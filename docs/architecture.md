@@ -104,12 +104,15 @@ The short version:
 
 ```ts
 const ctx = await getRequestContext();
-// ctx.user         — Supabase User | null
+// ctx.user            — Supabase User | null
 // ctx.isAuthenticated — boolean
-// Future: ctx.workspace, ctx.permissions
+// ctx.workspace       — WorkspaceContext | null (non-null when authenticated)
+// Future: ctx.permissions
 ```
 
-Extend `RequestContext` in `get_request_context.ts` when workspace and permission context are needed. Everything downstream gains access automatically.
+For authenticated requests, `getRequestContext()` also resolves the user's workspace via `getOrCreateDefaultWorkspace()` — bootstrapping a default workspace on first access if none exists. All downstream code can safely assume `ctx.workspace` is non-null whenever `ctx.isAuthenticated` is true.
+
+Extend `RequestContext` in `get_request_context.ts` when further context is needed. Everything downstream gains access automatically.
 
 ---
 
@@ -119,12 +122,16 @@ Context Store has a strict information hierarchy. Do not flatten these into gene
 
 | Entity | Description |
 |---|---|
-| **Workspace** | Top-level organizational unit. A user has one or more workspaces. |
+| **Workspace** | Top-level organizational unit. In V1, each user owns exactly one workspace. |
 | **Box** | A focused collection within a workspace. Analogous to a project, topic, or domain. |
 | **Folder** | Optional grouping within a box. Purely organizational — no semantic meaning beyond structure. |
 | **Note** | The primary content unit. Markdown. Has a title, body, tags, and metadata. |
-| **Guide note** | A special note kind that explains how to use a box or workspace. Surfaced prominently. |
-| **Context bundle** | A curated, structured collection of context assembled for export or AI consumption. |
+| **Guide note** | A note with `kind = 'guide'`. The canonical assignment is `boxes.guide_note_id`. |
+| **Context bundle** | A note with `kind = 'bundle'` — curated context assembled for export or AI consumption. |
+| **Connection** | An authorized external agent (MCP client, API) with scoped box access. |
+| **Write proposal** | A connection's proposed note change pending human review. |
+
+For the full schema, column definitions, RLS policies, and design decisions see [docs/data_model.md](data_model.md).
 
 ---
 
@@ -159,10 +166,55 @@ Client action (button, form)
 
 ---
 
+## Server layer
+
+```
+src/server/
+├── auth/
+│   ├── get_request_context.ts          Canonical per-request context (user + workspace)
+│   └── require_authenticated_user.ts   Auth guard; redirects to /sign_in if unauthenticated
+├── domain/
+│   ├── constants/                      Typed string-enum constants (status values, kinds, etc.)
+│   │   ├── content_status.ts           WORKSPACE_STATUS, BOX_STATUS, FOLDER_STATUS, NOTE_STATUS
+│   │   ├── note_constants.ts           NOTE_KIND, NOTE_ORIGIN_TYPE, RELATIONSHIP_TYPE
+│   │   ├── connection_constants.ts     CONNECTION_TYPE, CONNECTION_STATUS, PERMISSION_MODE, TOKEN_STATUS
+│   │   └── audit_constants.ts          ACTOR_TYPE, CHANGE_ORIGIN, PROPOSAL_TYPE, PROPOSAL_STATUS
+│   ├── types/                          TypeScript interfaces matching DB table shapes
+│   │   ├── workspace.ts                Workspace, WorkspaceContext
+│   │   ├── box.ts                      Box
+│   │   ├── folder.ts                   Folder
+│   │   ├── note.ts                     Note
+│   │   ├── note_version.ts             NoteVersion
+│   │   ├── note_link.ts                NoteLink
+│   │   ├── connection.ts               Connection, ConnectionToken, ConnectionBoxScope
+│   │   ├── write_proposal.ts           WriteProposal
+│   │   └── audit_event.ts              AuditEvent
+│   └── schemas/                        Zod v4 schemas for repository inputs
+│       ├── workspace_schemas.ts        CreateWorkspaceInput, UpdateWorkspaceInput
+│       ├── box_schemas.ts              CreateBoxInput, UpdateBoxInput
+│       └── note_schemas.ts             CreateNoteInput, UpdateNoteInput
+├── repositories/                       Data access layer (Supabase queries only, no business logic)
+│   ├── workspace_repository.ts
+│   ├── box_repository.ts
+│   ├── folder_repository.ts
+│   ├── note_repository.ts
+│   ├── note_version_repository.ts
+│   ├── note_link_repository.ts
+│   ├── audit_event_repository.ts
+│   ├── connection_repository.ts
+│   └── write_proposal_repository.ts
+├── services/                           Business logic layer
+│   └── workspace_bootstrap/
+│       └── get_or_create_default_workspace.ts   V1 workspace bootstrapping
+├── api/                                (future) Route handler layer
+├── policies/                           (future) Authorization checks
+├── resolvers/                          (future) Server Actions
+└── mcp/                                (future) MCP server implementation
+```
+
 ## Future prompts will add
 
-- `src/server/repositories/` — real Supabase data access (workspace, box, note)
-- `src/server/services/` — business logic
-- `src/app/api/` — REST endpoints
+- `src/server/api/` — REST endpoints
 - `src/server/mcp/` — MCP tools and resources
-- Database migrations (Supabase SQL, separate prompt)
+- `src/server/policies/` — authorization checks
+- UI flows for creating and navigating workspaces, boxes, and notes
