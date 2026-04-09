@@ -12,17 +12,20 @@ import {
 
 // ─── Download helper ──────────────────────────────────────────────────────────
 
-function triggerDownload(base64: string, filename: string, mimeType = "application/zip") {
-  const bytes = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
-  const blob = new Blob([bytes], { type: mimeType });
-  const url = URL.createObjectURL(blob);
+/**
+ * Trigger a browser download from a signed URL.
+ * Uses a temporary anchor element — works in all modern browsers.
+ * The signed URL already contains Content-Disposition: attachment so the
+ * browser will save rather than navigate to the file.
+ */
+function triggerSignedDownload(signedUrl: string, filename: string) {
   const a = document.createElement("a");
-  a.href = url;
+  a.href = signedUrl;
   a.download = filename;
+  a.rel = "noopener noreferrer";
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
-  URL.revokeObjectURL(url);
 }
 
 // ─── Export menu item ─────────────────────────────────────────────────────────
@@ -48,7 +51,7 @@ function ExportMenuItem({ icon, label, description, onClick, loading }: ExportMe
       <div className="mt-0.5 shrink-0 text-muted-foreground">{icon}</div>
       <div className="min-w-0">
         <p className="text-sm font-medium text-foreground">
-          {loading ? "Exporting…" : label}
+          {loading ? "Preparing download…" : label}
         </p>
         <p className="text-xs text-muted-foreground">{description}</p>
       </div>
@@ -56,7 +59,7 @@ function ExportMenuItem({ icon, label, description, onClick, loading }: ExportMe
   );
 }
 
-// ─── Note export button ───────────────────────────────────────────────────────
+// ─── Note export menu ─────────────────────────────────────────────────────────
 
 export function NoteExportMenu({
   noteId,
@@ -79,7 +82,7 @@ export function NoteExportMenu({
           : await exportBundleAction(noteId);
 
       if (result.ok) {
-        triggerDownload(result.data.base64, result.data.filename);
+        triggerSignedDownload(result.data.signed_url, result.data.filename);
         setOpen(false);
       } else {
         setError(result.error);
@@ -123,7 +126,7 @@ export function NoteExportMenu({
               <ExportMenuItem
                 icon={<FileText className="h-4 w-4" />}
                 label="Export note"
-                description="Markdown + manifest.json"
+                description="Markdown + manifest.json — link expires in 1 hour"
                 onClick={() => handleExport("note")}
                 loading={loading === "note"}
               />
@@ -147,7 +150,7 @@ export function NoteExportMenu({
   );
 }
 
-// ─── Box export button ────────────────────────────────────────────────────────
+// ─── Box export menu ──────────────────────────────────────────────────────────
 
 export function BoxExportMenu({
   boxId,
@@ -174,7 +177,7 @@ export function BoxExportMenu({
           : await exportFolderAction(folderId!);
 
       if (result.ok) {
-        triggerDownload(result.data.base64, result.data.filename);
+        triggerSignedDownload(result.data.signed_url, result.data.filename);
         setOpen(false);
       } else {
         setError(result.error);
@@ -218,7 +221,7 @@ export function BoxExportMenu({
               <ExportMenuItem
                 icon={<Package className="h-4 w-4" />}
                 label={`Export box "${boxName}"`}
-                description="All notes, folders, and links"
+                description="All notes, folders, and links — link expires in 1 hour"
                 onClick={() => handleExport("box")}
                 loading={loading === "box"}
               />

@@ -2,8 +2,10 @@ import { type NextRequest } from "next/server";
 import { getConnectionContext } from "@/server/auth/get_connection_context";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getNoteById } from "@/server/repositories/note_repository";
-import { exportBundle, packageToZip } from "@/server/services/export_service";
+import { exportBundle } from "@/server/services/export_service";
+import { deliverExportPackage } from "@/server/services/artifact_delivery_service";
 import {
+  apiOk,
   E_UNAUTHORIZED,
   E_FORBIDDEN,
   E_NOT_FOUND,
@@ -14,22 +16,38 @@ import {
 /**
  * POST /api/v1/export_context_bundle
  *
- * Assembles a context bundle for a note and exports it as a .zip package.
- * The ZIP includes a manifest, individual note files, and a README with the
- * suggested reading order.
- * Returns raw binary ZIP, not base64.
+ * Assembles a context bundle for a note and exports it as a signed download.
+ *
+ * The bundle includes: the entry note, guide note (if assigned and requested),
+ * ancestor summary note (if found), and linked notes up to the configured limit.
+ * A README with suggested upload order is included. The package is uploaded to
+ * private Supabase Storage and a signed URL returned.
+ *
+ * Authentication:
+ *   Bearer token (connection auth). The note's box must be in the connection's
+ *   allowed box scope.
  *
  * Request body:
  *   {
- *     note_id: string,
- *     include_guide?: boolean,            // default true
- *     include_ancestor_summary?: boolean, // default true
- *     linked_limit?: number               // default 10, max 10
+ *     "note_id": "<uuid>",
+ *     "include_guide": true,            // default true
+ *     "include_ancestor_summary": true, // default true
+ *     "linked_limit": 10               // default 10, max 10
  *   }
  *
- * Response:
- *   Content-Type: application/zip
- *   Content-Disposition: attachment; filename="<package-filename>.zip"
+ * Response data:
+ *   {
+ *     "signed_url": "https://...",
+ *     "expires_at": "2026-04-09T14:00:00.000Z",
+ *     "filename": "bundle-my-note.zip",
+ *     "size_bytes": 8192,
+ *     "manifest_summary": {
+ *       "export_type": "bundle",
+ *       "note_count": 5,
+ *       "folder_count": 0,
+ *       "link_count": 4
+ *     }
+ *   }
  */
 export async function POST(request: NextRequest) {
   const ctx = await getConnectionContext(request);
@@ -62,14 +80,15 @@ export async function POST(request: NextRequest) {
       includeAncestorSummary: body.include_ancestor_summary ?? true,
       linkedLimit: body.linked_limit ?? 10,
     });
-    const zip = packageToZip(pkg);
+    const delivery = await deliverExportPackage(adminClient, ctx.workspaceId, pkg);
 
-    return new Response(new Uint8Array(zip), {
-      status: 200,
-      headers: {
-        "Content-Type": "application/zip",
-        "Content-Disposition": `attachment; filename="${pkg.filename}"`,
-        "Content-Length": String(zip.length),
+    return apiOk({
+      ...delivery,
+      manifest_summary: {
+        export_type: pkg.manifest.export_type,
+        note_count: pkg.manifest.counts.notes,
+        folder_count: pkg.manifest.counts.folders,
+        link_count: pkg.manifest.counts.links,
       },
     });
   } catch (err) {

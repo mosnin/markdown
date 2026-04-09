@@ -211,6 +211,43 @@ export interface ImportSummaryReport {
   warnings: ImportWarning[];
 }
 
+// ─── Export artifact (signed delivery) ───────────────────────────────────────
+
+/**
+ * A compact summary of a manifest — returned alongside the signed URL so
+ * callers do not have to download and parse the zip just to know what it contains.
+ */
+export interface ManifestSummary {
+  export_type: ExportManifest["export_type"];
+  note_count: number;
+  folder_count: number;
+  link_count: number;
+}
+
+/**
+ * The stable response shape returned by all export endpoints after the
+ * portability contract correction.
+ *
+ * Delivery is via a short-lived signed URL (Supabase Storage, private bucket).
+ * The URL expires at `expires_at` — callers must initiate the download before
+ * then. The signed URL is not logged or included in audit events.
+ *
+ * Human app: trigger window download via anchor click on signed_url.
+ * API clients: GET the signed_url to stream the zip bytes.
+ */
+export interface ExportArtifact {
+  /** Short-lived Supabase Storage signed URL. GET this URL to download the zip. */
+  signed_url: string;
+  /** ISO timestamp when the signed URL expires (1 hour from generation). */
+  expires_at: string;
+  /** Suggested filename for saving the zip. */
+  filename: string;
+  /** Size of the zip in bytes. */
+  size_bytes: number;
+  /** Compact summary of what the manifest contains. */
+  manifest_summary: ManifestSummary;
+}
+
 // ─── Export input options ─────────────────────────────────────────────────────
 
 export interface ExportOptions {

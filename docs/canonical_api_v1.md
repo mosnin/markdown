@@ -351,35 +351,62 @@ Assembles a bounded, deterministic context bundle centered on a note. Includes t
 
 ### Export
 
-All export endpoints return raw binary ZIP files, not JSON. The response `Content-Type` is `application/zip`.
+All export endpoints assemble the package server-side, upload it to private Supabase Storage, and return a signed download URL. The response is JSON in the standard `{ data, meta }` envelope.
+
+The caller downloads the actual zip by GETting `data.signed_url` before it expires (1 hour).
+
+**All export endpoints return the same `data` shape:**
+
+```json
+{
+  "signed_url": "https://<project>.supabase.co/storage/v1/object/sign/exports/...",
+  "expires_at": "2026-04-09T14:00:00.000Z",
+  "filename": "my-note.zip",
+  "size_bytes": 8192,
+  "manifest_summary": {
+    "export_type": "note" | "folder" | "box" | "bundle",
+    "note_count": 1,
+    "folder_count": 0,
+    "link_count": 0
+  }
+}
+```
+
+Check `expires_at` before using the URL. Expired URLs return a storage error.
 
 #### `POST /api/v1/export_note`
 
 Exports a single note as a `.zip` package.
 
+**Authentication:** Bearer token (connection auth). The note's box must be in the connection's allowed scope.
+
 **Request body:** `{ "note_id": "..." }`
 
-**Response:** `application/zip` binary, `Content-Disposition: attachment; filename="<name>.zip"`
+**Response `data`:** `ExportArtifact` (see shape above, `export_type: "note"`)
 
 ---
 
 #### `POST /api/v1/export_folder`
 
-Exports a folder and all its notes as a `.zip` package.
+Exports a folder and all its descendant folders and notes as a `.zip` package.
+
+**Authentication:** Bearer token (connection auth). The folder's box must be in the connection's allowed scope.
 
 **Request body:** `{ "folder_id": "..." }`
 
-**Response:** `application/zip` binary
+**Response `data`:** `ExportArtifact` (`export_type: "folder"`)
 
 ---
 
 #### `POST /api/v1/export_box`
 
-Exports an entire box (all folders + notes) as a `.zip` package.
+Exports an entire box (all active folders and notes) as a `.zip` package.
+
+**Authentication:** Bearer token (connection auth). The box must be in the connection's allowed scope.
 
 **Request body:** `{ "box_id": "..." }`
 
-**Response:** `application/zip` binary
+**Response `data`:** `ExportArtifact` (`export_type: "box"`)
 
 ---
 
@@ -387,6 +414,8 @@ Exports an entire box (all folders + notes) as a `.zip` package.
 
 Assembles a context bundle for a note and exports it as a `.zip` package.
 The ZIP includes a manifest, individual note files, and a `README.md` with the suggested reading order.
+
+**Authentication:** Bearer token (connection auth). The note's box must be in the connection's allowed scope.
 
 **Request body:**
 
@@ -399,7 +428,55 @@ The ZIP includes a manifest, individual note files, and a `README.md` with the s
 }
 ```
 
-**Response:** `application/zip` binary
+**Response `data`:** `ExportArtifact` (`export_type: "bundle"`)
+
+---
+
+### Import
+
+#### `POST /api/v1/import_package`
+
+Imports a `.md` or `.zip` package into an owned box.
+
+**Authentication:** Human session only (Supabase SSR cookie auth). External bearer token connections are **not** supported for import in V1.
+
+Rationale: Import creates content from an external untrusted package at scale (up to 1,000 objects). Allowing connection-auth import would let any scoped connection flood a workspace with arbitrary content without human review. Human-initiated import keeps this operation explicitly deliberate.
+
+A connection sending a bearer token to this endpoint receives `401 Unauthorized`.
+
+**Request:** `Content-Type: multipart/form-data`
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `file` | File | Yes | `.md` or `.zip`, max 25 MB |
+| `box_id` | string | Yes | Target box UUID (must be owned by the authenticated workspace) |
+| `collision_mode` | string | Yes | One of: `create_copy`, `replace_by_id`, `merge_metadata_only`, `remap_ids_and_import` |
+| `target_folder_id` | string | No | Target folder UUID (must belong to the target box) |
+
+**Supported package formats:**
+
+| Input | Behavior |
+|---|---|
+| `.md` file | One note created; title from first H1 or filename |
+| `.zip` without `manifest.json` | Each `.md` file becomes a note |
+| `.zip` with `manifest.json` | Manifest drives folder/note/link creation |
+
+**Response `data`:** `ImportSummaryReport`
+
+```json
+{
+  "collision_mode": "create_copy",
+  "created_counts": { "folders": 2, "notes": 5, "links": 3 },
+  "replaced_counts": { "notes": 0, "folders": 0 },
+  "duplicated_counts": { "notes": 0, "folders": 0 },
+  "remapped_counts": { "notes": 0, "folders": 0 },
+  "skipped_counts": { "notes": 0, "folders": 0, "links": 0 },
+  "actions": [...],
+  "warnings": [...]
+}
+```
+
+**Hard failures (400):** Malformed zip, invalid manifest schema, unsupported collision mode, package > 25 MB, combined folder + note count > 1,000.
 
 ---
 
@@ -572,7 +649,7 @@ So the full check for a note is:
 
 ## Export ZIP format
 
-ZIP packages use DEFLATE compression. The manifest is always at `manifest.json`.
+ZIP packages use DEFLATE compression. The manifest is always at `manifest.json`. These are the contents of the zip downloaded from the signed URL.
 
 ### Note package
 
@@ -597,7 +674,7 @@ notes/<slug>.md  (target note)
 notes/<slug>.md  (linked notes, guide, ancestor summary)
 ```
 
-See `docs/import_export_v1.md` for manifest schema details.
+See `docs/import_export_v1.md` for manifest schema details and import vocabulary validation rules.
 
 ---
 
@@ -624,10 +701,12 @@ curl -X POST -H "Authorization: Bearer csk_v1_..." \
   -d '{"note_id": "<note_id>"}' \
   https://your-domain.com/api/v1/context_bundles
 
-# Export a note to disk
-curl -X POST -H "Authorization: Bearer csk_v1_..." \
+# Export a note — get signed URL, then download the zip
+EXPORT=$(curl -s -X POST -H "Authorization: Bearer csk_v1_..." \
   -H "Content-Type: application/json" \
   -d '{"note_id": "<note_id>"}' \
-  -o note_export.zip \
-  https://your-domain.com/api/v1/export_note
+  https://your-domain.com/api/v1/export_note)
+SIGNED_URL=$(echo "$EXPORT" | jq -r '.data.signed_url')
+FILENAME=$(echo "$EXPORT" | jq -r '.data.filename')
+curl -o "$FILENAME" "$SIGNED_URL"
 ```

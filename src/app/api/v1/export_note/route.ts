@@ -3,8 +3,10 @@ import { getConnectionContext } from "@/server/auth/get_connection_context";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getNoteById } from "@/server/repositories/note_repository";
 import { getBoxById } from "@/server/repositories/box_repository";
-import { exportNote, packageToZip } from "@/server/services/export_service";
+import { exportNote } from "@/server/services/export_service";
+import { deliverExportPackage } from "@/server/services/artifact_delivery_service";
 import {
+  apiOk,
   E_UNAUTHORIZED,
   E_FORBIDDEN,
   E_NOT_FOUND,
@@ -15,17 +17,32 @@ import {
 /**
  * POST /api/v1/export_note
  *
- * Exports a single note as a .zip package and returns the binary file.
- * Unlike the human app export (which returns base64), this endpoint returns
- * the raw binary ZIP directly with appropriate Content-Type headers.
+ * Exports a single note as a signed download package.
+ *
+ * The package is assembled server-side, uploaded to private Supabase Storage,
+ * and a short-lived signed URL is returned. The caller downloads the zip by
+ * GETting the signed_url before it expires (1 hour).
+ *
+ * Authentication:
+ *   Bearer token (connection auth). The note's box must be in the connection's
+ *   allowed box scope.
  *
  * Request body:
- *   { note_id: string }
+ *   { "note_id": "<uuid>" }
  *
- * Response:
- *   Content-Type: application/zip
- *   Content-Disposition: attachment; filename="<package-filename>.zip"
- *   Body: raw ZIP binary
+ * Response data:
+ *   {
+ *     "signed_url": "https://...",
+ *     "expires_at": "2026-04-09T14:00:00.000Z",
+ *     "filename": "my-note.zip",
+ *     "size_bytes": 4096,
+ *     "manifest_summary": {
+ *       "export_type": "note",
+ *       "note_count": 1,
+ *       "folder_count": 0,
+ *       "link_count": 0
+ *     }
+ *   }
  */
 export async function POST(request: NextRequest) {
   const ctx = await getConnectionContext(request);
@@ -52,14 +69,15 @@ export async function POST(request: NextRequest) {
 
   try {
     const pkg = await exportNote(adminClient, ctx.workspaceId, note_id);
-    const zip = packageToZip(pkg);
+    const delivery = await deliverExportPackage(adminClient, ctx.workspaceId, pkg);
 
-    return new Response(new Uint8Array(zip), {
-      status: 200,
-      headers: {
-        "Content-Type": "application/zip",
-        "Content-Disposition": `attachment; filename="${pkg.filename}"`,
-        "Content-Length": String(zip.length),
+    return apiOk({
+      ...delivery,
+      manifest_summary: {
+        export_type: pkg.manifest.export_type,
+        note_count: pkg.manifest.counts.notes,
+        folder_count: pkg.manifest.counts.folders,
+        link_count: pkg.manifest.counts.links,
       },
     });
   } catch {

@@ -62,8 +62,8 @@ manifest.json {
 | `status` | `active`, `archived`, etc. |
 | `summary` | Optional summary |
 | `tags` | Array of tag strings |
-| `origin_type` | `human`, `generated`, `imported` |
-| `read_hint` | Optional retrieval hint |
+| `origin_type` | `user_created`, `imported`, `generated_by_tool`, `duplicated`, `restored` |
+| `read_hint` | Optional retrieval hint — one of `read_first`, `core_reference`, `supporting_context`, `related`, `archive_only`, `generated`, or null |
 | `is_generated` | Boolean |
 | `current_version_id` | Points to the version snapshot |
 | `is_guide_note` | True when this note is the box's guide |
@@ -77,7 +77,7 @@ manifest.json {
 | `id` | Stable link id |
 | `source_note_id` | Source note id |
 | `target_note_id` | Target note id |
-| `relationship_type` | Exact value as stored — never normalized |
+| `relationship_type` | Canonical value from the 10-value set — never normalized on export; validated on import |
 | `relationship_note` | Optional annotation describing the specific link — preserved exactly on export; imported as stored |
 
 ### ManifestBundle (context bundle exports only)
@@ -148,11 +148,51 @@ The README includes a suggested upload order:
 
 ---
 
+## Export delivery model
+
+All export operations (human UI and canonical API) produce a signed, expiring download URL via Supabase Storage.
+
+1. The export service assembles an `ExportPackage` in memory (manifest + markdown files map).
+2. The artifact delivery service (`artifact_delivery_service.ts`) zips the package and uploads it to the private `exports` Supabase Storage bucket.
+3. A signed download URL is generated and returned. The URL expires in **1 hour**.
+4. The caller downloads the zip by GETting the signed URL before expiration.
+
+### Export artifact response shape
+
+Every export endpoint returns an `ExportArtifact`:
+
+```json
+{
+  "signed_url": "https://<project>.supabase.co/storage/v1/object/sign/exports/...",
+  "expires_at": "2026-04-09T14:00:00.000Z",
+  "filename": "my-box-box.zip",
+  "size_bytes": 65536,
+  "manifest_summary": {
+    "export_type": "box",
+    "note_count": 42,
+    "folder_count": 8,
+    "link_count": 17
+  }
+}
+```
+
+The `exports` storage bucket is private — no public URLs are ever issued. Signed URLs expire after 3,600 seconds. Files accumulate in the bucket; V1 has no automatic purge.
+
+### Human app export flow
+
+1. User clicks an export button in the UI.
+2. The server action assembles and uploads the package.
+3. The action returns `{ ok: true, data: ExportArtifact }`.
+4. The client calls `triggerSignedDownload(data.signed_url, data.filename)` — an anchor click on the signed URL.
+5. The browser downloads the zip directly from Supabase Storage.
+
+---
+
 ## Export rules
 
 - Trashed content: **never included**
 - Archived content: **excluded by default** (no opt-in UI in V1; service layer supports `includeArchived` flag)
-- Relationship types: **preserved exactly as stored** — never renamed or normalized
+- Relationship types: **canonical values only** — exported faithfully from the 10-value canonical set
 - Links: only included when **both endpoints** are inside the exported set
 - Guide note flag: derived from `boxes.guide_note_id` at export time; stored in `ManifestNote.is_guide_note`
 
@@ -194,6 +234,14 @@ The export service calls `assembleContextBundle` to determine which notes are in
 | Unsupported collision mode | Hard failure |
 
 Non-recognized file types inside a zip generate a warning and are ignored. Missing link targets are warnings, not hard failures.
+
+### Import vocabulary validation
+
+On import, the service validates and sanitizes values from incoming manifests:
+
+- **`relationship_type`** is validated against the canonical 10-value set (`related`, `depends_on`, `parent_of`, `child_of`, `reference_for`, `extends`, `example_of`, `sibling_of`, `supersedes`, `derived_from`). Non-canonical values produce a `non_canonical_relationship_type` warning and the link is skipped — notes are still created.
+- **`read_hint`** is sanitized against the canonical 6-value set (`read_first`, `core_reference`, `supporting_context`, `related`, `archive_only`, `generated`). Non-canonical values are nulled before the DB insert, with a `non_canonical_read_hint` warning — the note is still created, just without the hint.
+- **`origin_type`** on import is always forced to `"imported"` regardless of the manifest value. The manifest's `origin_type` is not re-applied.
 
 ---
 
@@ -312,9 +360,11 @@ All events are append-only and include useful metadata (counts, collision mode, 
 
 | File | Purpose |
 |---|---|
-| `src/server/domain/types/import_export.ts` | `ExportManifest`, `ImportSummaryReport`, `CollisionMode`, etc. |
+| `src/server/domain/types/import_export.ts` | `ExportManifest`, `ExportArtifact`, `ManifestSummary`, `ImportSummaryReport`, `CollisionMode`, etc. |
 | `src/server/services/export_service.ts` | `exportNote`, `exportFolder`, `exportBox`, `exportBundle`, `packageToZip` |
+| `src/server/services/artifact_delivery_service.ts` | `deliverExportPackage` — zips and uploads to private Storage, returns signed URL |
 | `src/server/services/import_service.ts` | `importPackage` — parse + validate + apply |
-| `src/app/app/import_export/actions.ts` | `exportNoteAction`, `exportBoxAction`, `exportBundleAction`, `importPackageAction` |
-| `src/components/product/export_menu.tsx` | `NoteExportMenu`, `BoxExportMenu` client components |
+| `src/app/app/import_export/actions.ts` | `exportNoteAction`, `exportBoxAction`, `exportBundleAction`, `importPackageAction` — all return `ExportArtifact` |
+| `src/components/product/export_menu.tsx` | `NoteExportMenu`, `BoxExportMenu` client components — download via signed URL |
 | `src/components/product/import_dialog.tsx` | `ImportDialog`, `ImportTriggerButton` client components |
+| `supabase/migrations/20260409000010_export_artifacts_bucket.sql` | Creates private `exports` Storage bucket |

@@ -1,14 +1,15 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { getRequestContext } from "@/server/auth/get_request_context";
 import {
   exportNote,
   exportFolder,
   exportBox,
   exportBundle,
-  packageToZip,
 } from "@/server/services/export_service";
+import { deliverExportPackage } from "@/server/services/artifact_delivery_service";
 import { importPackage } from "@/server/services/import_service";
 import {
   auditNoteExported,
@@ -21,6 +22,7 @@ import {
   type CollisionMode,
   type BundleExportOptions,
   type ImportSummaryReport,
+  type ExportArtifact,
 } from "@/server/domain/types/import_export";
 
 // ─── Action result type ───────────────────────────────────────────────────────
@@ -44,21 +46,34 @@ async function requireContext() {
 
 /**
  * Export a single note as a zip package.
- * Returns the zip as base64 so the client can trigger a browser download.
+ *
+ * Packages the note server-side, uploads to private Supabase Storage, and
+ * returns a signed download URL valid for 1 hour. The client should trigger
+ * a browser download via the signed_url rather than handling raw bytes.
  */
 export async function exportNoteAction(
   noteId: string
-): Promise<ActionResult<{ filename: string; base64: string }>> {
+): Promise<ActionResult<ExportArtifact>> {
   try {
     const { supabase, userId, workspaceId } = await requireContext();
+    const adminClient = createAdminClient();
+
     const pkg = await exportNote(supabase, workspaceId, noteId);
-    const zip = packageToZip(pkg);
+    const delivery = await deliverExportPackage(adminClient, workspaceId, pkg);
 
     await auditNoteExported(supabase, workspaceId, userId, noteId);
 
     return {
       ok: true,
-      data: { filename: pkg.filename, base64: zip.toString("base64") },
+      data: {
+        ...delivery,
+        manifest_summary: {
+          export_type: pkg.manifest.export_type,
+          note_count: pkg.manifest.counts.notes,
+          folder_count: pkg.manifest.counts.folders,
+          link_count: pkg.manifest.counts.links,
+        },
+      },
     };
   } catch (err) {
     return {
@@ -72,11 +87,13 @@ export async function exportNoteAction(
 
 export async function exportFolderAction(
   folderId: string
-): Promise<ActionResult<{ filename: string; base64: string }>> {
+): Promise<ActionResult<ExportArtifact>> {
   try {
     const { supabase, userId, workspaceId } = await requireContext();
+    const adminClient = createAdminClient();
+
     const pkg = await exportFolder(supabase, workspaceId, folderId);
-    const zip = packageToZip(pkg);
+    const delivery = await deliverExportPackage(adminClient, workspaceId, pkg);
 
     await auditFolderExported(supabase, workspaceId, userId, folderId, {
       note_count: pkg.manifest.counts.notes,
@@ -84,7 +101,15 @@ export async function exportFolderAction(
 
     return {
       ok: true,
-      data: { filename: pkg.filename, base64: zip.toString("base64") },
+      data: {
+        ...delivery,
+        manifest_summary: {
+          export_type: pkg.manifest.export_type,
+          note_count: pkg.manifest.counts.notes,
+          folder_count: pkg.manifest.counts.folders,
+          link_count: pkg.manifest.counts.links,
+        },
+      },
     };
   } catch (err) {
     return {
@@ -98,11 +123,13 @@ export async function exportFolderAction(
 
 export async function exportBoxAction(
   boxId: string
-): Promise<ActionResult<{ filename: string; base64: string }>> {
+): Promise<ActionResult<ExportArtifact>> {
   try {
     const { supabase, userId, workspaceId } = await requireContext();
+    const adminClient = createAdminClient();
+
     const pkg = await exportBox(supabase, workspaceId, boxId);
-    const zip = packageToZip(pkg);
+    const delivery = await deliverExportPackage(adminClient, workspaceId, pkg);
 
     await auditBoxExported(supabase, workspaceId, userId, boxId, {
       note_count: pkg.manifest.counts.notes,
@@ -111,7 +138,15 @@ export async function exportBoxAction(
 
     return {
       ok: true,
-      data: { filename: pkg.filename, base64: zip.toString("base64") },
+      data: {
+        ...delivery,
+        manifest_summary: {
+          export_type: pkg.manifest.export_type,
+          note_count: pkg.manifest.counts.notes,
+          folder_count: pkg.manifest.counts.folders,
+          link_count: pkg.manifest.counts.links,
+        },
+      },
     };
   } catch (err) {
     return {
@@ -126,11 +161,13 @@ export async function exportBoxAction(
 export async function exportBundleAction(
   noteId: string,
   options?: BundleExportOptions
-): Promise<ActionResult<{ filename: string; base64: string }>> {
+): Promise<ActionResult<ExportArtifact>> {
   try {
     const { supabase, userId, workspaceId } = await requireContext();
+    const adminClient = createAdminClient();
+
     const pkg = await exportBundle(supabase, workspaceId, noteId, options);
-    const zip = packageToZip(pkg);
+    const delivery = await deliverExportPackage(adminClient, workspaceId, pkg);
 
     await auditBundleExported(supabase, workspaceId, userId, noteId, {
       note_count: pkg.manifest.counts.notes,
@@ -139,7 +176,15 @@ export async function exportBundleAction(
 
     return {
       ok: true,
-      data: { filename: pkg.filename, base64: zip.toString("base64") },
+      data: {
+        ...delivery,
+        manifest_summary: {
+          export_type: pkg.manifest.export_type,
+          note_count: pkg.manifest.counts.notes,
+          folder_count: pkg.manifest.counts.folders,
+          link_count: pkg.manifest.counts.links,
+        },
+      },
     };
   } catch (err) {
     return {

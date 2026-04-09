@@ -16,6 +16,30 @@ import { getNoteById, updateNote as repoUpdateNote } from "@/server/repositories
 import { createNoteLink } from "@/server/repositories/note_link_repository";
 import { getLatestVersionForNote, createNoteVersion } from "@/server/repositories/note_version_repository";
 import { slugify } from "@/lib/slugify";
+import { RELATIONSHIP_TYPE, NOTE_READ_HINT } from "@/server/domain/constants/note_constants";
+
+// ─── Canonical vocabulary sets ────────────────────────────────────────────────
+
+const CANONICAL_RELATIONSHIP_TYPES = new Set(Object.values(RELATIONSHIP_TYPE));
+const CANONICAL_READ_HINTS = new Set(Object.values(NOTE_READ_HINT));
+
+/**
+ * Validate a relationship_type value from an incoming manifest.
+ * Returns the value if canonical, null otherwise.
+ * Callers should skip the link and add a warning when null is returned.
+ */
+function validateRelationshipType(value: string): string | null {
+  return CANONICAL_RELATIONSHIP_TYPES.has(value as never) ? value : null;
+}
+
+/**
+ * Sanitize a read_hint value from an incoming manifest.
+ * Returns the value if canonical, null otherwise (to avoid DB CHECK violation).
+ */
+function sanitizeReadHint(value: string | null | undefined): string | null {
+  if (!value) return null;
+  return CANONICAL_READ_HINTS.has(value as never) ? value : null;
+}
 
 /**
  * Import service.
@@ -392,13 +416,33 @@ async function applyManifest(
       continue;
     }
 
+    // Validate relationship_type against canonical vocabulary
+    const validRelationshipType = validateRelationshipType(ml.relationship_type);
+    if (!validRelationshipType) {
+      warnings.push({
+        code: "non_canonical_relationship_type",
+        message: `Link "${ml.id}" has non-canonical relationship_type "${ml.relationship_type}". Link skipped.`,
+        subject: ml.id,
+      });
+      actions.push({
+        object_type: "link",
+        incoming_id: ml.id,
+        final_id: null,
+        incoming_path: null,
+        final_path: null,
+        action: "skipped",
+        reason: `Non-canonical relationship_type: "${ml.relationship_type}"`,
+      });
+      continue;
+    }
+
     // Check for existing link to avoid duplicate
     const { data: existingLink } = await supabase
       .from("note_links")
       .select("id")
       .eq("source_note_id", finalSource)
       .eq("target_note_id", finalTarget)
-      .eq("relationship_type", ml.relationship_type)
+      .eq("relationship_type", validRelationshipType)
       .maybeSingle();
 
     if (existingLink) {
@@ -418,7 +462,7 @@ async function applyManifest(
       const link = await createNoteLink(supabase, {
         source_note_id: finalSource,
         target_note_id: finalTarget,
-        relationship_type: ml.relationship_type as never,
+        relationship_type: validRelationshipType as never,
         relationship_note: ml.relationship_note ?? null,
       });
       actions.push({
@@ -653,7 +697,7 @@ async function applyNote(
         markdownContent,
         summary: mn.summary,
         tags: mn.tags,
-        readHint: mn.read_hint,
+        readHint: sanitizeReadHint(mn.read_hint),
         actorId,
       });
       noteIdMap.set(mn.id, mn.id);
@@ -698,7 +742,7 @@ async function applyNote(
           markdownContent: existing.markdown_content,
           summary: mn.summary,
           tags: mn.tags,
-          readHint: mn.read_hint,
+          readHint: sanitizeReadHint(mn.read_hint),
           actorId,
         });
       }
@@ -740,7 +784,7 @@ async function applyNote(
         markdownContent,
         summary: mn.summary,
         tags: mn.tags,
-        readHint: mn.read_hint,
+        readHint: sanitizeReadHint(mn.read_hint),
         actorId,
       });
       noteIdMap.set(mn.id, result.id);

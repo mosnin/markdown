@@ -3,8 +3,10 @@ import { getConnectionContext } from "@/server/auth/get_connection_context";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getFolderById } from "@/server/repositories/folder_repository";
 import { getBoxById } from "@/server/repositories/box_repository";
-import { exportFolder, packageToZip } from "@/server/services/export_service";
+import { exportFolder } from "@/server/services/export_service";
+import { deliverExportPackage } from "@/server/services/artifact_delivery_service";
 import {
+  apiOk,
   E_UNAUTHORIZED,
   E_FORBIDDEN,
   E_NOT_FOUND,
@@ -15,15 +17,32 @@ import {
 /**
  * POST /api/v1/export_folder
  *
- * Exports a folder and all its notes as a .zip package.
- * Returns raw binary ZIP, not base64.
+ * Exports a folder and all its descendant folders and notes.
+ *
+ * The package is assembled server-side, uploaded to private Supabase Storage,
+ * and a short-lived signed URL is returned. The caller downloads the zip by
+ * GETting the signed_url before it expires (1 hour).
+ *
+ * Authentication:
+ *   Bearer token (connection auth). The folder's box must be in the
+ *   connection's allowed box scope.
  *
  * Request body:
- *   { folder_id: string }
+ *   { "folder_id": "<uuid>" }
  *
- * Response:
- *   Content-Type: application/zip
- *   Content-Disposition: attachment; filename="<package-filename>.zip"
+ * Response data:
+ *   {
+ *     "signed_url": "https://...",
+ *     "expires_at": "2026-04-09T14:00:00.000Z",
+ *     "filename": "my-folder-folder.zip",
+ *     "size_bytes": 12288,
+ *     "manifest_summary": {
+ *       "export_type": "folder",
+ *       "note_count": 5,
+ *       "folder_count": 2,
+ *       "link_count": 3
+ *     }
+ *   }
  */
 export async function POST(request: NextRequest) {
   const ctx = await getConnectionContext(request);
@@ -50,14 +69,15 @@ export async function POST(request: NextRequest) {
 
   try {
     const pkg = await exportFolder(adminClient, ctx.workspaceId, folder_id);
-    const zip = packageToZip(pkg);
+    const delivery = await deliverExportPackage(adminClient, ctx.workspaceId, pkg);
 
-    return new Response(new Uint8Array(zip), {
-      status: 200,
-      headers: {
-        "Content-Type": "application/zip",
-        "Content-Disposition": `attachment; filename="${pkg.filename}"`,
-        "Content-Length": String(zip.length),
+    return apiOk({
+      ...delivery,
+      manifest_summary: {
+        export_type: pkg.manifest.export_type,
+        note_count: pkg.manifest.counts.notes,
+        folder_count: pkg.manifest.counts.folders,
+        link_count: pkg.manifest.counts.links,
       },
     });
   } catch {
