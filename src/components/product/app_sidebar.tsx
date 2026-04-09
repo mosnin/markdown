@@ -158,9 +158,17 @@ export function AppSidebar({
         </div>
 
         {boxes.length === 0 ? (
-          <p className="px-2.5 py-2 text-xs text-sidebar-foreground/40">
-            No boxes yet
-          </p>
+          <Link
+            href="/app/workspaces"
+            className={cn(
+              "flex items-center gap-1.5 rounded-md px-2.5 py-2 text-xs transition-fast",
+              "text-sidebar-foreground/40 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            )}
+          >
+            <Plus className="h-3 w-3 shrink-0" aria-hidden="true" />
+            Create your first box
+          </Link>
         ) : (
           <nav aria-label="Boxes">
             <ul className="flex flex-col gap-0.5 list-none">

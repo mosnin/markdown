@@ -103,7 +103,7 @@ export function BoxGuidePanel({
         ) : (
           <div className="flex items-center gap-2 rounded-md border border-dashed border-border px-3 py-2.5 text-xs text-muted-foreground">
             <BookOpen className="h-3.5 w-3.5 shrink-0" />
-            <span>No guide note assigned. Set one from the box panel.</span>
+            <span>No guide note assigned. Open a note and use its options menu to set it as the guide.</span>
           </div>
         )}
       </div>

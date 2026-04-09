@@ -10,6 +10,7 @@ import {
   Home,
   Inbox,
   Menu,
+  Plus,
   Settings,
   X,
 } from "lucide-react";
@@ -144,6 +145,18 @@ export function MobileSidebar({
               <span className="text-xs font-medium uppercase tracking-wider text-sidebar-foreground/40">
                 {workspaceName}
               </span>
+              <Link
+                href="/app/workspaces"
+                onClick={close}
+                className={cn(
+                  "rounded p-0.5 text-sidebar-foreground/40 transition-fast",
+                  "hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+                  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                )}
+                aria-label="Manage workspace"
+              >
+                <Plus className="h-3 w-3" aria-hidden="true" />
+              </Link>
             </div>
 
             {boxes.length === 0 ? (

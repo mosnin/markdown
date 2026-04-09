@@ -68,7 +68,7 @@ export default async function AppHomePage() {
               <StatCard
                 icon={FileText}
                 label="Recent notes"
-                value={allNotes.length > 0 ? `${allNotes.length}+` : "0"}
+                value={allNotes.length}
               />
             </section>
           )}

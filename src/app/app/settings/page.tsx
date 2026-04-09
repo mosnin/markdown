@@ -8,7 +8,6 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Separator } from "@/components/ui/separator";
 import { PageHeader } from "@/components/product/page_header";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { ConnectionsPanel } from "@/components/product/connections_panel";
@@ -29,9 +28,10 @@ const settingsNav = [
 
 // ─── Profile section ──────────────────────────────────────────────────────────
 
-function ProfileSection() {
+function ProfileSection({ email, displayName }: { email: string; displayName?: string }) {
+  const initials = email.slice(0, 2).toUpperCase();
   return (
-    <Card>
+    <Card id="settings-profile">
       <CardHeader>
         <CardTitle className="text-base">Profile</CardTitle>
         <CardDescription>
@@ -41,7 +41,7 @@ function ProfileSection() {
       <CardContent className="space-y-4">
         <div className="flex items-center gap-4">
           <div className="flex h-12 w-12 items-center justify-center rounded-full bg-muted text-sm font-medium text-muted-foreground">
-            JS
+            {initials}
           </div>
           <Button variant="outline" size="sm">
             Change avatar
@@ -49,15 +49,20 @@ function ProfileSection() {
         </div>
         <div className="grid gap-3 sm:grid-cols-2">
           <div className="space-y-1.5">
-            <label className="text-sm font-medium text-foreground">
+            <label htmlFor="display-name" className="text-sm font-medium text-foreground">
               Display name
             </label>
-            <Input defaultValue="Jane Smith" placeholder="Your name" />
+            <Input
+              id="display-name"
+              defaultValue={displayName ?? ""}
+              placeholder="Your name"
+            />
           </div>
           <div className="space-y-1.5">
-            <label className="text-sm font-medium text-foreground">Email</label>
+            <label htmlFor="email" className="text-sm font-medium text-foreground">Email</label>
             <Input
-              defaultValue="jane@example.com"
+              id="email"
+              defaultValue={email}
               placeholder="you@example.com"
               type="email"
             />
@@ -75,7 +80,7 @@ function ProfileSection() {
 
 function AppearanceSection() {
   return (
-    <Card>
+    <Card id="settings-appearance">
       <CardHeader>
         <CardTitle className="text-base">Appearance</CardTitle>
         <CardDescription>
@@ -84,7 +89,7 @@ function AppearanceSection() {
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="space-y-1.5">
-          <label className="text-sm font-medium text-foreground">Theme</label>
+          <label htmlFor="theme-selector" className="text-sm font-medium text-foreground">Theme</label>
           <div className="flex gap-2">
             {["Light", "Dark", "System"].map((t) => (
               <Button
@@ -126,27 +131,36 @@ export default async function SettingsPage() {
 
       <div className="flex flex-1 overflow-hidden">
         {/* Settings sidebar nav */}
-        <nav className="hidden w-48 shrink-0 flex-col gap-0.5 border-r border-border p-3 md:flex">
+        <nav aria-label="Settings sections" className="hidden w-48 shrink-0 flex-col gap-0.5 border-r border-border p-3 md:flex">
           {settingsNav.map(({ id, label, icon: Icon }) => (
-            <button
+            <a
               key={id}
-              className="flex items-center gap-2 rounded-md px-2.5 py-2 text-sm text-muted-foreground transition-fast hover:bg-accent hover:text-foreground text-left"
+              href={`#settings-${id}`}
+              className="flex items-center gap-2 rounded-md px-2.5 py-2 text-sm text-muted-foreground transition-fast hover:bg-accent hover:text-foreground"
             >
-              <Icon className="h-3.5 w-3.5 shrink-0" />
+              <Icon className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
               {label}
-            </button>
+            </a>
           ))}
         </nav>
 
         {/* Main settings area */}
         <ScrollArea className="flex-1">
           <div className="mx-auto max-w-2xl space-y-4 px-6 py-6">
-            <ProfileSection />
-            <AppearanceSection />
-            <ConnectionsPanel
-              initialConnections={connections}
-              boxes={boxes}
+            <ProfileSection
+              email={ctx.user.email ?? ""}
+              displayName={
+                (ctx.user.user_metadata?.full_name as string | undefined) ??
+                (ctx.user.user_metadata?.name as string | undefined)
+              }
             />
+            <AppearanceSection />
+            <div id="settings-api">
+              <ConnectionsPanel
+                initialConnections={connections}
+                boxes={boxes}
+              />
+            </div>
           </div>
         </ScrollArea>
       </div>
