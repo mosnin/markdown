@@ -188,7 +188,8 @@ src/server/
 │   │   ├── note_link.ts                NoteLink
 │   │   ├── connection.ts               Connection, ConnectionToken, ConnectionBoxScope
 │   │   ├── write_proposal.ts           WriteProposal
-│   │   └── audit_event.ts              AuditEvent
+│   │   ├── audit_event.ts              AuditEvent
+│   │   └── context_bundle.ts           ContextBundle (shared read model for API/MCP)
 │   └── schemas/                        Zod v4 schemas for repository inputs
 │       ├── workspace_schemas.ts        CreateWorkspaceInput, UpdateWorkspaceInput
 │       ├── box_schemas.ts              CreateBoxInput, UpdateBoxInput
@@ -210,7 +211,12 @@ src/server/
 │   ├── box_service.ts                  Box CRUD, slug generation, ownership checks
 │   ├── folder_service.ts               Folder CRUD, path_cache derivation and cascade
 │   ├── note_service.ts                 Note create/update via atomic RPC functions
-│   └── guide_service.ts                Guide note assign/clear (boxes.guide_note_id)
+│   ├── guide_service.ts                Guide note assign/clear (boxes.guide_note_id)
+│   ├── link_service.ts                 Note link CRUD with same-box validation
+│   ├── search_service.ts               Box-scoped FTS via search_notes RPC
+│   ├── overview_service.ts             Box hierarchy + link graph (bounded)
+│   ├── system_guide_service.ts         Static structured product rules for API/MCP
+│   └── context_bundle_service.ts       Deterministic context bundle assembly
 ├── api/                                (future) Route handler layer
 ├── policies/                           (future) Authorization checks
 └── mcp/                                (future) MCP server implementation
@@ -240,9 +246,36 @@ AppShell's `rightPanel` prop:
 
 The AppShell in the layout provides only the sidebar. Pages own their own panel space.
 
+## Retrieval layer
+
+See [docs/retrieval_layer_v1.md](retrieval_layer_v1.md) for the full retrieval architecture:
+
+- Explicit note links (directional, same-box, typed)
+- Keyword search (Postgres FTS, weighted fields, deterministic ranking)
+- System guide (static product rules, reusable by API/MCP)
+- Box guide (structured interpretation surface per box)
+- Box overview (hierarchy + link graph, bounded)
+
+## Context bundle
+
+See [docs/context_bundle_v1.md](context_bundle_v1.md) for the bundle architecture:
+
+- Bounded, deterministic retrieval package centered on one note
+- Typed shared output (`ContextBundle`) usable by human UI, API, and MCP
+- Assembly pipeline with explicit ownership checks
+- Ancestor summary resolution via folder walk
+- Configurable options: guide, ancestor summary, linked limit
+
+## Shared markdown rendering
+
+All markdown rendering goes through `src/lib/markdown.ts` → `renderMarkdown(content)`.
+The `MarkdownPreview` component (`src/components/product/markdown_preview.tsx`) is the
+shared client component. Sanitization can be added in one place here when needed.
+
 ## Future prompts will add
 
 - `src/server/api/` — REST endpoints
 - `src/server/mcp/` — MCP tools and resources
 - `src/server/policies/` — authorization checks
-- Note links, search, context bundles, connection management
+- Import, export, manifest generation
+- Connection management, write proposals

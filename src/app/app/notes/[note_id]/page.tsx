@@ -7,11 +7,14 @@ import { getNoteById, listNotesByBox } from "@/server/repositories/note_reposito
 import { getBoxById } from "@/server/repositories/box_repository";
 import { getFolderById } from "@/server/repositories/folder_repository";
 import { listLinksForNote } from "@/server/services/link_service";
+import { assembleContextBundle } from "@/server/services/context_bundle_service";
+import { auditBundleRead } from "@/server/services/audit_service";
 import { NoteEditor } from "@/components/product/note_editor";
 import { LinkedNotesSection } from "@/components/product/linked_notes_section";
+import { ContextBundleViewer } from "@/components/product/context_bundle_viewer";
 import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 function formatDate(dateStr: string): string {
   return new Date(dateStr).toLocaleDateString("en-US", {
@@ -271,13 +274,29 @@ export default async function NotePage({
     listLinksForNote(supabase, note_id),
   ]);
 
+  // Assemble initial context bundle (default options, server-side)
+  const initialBundle = await assembleContextBundle(
+    supabase,
+    ctx.workspace.id,
+    note_id
+  );
+
+  // Audit the initial bundle read
+  await auditBundleRead(supabase, ctx.workspace.id, ctx.user!.id, note_id, {
+    box_id: box.id,
+    linked_count: initialBundle.linked_notes.length,
+    guide_included: initialBundle.guide_note !== null,
+    ancestor_summary_included: initialBundle.ancestor_summary_note !== null,
+    truncated: initialBundle.truncated,
+  });
+
   const isGuideNote = box.guide_note_id === note_id;
 
   return (
     <div className="flex h-full overflow-hidden">
-      {/* Main editing area */}
+      {/* Main content area */}
       <div className="flex flex-1 flex-col overflow-hidden">
-        {/* Breadcrumb header */}
+        {/* Breadcrumb */}
         <div className="flex items-center gap-3 border-b border-border px-6 py-3">
           <Breadcrumb
             workspaceName={ctx.workspace.name}
@@ -296,18 +315,44 @@ export default async function NotePage({
           )}
         </div>
 
-        {/* Editor fills the remaining space */}
-        <NoteEditor note={note} />
+        {/* Edit / Bundle tabs */}
+        <Tabs defaultValue="edit" className="flex flex-1 flex-col overflow-hidden">
+          <div className="border-b border-border px-6">
+            <TabsList variant="line" className="h-auto pb-0">
+              <TabsTrigger value="edit" className="pb-3">
+                Edit
+              </TabsTrigger>
+              <TabsTrigger value="bundle" className="pb-3">
+                Context Bundle
+              </TabsTrigger>
+            </TabsList>
+          </div>
 
-        {/* Linked notes section below editor */}
-        <div className="border-t border-border px-6 py-4">
-          <LinkedNotesSection
-            sourceNoteId={note_id}
-            outgoing={links.outgoing}
-            incoming={links.incoming}
-            allBoxNotes={allBoxNotes}
-          />
-        </div>
+          {/* ── Edit tab ── */}
+          <TabsContent value="edit" className="flex flex-1 flex-col overflow-hidden">
+            <NoteEditor note={note} />
+            <div className="border-t border-border px-6 py-4">
+              <LinkedNotesSection
+                sourceNoteId={note_id}
+                outgoing={links.outgoing}
+                incoming={links.incoming}
+                allBoxNotes={allBoxNotes}
+              />
+            </div>
+          </TabsContent>
+
+          {/* ── Context Bundle tab ── */}
+          <TabsContent value="bundle" className="flex-1 overflow-hidden">
+            <ScrollArea className="h-full">
+              <div className="mx-auto max-w-2xl px-6 py-6">
+                <ContextBundleViewer
+                  initialBundle={initialBundle}
+                  noteId={note_id}
+                />
+              </div>
+            </ScrollArea>
+          </TabsContent>
+        </Tabs>
       </div>
 
       {/* Right metadata panel */}

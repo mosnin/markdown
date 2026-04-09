@@ -113,6 +113,24 @@ export function auditNoteUpdated(
   });
 }
 
+// ─── Context bundle events ────────────────────────────────────────────────────
+
+export function auditBundleRead(
+  supabase: SupabaseClient,
+  workspaceId: string,
+  actorId: string,
+  noteId: string,
+  metadata: {
+    box_id: string;
+    linked_count: number;
+    guide_included: boolean;
+    ancestor_summary_included: boolean;
+    truncated: boolean;
+  }
+): Promise<void> {
+  return write(supabase, workspaceId, actorId, "note", noteId, "bundle.read", metadata);
+}
+
 // ─── Note link events ────────────────────────────────────────────────────────
 
 export function auditNoteLinkCreated(

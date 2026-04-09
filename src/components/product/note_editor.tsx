@@ -1,19 +1,14 @@
 "use client";
 
-import { useState, useTransition, useEffect } from "react";
+import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Check, Eye, Pencil } from "lucide-react";
-import { marked } from "marked";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
+import { renderMarkdown } from "@/lib/markdown";
 import { type Note } from "@/server/domain/types/note";
 import { saveNoteAction } from "@/app/app/notes/actions";
-
-// Configure marked for consistent output
-marked.setOptions({ async: false });
 
 interface NoteEditorProps {
   note: Note;
@@ -76,13 +71,7 @@ export function NoteEditor({ note }: NoteEditorProps) {
     });
   }
 
-  const renderedHtml = (() => {
-    try {
-      return marked.parse(content) as string;
-    } catch {
-      return "<p>Preview unavailable</p>";
-    }
-  })();
+  const renderedHtml = renderMarkdown(content);
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
