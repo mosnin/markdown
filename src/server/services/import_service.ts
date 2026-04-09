@@ -148,7 +148,6 @@ async function rpcCreateNote(
     summary,
     tags,
     readHint,
-    originType,
     actorId,
   }: {
     boxId: string;
@@ -160,7 +159,6 @@ async function rpcCreateNote(
     summary: string | null;
     tags: string[];
     readHint: string | null;
-    originType: string;
     actorId: string;
   }
 ): Promise<{ id: string; current_version_id: string | null }> {
@@ -177,13 +175,13 @@ async function rpcCreateNote(
     p_retrieval_priority: 0,
     p_kind: "note",
     p_actor_id: actorId,
+    p_origin_type: "imported",
+    p_change_origin: "import",
   });
 
   if (error || !data) throw new Error(error?.message ?? "Failed to create note");
 
-  // Override origin_type to 'imported' (the RPC defaults to 'human')
   const noteId = (data as { note: { id: string } }).note.id;
-  await supabase.from("notes").update({ origin_type: originType }).eq("id", noteId);
 
   return {
     id: noteId,
@@ -218,6 +216,7 @@ async function rpcUpdateNote(
     p_tags: tags,
     p_read_hint: readHint,
     p_actor_id: actorId,
+    p_change_origin: "import",
   });
 
   if (error) throw new Error(error.message ?? "Failed to update note");
@@ -270,7 +269,6 @@ async function importSingleMarkdown(
     summary: null,
     tags: [],
     readHint: null,
-    originType: "imported",
     actorId,
   });
 
@@ -743,7 +741,6 @@ async function applyNote(
         summary: mn.summary,
         tags: mn.tags,
         readHint: mn.read_hint,
-        originType: "imported",
         actorId,
       });
       noteIdMap.set(mn.id, result.id);
@@ -789,7 +786,6 @@ async function applyNote(
     summary: mn.summary,
     tags: mn.tags,
     readHint: mn.read_hint,
-    originType: "imported",
     actorId,
   });
 

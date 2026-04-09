@@ -3,6 +3,7 @@ import { type Note } from "@/server/domain/types/note";
 import { type NoteVersion } from "@/server/domain/types/note_version";
 import { type ConnectionRequestContext } from "@/server/auth/get_connection_context";
 import { PERMISSION_MODE } from "@/server/domain/constants/connection_constants";
+import { NOTE_READ_HINT } from "@/server/domain/constants/note_constants";
 import { getFolderById } from "@/server/repositories/folder_repository";
 import { getBoxById } from "@/server/repositories/box_repository";
 import { auditGeneratedNoteCreated } from "@/server/services/audit_service";
@@ -155,7 +156,7 @@ export async function createGeneratedNote(
   const markdown_content = input.markdown_content ?? "";
   const summary = input.summary ?? null;
   const tags = input.tags ?? [];
-  const read_hint = input.read_hint ?? "generated";
+  const read_hint = input.read_hint ?? NOTE_READ_HINT.GENERATED;
   const retrieval_priority = input.retrieval_priority ?? 0;
 
   const { data, error } = await adminClient.rpc("create_generated_note_with_version", {

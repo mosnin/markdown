@@ -4,8 +4,8 @@
 
 export const CONNECTION_TYPE = {
   MCP: "mcp",
-  API: "api",
-  WEBHOOK: "webhook",
+  API_TOKEN: "api_token",
+  INTERNAL: "internal",
 } as const;
 
 export type ConnectionType =
@@ -13,7 +13,7 @@ export type ConnectionType =
 
 export const CONNECTION_STATUS = {
   ACTIVE: "active",
-  SUSPENDED: "suspended",
+  PAUSED: "paused",
   REVOKED: "revoked",
 } as const;
 

@@ -145,25 +145,16 @@ const SYSTEM_GUIDE: SystemGuide = {
   ],
 
   relationshipTypes: [
-    { type: "related", description: "General association between two notes." },
-    {
-      type: "references",
-      description: "Source note cites or references the target note.",
-    },
-    {
-      type: "extends",
-      description: "Source note builds upon or expands the target note.",
-    },
-    {
-      type: "contradicts",
-      description:
-        "Source note presents information that conflicts with the target note.",
-    },
-    {
-      type: "supersedes",
-      description:
-        "Source note is the newer, authoritative replacement for the target note.",
-    },
+    { type: "related",       description: "General association between two notes." },
+    { type: "depends_on",   description: "Source note's understanding depends on the target note." },
+    { type: "parent_of",    description: "Source is a conceptual parent of the target note." },
+    { type: "child_of",     description: "Source is a conceptual child of the target note." },
+    { type: "reference_for", description: "Source note is cited as a reference for the target." },
+    { type: "extends",      description: "Source note builds upon or continues the target note." },
+    { type: "example_of",   description: "Source note is a concrete example of the target note." },
+    { type: "sibling_of",   description: "Source and target are peer-level notes." },
+    { type: "supersedes",   description: "Source note replaces or supersedes the target note." },
+    { type: "derived_from", description: "Source note was derived or extracted from the target." },
   ],
 
   retrievalRules: [

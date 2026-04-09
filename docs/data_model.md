@@ -110,7 +110,7 @@ The primary content unit. Markdown document with metadata.
 | `content_bytes` | integer | byte length of markdown_content, maintained by service |
 | `path_cache` | text | full path, maintained by service layer |
 | `kind` | text | `'note'` \| `'guide'` \| `'bundle'` |
-| `origin_type` | text | `'human'` \| `'connection'` \| `'import'` |
+| `origin_type` | text | `'user_created'` \| `'imported'` \| `'generated_by_tool'` \| `'duplicated'` \| `'restored'` |
 | `status` | text | `'active'` \| `'archived'` \| `'trashed'` |
 | `retrieval_priority` | integer | higher = surfaced first in AI retrieval |
 | `tags` | text[] | free-form labels |
@@ -137,7 +137,7 @@ Immutable full-content snapshots of a note's state. Never mutated after creation
 | `content_bytes` | integer | byte length |
 | `actor_type` | text | `'user'` \| `'connection'` \| `'system'` |
 | `actor_id` | text | uuid (user/connection) or `'system'` |
-| `change_origin` | text | `'human_edit'` \| `'connection_write'` \| `'import'` \| `'system'` |
+| `change_origin` | text | `'human_edit'` \| `'import'` \| `'generated'` \| `'proposal_approved'` \| `'rollback'` |
 | `diff_summary` | jsonb | lightweight description of changes (field names, deltas) |
 | `diff_patch` | text | optional full unified diff for audit/revert |
 | `created_at` | timestamptz | |
@@ -176,7 +176,7 @@ See [docs/relationship_contract_correction_v1.md](relationship_contract_correcti
 
 ### `connections`
 
-An authorized external agent (MCP client, webhook, API integration) with scoped access to one workspace.
+An authorized external agent (MCP client, API token integration, or internal service) with scoped access to one workspace.
 
 | Column | Type | Notes |
 |---|---|---|
@@ -184,8 +184,8 @@ An authorized external agent (MCP client, webhook, API integration) with scoped 
 | `workspace_id` | uuid FK | → `workspaces` |
 | `name` | text | |
 | `description` | text | nullable |
-| `connection_type` | text | `'mcp'` \| `'webhook'` \| `'api_integration'` |
-| `status` | text | `'active'` \| `'suspended'` \| `'revoked'` |
+| `connection_type` | text | `'mcp'` \| `'api_token'` \| `'internal'` |
+| `status` | text | `'active'` \| `'paused'` \| `'revoked'` |
 | `permission_mode` | text | `'read_only'` \| `'propose_writes'` \| `'full_write'` |
 | `last_used_at` | timestamptz | nullable |
 | `usage_count` | integer | |
@@ -332,6 +332,7 @@ Hard deletes are not issued by application code. Future retention/purge jobs may
 | `supabase/migrations/20260409000001_core_schema.sql` | All 11 tables, indexes, triggers, helper functions |
 | `supabase/migrations/20260409000002_rls_policies.sql` | RLS enable + all policies |
 | `supabase/migrations/20260409000003_note_rpc_functions.sql` | Atomic note create and update RPC functions |
+| `supabase/migrations/20260409000009_vocabulary_normalization.sql` | `origin_type`, `read_hint`, `connection_type`, `connection_status` corrections |
 
 Circular FK references are resolved in the schema migration using `ALTER TABLE ... ADD CONSTRAINT` after both tables exist:
 

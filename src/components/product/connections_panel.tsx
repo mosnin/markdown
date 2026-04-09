@@ -52,14 +52,14 @@ export type ConnectionWithScopes = Connection & {
 
 const TYPE_LABEL: Record<ConnectionType, string> = {
   mcp: "MCP",
-  api: "API",
-  webhook: "Webhook",
+  api_token: "API Token",
+  internal: "Internal",
 };
 
 const TYPE_ICON: Record<ConnectionType, React.ElementType> = {
   mcp: Zap,
-  api: Key,
-  webhook: Webhook,
+  api_token: Key,
+  internal: Webhook,
 };
 
 const PERMISSION_LABEL: Record<PermissionMode, string> = {
@@ -161,7 +161,7 @@ function CreateConnectionDialog({
 }) {
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
-  const [connectionType, setConnectionType] = useState<ConnectionType>("api");
+  const [connectionType, setConnectionType] = useState<ConnectionType>("api_token");
   const [permissionMode, setPermissionMode] =
     useState<PermissionMode>("read_only");
   const [selectedBoxIds, setSelectedBoxIds] = useState<Set<string>>(new Set());
@@ -254,9 +254,9 @@ function CreateConnectionDialog({
             <div className="flex gap-2">
               {(
                 [
-                  CONNECTION_TYPE.API,
+                  CONNECTION_TYPE.API_TOKEN,
                   CONNECTION_TYPE.MCP,
-                  CONNECTION_TYPE.WEBHOOK,
+                  CONNECTION_TYPE.INTERNAL,
                 ] as ConnectionType[]
               ).map((type) => {
                 const Icon = TYPE_ICON[type];
