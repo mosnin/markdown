@@ -1,0 +1,44 @@
+import { requireAuthenticatedUser } from "@/server/auth/require_authenticated_user";
+import { createClient } from "@/lib/supabase/server";
+import { listWorkspaceAuditEvents } from "@/server/services/audit_view_service";
+import { AuditPanel } from "@/components/product/audit_panel";
+
+/**
+ * Workspace audit log browser.
+ *
+ * Displays an append-only record of all workspace events — note lifecycle
+ * changes, write proposals, AI agent actions, and more. Read-only view;
+ * no mutations are possible from this page.
+ */
+export default async function AuditPage() {
+  const ctx = await requireAuthenticatedUser();
+  const supabase = await createClient();
+
+  const result = await listWorkspaceAuditEvents(supabase, ctx.workspace.id, {
+    limit: 50,
+    page: 1,
+  });
+
+  return (
+    <div className="flex h-full flex-col overflow-hidden">
+      {/* Header */}
+      <div className="border-b border-border px-6 py-4">
+        <h1 className="text-lg font-semibold tracking-tight text-foreground">
+          Audit log
+        </h1>
+        <p className="mt-0.5 text-sm text-muted-foreground">
+          Immutable record of all workspace events — lifecycle changes,
+          AI writes, proposals, and connections.
+        </p>
+      </div>
+
+      {/* Panel */}
+      <div className="flex-1 overflow-hidden">
+        <AuditPanel
+          initialEvents={result.events}
+          workspaceId={ctx.workspace.id}
+        />
+      </div>
+    </div>
+  );
+}

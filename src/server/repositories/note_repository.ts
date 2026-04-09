@@ -121,6 +121,38 @@ export async function updateNote(
   return data as Note;
 }
 
+/** List trashed notes for a box (for the trash recovery surface). */
+export async function listTrashedNotesByBox(
+  supabase: SupabaseClient,
+  box_id: string
+): Promise<Note[]> {
+  const { data, error } = await supabase
+    .from("notes")
+    .select("*")
+    .eq("box_id", box_id)
+    .eq("status", NOTE_STATUS.TRASHED)
+    .order("updated_at", { ascending: false });
+
+  if (error || !data) return [];
+  return data as Note[];
+}
+
+/** List archived notes for a box (for the archive browsing surface). */
+export async function listArchivedNotesByBox(
+  supabase: SupabaseClient,
+  box_id: string
+): Promise<Note[]> {
+  const { data, error } = await supabase
+    .from("notes")
+    .select("*")
+    .eq("box_id", box_id)
+    .eq("status", NOTE_STATUS.ARCHIVED)
+    .order("updated_at", { ascending: false });
+
+  if (error || !data) return [];
+  return data as Note[];
+}
+
 /**
  * Fetch all non-trashed notes in a box in a single query.
  * Returns up to 1000 notes. Used for bulk export assembly.

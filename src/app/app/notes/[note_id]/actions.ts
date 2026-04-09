@@ -3,6 +3,12 @@
 import { requireAuthenticatedUser } from "@/server/auth/require_authenticated_user";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { rollbackNoteToVersion } from "@/server/services/version_history_service";
+import {
+  archiveNote,
+  unarchiveNote,
+  trashNote,
+  restoreNote,
+} from "@/server/services/lifecycle_service";
 
 type ActionResult<T = undefined> =
   | { success: true; data: T }
@@ -10,13 +16,7 @@ type ActionResult<T = undefined> =
 
 /**
  * Roll back a note to a selected prior version.
- *
- * Human-only. Not available to external connections or MCP in V1.
- *
- * Creates a new note_version (change_origin='rollback') from the selected
- * historical snapshot. The target version row is never mutated.
- *
- * Returns the new version id and version number on success.
+ * Human-only. Creates a new version (change_origin='rollback') — history is preserved.
  */
 export async function rollbackNoteAction(
   noteId: string,
@@ -44,5 +44,57 @@ export async function rollbackNoteAction(
   } catch (err) {
     const message = err instanceof Error ? err.message : "Rollback failed";
     return { success: false, error: message };
+  }
+}
+
+/** Archive a note. Blocked if the note is the box's current guide note. */
+export async function archiveNoteAction(
+  noteId: string
+): Promise<ActionResult> {
+  try {
+    const ctx = await requireAuthenticatedUser();
+    await archiveNote(createAdminClient(), ctx.user!.id, ctx.workspace.id, noteId);
+    return { success: true, data: undefined };
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : "Failed" };
+  }
+}
+
+/** Unarchive a note, returning it to active. */
+export async function unarchiveNoteAction(
+  noteId: string
+): Promise<ActionResult> {
+  try {
+    const ctx = await requireAuthenticatedUser();
+    await unarchiveNote(createAdminClient(), ctx.user!.id, ctx.workspace.id, noteId);
+    return { success: true, data: undefined };
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : "Failed" };
+  }
+}
+
+/** Move note to trash. Blocked if it is the box's current guide note. */
+export async function trashNoteAction(
+  noteId: string
+): Promise<ActionResult> {
+  try {
+    const ctx = await requireAuthenticatedUser();
+    await trashNote(createAdminClient(), ctx.user!.id, ctx.workspace.id, noteId);
+    return { success: true, data: undefined };
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : "Failed" };
+  }
+}
+
+/** Restore a trashed note to active. */
+export async function restoreNoteAction(
+  noteId: string
+): Promise<ActionResult> {
+  try {
+    const ctx = await requireAuthenticatedUser();
+    await restoreNote(createAdminClient(), ctx.user!.id, ctx.workspace.id, noteId);
+    return { success: true, data: undefined };
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : "Failed" };
   }
 }

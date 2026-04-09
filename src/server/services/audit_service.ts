@@ -449,6 +449,108 @@ export function auditGeneratedFolderPolicyChanged(
   );
 }
 
+// ─── Lifecycle events ─────────────────────────────────────────────────────────
+
+export function auditNoteArchived(
+  supabase: SupabaseClient,
+  workspaceId: string,
+  userId: string,
+  noteId: string,
+  metadata: { title: string; box_id: string }
+): Promise<void> {
+  return write(supabase, workspaceId, userId, "note", noteId, "note.archived", metadata);
+}
+
+export function auditNoteUnarchived(
+  supabase: SupabaseClient,
+  workspaceId: string,
+  userId: string,
+  noteId: string,
+  metadata: { title: string; box_id: string }
+): Promise<void> {
+  return write(supabase, workspaceId, userId, "note", noteId, "note.unarchived", metadata);
+}
+
+export function auditNoteTrashed(
+  supabase: SupabaseClient,
+  workspaceId: string,
+  userId: string,
+  noteId: string,
+  metadata: { title: string; box_id: string }
+): Promise<void> {
+  return write(supabase, workspaceId, userId, "note", noteId, "note.trashed", metadata);
+}
+
+export function auditNoteRestored(
+  supabase: SupabaseClient,
+  workspaceId: string,
+  userId: string,
+  noteId: string,
+  metadata: { title: string; box_id: string }
+): Promise<void> {
+  return write(supabase, workspaceId, userId, "note", noteId, "note.restored", metadata);
+}
+
+export function auditFolderSubtreeArchived(
+  supabase: SupabaseClient,
+  workspaceId: string,
+  userId: string,
+  folderId: string,
+  metadata: { box_id: string; folder_name: string; folder_count: number; note_count: number }
+): Promise<void> {
+  return write(supabase, workspaceId, userId, "folder", folderId, "folder.subtree_archived", metadata);
+}
+
+export function auditFolderSubtreeUnarchived(
+  supabase: SupabaseClient,
+  workspaceId: string,
+  userId: string,
+  folderId: string,
+  metadata: { box_id: string; folder_name: string; folder_count: number; note_count: number }
+): Promise<void> {
+  return write(supabase, workspaceId, userId, "folder", folderId, "folder.subtree_unarchived", metadata);
+}
+
+export function auditFolderSubtreeTrashed(
+  supabase: SupabaseClient,
+  workspaceId: string,
+  userId: string,
+  folderId: string,
+  metadata: { box_id: string; folder_name: string; folder_count: number; note_count: number }
+): Promise<void> {
+  return write(supabase, workspaceId, userId, "folder", folderId, "folder.subtree_trashed", metadata);
+}
+
+export function auditFolderSubtreeRestored(
+  supabase: SupabaseClient,
+  workspaceId: string,
+  userId: string,
+  folderId: string,
+  metadata: { box_id: string; folder_name: string; folder_count: number; note_count: number }
+): Promise<void> {
+  return write(supabase, workspaceId, userId, "folder", folderId, "folder.subtree_restored", metadata);
+}
+
+export function auditBoxArchived(
+  supabase: SupabaseClient,
+  workspaceId: string,
+  userId: string,
+  boxId: string,
+  metadata: { box_name: string; folder_count: number; note_count: number }
+): Promise<void> {
+  return write(supabase, workspaceId, userId, "box", boxId, "box.archived", metadata);
+}
+
+export function auditBoxUnarchived(
+  supabase: SupabaseClient,
+  workspaceId: string,
+  userId: string,
+  boxId: string,
+  metadata: { box_name: string; folder_count: number; note_count: number }
+): Promise<void> {
+  return write(supabase, workspaceId, userId, "box", boxId, "box.unarchived", metadata);
+}
+
 // ─── Version history events ───────────────────────────────────────────────────
 
 export function auditNoteRollback(

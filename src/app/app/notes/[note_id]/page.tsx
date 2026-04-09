@@ -16,6 +16,7 @@ import { LinkedNotesSection } from "@/components/product/linked_notes_section";
 import { ContextBundleViewer } from "@/components/product/context_bundle_viewer";
 import { NoteExportMenu } from "@/components/product/export_menu";
 import { NoteHistoryPanel } from "@/components/product/note_history_panel";
+import { NoteLifecycleMenu } from "@/components/product/note_lifecycle_menu";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -321,7 +322,10 @@ export default async function NotePage({
               </Badge>
             )}
           </div>
-          <NoteExportMenu noteId={note_id} noteTitle={note.title} />
+          <div className="flex items-center gap-1.5 shrink-0">
+            <NoteLifecycleMenu noteId={note_id} noteStatus={note.status as "draft" | "active" | "archived" | "trashed"} />
+            <NoteExportMenu noteId={note_id} noteTitle={note.title} />
+          </div>
         </div>
 
         {/* Edit / Bundle / History tabs */}

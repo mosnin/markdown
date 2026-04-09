@@ -43,12 +43,14 @@ export async function listAuditEventsByWorkspace(
     object_type,
     object_id,
     event_type,
+    actor_type,
     limit = 100,
     offset = 0,
   }: {
     object_type?: string;
     object_id?: string;
     event_type?: string;
+    actor_type?: ActorType;
     limit?: number;
     offset?: number;
   } = {}
@@ -61,6 +63,7 @@ export async function listAuditEventsByWorkspace(
   if (object_type) query = query.eq("object_type", object_type);
   if (object_id) query = query.eq("object_id", object_id);
   if (event_type) query = query.eq("event_type", event_type);
+  if (actor_type) query = query.eq("actor_type", actor_type);
 
   const { data, error } = await query
     .order("created_at", { ascending: false })

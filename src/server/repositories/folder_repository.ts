@@ -149,3 +149,35 @@ export async function updateFolder(
   if (error || !data) return null;
   return data as Folder;
 }
+
+/** List trashed folders for a box (for the trash recovery surface). */
+export async function listTrashedFoldersByBox(
+  supabase: SupabaseClient,
+  box_id: string
+): Promise<Folder[]> {
+  const { data, error } = await supabase
+    .from("folders")
+    .select("*")
+    .eq("box_id", box_id)
+    .eq("status", FOLDER_STATUS.TRASHED)
+    .order("path_cache", { ascending: true });
+
+  if (error || !data) return [];
+  return data as Folder[];
+}
+
+/** List archived folders for a box (for the archive browsing surface). */
+export async function listArchivedFoldersByBox(
+  supabase: SupabaseClient,
+  box_id: string
+): Promise<Folder[]> {
+  const { data, error } = await supabase
+    .from("folders")
+    .select("*")
+    .eq("box_id", box_id)
+    .eq("status", FOLDER_STATUS.ARCHIVED)
+    .order("path_cache", { ascending: true });
+
+  if (error || !data) return [];
+  return data as Folder[];
+}

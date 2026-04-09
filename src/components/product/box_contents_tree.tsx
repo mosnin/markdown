@@ -1,3 +1,4 @@
+import React from "react";
 import Link from "next/link";
 import { BookOpen, ChevronRight, FileText, Folder, Package } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -18,6 +19,7 @@ export interface TreeFolder {
   name: string;
   slug: string;
   path_cache: string;
+  status: string;
   children: TreeFolder[];
   notes: TreeNote[];
 }
@@ -36,6 +38,7 @@ export function buildBoxTree(
       name: f.name,
       slug: f.slug,
       path_cache: f.path_cache,
+      status: f.status,
       children: [],
       notes: [],
     });
@@ -107,9 +110,11 @@ function NoteRow({ note, depth = 0 }: { note: TreeNote; depth?: number }) {
 function FolderNode({
   folder,
   depth = 0,
+  folderLifecycleMenu,
 }: {
   folder: TreeFolder;
   depth?: number;
+  folderLifecycleMenu?: (folder: TreeFolder) => React.ReactNode;
 }) {
   const hasChildren = folder.children.length > 0 || folder.notes.length > 0;
   return (
@@ -124,13 +129,14 @@ function FolderNode({
           <span className="h-3 w-3 shrink-0" />
         )}
         <Folder className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-        <span className="truncate font-medium">{folder.name}</span>
+        <span className="truncate font-medium flex-1">{folder.name}</span>
+        {folderLifecycleMenu?.(folder)}
       </div>
       {folder.notes.map((note) => (
         <NoteRow key={note.id} note={note} depth={depth + 1} />
       ))}
       {folder.children.map((child) => (
-        <FolderNode key={child.id} folder={child} depth={depth + 1} />
+        <FolderNode key={child.id} folder={child} depth={depth + 1} folderLifecycleMenu={folderLifecycleMenu} />
       ))}
     </div>
   );
@@ -142,13 +148,15 @@ interface BoxContentsTreeProps {
   folders: FolderType[];
   notes: Note[];
   className?: string;
+  /** Optional render prop — renders a lifecycle menu next to each folder row. */
+  folderLifecycleMenu?: (folder: TreeFolder) => React.ReactNode;
 }
 
 /**
  * Hierarchical tree of folders and notes for a box.
  * Server component — renders links, no expand/collapse state needed in V1.
  */
-export function BoxContentsTree({ folders, notes, className }: BoxContentsTreeProps) {
+export function BoxContentsTree({ folders, notes, className, folderLifecycleMenu }: BoxContentsTreeProps) {
   const { rootFolders, rootNotes } = buildBoxTree(folders, notes);
 
   const empty = rootFolders.length === 0 && rootNotes.length === 0;
@@ -163,7 +171,7 @@ export function BoxContentsTree({ folders, notes, className }: BoxContentsTreePr
   return (
     <div className={cn("flex flex-col gap-0.5", className)}>
       {rootFolders.map((folder) => (
-        <FolderNode key={folder.id} folder={folder} />
+        <FolderNode key={folder.id} folder={folder} folderLifecycleMenu={folderLifecycleMenu} />
       ))}
       {rootNotes.map((note) => (
         <NoteRow key={note.id} note={note} />

@@ -1,10 +1,19 @@
 import { notFound } from "next/navigation";
-import { Bot, FileText, Folder } from "lucide-react";
+import { Bot, FileText, Folder, Archive, RotateCcw } from "lucide-react";
 import { requireAuthenticatedUser } from "@/server/auth/require_authenticated_user";
 import { createClient } from "@/lib/supabase/server";
 import { getBoxById } from "@/server/repositories/box_repository";
 import { listFoldersByBox } from "@/server/repositories/folder_repository";
-import { listNotesByBox, getNoteById } from "@/server/repositories/note_repository";
+import {
+  listNotesByBox,
+  getNoteById,
+  listArchivedNotesByBox,
+  listTrashedNotesByBox,
+} from "@/server/repositories/note_repository";
+import {
+  listArchivedFoldersByBox,
+  listTrashedFoldersByBox,
+} from "@/server/repositories/folder_repository";
 import { listLinksFromNote } from "@/server/repositories/note_link_repository";
 import { getBoxOverview } from "@/server/services/overview_service";
 import { PageHeader } from "@/components/product/page_header";
@@ -18,6 +27,8 @@ import { CreateFolderDialog } from "@/components/product/create_folder_dialog";
 import { CreateNoteDialog } from "@/components/product/create_note_dialog";
 import { GuideNotePicker } from "@/components/product/guide_note_picker";
 import { NoteStub } from "@/components/product/note_stub";
+import { BoxLifecycleMenu } from "@/components/product/box_lifecycle_menu";
+import { FolderLifecycleMenu } from "@/components/product/folder_lifecycle_menu";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
@@ -81,6 +92,12 @@ async function BoxPanel({
           <p className="mt-0.5 text-sm font-medium text-foreground">{box.name}</p>
           {box.description && (
             <p className="mt-1 text-xs text-muted-foreground">{box.description}</p>
+          )}
+          {box.status === "archived" && (
+            <Badge variant="secondary" className="mt-2 flex items-center gap-1 w-fit text-[10px] font-normal">
+              <Archive className="h-3 w-3" />
+              Archived
+            </Badge>
           )}
         </div>
 
@@ -198,10 +215,14 @@ export default async function BoxPage({
     notFound();
   }
 
-  // Load contents
-  const [folders, notes] = await Promise.all([
+  // Load active contents + archived/trashed for discovery tabs
+  const [folders, notes, archivedNotes, trashedNotes, archivedFolders, trashedFolders] = await Promise.all([
     listFoldersByBox(supabase, box.id),
     listNotesByBox(supabase, box.id),
+    listArchivedNotesByBox(supabase, box.id),
+    listTrashedNotesByBox(supabase, box.id),
+    listArchivedFoldersByBox(supabase, box.id),
+    listTrashedFoldersByBox(supabase, box.id),
   ]);
 
   // Load guide note if assigned
@@ -222,6 +243,9 @@ export default async function BoxPage({
     b.updated_at.localeCompare(a.updated_at)
   );
 
+  const archivedCount = archivedNotes.length + archivedFolders.length;
+  const trashedCount = trashedNotes.length + trashedFolders.length;
+
   return (
     <div className="flex h-full overflow-hidden">
       {/* Main content */}
@@ -241,6 +265,10 @@ export default async function BoxPage({
                 }))}
               />
               <BoxExportMenu boxId={box.id} boxName={box.name} />
+              <BoxLifecycleMenu
+                boxId={box.id}
+                boxStatus={box.status as "active" | "archived"}
+              />
               <CreateFolderDialog boxId={box.id} />
               <CreateNoteDialog boxId={box.id} folders={folders} />
             </div>
@@ -265,6 +293,22 @@ export default async function BoxPage({
               <TabsTrigger value="search" className="pb-3">
                 Search
               </TabsTrigger>
+              {archivedCount > 0 && (
+                <TabsTrigger value="archived" className="pb-3">
+                  Archived
+                  <Badge variant="secondary" className="ml-1.5 h-4 px-1.5 text-[10px] font-normal">
+                    {archivedCount}
+                  </Badge>
+                </TabsTrigger>
+              )}
+              {trashedCount > 0 && (
+                <TabsTrigger value="trashed" className="pb-3">
+                  Trash
+                  <Badge variant="secondary" className="ml-1.5 h-4 px-1.5 text-[10px] font-normal">
+                    {trashedCount}
+                  </Badge>
+                </TabsTrigger>
+              )}
             </TabsList>
           </div>
 
@@ -301,7 +345,16 @@ export default async function BoxPage({
           <TabsContent value="tree" className="flex-1 overflow-hidden">
             <ScrollArea className="h-full">
               <div className="mx-auto max-w-3xl px-6 py-4">
-                <BoxContentsTree folders={folders} notes={notes} />
+                <BoxContentsTree
+                  folders={folders}
+                  notes={notes}
+                  folderLifecycleMenu={(folder) => (
+                    <FolderLifecycleMenu
+                      folderId={folder.id}
+                      folderStatus={folder.status as "active" | "archived" | "trashed"}
+                    />
+                  )}
+                />
               </div>
             </ScrollArea>
           </TabsContent>
@@ -337,6 +390,122 @@ export default async function BoxPage({
               </div>
             </ScrollArea>
           </TabsContent>
+
+          {/* ── Archived tab ── */}
+          {archivedCount > 0 && (
+            <TabsContent value="archived" className="flex-1 overflow-hidden">
+              <ScrollArea className="h-full">
+                <div className="mx-auto max-w-3xl px-6 py-4">
+                  <p className="mb-3 text-xs text-muted-foreground">
+                    Archived content is hidden from active views. Use the lifecycle menu on each item to unarchive.
+                  </p>
+                  {archivedFolders.length > 0 && (
+                    <div className="mb-4">
+                      <p className="mb-2 text-xs font-medium uppercase tracking-wider text-muted-foreground/60">
+                        Folders ({archivedFolders.length})
+                      </p>
+                      <div className="flex flex-col gap-1">
+                        {archivedFolders.map((folder) => (
+                          <div
+                            key={folder.id}
+                            className="flex items-center justify-between gap-2 rounded-md border border-border px-3 py-2"
+                          >
+                            <div className="flex items-center gap-2 min-w-0">
+                              <Folder className="h-3.5 w-3.5 shrink-0 text-muted-foreground/60" />
+                              <span className="truncate text-sm text-foreground/80">{folder.name}</span>
+                              <span className="text-xs text-muted-foreground/60 truncate">{folder.path_cache}</span>
+                            </div>
+                            <FolderLifecycleMenu
+                              folderId={folder.id}
+                              folderStatus="archived"
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {archivedNotes.length > 0 && (
+                    <div>
+                      <p className="mb-2 text-xs font-medium uppercase tracking-wider text-muted-foreground/60">
+                        Notes ({archivedNotes.length})
+                      </p>
+                      <div className="flex flex-col gap-2">
+                        {archivedNotes.map((note) => (
+                          <Link key={note.id} href={`/app/notes/${note.id}`} className="block">
+                            <NoteStub
+                              title={note.title}
+                              kind={note.kind as "note" | "guide" | "bundle"}
+                              excerpt={note.summary ?? undefined}
+                              updatedAt={formatRelativeDate(note.updated_at)}
+                              tags={note.tags.slice(0, 3)}
+                            />
+                          </Link>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </ScrollArea>
+            </TabsContent>
+          )}
+
+          {/* ── Trashed tab ── */}
+          {trashedCount > 0 && (
+            <TabsContent value="trashed" className="flex-1 overflow-hidden">
+              <ScrollArea className="h-full">
+                <div className="mx-auto max-w-3xl px-6 py-4">
+                  <p className="mb-3 text-xs text-muted-foreground">
+                    Trashed content is excluded from all retrieval and context building. Restore to make it active again.
+                  </p>
+                  {trashedFolders.length > 0 && (
+                    <div className="mb-4">
+                      <p className="mb-2 text-xs font-medium uppercase tracking-wider text-muted-foreground/60">
+                        Folders ({trashedFolders.length})
+                      </p>
+                      <div className="flex flex-col gap-1">
+                        {trashedFolders.map((folder) => (
+                          <div
+                            key={folder.id}
+                            className="flex items-center justify-between gap-2 rounded-md border border-border px-3 py-2"
+                          >
+                            <div className="flex items-center gap-2 min-w-0">
+                              <Folder className="h-3.5 w-3.5 shrink-0 text-muted-foreground/60" />
+                              <span className="truncate text-sm text-foreground/80">{folder.name}</span>
+                              <span className="text-xs text-muted-foreground/60 truncate">{folder.path_cache}</span>
+                            </div>
+                            <FolderLifecycleMenu
+                              folderId={folder.id}
+                              folderStatus="trashed"
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {trashedNotes.length > 0 && (
+                    <div>
+                      <p className="mb-2 text-xs font-medium uppercase tracking-wider text-muted-foreground/60">
+                        Notes ({trashedNotes.length})
+                      </p>
+                      <div className="flex flex-col gap-2">
+                        {trashedNotes.map((note) => (
+                          <Link key={note.id} href={`/app/notes/${note.id}`} className="block">
+                            <NoteStub
+                              title={note.title}
+                              kind={note.kind as "note" | "guide" | "bundle"}
+                              excerpt={note.summary ?? undefined}
+                              updatedAt={formatRelativeDate(note.updated_at)}
+                              tags={note.tags.slice(0, 3)}
+                            />
+                          </Link>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </ScrollArea>
+            </TabsContent>
+          )}
         </Tabs>
       </div>
 

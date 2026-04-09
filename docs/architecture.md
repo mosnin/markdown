@@ -434,6 +434,45 @@ pnpm mcp       # run with tsx (dev)
 pnpm build:mcp # compile to dist/mcp/ (prod)
 ```
 
+## Lifecycle control layer
+
+See [docs/lifecycle_controls_v1.md](lifecycle_controls_v1.md) for the full lifecycle architecture.
+
+- **Human-only**: no lifecycle mutations exposed via API or MCP
+- **States**: `active ↔ archived` (reversible hide), `active → trashed → active` (restore)
+- **Subtree operations**: folder archive/trash/restore via atomic recursive-CTE SQL RPCs
+- **Guide note protection**: note/folder operations blocked if content is the box's current guide note
+- **Audit**: every lifecycle mutation fires an append-only audit event
+- **Audit log UI**: `/app/audit` — read-only browser with actor/object-type filtering
+
+```
+supabase/migrations/20260409000007_lifecycle_rpc.sql
+
+src/server/services/
+├── lifecycle_service.ts       archiveNote/unarchiveNote/trashNote/restoreNote + folder + box variants
+└── audit_view_service.ts      listWorkspaceAuditEvents, AUDIT_OBJECT_TYPES, AUDIT_EVENT_GROUPS
+
+src/server/repositories/
+├── note_repository.ts         listArchivedNotesByBox, listTrashedNotesByBox (added)
+└── folder_repository.ts       listArchivedFoldersByBox, listTrashedFoldersByBox (added)
+
+src/app/app/notes/[note_id]/
+└── actions.ts                 archiveNoteAction, unarchiveNoteAction, trashNoteAction, restoreNoteAction
+
+src/app/app/boxes/[box_id]/
+└── actions.ts                 archiveFolderAction, unarchiveFolderAction, trashFolderAction, restoreFolderAction, archiveBoxAction, unarchiveBoxAction
+
+src/app/app/audit/
+├── page.tsx                   /app/audit route — audit event browser
+└── actions.ts                 fetchAuditEventsAction
+
+src/components/product/
+├── note_lifecycle_menu.tsx    Note archive/trash/restore dropdown
+├── folder_lifecycle_menu.tsx  Folder subtree archive/trash/restore dropdown
+├── box_lifecycle_menu.tsx     Box archive/unarchive dropdown
+└── audit_panel.tsx            Audit event list with filter + expand
+```
+
 ## Future prompts will add
 
 - `src/server/policies/` — authorization checks

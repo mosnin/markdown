@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Archive, Box, Home, Inbox, Plus, Settings } from "lucide-react";
+import { Archive, Box, ClipboardList, Home, Inbox, Plus, Settings } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { type Box as BoxType } from "@/server/domain/types/box";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -21,6 +21,7 @@ const primaryNav = [
   { label: "Home", href: "/app", icon: Home },
   { label: "Workspace", href: "/app/workspaces", icon: Archive },
   { label: "Proposals", href: "/app/proposals", icon: Inbox },
+  { label: "Audit log", href: "/app/audit", icon: ClipboardList },
 ];
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
