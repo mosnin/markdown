@@ -1,36 +1,83 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Context Store
 
-## Getting Started
+A structured, markdown-native context operating system for humans and AI.
 
-First, run the development server:
+Context Store is not a generic notes app. It is an opinionated system for capturing, organizing, and serving structured context — to yourself and to AI agents — through a clear information hierarchy: **workspaces → boxes → folders → notes / guides / bundles**.
+
+---
+
+## Local development
+
+### Prerequisites
+
+- Node.js 20+
+- pnpm 9+
+
+### Setup
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
+# 1. Install dependencies
+pnpm install
+
+# 2. Copy environment variables
+cp .env.example .env.local
+# Fill in Supabase credentials when the database prompt is implemented.
+# The app runs without them for now (no auth, no data persistence).
+
+# 3. Start the dev server
 pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### Available commands
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+| Command | Description |
+|---|---|
+| `pnpm dev` | Start local dev server with HMR |
+| `pnpm build` | Production build |
+| `pnpm start` | Serve production build |
+| `pnpm lint` | Run ESLint |
 
-## Learn More
+---
 
-To learn more about Next.js, take a look at the following resources:
+## Project status
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+This is the **foundation prompt** result. The following is in place:
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+- [x] Next.js 16 App Router with TypeScript and Tailwind v4
+- [x] shadcn/ui component library
+- [x] Light / dark mode with next-themes
+- [x] Design token system in `globals.css`
+- [x] Application shell (sidebar, header, main, right panel)
+- [x] Routes: `/`, `/app`, `/app/workspaces`, `/app/boxes/[box_id]`, `/app/notes/[note_id]`, `/app/settings`
+- [x] Product UI components (tree, note card, metadata panel, empty state)
+- [x] Folder structure for backend, services, and MCP
 
-## Deploy on Vercel
+The following is **not yet implemented**:
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+- [ ] Supabase auth
+- [ ] Database schema and migrations
+- [ ] Real data fetching
+- [ ] Markdown editor
+- [ ] API endpoints
+- [ ] MCP server
+- [ ] Import / export
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+---
+
+## Information architecture
+
+```
+Workspace
+  └── Box
+        ├── Folder
+        │     ├── Note
+        │     ├── Guide note
+        │     └── Context bundle
+        ├── Note (root-level)
+        └── Context bundle (root-level)
+```
+
+See [docs/architecture.md](docs/architecture.md) for the full module layout.
+See [docs/design_system.md](docs/design_system.md) for UI rules and component guidance.
