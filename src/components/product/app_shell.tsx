@@ -6,6 +6,11 @@ interface AppShellProps {
   children: ReactNode;
   /** Optional right panel — metadata, context, etc. */
   rightPanel?: ReactNode;
+  /**
+   * Authenticated user's email, threaded from the /app layout.
+   * Passed to the sidebar for the user menu affordance.
+   */
+  userEmail?: string;
 }
 
 /**
@@ -21,12 +26,12 @@ interface AppShellProps {
  * panel is omitted. A sheet-based drawer handles mobile navigation
  * (wired in a later prompt).
  */
-export function AppShell({ children, rightPanel }: AppShellProps) {
+export function AppShell({ children, rightPanel, userEmail }: AppShellProps) {
   return (
     <div className="flex h-full w-full overflow-hidden bg-background">
       {/* Left sidebar — hidden on mobile */}
       <div className="hidden md:flex md:h-full md:shrink-0">
-        <AppSidebar />
+        <AppSidebar userEmail={userEmail} />
       </div>
 
       {/* Main content + optional right panel */}

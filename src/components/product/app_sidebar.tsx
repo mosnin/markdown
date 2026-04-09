@@ -20,20 +20,13 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { ThemeToggle } from "@/components/product/theme_toggle";
+import { UserMenu } from "@/components/product/user_menu";
 
 // ─── Navigation items ────────────────────────────────────────────────────────
 
 const primaryNav = [
-  {
-    label: "Home",
-    href: "/app",
-    icon: Home,
-  },
-  {
-    label: "Workspaces",
-    href: "/app/workspaces",
-    icon: Archive,
-  },
+  { label: "Home", href: "/app", icon: Home },
+  { label: "Workspaces", href: "/app/workspaces", icon: Archive },
 ];
 
 // Stub workspace tree — replaced with real data in a later prompt.
@@ -58,7 +51,7 @@ function navItemClass(isActive: boolean) {
   );
 }
 
-// ─── Rail nav item ───────────────────────────────────────────────────────────
+// ─── Rail nav item ────────────────────────────────────────────────────────────
 
 function NavItem({
   href,
@@ -74,7 +67,9 @@ function NavItem({
   return (
     <Tooltip>
       {/* Base UI Tooltip: use render prop instead of asChild */}
-      <TooltipTrigger render={<Link href={href} className={navItemClass(isActive)} />}>
+      <TooltipTrigger
+        render={<Link href={href} className={navItemClass(isActive)} />}
+      >
         <Icon className="h-4 w-4 shrink-0" />
         <span className="truncate">{label}</span>
       </TooltipTrigger>
@@ -115,9 +110,17 @@ function BoxNavItem({
   );
 }
 
-// ─── Sidebar ─────────────────────────────────────────────────────────────────
+// ─── Sidebar ──────────────────────────────────────────────────────────────────
 
-export function AppSidebar() {
+interface AppSidebarProps {
+  /**
+   * Authenticated user's email, passed from the server layout.
+   * Rendered in the user menu at the bottom of the sidebar.
+   */
+  userEmail?: string;
+}
+
+export function AppSidebar({ userEmail }: AppSidebarProps) {
   const pathname = usePathname();
 
   return (
@@ -154,15 +157,12 @@ export function AppSidebar() {
 
       {/* Workspace tree */}
       <ScrollArea className="flex-1 px-2 py-1">
-        {/* Workspace label */}
         <div className="mb-1 flex items-center gap-1 px-2.5 py-1">
           <ChevronRight className="h-3 w-3 text-sidebar-foreground/40" />
           <span className="text-xs font-medium uppercase tracking-wider text-sidebar-foreground/40">
             {stubWorkspace.label}
           </span>
         </div>
-
-        {/* Boxes */}
         <nav className="flex flex-col gap-0.5">
           {stubWorkspace.boxes.map((box) => (
             <BoxNavItem
@@ -176,20 +176,30 @@ export function AppSidebar() {
         </nav>
       </ScrollArea>
 
-      {/* Bottom actions */}
-      <div className="flex items-center justify-between border-t border-sidebar-border px-3 py-2">
-        <Link
-          href="/app/settings"
-          className={cn(
-            "flex items-center gap-2 rounded-md p-1.5 text-sidebar-foreground/60 transition-fast",
-            "hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
-            pathname === "/app/settings" && "text-sidebar-accent-foreground"
-          )}
-          aria-label="Settings"
-        >
-          <Settings className="h-4 w-4" />
-        </Link>
-        <ThemeToggle />
+      {/* Bottom chrome */}
+      <div className="border-t border-sidebar-border">
+        {/* Settings + theme toggle row */}
+        <div className="flex items-center justify-between px-3 py-2">
+          <Link
+            href="/app/settings"
+            className={cn(
+              "flex items-center gap-2 rounded-md p-1.5 text-sidebar-foreground/60 transition-fast",
+              "hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+              pathname === "/app/settings" && "text-sidebar-accent-foreground"
+            )}
+            aria-label="Settings"
+          >
+            <Settings className="h-4 w-4" />
+          </Link>
+          <ThemeToggle />
+        </div>
+
+        {/* User menu row */}
+        {userEmail && (
+          <div className="border-t border-sidebar-border px-2 py-2">
+            <UserMenu email={userEmail} />
+          </div>
+        )}
       </div>
     </aside>
   );

@@ -12,6 +12,7 @@ Context Store is not a generic notes app. It is an opinionated system for captur
 
 - Node.js 20+
 - pnpm 9+
+- A Supabase project (free tier is fine)
 
 ### Setup
 
@@ -19,16 +20,30 @@ Context Store is not a generic notes app. It is an opinionated system for captur
 # 1. Install dependencies
 pnpm install
 
-# 2. Copy environment variables
+# 2. Copy environment variables and fill in Supabase credentials
 cp .env.example .env.local
-# Fill in Supabase credentials when the database prompt is implemented.
-# The app runs without them for now (no auth, no data persistence).
+```
 
+Edit `.env.local`:
+
+```bash
+NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
+NEXT_PUBLIC_APP_URL=http://localhost:3000
+```
+
+**Supabase project configuration** (one-time, in the Supabase dashboard):
+
+1. **Enable Email OTP** — Authentication → Providers → Email → enable "Email OTP"
+2. **Add redirect URL** — Authentication → URL Configuration → Redirect URLs → add `http://localhost:3000/auth/callback`
+3. **Set site URL** — Authentication → URL Configuration → Site URL → `http://localhost:3000`
+
+```bash
 # 3. Start the dev server
 pnpm dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000).
+Open [http://localhost:3000](http://localhost:3000). Sign in at [http://localhost:3000/sign_in](http://localhost:3000/sign_in).
 
 ### Available commands
 
@@ -43,26 +58,31 @@ Open [http://localhost:3000](http://localhost:3000).
 
 ## Project status
 
-This is the **foundation prompt** result. The following is in place:
+### Implemented
 
 - [x] Next.js 16 App Router with TypeScript and Tailwind v4
-- [x] shadcn/ui component library
+- [x] shadcn/ui component library (Base UI backend)
 - [x] Light / dark mode with next-themes
 - [x] Design token system in `globals.css`
 - [x] Application shell (sidebar, header, main, right panel)
 - [x] Routes: `/`, `/app`, `/app/workspaces`, `/app/boxes/[box_id]`, `/app/notes/[note_id]`, `/app/settings`
 - [x] Product UI components (tree, note card, metadata panel, empty state)
-- [x] Folder structure for backend, services, and MCP
+- [x] **Supabase Auth with email magic link**
+- [x] **Session proxy middleware for token refresh**
+- [x] **Server-side route protection on `/app`**
+- [x] **Request context foundation (`getRequestContext`)**
+- [x] **Sign in / sign out flow**
 
-The following is **not yet implemented**:
+### Not yet implemented
 
-- [ ] Supabase auth
 - [ ] Database schema and migrations
-- [ ] Real data fetching
+- [ ] Real workspace / box / note data
 - [ ] Markdown editor
-- [ ] API endpoints
+- [ ] REST API endpoints
 - [ ] MCP server
 - [ ] Import / export
+- [ ] OAuth providers
+- [ ] Role-based permissions
 
 ---
 
@@ -80,4 +100,5 @@ Workspace
 ```
 
 See [docs/architecture.md](docs/architecture.md) for the full module layout.
+See [docs/auth.md](docs/auth.md) for the auth architecture and setup guide.
 See [docs/design_system.md](docs/design_system.md) for UI rules and component guidance.
