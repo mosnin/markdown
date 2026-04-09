@@ -24,6 +24,8 @@ export interface WriteProposal {
   status: ProposalStatus;
   proposed_title: string | null;
   proposed_content: string | null;
+  proposed_summary: string | null;
+  proposed_tags: string[] | null;
   proposed_folder_id: string | null;
   rationale: string | null;
   reviewer_id: string | null;

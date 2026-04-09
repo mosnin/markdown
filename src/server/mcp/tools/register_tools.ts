@@ -19,6 +19,11 @@ import {
   registerSearchNotesTool,
 } from "./notes.js";
 import { registerGetContextBundleTool } from "./bundles.js";
+import {
+  registerCreateWriteProposalTool,
+  registerListWriteProposalsTool,
+  registerCreateGeneratedNoteTool,
+} from "./write_proposals.js";
 
 export function registerAllTools(server: McpServer, client: ApiClient): void {
   // Orientation tools — call these first
@@ -35,4 +40,9 @@ export function registerAllTools(server: McpServer, client: ApiClient): void {
 
   // Context assembly
   registerGetContextBundleTool(server, client);
+
+  // Write tools (proposals and direct generated note creation)
+  registerCreateWriteProposalTool(server, client);
+  registerListWriteProposalsTool(server, client);
+  registerCreateGeneratedNoteTool(server, client);
 }

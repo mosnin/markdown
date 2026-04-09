@@ -358,6 +358,154 @@ The ZIP includes a manifest, individual note files, and a `README.md` with the s
 
 ---
 
+### Write proposals
+
+#### `POST /api/v1/write_proposals`
+
+Submit a write proposal. The connection must have `propose_writes` or `generate_in_allowed_folders` permission.
+
+**Request body:**
+
+```json
+{
+  "proposal_type": "create_note" | "update_note" | "append_note" | "replace_note",
+  "target_folder_id": "...",
+  "target_note_id": "...",
+  "proposed_title": "...",
+  "proposed_content": "...",
+  "proposed_summary": "...",
+  "proposed_tags": ["tag1", "tag2"],
+  "rationale": "..."
+}
+```
+
+| Field | Type | Required | Notes |
+|---|---|---|---|
+| `proposal_type` | enum | Yes | One of the 4 types above |
+| `target_folder_id` | string | `create_note` only | Folder to create the note in |
+| `target_note_id` | string | update/append/replace | Note to modify |
+| `proposed_title` | string | Yes | Proposed note title |
+| `proposed_content` | string | Yes | Full markdown body |
+| `proposed_summary` | string | No | Proposed summary (optional metadata) |
+| `proposed_tags` | string[] | No | Proposed tags (optional metadata) |
+| `rationale` | string | No | Human-readable reason for the change; shown in review UI |
+
+**Response `data` (201):**
+
+```json
+{
+  "id": "...",
+  "proposal_type": "...",
+  "status": "pending",
+  "proposed_title": "...",
+  "rationale": "...",
+  "created_at": "..."
+}
+```
+
+**Errors:**
+
+| Code | Meaning |
+|---|---|
+| `forbidden` | Connection is `read_only` |
+| `bad_request` | Missing required fields or invalid proposal_type |
+| `not_found` | target_note_id or target_folder_id not found / not in allowed scopes |
+
+---
+
+#### `GET /api/v1/write_proposals`
+
+List proposals submitted by this connection.
+
+**Query parameters:**
+
+| Param | Type | Default | Description |
+|---|---|---|---|
+| `status` | string | — | Filter by status: `pending`, `approved`, `rejected`, `conflicted`, `canceled`, `expired` |
+| `limit` | integer | 50 | Max 100 |
+| `page` | integer | 1 | 1-based page number |
+
+**Response `data`:**
+
+```json
+{
+  "proposals": [
+    {
+      "id": "...",
+      "proposal_type": "...",
+      "status": "pending",
+      "proposed_title": "...",
+      "rationale": "...",
+      "target_note_id": "..." | null,
+      "target_folder_id": "..." | null,
+      "approved_note_id": "..." | null,
+      "approved_version_id": "..." | null,
+      "review_note": "..." | null,
+      "expires_at": "..." | null,
+      "created_at": "...",
+      "updated_at": "..."
+    }
+  ],
+  "total": 12,
+  "limit": 50,
+  "page": 1
+}
+```
+
+---
+
+### Generated notes
+
+#### `POST /api/v1/generated_notes`
+
+Create a note directly in an allowed folder. Requires `generate_in_allowed_folders` permission, and the target folder must have `accepts_generated_notes = true`.
+
+This path is for high-confidence ingest output, structured summaries, or reference data that does not require human review.
+
+**Request body:**
+
+```json
+{
+  "folder_id": "...",
+  "title": "...",
+  "content": "...",
+  "summary": "...",
+  "tags": ["tag1", "tag2"],
+  "read_hint": "generated"
+}
+```
+
+| Field | Type | Required | Notes |
+|---|---|---|---|
+| `folder_id` | string | Yes | Must be in connection's allowed boxes and have `accepts_generated_notes = true` |
+| `title` | string | No | Defaults to `<connection_name> YYYYMMDD_HHMMSS` (UTC) |
+| `content` | string | Yes | Full markdown body |
+| `summary` | string | No | Short summary |
+| `tags` | string[] | No | Tags list |
+| `read_hint` | string | No | Defaults to `"generated"` |
+
+**Response `data` (201):**
+
+```json
+{
+  "note_id": "...",
+  "version_id": "...",
+  "title": "...",
+  "folder_id": "...",
+  "created_at": "..."
+}
+```
+
+**Errors:**
+
+| Code | Meaning |
+|---|---|
+| `forbidden` | Connection lacks `generate_in_allowed_folders` permission, or folder does not accept generated notes |
+| `bad_request` | Missing required fields |
+| `not_found` | folder_id not found / not in allowed scopes |
+
+---
+
 ## Authorization model
 
 Authorization is evaluated per-request in two layers:

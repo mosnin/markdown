@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { FileText, Folder } from "lucide-react";
+import { Bot, FileText, Folder } from "lucide-react";
 import { requireAuthenticatedUser } from "@/server/auth/require_authenticated_user";
 import { createClient } from "@/lib/supabase/server";
 import { getBoxById } from "@/server/repositories/box_repository";
@@ -25,6 +25,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { type NoteLink } from "@/server/domain/types/note_link";
 import { BoxExportMenu } from "@/components/product/export_menu";
 import { ImportTriggerButton } from "@/components/product/import_dialog";
+import { FolderPolicyToggle } from "@/components/product/folder_policy_toggle";
 import Link from "next/link";
 
 function formatDate(dateStr: string): string {
@@ -117,6 +118,38 @@ async function BoxPanel({
             </div>
           </div>
         </PanelSection>
+
+        {/* Folder generated-note policies */}
+        {folders.length > 0 && (
+          <>
+            <Separator />
+            <PanelSection title="Folder policies" noSeparator>
+              <div className="flex flex-col gap-1">
+                <p className="text-[10px] text-muted-foreground/70 mb-1">
+                  Folders that accept AI-generated notes
+                </p>
+                {folders.map((folder) => (
+                  <div
+                    key={folder.id}
+                    className="flex items-center justify-between gap-2 rounded-md px-1.5 py-1 text-xs"
+                  >
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <Folder className="h-3 w-3 shrink-0 text-muted-foreground/60" />
+                      <span className="truncate text-muted-foreground">
+                        {folder.name}
+                      </span>
+                    </div>
+                    <FolderPolicyToggle
+                      folderId={folder.id}
+                      initialAccepts={folder.accepts_generated_notes}
+                      compact
+                    />
+                  </div>
+                ))}
+              </div>
+            </PanelSection>
+          </>
+        )}
 
         <Separator />
 

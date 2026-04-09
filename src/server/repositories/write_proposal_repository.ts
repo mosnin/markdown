@@ -24,6 +24,8 @@ export interface CreateWriteProposalInput {
   target_version_id?: string | null;
   proposed_title?: string | null;
   proposed_content?: string | null;
+  proposed_summary?: string | null;
+  proposed_tags?: string[] | null;
   proposed_folder_id?: string | null;
   rationale?: string | null;
   expires_at?: string | null;
@@ -98,6 +100,40 @@ export async function listPendingProposals(
     .eq("status", PROPOSAL_STATUS.PENDING)
     .or(`expires_at.is.null,expires_at.gt.${now}`)
     .order("created_at", { ascending: true })
+    .range(offset, offset + limit - 1);
+
+  if (error || !data) return [];
+  return data as WriteProposal[];
+}
+
+/**
+ * List proposals created by a specific connection.
+ * Used by the external API (connection can only see its own proposals).
+ */
+export async function listWriteProposalsByConnection(
+  supabase: SupabaseClient,
+  connection_id: string,
+  workspace_id: string,
+  {
+    status,
+    limit = 50,
+    offset = 0,
+  }: {
+    status?: ProposalStatus;
+    limit?: number;
+    offset?: number;
+  } = {}
+): Promise<WriteProposal[]> {
+  let query = supabase
+    .from("write_proposals")
+    .select("*")
+    .eq("connection_id", connection_id)
+    .eq("workspace_id", workspace_id);
+
+  if (status) query = query.eq("status", status);
+
+  const { data, error } = await query
+    .order("created_at", { ascending: false })
     .range(offset, offset + limit - 1);
 
   if (error || !data) return [];

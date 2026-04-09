@@ -216,10 +216,12 @@ src/server/
 │   ├── search_service.ts               Box-scoped FTS via search_notes RPC
 │   ├── overview_service.ts             Box hierarchy + link graph (bounded)
 │   ├── system_guide_service.ts         Static structured product rules for API/MCP
-│   └── context_bundle_service.ts       Deterministic context bundle assembly
+│   ├── context_bundle_service.ts       Deterministic context bundle assembly
+│   ├── write_proposal_service.ts       Create, approve, reject, preview, conflict detection
+│   └── generated_note_service.ts       Direct authorized note creation (generate_in_allowed_folders)
 ├── api/                                (future) Route handler layer
 ├── policies/                           (future) Authorization checks
-└── mcp/                                MCP server (stdio, 9 read tools, proxies canonical API)
+└── mcp/                                MCP server (stdio, 12 tools, proxies canonical API)
     ├── index.ts                        Entrypoint — StdioServerTransport
     ├── server.ts                       McpServer factory
     ├── config.ts                       Env validation
@@ -231,7 +233,8 @@ src/server/
         ├── system_guide.ts             get_system_guide
         ├── boxes.ts                    list_boxes, get_box_guide, get_box_overview
         ├── notes.ts                    list_folder_contents, get_note, get_linked_notes, search_notes
-        └── bundles.ts                  get_context_bundle
+        ├── bundles.ts                  get_context_bundle
+        └── write_proposals.ts          create_write_proposal, list_write_proposals, create_generated_note
 ```
 
 ## Atomicity: note versioning
@@ -316,7 +319,7 @@ See [docs/connections_v1.md](connections_v1.md) and [docs/canonical_api_v1.md](c
 
 - Bearer token auth separate from human session auth — `get_connection_context.ts`
 - Admin Supabase client (service role) for token lookup only — `src/lib/supabase/admin.ts`
-- 13 canonical API endpoints under `src/app/api/v1/`
+- 16 canonical API endpoints under `src/app/api/v1/`
 - Connection management UI in Settings → Connections
 
 ```
@@ -347,7 +350,9 @@ src/app/api/v1/
 ├── export_note/route.ts
 ├── export_folder/route.ts
 ├── export_box/route.ts
-└── export_context_bundle/route.ts
+├── export_context_bundle/route.ts
+├── write_proposals/route.ts
+└── generated_notes/route.ts
 
 src/app/app/settings/
 └── connections_actions.ts     Server actions for UI
@@ -356,12 +361,41 @@ src/components/product/
 └── connections_panel.tsx      ConnectionsPanel (create, list, rotate, revoke)
 ```
 
+## Machine write layer
+
+See [docs/machine_write_v1.md](machine_write_v1.md) for the full machine write architecture.
+
+- **Write proposals**: external connections propose changes (create/update/append/replace); humans review at `/app/proposals`
+- **Generated notes**: `generate_in_allowed_folders` connections write directly to pre-authorized folders — no review
+- **Optimistic locking**: `target_version_id` captured at proposal creation; conflicts detected atomically at approval time
+- **Atomic SQL functions**: `approve_write_proposal_update`, `approve_write_proposal_create`, `create_generated_note_with_version`
+
+```
+supabase/migrations/20260409000005_machine_write_rpc.sql
+
+src/server/services/
+├── write_proposal_service.ts  Create, approve, reject, preview, conflict check
+└── generated_note_service.ts  Direct authorized note creation
+
+src/app/api/v1/
+├── write_proposals/route.ts   POST (create), GET (list)
+└── generated_notes/route.ts   POST (create)
+
+src/app/app/proposals/
+├── page.tsx                   Human review surface
+└── actions.ts                 approveProposalAction, rejectProposalAction, setFolderGeneratedPolicyAction
+
+src/components/product/
+├── proposals_panel.tsx        Proposal cards with approve/reject + status filter
+└── folder_policy_toggle.tsx   Folder accepts_generated_notes toggle (compact + full)
+```
+
 ## MCP server
 
 See [docs/mcp_v1.md](mcp_v1.md) for the full MCP architecture.
 
-- Read-only, stateless stdio MCP server
-- 9 tools matching the 9 canonical read endpoints
+- Stateless stdio MCP server
+- 12 tools: 9 read + 3 write (proposals + generated notes)
 - Proxies all calls to the running Next.js app over HTTP — no direct DB access
 - Auth via connection bearer token (`csk_v1_...`) — same as the external API
 
@@ -373,4 +407,3 @@ pnpm build:mcp # compile to dist/mcp/ (prod)
 ## Future prompts will add
 
 - `src/server/policies/` — authorization checks
-- Write proposals

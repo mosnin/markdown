@@ -29,6 +29,31 @@ async function write(
   }
 }
 
+/** Connection-actor variant — writes event with actor_type='connection'. */
+async function writeConnection(
+  supabase: SupabaseClient,
+  workspaceId: string,
+  connectionId: string,
+  objectType: string,
+  objectId: string,
+  eventType: string,
+  metadata?: Record<string, unknown>
+): Promise<void> {
+  try {
+    await createAuditEvent(supabase, {
+      workspace_id: workspaceId,
+      actor_type: "connection",
+      actor_id: connectionId,
+      object_type: objectType,
+      object_id: objectId,
+      event_type: eventType,
+      metadata: metadata ?? null,
+    });
+  } catch (err) {
+    console.error(`[audit] Failed to write ${eventType} for ${objectType}/${objectId}`, err);
+  }
+}
+
 // ─── Box events ───────────────────────────────────────────────────────────────
 
 export function auditBoxCreated(
@@ -314,5 +339,133 @@ export function auditTokenRotated(
     "connection",
     connectionId,
     "connection.token_rotated"
+  );
+}
+
+// ─── Write proposal events ────────────────────────────────────────────────────
+
+/** Proposal created by a connection (actor_type = 'connection'). */
+export function auditWriteProposalCreated(
+  supabase: SupabaseClient,
+  workspaceId: string,
+  connectionId: string,
+  proposalId: string,
+  metadata: {
+    proposal_type: string;
+    target_note_id?: string | null;
+    target_folder_id?: string | null;
+    box_id?: string | null;
+  }
+): Promise<void> {
+  return writeConnection(
+    supabase,
+    workspaceId,
+    connectionId,
+    "write_proposal",
+    proposalId,
+    "write_proposal.created",
+    metadata
+  );
+}
+
+/** Proposal approved by the workspace owner (actor_type = 'user'). */
+export function auditWriteProposalApproved(
+  supabase: SupabaseClient,
+  workspaceId: string,
+  userId: string,
+  proposalId: string,
+  metadata: {
+    proposal_type: string;
+    connection_id: string;
+    note_id?: string | null;
+  }
+): Promise<void> {
+  return write(
+    supabase,
+    workspaceId,
+    userId,
+    "write_proposal",
+    proposalId,
+    "write_proposal.approved",
+    metadata
+  );
+}
+
+/** Proposal rejected by the workspace owner (actor_type = 'user'). */
+export function auditWriteProposalRejected(
+  supabase: SupabaseClient,
+  workspaceId: string,
+  userId: string,
+  proposalId: string,
+  metadata: { proposal_type: string; connection_id: string }
+): Promise<void> {
+  return write(
+    supabase,
+    workspaceId,
+    userId,
+    "write_proposal",
+    proposalId,
+    "write_proposal.rejected",
+    metadata
+  );
+}
+
+/** Proposal marked conflicted during approval (actor_type = 'user'). */
+export function auditWriteProposalConflicted(
+  supabase: SupabaseClient,
+  workspaceId: string,
+  userId: string,
+  proposalId: string,
+  metadata: { proposal_type: string; connection_id: string; reason: string }
+): Promise<void> {
+  return write(
+    supabase,
+    workspaceId,
+    userId,
+    "write_proposal",
+    proposalId,
+    "write_proposal.conflicted",
+    metadata
+  );
+}
+
+// ─── Generated folder policy events ──────────────────────────────────────────
+
+export function auditGeneratedFolderPolicyChanged(
+  supabase: SupabaseClient,
+  workspaceId: string,
+  userId: string,
+  folderId: string,
+  metadata: { box_id: string; accepts_generated_notes: boolean }
+): Promise<void> {
+  return write(
+    supabase,
+    workspaceId,
+    userId,
+    "folder",
+    folderId,
+    "folder.generated_policy_changed",
+    metadata
+  );
+}
+
+// ─── Generated note events ────────────────────────────────────────────────────
+
+/** Generated note created directly by a connection (actor_type = 'connection'). */
+export function auditGeneratedNoteCreated(
+  supabase: SupabaseClient,
+  workspaceId: string,
+  connectionId: string,
+  noteId: string,
+  metadata: { title: string; box_id: string; folder_id: string }
+): Promise<void> {
+  return writeConnection(
+    supabase,
+    workspaceId,
+    connectionId,
+    "note",
+    noteId,
+    "note.generated",
+    metadata
   );
 }

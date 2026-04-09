@@ -190,6 +190,71 @@ export interface ContextBundleOptions {
   linked_limit?: number;
 }
 
+// ─── Write types ──────────────────────────────────────────────────────────────
+
+export type ProposalType = "create_note" | "update_note" | "append_note" | "replace_note";
+export type ProposalStatus =
+  | "pending" | "approved" | "rejected"
+  | "conflicted" | "canceled" | "expired";
+
+export interface CreateProposalOptions {
+  proposal_type: ProposalType;
+  target_note_id?: string | null;
+  target_folder_id?: string | null;
+  proposed_title?: string | null;
+  proposed_content?: string | null;
+  proposed_summary?: string | null;
+  proposed_tags?: string[] | null;
+  rationale?: string | null;
+}
+
+export interface WriteProposalSummary {
+  id: string;
+  workspace_id: string;
+  connection_id: string;
+  proposal_type: ProposalType;
+  status: ProposalStatus;
+  target_note_id: string | null;
+  target_version_id: string | null;
+  proposed_folder_id: string | null;
+  proposed_title: string | null;
+  proposed_summary: string | null;
+  proposed_tags: string[] | null;
+  rationale: string | null;
+  reviewed_at: string | null;
+  review_note: string | null;
+  approved_note_id: string | null;
+  approved_version_id: string | null;
+  expires_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ListProposalsResult {
+  proposals: WriteProposalSummary[];
+  pagination: { page: number; limit: number; count: number };
+}
+
+export interface CreateGeneratedNoteOptions {
+  folder_id: string;
+  title?: string | null;
+  markdown_content?: string | null;
+  summary?: string | null;
+  tags?: string[] | null;
+  read_hint?: string | null;
+  retrieval_priority?: number;
+}
+
+export interface GeneratedNoteResult {
+  note: NoteSummary & {
+    origin_type: string;
+    is_generated: boolean;
+    generated_by_connection_id: string | null;
+    created_at: string;
+  };
+  version_id: string;
+}
+
 // ─── API client factory ───────────────────────────────────────────────────────
 
 export function createApiClient(config: McpConfig) {
@@ -231,6 +296,26 @@ export function createApiClient(config: McpConfig) {
 
     getContextBundle: (opts: ContextBundleOptions) =>
       post<Record<string, unknown>>("/api/v1/context_bundles", opts),
+
+    // Write tools
+    createWriteProposal: (opts: CreateProposalOptions) =>
+      post<WriteProposalSummary>("/api/v1/write_proposals", opts),
+
+    listWriteProposals: (opts: {
+      status?: ProposalStatus;
+      limit?: number;
+      page?: number;
+    } = {}) => {
+      const qs = new URLSearchParams();
+      if (opts.status) qs.set("status", opts.status);
+      if (opts.limit != null) qs.set("limit", String(opts.limit));
+      if (opts.page != null) qs.set("page", String(opts.page));
+      const q = qs.toString();
+      return get<ListProposalsResult>(`/api/v1/write_proposals${q ? `?${q}` : ""}`);
+    },
+
+    createGeneratedNote: (opts: CreateGeneratedNoteOptions) =>
+      post<GeneratedNoteResult>("/api/v1/generated_notes", opts),
   };
 }
 

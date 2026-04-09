@@ -1,4 +1,5 @@
 import { type SupabaseClient } from "@supabase/supabase-js";
+import { type Box } from "@/server/domain/types/box";
 import { type Folder } from "@/server/domain/types/folder";
 import {
   getFolderById,
@@ -8,9 +9,11 @@ import {
 } from "@/server/repositories/folder_repository";
 import { FOLDER_STATUS } from "@/server/domain/constants/content_status";
 import { slugify } from "@/lib/slugify";
+import { getBoxById } from "@/server/repositories/box_repository";
 import {
   auditFolderCreated,
   auditFolderRenamed,
+  auditGeneratedFolderPolicyChanged,
 } from "@/server/services/audit_service";
 
 /**
@@ -196,3 +199,43 @@ export async function renameFolder(
   );
   return updated;
 }
+
+/**
+ * Toggles whether a folder accepts directly generated notes.
+ *
+ * Only the workspace owner may call this (enforced by the server action / route
+ * that calls this function). Verifies the folder belongs to the workspace.
+ */
+export async function setGeneratedFolderPolicy(
+  supabase: SupabaseClient,
+  userId: string,
+  workspaceId: string,
+  folderId: string,
+  accepts: boolean
+): Promise<Folder> {
+  const folder = await getFolderById(supabase, folderId);
+  if (!folder || folder.status === "trashed") {
+    throw new Error("Folder not found");
+  }
+
+  // Verify box belongs to workspace
+  const box = await getBoxById(supabase, folder.box_id);
+  if (!box || box.workspace_id !== workspaceId) {
+    throw new Error("Folder does not belong to this workspace");
+  }
+
+  const updated = await repoUpdate(supabase, folderId, {
+    accepts_generated_notes: accepts,
+  });
+  if (!updated) throw new Error("Failed to update folder policy");
+
+  await auditGeneratedFolderPolicyChanged(supabase, workspaceId, userId, folderId, {
+    box_id: folder.box_id,
+    accepts_generated_notes: accepts,
+  });
+
+  return updated;
+}
+
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+type _BoxRef = Box;

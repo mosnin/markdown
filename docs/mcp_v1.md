@@ -1,6 +1,6 @@
 # MCP Server V1
 
-Context Store ships a read-only MCP (Model Context Protocol) server that exposes the canonical `/api/v1` routes as MCP tools. AI clients (Claude Desktop, Cursor, Windsurf, etc.) can connect to it and retrieve structured knowledge from any box they have access to.
+Context Store ships an MCP (Model Context Protocol) server that exposes the canonical `/api/v1` routes as MCP tools. AI clients (Claude Desktop, Cursor, Windsurf, etc.) can connect to it and retrieve structured knowledge from any box they have access to, and — with the appropriate connection permission — submit write proposals or create generated notes.
 
 ---
 
@@ -13,18 +13,20 @@ src/server/mcp/index.ts        (entrypoint — StdioServerTransport)
   ↓
 src/server/mcp/server.ts       (McpServer factory)
   ↓
-src/server/mcp/tools/          (9 read tools)
+src/server/mcp/tools/          (9 read tools + 3 write tools)
   ↓  HTTP + Bearer csk_v1_...
 /api/v1/*                      (canonical Next.js API routes)
   ↓
 Supabase (admin client, app-level auth filters)
 ```
 
-The MCP server is **stateless** and **read-only**. It proxies every tool call to the canonical API over HTTP. It never imports internal app services, repositories, or the Supabase client directly — the API surface is the contract.
+The MCP server is **stateless**. It proxies every tool call to the canonical API over HTTP. It never imports internal app services, repositories, or the Supabase client directly — the API surface is the contract.
 
 ---
 
 ## Available tools
+
+### Read tools (9)
 
 | Tool | API route | Description |
 |---|---|---|
@@ -38,7 +40,22 @@ The MCP server is **stateless** and **read-only**. It proxies every tool call to
 | `search_notes` | `POST /api/v1/search_notes` | Full-text search within a box |
 | `get_context_bundle` | `POST /api/v1/context_bundles` | Bounded, deduplicated context bundle centered on a note |
 
-No write tools. No export tools. Resources and prompts are not registered in V1.
+### Write tools (3)
+
+Available to connections with `propose_writes` or `generate_in_allowed_folders` permission.
+
+| Tool | API route | Permission required | Description |
+|---|---|---|---|
+| `create_write_proposal` | `POST /api/v1/write_proposals` | `propose_writes` or `generate_in_allowed_folders` | Propose a note change (create/update/append/replace) for human review |
+| `list_write_proposals` | `GET /api/v1/write_proposals` | `propose_writes` or `generate_in_allowed_folders` | List proposals submitted by this connection |
+| `create_generated_note` | `POST /api/v1/generated_notes` | `generate_in_allowed_folders` only | Create a note directly in a pre-authorized folder (no human review) |
+
+**Write tool constraints:**
+- `read_only` connections cannot call any write tool.
+- `create_generated_note` requires both `generate_in_allowed_folders` permission AND the target folder having `accepts_generated_notes = true`.
+- Approval and rejection of proposals is not available through MCP. Humans review and act on proposals at `/app/proposals`.
+
+No export tools. Resources and prompts are not registered in V1.
 
 ---
 
@@ -55,6 +72,7 @@ No write tools. No export tools. Resources and prompts are not registered in V1.
 | `src/server/mcp/tools/boxes.ts` | `list_boxes`, `get_box_guide`, `get_box_overview` tools |
 | `src/server/mcp/tools/notes.ts` | `list_folder_contents`, `get_note`, `get_linked_notes`, `search_notes` tools |
 | `src/server/mcp/tools/bundles.ts` | `get_context_bundle` tool |
+| `src/server/mcp/tools/write_proposals.ts` | `create_write_proposal`, `list_write_proposals`, `create_generated_note` tools |
 | `src/server/mcp/tools/register_tools.ts` | Central registration — imports and calls all tool files |
 | `tsconfig.mcp.json` | TypeScript config for standalone build (NodeNext module resolution) |
 
@@ -187,8 +205,8 @@ For focused retrieval on a known note:
 **Calls API over HTTP, never imports app services directly.**
 The MCP layer has no knowledge of database schemas, repository patterns, or service implementations. The canonical API is the single integration point. This means MCP and the app can evolve independently.
 
-**9 tools, no more.**
-The tool set matches the canonical read API exactly — one tool per endpoint. No synthetic aggregation, no client-side pagination (the API handles limits). Export tools are omitted: binary ZIP downloads are not useful over MCP.
+**12 tools total: 9 read + 3 write.**
+Read tools match the canonical read API exactly — one tool per endpoint. Write tools match the 3 write endpoints added in V1. No synthetic aggregation, no client-side pagination (the API handles limits). Export tools are omitted: binary ZIP downloads are not useful over MCP.
 
 **All errors returned as tool errors, not thrown.**
 Network errors, auth failures, and 404s are caught and returned as `{ isError: true, content: [{ type: "text", text: "..." }] }` so the AI client receives a useful error message rather than an unhandled exception.
