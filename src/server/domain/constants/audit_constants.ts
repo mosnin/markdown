@@ -18,6 +18,7 @@ export const CHANGE_ORIGIN = {
   IMPORT: "import",
   GENERATED: "generated",
   PROPOSAL_APPROVED: "proposal_approved",
+  ROLLBACK: "rollback",
 } as const;
 
 export type ChangeOrigin = (typeof CHANGE_ORIGIN)[keyof typeof CHANGE_ORIGIN];

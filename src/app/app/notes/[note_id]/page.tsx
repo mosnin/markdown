@@ -3,16 +3,19 @@ import { ChevronRight, Clock, GitBranch, BookOpen } from "lucide-react";
 import Link from "next/link";
 import { requireAuthenticatedUser } from "@/server/auth/require_authenticated_user";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { getNoteById, listNotesByBox } from "@/server/repositories/note_repository";
 import { getBoxById } from "@/server/repositories/box_repository";
 import { getFolderById } from "@/server/repositories/folder_repository";
 import { listLinksForNote } from "@/server/services/link_service";
 import { assembleContextBundle } from "@/server/services/context_bundle_service";
 import { auditBundleRead } from "@/server/services/audit_service";
+import { listVersionsForNote } from "@/server/services/version_history_service";
 import { NoteEditor } from "@/components/product/note_editor";
 import { LinkedNotesSection } from "@/components/product/linked_notes_section";
 import { ContextBundleViewer } from "@/components/product/context_bundle_viewer";
 import { NoteExportMenu } from "@/components/product/export_menu";
+import { NoteHistoryPanel } from "@/components/product/note_history_panel";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -260,6 +263,7 @@ export default async function NotePage({
   const { note_id } = await params;
   const ctx = await requireAuthenticatedUser();
   const supabase = await createClient();
+  const adminClient = createAdminClient();
 
   // Load note and verify ownership via its box
   const note = await getNoteById(supabase, note_id);
@@ -269,10 +273,11 @@ export default async function NotePage({
   if (!box || box.workspace_id !== ctx.workspace.id) notFound();
 
   // Load supporting data in parallel
-  const [folder, allBoxNotes, links] = await Promise.all([
+  const [folder, allBoxNotes, links, historyResult] = await Promise.all([
     note.folder_id ? getFolderById(supabase, note.folder_id) : Promise.resolve(null),
     listNotesByBox(supabase, note.box_id),
     listLinksForNote(supabase, note_id),
+    listVersionsForNote(adminClient, ctx.workspace.id, note_id, { limit: 100 }),
   ]);
 
   // Assemble initial context bundle (default options, server-side)
@@ -319,7 +324,7 @@ export default async function NotePage({
           <NoteExportMenu noteId={note_id} noteTitle={note.title} />
         </div>
 
-        {/* Edit / Bundle tabs */}
+        {/* Edit / Bundle / History tabs */}
         <Tabs defaultValue="edit" className="flex flex-1 flex-col overflow-hidden">
           <div className="border-b border-border px-6">
             <TabsList variant="line" className="h-auto pb-0">
@@ -328,6 +333,9 @@ export default async function NotePage({
               </TabsTrigger>
               <TabsTrigger value="bundle" className="pb-3">
                 Context Bundle
+              </TabsTrigger>
+              <TabsTrigger value="history" className="pb-3">
+                History
               </TabsTrigger>
             </TabsList>
           </div>
@@ -355,6 +363,15 @@ export default async function NotePage({
                 />
               </div>
             </ScrollArea>
+          </TabsContent>
+
+          {/* ── History tab ── */}
+          <TabsContent value="history" className="flex-1 overflow-hidden">
+            <NoteHistoryPanel
+              noteId={note_id}
+              initialVersions={historyResult.versions}
+              currentVersionId={historyResult.current_version_id}
+            />
           </TabsContent>
         </Tabs>
       </div>

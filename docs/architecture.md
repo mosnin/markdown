@@ -218,7 +218,9 @@ src/server/
 │   ├── system_guide_service.ts         Static structured product rules for API/MCP
 │   ├── context_bundle_service.ts       Deterministic context bundle assembly
 │   ├── write_proposal_service.ts       Create, approve, reject, preview, conflict detection
-│   └── generated_note_service.ts       Direct authorized note creation (generate_in_allowed_folders)
+│   ├── generated_note_service.ts       Direct authorized note creation (generate_in_allowed_folders)
+│   ├── diff_utils.ts                   computeDiffSummary, computeRollbackDiff (deterministic, no AI)
+│   └── version_history_service.ts      listVersionsForNote, getVersionForNote, rollbackNoteToVersion
 ├── api/                                (future) Route handler layer
 ├── policies/                           (future) Authorization checks
 └── mcp/                                MCP server (stdio, 12 tools, proxies canonical API)
@@ -344,7 +346,8 @@ src/app/api/v1/
 │   └── folder_contents/route.ts
 ├── notes/[note_id]/
 │   ├── route.ts
-│   └── linked_notes/route.ts
+│   ├── linked_notes/route.ts
+│   └── versions/route.ts
 ├── search_notes/route.ts
 ├── context_bundles/route.ts
 ├── export_note/route.ts
@@ -359,6 +362,33 @@ src/app/app/settings/
 
 src/components/product/
 └── connections_panel.tsx      ConnectionsPanel (create, list, rotate, revoke)
+```
+
+## Version history layer
+
+See [docs/version_history_v1.md](version_history_v1.md) for the full version history architecture.
+
+- **Immutable chain**: every note write appends a new `note_versions` row — no row is ever mutated
+- **change_origin**: `human_edit`, `import`, `generated`, `proposal_approved`, `rollback`
+- **diff_summary**: deterministic jsonb (title/body/summary/tags changed + byte delta) computed in TypeScript
+- **Rollback**: human-only; creates a fresh version from the selected snapshot; history is preserved
+- **Canonical API**: `GET /api/v1/notes/[id]/versions` for connection-authenticated reads; rollback not exposed
+
+```
+supabase/migrations/20260409000006_version_history_rpc.sql
+
+src/server/services/
+├── diff_utils.ts              computeDiffSummary, computeRollbackDiff
+└── version_history_service.ts listVersionsForNote, getVersionForNote, rollbackNoteToVersion
+
+src/app/api/v1/notes/[note_id]/
+└── versions/route.ts          GET — paginated version list (connection-authenticated)
+
+src/app/app/notes/[note_id]/
+└── actions.ts                 rollbackNoteAction (human only, server action)
+
+src/components/product/
+└── note_history_panel.tsx     Version list + detail + rollback confirm (History tab)
 ```
 
 ## Machine write layer

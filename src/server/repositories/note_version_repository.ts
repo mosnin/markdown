@@ -40,6 +40,27 @@ export async function getNoteVersionById(
   return data as NoteVersion;
 }
 
+/**
+ * Fetch a version and verify it belongs to the given note.
+ * Returns null if not found or if the note_id does not match.
+ * This is the safe lookup for history and rollback operations.
+ */
+export async function getVersionByNoteAndId(
+  supabase: SupabaseClient,
+  noteId: string,
+  versionId: string
+): Promise<NoteVersion | null> {
+  const { data, error } = await supabase
+    .from("note_versions")
+    .select("*")
+    .eq("id", versionId)
+    .eq("note_id", noteId)
+    .single();
+
+  if (error || !data) return null;
+  return data as NoteVersion;
+}
+
 export async function listVersionsByNote(
   supabase: SupabaseClient,
   note_id: string,

@@ -8,6 +8,7 @@ import {
   auditNoteCreated,
   auditNoteUpdated,
 } from "@/server/services/audit_service";
+import { computeDiffSummary } from "@/server/services/diff_utils";
 
 /**
  * Note service.
@@ -188,6 +189,29 @@ export async function updateNote(
     readHint?: string | null;
   }
 ): Promise<Note> {
+  // Load current note state to compute diff_summary before overwriting
+  const currentNote = await getNoteById(supabase, noteId);
+  const diffSummary = currentNote
+    ? computeDiffSummary(
+        {
+          title: currentNote.title,
+          markdown_content: currentNote.markdown_content,
+          content_bytes: currentNote.content_bytes,
+          summary: currentNote.summary,
+          tags: currentNote.tags,
+          status: currentNote.status,
+        },
+        {
+          title,
+          markdown_content: markdownContent,
+          content_bytes: Buffer.byteLength(markdownContent, "utf8"),
+          summary: summary ?? null,
+          tags: tags ?? [],
+          status: currentNote.status,
+        }
+      )
+    : null;
+
   const { data, error } = await supabase.rpc("update_note_and_create_version", {
     p_note_id: noteId,
     p_title: title,
@@ -196,6 +220,7 @@ export async function updateNote(
     p_tags: tags ?? [],
     p_read_hint: readHint ?? null,
     p_actor_id: userId,
+    p_diff_summary: diffSummary,
   });
 
   if (error || !data) {

@@ -449,6 +449,23 @@ export function auditGeneratedFolderPolicyChanged(
   );
 }
 
+// ─── Version history events ───────────────────────────────────────────────────
+
+export function auditNoteRollback(
+  supabase: SupabaseClient,
+  workspaceId: string,
+  userId: string,
+  noteId: string,
+  metadata: {
+    prior_version_id: string | null;
+    restored_from_version_id: string;
+    new_version_id: string;
+    box_id: string;
+  }
+): Promise<void> {
+  return write(supabase, workspaceId, userId, "note", noteId, "note.rollback", metadata);
+}
+
 // ─── Generated note events ────────────────────────────────────────────────────
 
 /** Generated note created directly by a connection (actor_type = 'connection'). */

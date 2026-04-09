@@ -232,6 +232,50 @@ Returns all notes explicitly linked to or from the given note. Only linked notes
 
 ---
 
+#### `GET /api/v1/notes/[note_id]/versions`
+
+Returns paginated version history for a note, newest first. All change origins are returned (human_edit, import, generated, proposal_approved, rollback).
+
+`markdown_content` is excluded from list items to keep the payload bounded. Use `GET /api/v1/notes/[id]` for the current full content.
+
+**Query parameters:**
+
+| Param | Type | Default | Description |
+|---|---|---|---|
+| `limit` | integer | 50 | Max 100 |
+| `page` | integer | 1 | 1-based page number |
+
+**Response `data`:**
+
+```json
+{
+  "note_id": "...",
+  "current_version_id": "..." | null,
+  "versions": [
+    {
+      "id": "...",
+      "note_id": "...",
+      "parent_version_id": "..." | null,
+      "version_number": 5,
+      "title": "...",
+      "content_bytes": 1024,
+      "actor_type": "user" | "connection" | "system",
+      "actor_id": "...",
+      "change_origin": "human_edit" | "import" | "generated" | "proposal_approved" | "rollback",
+      "diff_summary": { ... } | null,
+      "created_at": "..."
+    }
+  ],
+  "total_fetched": 5,
+  "limit": 50,
+  "page": 1
+}
+```
+
+**Note:** Rollback is not available through the canonical API. See `docs/version_history_v1.md` for the explanation.
+
+---
+
 #### `POST /api/v1/search_notes`
 
 Full-text search within a box. Search is always box-scoped — cross-box search is not supported in V1.
