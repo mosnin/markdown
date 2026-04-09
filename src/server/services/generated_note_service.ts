@@ -4,11 +4,19 @@ import { type NoteVersion } from "@/server/domain/types/note_version";
 import { type ConnectionRequestContext } from "@/server/auth/get_connection_context";
 import { PERMISSION_MODE } from "@/server/domain/constants/connection_constants";
 import { NOTE_READ_HINT } from "@/server/domain/constants/note_constants";
+import { getNoteById } from "@/server/repositories/note_repository";
 import { getFolderById } from "@/server/repositories/folder_repository";
 import { getBoxById } from "@/server/repositories/box_repository";
-import { auditGeneratedNoteCreated } from "@/server/services/audit_service";
+import {
+  auditGeneratedNoteCreated,
+  auditGeneratedNotePromoted,
+} from "@/server/services/audit_service";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
+
+export interface PromoteGeneratedNoteResult {
+  note: Note;
+}
 
 export interface CreateGeneratedNoteInput {
   /** Must belong to a box in the connection's scope. */
@@ -193,4 +201,62 @@ export async function createGeneratedNote(
   );
 
   return result;
+}
+
+// ─── Generated note promotion ─────────────────────────────────────────────────
+
+/**
+ * Promotes a generated note to a standard user-managed note.
+ *
+ * Authorization:
+ *   The note must belong to a box owned by the given workspace.
+ *
+ * What changes:
+ *   - notes.is_generated           → false
+ *   - notes.origin_type            → unchanged (historically 'generated_by_tool')
+ *   - notes.generated_by_connection_id → unchanged (preserved for provenance)
+ *   - notes.current_version_id     → new promotion version
+ *
+ * A new note_version is created with change_origin='promotion' so the state
+ * transition is legible in version history without rewriting prior versions.
+ * The new version carries the same title and markdown content as the current
+ * version — promotion is a metadata state change, not a content change.
+ *
+ * An audit event (note.promoted_from_generated) is written on success.
+ */
+export async function promoteGeneratedNote(
+  adminClient: SupabaseClient,
+  userId: string,
+  workspaceId: string,
+  noteId: string
+): Promise<PromoteGeneratedNoteResult> {
+  // Verify the note exists and belongs to this workspace.
+  const note = await getNoteById(adminClient, noteId);
+  if (!note) throw new Error("Note not found");
+
+  const box = await getBoxById(adminClient, note.box_id);
+  if (!box || box.workspace_id !== workspaceId) throw new Error("Note not found");
+
+  if (!note.is_generated) throw new Error("Note is not generated");
+  if (note.status === "trashed") throw new Error("Note is trashed");
+
+  const { data, error } = await adminClient.rpc("promote_generated_note", {
+    p_note_id: noteId,
+    p_actor_id: userId,
+  });
+
+  if (error || !data) {
+    throw new Error(error?.message ?? "Failed to promote note");
+  }
+
+  const updatedNote = data as Note;
+
+  // Fire-and-forget audit
+  auditGeneratedNotePromoted(adminClient, workspaceId, userId, noteId, {
+    title: updatedNote.title,
+    box_id: box.id,
+    generated_by_connection_id: note.generated_by_connection_id,
+  });
+
+  return { note: updatedNote };
 }

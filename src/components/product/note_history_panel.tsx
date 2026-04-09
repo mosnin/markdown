@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { AlertTriangle, CheckCircle2, Clock, GitBranch, Loader2, RotateCcw, User, Bot, FileInput } from "lucide-react";
+import { AlertTriangle, ArrowUpFromLine, CheckCircle2, Clock, GitBranch, Loader2, RotateCcw, User, Bot, FileInput } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -43,6 +43,7 @@ const ORIGIN_LABEL: Record<string, string> = {
   generated: "Generated",
   proposal_approved: "Proposal approved",
   rollback: "Rollback",
+  promotion: "Promoted",
 };
 
 const ORIGIN_ICON: Record<string, React.ElementType> = {
@@ -51,6 +52,7 @@ const ORIGIN_ICON: Record<string, React.ElementType> = {
   generated: Bot,
   proposal_approved: CheckCircle2,
   rollback: RotateCcw,
+  promotion: ArrowUpFromLine,
 };
 
 function originVariant(origin: string): "default" | "secondary" | "outline" {

@@ -41,6 +41,7 @@ Each `note_versions` row is a complete snapshot of a note at one point in time.
 | `generated` | Created directly by a `generate_in_allowed_folders` connection |
 | `proposal_approved` | Created when a human approved a write proposal |
 | `rollback` | Created by rolling back to a prior version |
+| `promotion` | Created when a human promotes a generated note to a standard note; same content as previous version |
 
 ---
 

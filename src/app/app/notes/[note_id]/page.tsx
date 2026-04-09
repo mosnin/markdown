@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { ChevronRight, Clock, GitBranch, BookOpen } from "lucide-react";
+import { ChevronRight, Clock, GitBranch, BookOpen, Bot } from "lucide-react";
 import Link from "next/link";
 import { requireAuthenticatedUser } from "@/server/auth/require_authenticated_user";
 import { createClient } from "@/lib/supabase/server";
@@ -7,6 +7,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { getNoteById, listNotesByBox } from "@/server/repositories/note_repository";
 import { getBoxById } from "@/server/repositories/box_repository";
 import { getFolderById } from "@/server/repositories/folder_repository";
+import { getConnectionById } from "@/server/repositories/connection_repository";
 import { listLinksForNote } from "@/server/services/link_service";
 import { assembleContextBundle } from "@/server/services/context_bundle_service";
 import { auditBundleRead } from "@/server/services/audit_service";
@@ -17,6 +18,7 @@ import { ContextBundleViewer } from "@/components/product/context_bundle_viewer"
 import { NoteExportMenu } from "@/components/product/export_menu";
 import { NoteHistoryPanel } from "@/components/product/note_history_panel";
 import { NoteLifecycleMenu } from "@/components/product/note_lifecycle_menu";
+import { GeneratedNoteBanner } from "@/components/product/generated_note_banner";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -274,11 +276,14 @@ export default async function NotePage({
   if (!box || box.workspace_id !== ctx.workspace.id) notFound();
 
   // Load supporting data in parallel
-  const [folder, allBoxNotes, links, historyResult] = await Promise.all([
+  const [folder, allBoxNotes, links, historyResult, generatingConnection] = await Promise.all([
     note.folder_id ? getFolderById(supabase, note.folder_id) : Promise.resolve(null),
     listNotesByBox(supabase, note.box_id),
     listLinksForNote(supabase, note_id),
     listVersionsForNote(adminClient, ctx.workspace.id, note_id, { limit: 100 }),
+    note.is_generated && note.generated_by_connection_id
+      ? getConnectionById(adminClient, note.generated_by_connection_id).catch(() => null)
+      : Promise.resolve(null),
   ]);
 
   // Assemble initial context bundle (default options, server-side)
@@ -321,6 +326,15 @@ export default async function NotePage({
                 Guide
               </Badge>
             )}
+            {note.is_generated && (
+              <Badge
+                variant="outline"
+                className="flex items-center gap-1 text-[10px] font-normal shrink-0"
+              >
+                <Bot className="h-3 w-3" />
+                Generated
+              </Badge>
+            )}
           </div>
           <div className="flex items-center gap-1.5 shrink-0">
             <NoteLifecycleMenu noteId={note_id} noteStatus={note.status as "draft" | "active" | "archived" | "trashed"} />
@@ -346,6 +360,12 @@ export default async function NotePage({
 
           {/* ── Edit tab ── */}
           <TabsContent value="edit" className="flex flex-1 flex-col overflow-hidden">
+            {note.is_generated && (
+              <GeneratedNoteBanner
+                noteId={note_id}
+                connectionName={generatingConnection?.name ?? null}
+              />
+            )}
             <NoteEditor note={note} />
             <div className="border-t border-border px-6 py-4">
               <LinkedNotesSection

@@ -97,7 +97,7 @@ Handles `create_note`.
 
 1. Lock proposal row `FOR UPDATE`
 2. Verify `proposed_folder_id` still exists (conflict if gone)
-3. Insert note (`origin_type='generated'`, `is_generated=true`, `generated_by_connection_id=proposal.connection_id`)
+3. Insert note (`origin_type='generated_by_tool'`, `is_generated=true`, `generated_by_connection_id=proposal.connection_id`)
 4. Insert initial `note_versions` row (`change_origin = 'proposal_approved'`, `actor_type = 'user'`)
 5. Link `note.current_version_id = version.id`
 6. Mark proposal `approved`, set `approved_note_id`, `approved_version_id`
@@ -131,7 +131,7 @@ Authorization checks (enforced by service layer before calling the function):
 4. `box.workspace_id == connection.workspace_id` (defense in depth)
 
 Note fields set:
-- `origin_type = 'generated'`
+- `origin_type = 'generated_by_tool'`
 - `is_generated = true`
 - `generated_by_connection_id = connection.id`
 - `read_hint = 'generated'` (default; caller may override)
@@ -155,6 +155,33 @@ Version fields set:
 
 ---
 
+## Generated note promotion
+
+The workspace owner can promote a generated note into a standard user-managed note through the human app. External connections cannot promote notes in V1.
+
+### What happens
+
+1. Owner clicks "Promote to standard note" on the note page.
+2. A new `note_version` is created with `change_origin='promotion'`, `actor_type='user'`. The content is identical to the current version — promotion is a metadata state change, not a content change.
+3. `notes.is_generated` is set to `false`.
+4. `notes.current_version_id` advances to the new promotion version.
+5. An audit event (`note.promoted_from_generated`) is written.
+
+### What does not change after promotion
+
+| Field | Value after promotion |
+|---|---|
+| `origin_type` | Still `generated_by_tool` — historically accurate |
+| `generated_by_connection_id` | Preserved for provenance and attribution |
+| Prior note versions | Untouched — immutable |
+| Guide note status | Unchanged — promotion does not affect guide assignment |
+
+### Why promotion creates a new version
+
+Making promotion a new version (not a silent metadata update) keeps the state transition legible in the History tab. Users and auditors can see exactly when a generated note was promoted and by whom. This is consistent with how rollback works.
+
+---
+
 ## Audit events
 
 | Event | Actor type | Triggered by |
@@ -165,6 +192,7 @@ Version fields set:
 | `write_proposal.conflicted` | `user` | Conflict detected at approval time |
 | `folder.generated_policy_changed` | `user` | Owner toggles folder policy |
 | `note.generated` | `connection` | Direct generated note creation |
+| `note.promoted_from_generated` | `user` | Owner promotes generated note |
 
 ---
 
@@ -208,7 +236,7 @@ Route: `/app/proposals`
 | Domain type | `src/server/domain/types/write_proposal.ts` | `proposed_summary`, `proposed_tags` added |
 | Repository | `src/server/repositories/write_proposal_repository.ts` | `listWriteProposalsByConnection` added |
 | Service | `src/server/services/write_proposal_service.ts` | Create, list, approve, reject, preview |
-| Service | `src/server/services/generated_note_service.ts` | Direct generated note creation |
+| Service | `src/server/services/generated_note_service.ts` | Direct generated note creation; `promoteGeneratedNote` |
 | Service | `src/server/services/folder_service.ts` | `setGeneratedFolderPolicy` added |
 | Service | `src/server/services/audit_service.ts` | `writeConnection` helper + 6 new audit functions |
 | API route | `src/app/api/v1/write_proposals/route.ts` | `POST` + `GET` |
@@ -216,6 +244,9 @@ Route: `/app/proposals`
 | MCP client | `src/server/mcp/client/canonical_api_client.ts` | `createWriteProposal`, `listWriteProposals`, `createGeneratedNote` |
 | MCP tools | `src/server/mcp/tools/write_proposals.ts` | 3 write tools |
 | App actions | `src/app/app/proposals/actions.ts` | `approveProposalAction`, `rejectProposalAction`, `setFolderGeneratedPolicyAction` |
+| App actions | `src/app/app/notes/[note_id]/actions.ts` | `promoteGeneratedNoteAction` |
+| Component | `src/components/product/generated_note_banner.tsx` | Generated note banner with promote action |
+| Migration | `supabase/migrations/20260409000011_generated_note_promotion.sql` | `change_origin='promotion'` constraint; `promote_generated_note` RPC |
 | App page | `src/app/app/proposals/page.tsx` | Proposals review page |
 | Component | `src/components/product/proposals_panel.tsx` | Proposal cards with approve/reject |
 | Component | `src/components/product/folder_policy_toggle.tsx` | Folder policy toggle |

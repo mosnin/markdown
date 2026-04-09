@@ -1,5 +1,6 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
 import { requireAuthenticatedUser } from "@/server/auth/require_authenticated_user";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { rollbackNoteToVersion } from "@/server/services/version_history_service";
@@ -9,6 +10,7 @@ import {
   trashNote,
   restoreNote,
 } from "@/server/services/lifecycle_service";
+import { promoteGeneratedNote } from "@/server/services/generated_note_service";
 
 type ActionResult<T = undefined> =
   | { success: true; data: T }
@@ -96,5 +98,23 @@ export async function restoreNoteAction(
     return { success: true, data: undefined };
   } catch (err) {
     return { success: false, error: err instanceof Error ? err.message : "Failed" };
+  }
+}
+
+/**
+ * Promote a generated note to a standard user-managed note.
+ * Human-only. Creates a new version (change_origin='promotion') — history is preserved.
+ * Clears is_generated; origin_type and generated_by_connection_id remain for provenance.
+ */
+export async function promoteGeneratedNoteAction(
+  noteId: string
+): Promise<ActionResult> {
+  try {
+    const ctx = await requireAuthenticatedUser();
+    await promoteGeneratedNote(createAdminClient(), ctx.user!.id, ctx.workspace.id, noteId);
+    revalidatePath(`/app/notes/${noteId}`);
+    return { success: true, data: undefined };
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : "Failed to promote note" };
   }
 }

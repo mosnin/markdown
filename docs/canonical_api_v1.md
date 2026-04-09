@@ -584,6 +584,8 @@ Create a note directly in an allowed folder. Requires `generate_in_allowed_folde
 
 This path is for high-confidence ingest output, structured summaries, or reference data that does not require human review.
 
+Generated notes have `origin_type: "generated_by_tool"` and `is_generated: true`. They are fully visible in search, tree navigation, version history, and exports. The creating connection is identified by `generated_by_connection_id`.
+
 **Request body:**
 
 ```json
@@ -625,6 +627,8 @@ This path is for high-confidence ingest output, structured summaries, or referen
 | `forbidden` | Connection lacks `generate_in_allowed_folders` permission, or folder does not accept generated notes |
 | `bad_request` | Missing required fields |
 | `not_found` | folder_id not found / not in allowed scopes |
+
+**Generated note promotion is human-only.** External connections cannot promote generated notes via the API in V1. Promotion is performed by the workspace owner through the human app. See `docs/machine_write_v1.md` for promotion semantics.
 
 ---
 

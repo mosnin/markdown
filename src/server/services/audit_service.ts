@@ -588,3 +588,21 @@ export function auditGeneratedNoteCreated(
     metadata
   );
 }
+
+/**
+ * Generated note promoted to a standard user-managed note (actor_type = 'user').
+ * Fired after is_generated is cleared and the promotion version is created.
+ */
+export function auditGeneratedNotePromoted(
+  supabase: SupabaseClient,
+  workspaceId: string,
+  userId: string,
+  noteId: string,
+  metadata: {
+    title: string;
+    box_id: string;
+    generated_by_connection_id: string | null;
+  }
+): Promise<void> {
+  return write(supabase, workspaceId, userId, "note", noteId, "note.promoted_from_generated", metadata);
+}
