@@ -188,17 +188,35 @@ accessible via right-panel tabs in the note and box pages.
 
 ### Note editor modes
 
-The `NoteEditor` component exposes three modes via a toolbar toggle:
+The `NoteEditor` component exposes **two modes** via a toolbar toggle:
 
 | Mode | Description |
 |---|---|
-| Document | Rendered markdown — primary reading experience |
-| Edit | Markdown textarea with autosave (1.5s debounce) and metadata section |
-| Source | Raw markdown, read-only — labeled "what the AI model receives" |
+| Document | Rendered markdown — the default human reading surface |
+| Markdown | Editable raw markdown textarea, labeled "the exact source the AI model receives" |
 
-**Document mode** is the default when opening a note. Clicking the document or focusing
-the title switches to Edit mode. Source mode shows the exact stored markdown string with
-no transformation.
+**Document mode** is the default when opening a note. Clicking anywhere in the document
+or focusing the title switches to Markdown mode automatically.
+
+**Markdown mode** is the editing and inspection surface. The stored markdown string and
+the textarea content are identical — no transformation, no conversion. A subtle banner
+confirms this is the AI-facing source. Metadata editing (summary, tags, read hint) is
+available in a collapsible section at the bottom of the Markdown mode surface.
+
+There is no separate read-only "Source" mode. Markdown mode is both the editing surface
+and the source inspection surface. See [docs/note_dual_view_and_autosave_v1.md](note_dual_view_and_autosave_v1.md).
+
+### Autosave save state
+
+The `AutosaveStatus` component displays save state in the note toolbar:
+
+| State | Visual | Meaning |
+|---|---|---|
+| `idle` | (nothing) | No changes since last save |
+| `unsaved` | `● Unsaved` (dim) | Content changed; autosave timer running |
+| `saving` | `⟳ Saving…` | Save in flight |
+| `saved` | `✓ Saved` | Last save succeeded (fades to idle after 4s) |
+| `error` | `⊘ error` | Save failed; Retry button appears |
 
 ### Semantic links framing
 

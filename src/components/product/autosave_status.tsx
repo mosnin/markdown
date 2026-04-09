@@ -1,7 +1,16 @@
-import { Loader2, Check, CloudOff } from "lucide-react";
+import { Check, CloudOff, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-export type AutosaveState = "idle" | "saving" | "saved" | "error";
+/**
+ * Autosave state machine:
+ *
+ *   idle     — no unsaved changes, no recent save (nothing shown)
+ *   unsaved  — content changed since last save; debounce timer is running
+ *   saving   — save request in flight
+ *   saved    — save completed; fades back to idle after ~4s
+ *   error    — save failed; Retry button shown by caller
+ */
+export type AutosaveState = "idle" | "unsaved" | "saving" | "saved" | "error";
 
 interface AutosaveStatusProps {
   state: AutosaveState;
@@ -19,7 +28,7 @@ function formatSavedAgo(d: Date): string {
 }
 
 /**
- * Subtle autosave indicator for the note editor toolbar.
+ * Subtle autosave indicator for the note toolbar.
  * Returns null when state is "idle" to take up no space.
  */
 export function AutosaveStatus({
@@ -37,6 +46,17 @@ export function AutosaveStatus({
       aria-atomic="true"
       className={cn("flex items-center gap-1.5 text-xs", className)}
     >
+      {state === "unsaved" && (
+        <>
+          {/* Subtle dot — autosave will fire soon */}
+          <span
+            className="h-1.5 w-1.5 rounded-full bg-muted-foreground/40"
+            aria-hidden="true"
+          />
+          <span className="text-muted-foreground/70">Unsaved</span>
+        </>
+      )}
+
       {state === "saving" && (
         <>
           <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />

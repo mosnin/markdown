@@ -539,9 +539,9 @@ full workspace layout architecture.
 - **Three-pane model**: `[sidebar 240px] | [center flex-1] | [right pane 288px]`; right pane hidden < lg; shell stays thin, pages own panel space
 - **`TreeSidebar`**: client component, lazy-loads box tree via `getBoxTreeAction` on first expand, auto-expands current box from pathname
 - **`AppSidebar` + `MobileSidebar`**: both use `TreeSidebar`; mobile uses Sheet drawer
-- **Note editor**: three modes (Document / Edit / Source); Document mode is the default reading experience, Source mode shows exact stored markdown labeled for AI
-- **Autosave**: 1500ms debounce via `useEffect` + `useRef`; calls `saveNoteAction` (same as manual save); every autosave creates an immutable version via `update_note_and_create_version` RPC
-- **`AutosaveStatus`**: subtle toolbar indicator (idle renders nothing, saved fades to idle after 4s, error shows Retry button)
+- **Note editor**: two modes (Document / Markdown); Document is the default reading surface; Markdown mode is editable textarea labeled as the exact AI-facing source — no separate "Source" mode
+- **Autosave**: 1500ms debounce via `useEffect` + `useRef`; calls `saveNoteAction` (same as manual save); every autosave creates an immutable version via `update_note_and_create_version` RPC; see [docs/note_dual_view_and_autosave_v1.md](note_dual_view_and_autosave_v1.md)
+- **`AutosaveStatus`**: five states — idle/unsaved/saving/saved/error; "unsaved" shows dim dot while timer runs; error shows Retry button and does not auto-dismiss
 - **`SemanticLinksPanel`**: replaces `LinkedNotesSection` in right pane; "Context relationships" framing (not backlinks)
 - **`GraphPanel`**: read-only structured view using `BoxOverview` data; no D3 or force layout
 - **Workspace home (cockpit)**: status tiles + recent notes + boxes grid + connections + proposals

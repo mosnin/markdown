@@ -102,29 +102,30 @@ When no boxes exist, a link to create the first box is shown.
 
 ## Note page layout
 
-### Center pane — three modes
+### Center pane — two modes
 
-The note editor exposes three clearly labeled modes via a toolbar toggle:
+The note editor exposes two clearly labeled modes via a toolbar toggle:
 
 | Mode | Icon | Label | Description |
 |---|---|---|---|
 | Document | Eye | Document | Rendered markdown — the primary reading experience for humans |
-| Edit | Pencil | Edit | Markdown textarea — the primary writing surface, with autosave |
-| Source | Code2 | Markdown | Raw markdown, read-only — "what the AI model receives" |
+| Markdown | Code2 | Markdown | Editable raw markdown — labeled as the exact AI-facing source |
 
 **Document mode** (default when opening a note) — renders the markdown as a styled
-prose document using `renderMarkdown`. Clicking anywhere in the document area or on
-the title field switches to Edit mode. This is the human reading view.
+prose document using `renderMarkdown`. Clicking anywhere or focusing the title
+switches to Markdown mode. This is the human reading view.
 
-**Edit mode** — a full-height markdown textarea with monospace font, autosave, and
-an expandable metadata section (summary, tags, read hint). The canonical editing surface.
+**Markdown mode** — a full-height monospace textarea showing the exact stored
+markdown string. This is both the editing surface AND the AI source inspection
+surface. A banner confirms: "Raw markdown — the exact source the AI model receives."
+Metadata (summary, tags, read hint) is editable in a collapsible section at the
+bottom of this mode.
 
-**Source mode** — read-only preformatted view of the raw markdown string. Labeled
-explicitly as "what the AI model receives — unmodified source". Used to verify that
-the note's AI-facing representation is what you intended.
+No proprietary rich text conversion is performed. The stored markdown equals what
+appears in the textarea. There is no separate read-only "Source" mode.
 
-No proprietary rich text conversion is performed. The markdown stored in the database
-is exactly what appears in Source mode.
+See [docs/note_dual_view_and_autosave_v1.md](note_dual_view_and_autosave_v1.md) for
+the full dual view and autosave specification.
 
 ### Autosave behavior
 
@@ -139,9 +140,10 @@ summary, tags, or read hint). The mechanism:
 
 **Save state** — a subtle `AutosaveStatus` component in the toolbar shows:
 - Nothing (idle, no changes)
+- "● Unsaved" (dim dot, while debounce timer runs)
 - "Saving…" with a spinner (during save)
 - "Saved just now" / "Saved 2m ago" with a check (after save, fades to idle)
-- Error message with a Retry button (if save fails)
+- Error message with a Retry button (if save fails; does not auto-dismiss)
 
 **Trust guarantee** — autosave does not weaken the versioning or optimistic locking
 model. Every save call is identical to a manual save; the version history grows normally.

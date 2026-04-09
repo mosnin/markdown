@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { Eye, Pencil, Code2 } from "lucide-react";
+import { Code2, Eye } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
@@ -14,31 +14,34 @@ import {
   type AutosaveState,
 } from "@/components/product/autosave_status";
 
-// How long after the last keystroke before autosaving (ms)
+/**
+ * Autosave debounce: 1500ms after the last content change.
+ *
+ * Every fired save calls saveNoteAction → update_note_and_create_version RPC,
+ * which atomically creates a new immutable version. This is identical to the
+ * manual save path — versioning, optimistic concurrency, and audit semantics
+ * are fully preserved.
+ */
 const AUTOSAVE_DEBOUNCE_MS = 1500;
 
-export type NoteViewMode = "document" | "edit" | "source";
+/**
+ * Two view modes for the note editor:
+ *
+ *   document  — rendered markdown presented as a readable document (default).
+ *               Clicking anywhere or focusing the title switches to markdown mode.
+ *
+ *   markdown  — editable raw markdown textarea, explicitly labeled as the exact
+ *               source the AI model receives. Autosave and metadata editing happen here.
+ *               No hidden conversion; the stored string equals what is shown.
+ */
+export type NoteViewMode = "document" | "markdown";
 
 interface NoteEditorProps {
   note: Note;
-  /** Initial view mode — defaults to "document" (rendered presentation) */
+  /** Initial view mode — defaults to "document" (rendered, human reading experience). */
   initialMode?: NoteViewMode;
 }
 
-/**
- * Note editor with autosave and three view modes.
- *
- * Modes:
- *   document — rendered markdown, the primary reading experience for humans
- *   edit     — markdown textarea with autosave (1.5s debounce)
- *   source   — raw markdown, read-only, labeled as "what the AI model receives"
- *
- * Autosave fires automatically after the debounce delay when content has changed.
- * Versioning remains intact — every save creates a new immutable version via the
- * update_note_and_create_version RPC (same as the manual save path).
- *
- * The explicit Save button is shown only when autosave is in error state.
- */
 export function NoteEditor({ note, initialMode = "document" }: NoteEditorProps) {
   const [title, setTitle] = useState(note.title);
   const [content, setContent] = useState(note.markdown_content);
@@ -54,6 +57,9 @@ export function NoteEditor({ note, initialMode = "document" }: NoteEditorProps) 
 
   const router = useRouter();
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // The snapshot of what was last successfully persisted to the database.
+  // isDirty compares current state against this ref.
   const lastSavedSnapshot = useRef({
     title: note.title,
     content: note.markdown_content,
@@ -76,6 +82,13 @@ export function NoteEditor({ note, initialMode = "document" }: NoteEditorProps) 
     tagsInput !== lastSavedSnapshot.current.tagsInput ||
     readHint !== lastSavedSnapshot.current.readHint;
 
+  /**
+   * performSave — calls saveNoteAction with the current editor state.
+   *
+   * Uses the same update path as manual save: saveNoteAction →
+   * update_note_and_create_version RPC → new immutable note_versions row.
+   * Optimistic locking is handled by the RPC; this function does not bypass it.
+   */
   const performSave = useCallback(async () => {
     if (!title.trim() || isSaving) return;
     setIsSaving(true);
@@ -97,7 +110,7 @@ export function NoteEditor({ note, initialMode = "document" }: NoteEditorProps) 
       setAutosaveState("saved");
       lastSavedSnapshot.current = { title, content, summary, tagsInput, readHint };
       router.refresh();
-      // Reset to idle after a few seconds
+      // Fade to idle after a few seconds
       setTimeout(() => {
         setAutosaveState((s: AutosaveState) => (s === "saved" ? "idle" : s));
       }, 4000);
@@ -107,20 +120,26 @@ export function NoteEditor({ note, initialMode = "document" }: NoteEditorProps) 
     }
   }, [note.id, title, content, summary, tagsInput, readHint, isSaving, router]);
 
-  // Autosave debounce — fires after AUTOSAVE_DEBOUNCE_MS of inactivity
+  /**
+   * Autosave debounce effect.
+   *
+   * Fires AUTOSAVE_DEBOUNCE_MS after the last content change.
+   * Immediately signals "unsaved" so the user sees feedback while the timer runs.
+   * When the timer fires, performSave() takes over and transitions to "saving".
+   */
   useEffect(() => {
     if (!isDirty) return;
+    setAutosaveState("unsaved");
     if (debounceTimer.current) clearTimeout(debounceTimer.current);
     debounceTimer.current = setTimeout(() => {
       void performSave();
     }, AUTOSAVE_DEBOUNCE_MS);
-
     return () => {
       if (debounceTimer.current) clearTimeout(debounceTimer.current);
     };
   }, [title, content, summary, tagsInput, readHint, isDirty, performSave]);
 
-  // Flush save on unmount if dirty
+  // Flush timer on unmount
   useEffect(() => {
     return () => {
       if (debounceTimer.current) clearTimeout(debounceTimer.current);
@@ -131,17 +150,17 @@ export function NoteEditor({ note, initialMode = "document" }: NoteEditorProps) 
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
-      {/* Title */}
+      {/* ── Title ─────────────────────────────────────────────────────────── */}
       <div className="border-b border-border px-6 py-4">
         <input
           type="text"
           value={title}
           onChange={(e) => {
             setTitle(e.target.value);
-            if (mode === "document") setMode("edit");
+            if (mode === "document") setMode("markdown");
           }}
           onFocus={() => {
-            if (mode === "document") setMode("edit");
+            if (mode === "document") setMode("markdown");
           }}
           placeholder="Note title"
           aria-label="Note title"
@@ -152,9 +171,14 @@ export function NoteEditor({ note, initialMode = "document" }: NoteEditorProps) 
         />
       </div>
 
-      {/* Mode toolbar */}
+      {/* ── Toolbar: mode toggle + save state ─────────────────────────────── */}
       <div className="flex items-center justify-between border-b border-border px-6 py-2">
-        <div className="flex items-center gap-1" role="tablist" aria-label="View mode">
+        {/* Mode toggle */}
+        <div
+          className="flex items-center gap-1"
+          role="tablist"
+          aria-label="Note view mode"
+        >
           <ModeButton
             mode="document"
             current={mode}
@@ -163,28 +187,21 @@ export function NoteEditor({ note, initialMode = "document" }: NoteEditorProps) 
             onClick={() => setMode("document")}
           />
           <ModeButton
-            mode="edit"
-            current={mode}
-            icon={<Pencil className="h-3 w-3" />}
-            label="Edit"
-            onClick={() => setMode("edit")}
-          />
-          <ModeButton
-            mode="source"
+            mode="markdown"
             current={mode}
             icon={<Code2 className="h-3 w-3" />}
             label="Markdown"
-            onClick={() => setMode("source")}
+            onClick={() => setMode("markdown")}
           />
         </div>
 
+        {/* Save state + retry */}
         <div className="flex items-center gap-2">
           <AutosaveStatus
             state={autosaveState}
             savedAt={savedAt}
             error={saveError}
           />
-          {/* Manual save button — only shown on error to allow retry */}
           {autosaveState === "error" && (
             <Button
               size="sm"
@@ -199,23 +216,24 @@ export function NoteEditor({ note, initialMode = "document" }: NoteEditorProps) 
         </div>
       </div>
 
-      {/* Content area */}
+      {/* ── Content area ──────────────────────────────────────────────────── */}
       <div className="flex-1 overflow-auto">
+
         {/* Document mode — rendered markdown for human reading */}
         {mode === "document" && (
           <div
             role="tabpanel"
             aria-label="Document view"
             className="h-full cursor-text"
-            onClick={() => setMode("edit")}
+            onClick={() => setMode("markdown")}
             onKeyDown={(e) => {
-              if (e.key === "Enter" || e.key === " ") setMode("edit");
+              if (e.key === "Enter" || e.key === " ") setMode("markdown");
             }}
           >
             {content ? (
               <div
                 className="prose prose-neutral dark:prose-invert max-w-none px-6 py-6 text-base leading-relaxed"
-                // renderMarkdown output is sanitized by sanitize-html — see src/lib/markdown.ts
+                // renderMarkdown output is sanitized — see src/lib/markdown.ts
                 dangerouslySetInnerHTML={{ __html: renderedHtml }}
               />
             ) : (
@@ -231,47 +249,43 @@ export function NoteEditor({ note, initialMode = "document" }: NoteEditorProps) 
           </div>
         )}
 
-        {/* Edit mode — markdown textarea with autosave */}
-        {mode === "edit" && (
-          <textarea
+        {/* Markdown mode — editable raw source, labeled as AI-facing */}
+        {mode === "markdown" && (
+          <div
             role="tabpanel"
             aria-label="Markdown editor"
-            value={content}
-            onChange={(e) => setContent(e.target.value)}
-            placeholder="Write in Markdown…"
-            spellCheck
-            className={cn(
-              "h-full min-h-full w-full resize-none bg-transparent px-6 py-6",
-              "font-mono text-sm leading-relaxed text-foreground",
-              "placeholder:text-muted-foreground focus:outline-none"
-            )}
-          />
-        )}
-
-        {/* Source mode — raw markdown, read-only, AI-facing */}
-        {mode === "source" && (
-          <div role="tabpanel" aria-label="Raw markdown source" className="h-full flex flex-col">
-            <div className="flex items-center gap-2 border-b border-border/50 bg-muted/30 px-6 py-2">
-              <Code2 className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
-              <p className="text-xs text-muted-foreground">
-                This is the raw markdown the AI model receives — unmodified source.
+            className="flex h-full flex-col"
+          >
+            {/* Source label — tells the user this is what the AI receives */}
+            <div className="flex items-center gap-2 border-b border-border/40 bg-muted/20 px-6 py-1.5">
+              <Code2
+                className="h-3.5 w-3.5 shrink-0 text-muted-foreground/60"
+                aria-hidden="true"
+              />
+              <p className="text-xs text-muted-foreground/70">
+                Raw markdown — the exact source the AI model receives
               </p>
             </div>
-            <pre
+
+            {/* Editable textarea */}
+            <textarea
+              value={content}
+              onChange={(e) => setContent(e.target.value)}
+              placeholder="Write in Markdown…"
+              spellCheck
+              aria-label="Markdown content"
               className={cn(
-                "flex-1 overflow-auto px-6 py-6",
-                "font-mono text-sm leading-relaxed text-foreground/80",
-                "whitespace-pre-wrap break-words"
+                "flex-1 resize-none bg-transparent px-6 py-5",
+                "font-mono text-sm leading-relaxed text-foreground",
+                "placeholder:text-muted-foreground focus:outline-none"
               )}
-            >
-              {content || <span className="text-muted-foreground italic">No content yet.</span>}
-            </pre>
+            />
           </div>
         )}
       </div>
 
-      {/* Metadata section (edit mode only) */}
-      {mode === "edit" && (
+      {/* ── Metadata — shown in markdown mode ─────────────────────────────── */}
+      {mode === "markdown" && (
         <div className="border-t border-border">
           <details className="group">
             <summary className="flex cursor-pointer items-center justify-between px-6 py-2 text-xs font-medium text-muted-foreground hover:text-foreground">
@@ -295,7 +309,6 @@ export function NoteEditor({ note, initialMode = "document" }: NoteEditorProps) 
                   placeholder="One-line summary for context retrieval"
                 />
               </div>
-
               <div className="flex flex-col gap-1.5">
                 <label
                   className="text-xs font-medium text-foreground/70"
@@ -313,7 +326,6 @@ export function NoteEditor({ note, initialMode = "document" }: NoteEditorProps) 
                   placeholder="research, reading, ideas"
                 />
               </div>
-
               <div className="flex flex-col gap-1.5">
                 <label
                   className="text-xs font-medium text-foreground/70"

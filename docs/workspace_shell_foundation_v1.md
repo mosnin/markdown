@@ -118,8 +118,9 @@ The note page embeds the note in a structured system — it is not just an edito
 
 - Breadcrumb bar (workspace → box → folder → note)
 - NoteEditor with Document mode as the default (reading experience first)
-- Three mode toggle: Document (rendered) / Edit (markdown textarea) / Source (raw)
-- Source mode is labeled explicitly as "what the AI model receives — unmodified source"
+- Two mode toggle: Document (rendered) / Markdown (editable raw source)
+- Markdown mode is labeled "Raw markdown — the exact source the AI model receives"
+- See [docs/note_dual_view_and_autosave_v1.md](note_dual_view_and_autosave_v1.md)
 
 ### Right context pane — tabs
 
@@ -180,7 +181,7 @@ These rules must be preserved by all future prompts:
 5. **TreeSidebar is the primary nav surface** — do not replace it with a flat list.
 6. **Autosave must not weaken versioning** — every autosave calls the same RPC as manual save.
 7. **Document mode is the default** — notes open in rendered view, not raw textarea.
-8. **Source mode shows exact stored markdown** — no transformation; labeled for AI.
+8. **Markdown mode IS the source** — no separate read-only source mode; the editable textarea shows the exact stored string.
 9. **Semantic links are context relationships** — not backlinks or generic navigation.
 10. **Graph views are read-only** — no editing in graph views.
 11. **AppShell remains thin** — sidebar only; right panels live in page components.
