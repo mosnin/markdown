@@ -34,7 +34,8 @@ The primary trust boundary is between:
 - Token format: `csk_v1_<64 lowercase hex>` — 256 bits of entropy
 - Token storage: prefix (8 hex) + SHA-256 hash stored in DB — raw token never persisted
 - Verification: constant-time `timingSafeEqual()` hash comparison prevents timing attacks
-- Expiry: optional `expires_at` on token records — enforced on every request
+- Expiry: 90-day default on all new and rotated tokens; explicit `null` bypass
+  path exists in code for intentional indefinite tokens (must be deliberate)
 - Connection status: `ACTIVE` required on both token record and parent connection
 - Auth failures: logged with event type but never the token value
 
@@ -97,8 +98,12 @@ approve proposals, modify connection scopes, or access other workspaces.
 - Signed URLs expire in 1 hour
 - Export artifact response includes `signed_url`, `expires_at`, `filename`, `size_bytes`
 - Ownership verified before export: `box.workspace_id === workspaceId`
-- V1 known gap: Export artifacts accumulate in the `exports` bucket with no
-  automatic purge. Manual cleanup or a scheduled function is needed for production.
+- Export artifacts use **stable resource-scoped paths** (`{workspaceId}/{filename}`)
+  with `upsert: true` — re-exporting the same box overwrites the previous file,
+  bounding storage growth to one artifact per named resource
+- Legacy timestamp-prefixed artifacts can be purged via the SQL cleanup function
+  (see `supabase/migrations/20260409000012_export_artifact_cleanup.sql`)
+- Signed URLs expire in 1 hour; the underlying object persists until cleaned up
 
 ---
 
@@ -158,15 +163,49 @@ Set on all routes via `next.config.ts`:
 
 | Header | Value |
 |---|---|
+| `Content-Security-Policy` | See below |
 | `X-Content-Type-Options` | `nosniff` |
-| `X-Frame-Options` | `SAMEORIGIN` |
+| `X-Frame-Options` | `DENY` |
 | `X-XSS-Protection` | `1; mode=block` |
 | `Referrer-Policy` | `strict-origin-when-cross-origin` |
 | `Permissions-Policy` | `camera=(), microphone=(), geolocation=()` |
 
-**V1 known gap:** No Content-Security-Policy (CSP) header is set. Adding a
-restrictive CSP for a Next.js app with inline styles (Tailwind) requires careful
-nonce or hash configuration. Deferred to V2.
+### Content Security Policy
+
+```
+default-src 'self'
+script-src 'self' 'unsafe-inline'
+style-src 'self' 'unsafe-inline'
+img-src 'self' data: https:
+font-src 'self'
+connect-src 'self' https://*.supabase.co wss://*.supabase.co
+frame-src 'none'
+object-src 'none'
+base-uri 'self'
+form-action 'self'
+```
+
+**Allowances and rationale:**
+
+- `script-src 'unsafe-inline'` — Required by Next.js App Router; inline scripts
+  are injected by the framework. A nonce-based CSP (which removes this) requires
+  per-request nonce infrastructure; deferred to V2.
+- `style-src 'unsafe-inline'` — Required by Tailwind CSS and component styling.
+- `connect-src *.supabase.co wss://*.supabase.co` — Supabase REST and realtime
+  connections to the project's hosted instance.
+- `font-src 'self'` — Geist font is bundled with the app; no external CDN needed.
+- `frame-src 'none'` / `object-src 'none'` — Hard blocks on embedding content.
+
+**Meaningful protections provided by this policy:**
+- `base-uri 'self'` — Prevents base tag hijacking even if XSS occurs
+- `form-action 'self'` — Prevents form exfiltration attacks
+- `frame-src 'none'` — Prevents clickjacking via nested frames
+- `object-src 'none'` — Blocks Flash/plugin vectors entirely
+- Restricted `connect-src` — Limits exfiltration targets even if XSS fires
+
+**V1 known limitation:** `'unsafe-inline'` in script-src and style-src reduces
+the XSS-mitigation value of the CSP. This is mitigated by `sanitize-html` in the
+rendering pipeline. A nonce-based CSP is the V2 target.
 
 ---
 
@@ -198,9 +237,9 @@ to support this swap.
 | Risk | Severity | Mitigation | Deferred action |
 |---|---|---|---|
 | No distributed rate limiting | Medium | In-process limiter per instance | Replace with Vercel KV post-launch |
-| No CSP header | Medium | sanitize-html prevents injected scripts; owner-only content | Add CSP in V2 |
-| Export artifact accumulation | Low | Private bucket, signed URLs expire | Add scheduled purge function |
-| No token rotation enforcement | Low | Expiry field optional; owner manages tokens | Enforce rotation in V2 |
+| `unsafe-inline` in CSP | Medium | sanitize-html prevents injected scripts; CSP still blocks frame-src, object-src, base-uri, form-action | Nonce-based CSP in V2 |
+| Export artifact storage growth | Low | Stable paths + upsert bounds growth; SQL cleanup function available | Schedule `cleanup_old_export_artifacts()` via pg_cron |
+| Indefinite token lifetime possible | Low | 90-day default on all new/rotated tokens; bypass path requires explicit code | Enforce hard maximum in V2 |
 | Single-instance rate limits | Low | Abuse still bounded per-instance | Distributed limiter post-launch |
 | MCP stdio process: no independent auth | Info | MCP reads CONTEXT_STORE_CONNECTION_SECRET from env — same auth as API | No change needed; documented |
 

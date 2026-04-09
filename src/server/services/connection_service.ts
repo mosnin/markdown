@@ -30,6 +30,29 @@ import {
   auditTokenRotated,
 } from "@/server/services/audit_service";
 
+// ─── Token expiry defaults ────────────────────────────────────────────────────
+
+/**
+ * Default token lifetime in days.
+ *
+ * New tokens (initial and rotated) expire after this many days by default.
+ * 90 days was chosen as a reasonable private beta default — long enough to
+ * avoid operational friction, short enough to bound the window for a
+ * compromised or forgotten token.
+ *
+ * To issue a token without expiry (e.g. for an automated internal integration),
+ * pass an explicit `expires_at: null` to `createConnectionToken()` directly.
+ * That path is intentionally bypassed by this default and should be used
+ * deliberately, not accidentally.
+ */
+const DEFAULT_TOKEN_EXPIRY_DAYS = 90;
+
+function defaultExpiresAt(): string {
+  const d = new Date();
+  d.setDate(d.getDate() + DEFAULT_TOKEN_EXPIRY_DAYS);
+  return d.toISOString();
+}
+
 // ─── Token generation ─────────────────────────────────────────────────────────
 
 /**
@@ -102,6 +125,7 @@ export async function createConnection(
     token_prefix,
     secret_hash,
     label: "Initial token",
+    expires_at: defaultExpiresAt(),
   });
 
   if (input.boxIds?.length) {
@@ -156,6 +180,7 @@ export async function rotateConnectionToken(
     token_prefix,
     secret_hash,
     label: "Rotated token",
+    expires_at: defaultExpiresAt(),
   });
 
   void auditTokenRotated(supabase, workspaceId, actorId, connectionId);

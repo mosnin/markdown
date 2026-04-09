@@ -24,8 +24,8 @@ pnpm test:watch
 pnpm test:coverage
 ```
 
-Tests live in `src/tests/unit/`. The vitest configuration is at
-`vitest.config.ts`.
+Unit tests live in `src/tests/unit/`. Integration tests live in
+`src/tests/integration/`. The vitest configuration is at `vitest.config.ts`.
 
 ---
 
@@ -134,6 +134,73 @@ imported content.
 
 ---
 
+---
+
+## Integration test modules
+
+Integration tests live in `src/tests/integration/`. They mock the **repository
+layer** (not the DB) but run the full service function, verifying the complete
+guard chain, correct mock call sequences, and legible error messages.
+
+### `proposal_conflict_detection.test.ts`
+
+Covers the write proposal conflict detection path:
+- SQL RPC returning `outcome: "conflicted"` → service returns `{ outcome, reason }` with no note
+- Conflict fires `auditWriteProposalConflicted`, not `auditWriteProposalApproved`
+- Approval happy path: `outcome: "approved"`, note returned, correct audit event
+- Ownership guard: proposal from a different workspace → `not found`
+- Idempotency: already-approved or conflicted proposal → `not pending`
+
+**Why:** The two-outcome RPC result is the version-conflict detection seam.
+Verifying the service interprets both outcomes correctly (different audit events,
+different return shapes) is essential for the AI agent trust model.
+
+---
+
+### `generated_note_authorization.test.ts`
+
+Covers the four-layer authorization chain in `createGeneratedNote`:
+- Wrong `permission_mode` (read_only, propose_writes) → throws "generate_in_allowed_folders"
+- Non-existent or trashed folder → throws "not found"
+- Folder's box not in `allowedBoxIds` → throws "not in an allowed box"
+- `accepts_generated_notes = false` → throws "accepts_generated_notes"
+- All checks pass → RPC called with correct params, note returned with `is_generated: true`
+
+**Why:** Generated notes are the highest-privilege external operation. Defense-in-
+depth at the service level ensures the auth chain holds even if a route handler
+skips a check.
+
+---
+
+### `stable_id_resolution.test.ts`
+
+Covers the UUID-as-identity invariant:
+- `getNoteById` is called with the note UUID, never with `path_cache` values
+- A note with a changed `path_cache` (after a move) is still found by original UUID
+- UUID identity is stable across multiple operations on the same note
+
+**Why:** `path_cache` is a derived display field. Verifying that service
+functions never use it as a lookup key prevents a class of subtle identity bugs
+after note moves.
+
+---
+
+### `lifecycle_guide_protection.test.ts`
+
+Covers the end-to-end guide note protection flow:
+- Guide note cannot be archived or trashed (Supabase query detects assignment)
+- Non-guide note in the same box can be archived or trashed
+- Former guide note (assignment cleared) can be trashed after the fact
+- Already-archived note → `already archived`; already-trashed → `already trashed`
+- Archived-to-trashed direction → `Cannot archive a trashed note`
+- Restore and unarchive happy paths return `status: "active"`
+- Restore on active note → `not trashed`
+
+**Why:** Guide note protection is a hard system invariant. The integration test
+verifies the guard survives the full call chain including the supabase mock query.
+
+---
+
 ## Test architecture
 
 ### Framework
@@ -162,25 +229,25 @@ and their behavior is covered by the audit events design rather than unit tests.
 
 ## Intentional gaps (V1 deferrals)
 
-The following are not unit-tested in V1 and are explicitly deferred:
+The following are not covered in V1 and are explicitly deferred:
 
 | Gap | Reason for deferral |
 |---|---|
-| Integration tests with real DB | Requires test Supabase instance; deferred to post-launch hardening |
+| DB-level integration tests | Requires test Supabase instance; deferred to post-launch hardening |
 | Context bundle assembly correctness | Requires DB fixtures; complex to mock correctly |
-| Version history and rollback | Depends on atomic SQL RPCs; needs DB integration tests |
-| Import collision modes end-to-end | Complex DB state; needs integration test harness |
-| Canonical API route integration tests | Needs full Next.js test harness or real DB; deferred |
-| MCP adapter tool input validation | Covered by TypeScript types + canonical API tests; deferred |
+| Version history and rollback | Depends on atomic SQL RPCs; needs real DB |
+| Import collision modes end-to-end | Complex DB state; needs DB integration test harness |
+| Canonical API route integration tests | Needs full Next.js test harness or real DB |
+| MCP adapter tool input validation | Covered by TypeScript types + canonical API tests |
 | E2E browser tests | No Playwright/Cypress setup in V1; post-launch |
 
-### How to add integration tests in a future pass
+### How to add DB integration tests in a future pass
 
 1. Set up a dedicated Supabase test project (or use branching)
 2. Apply migrations: `npx supabase db push --db-url $TEST_DB_URL`
-3. Write integration tests in `src/tests/integration/` using the real Supabase
-   client and actual SQL functions
-4. Add `test:integration` script to package.json
+3. Add a `TEST_DATABASE_URL` env var to the test environment
+4. Write tests in `src/tests/integration/db/` using the real Supabase client
+5. Add `test:db` script to package.json (separate from the mock-based suite)
 
 ---
 
@@ -195,5 +262,9 @@ The following are not unit-tested in V1 and are explicitly deferred:
 | Import vocabulary validation | All canonical values + non-canonical inputs |
 | Rate limiter | Core window logic |
 | Markdown sanitization | Key XSS vectors |
+| Proposal conflict detection (integration) | Conflict path + audit + approval happy path |
+| Generated note authorization (integration) | All 4 auth checks in sequence |
+| Stable ID resolution (integration) | UUID-as-identity invariant before/after move |
+| Lifecycle guide protection (integration) | Full guard chain + idempotency + restore |
 
 Full line coverage is not the goal. Covering the **trust invariants** is.

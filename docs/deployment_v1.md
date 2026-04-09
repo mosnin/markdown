@@ -163,19 +163,39 @@ For production schema changes post-launch:
 
 ## Export artifact cleanup
 
-Export artifacts accumulate in the `exports` Supabase Storage bucket.
-Signed URLs expire after 1 hour but the underlying files are not deleted.
+Export artifacts live in the private `exports` Supabase Storage bucket.
 
-**V1 expectation**: Manual cleanup or a scheduled Supabase Edge Function that
-deletes objects older than 24 hours. This is not implemented in V1 but is
-straightforward to add:
+### Stable resource-scoped paths (V1 strategy)
+
+Export artifacts are stored at `{workspaceId}/{filename}` with `upsert: true`.
+Re-exporting the same box **overwrites** the previous artifact, bounding storage
+growth to **at most one artifact per named export resource**. Signed URLs still
+expire after 1 hour; the underlying object persists until explicitly cleaned up.
+
+### SQL cleanup function
+
+Migration `supabase/migrations/20260409000012_export_artifact_cleanup.sql`
+installs a cleanup function:
 
 ```sql
--- Run as a scheduled job or edge function
-DELETE FROM storage.objects
-WHERE bucket_id = 'exports'
-  AND created_at < now() - interval '24 hours';
+SELECT cleanup_old_export_artifacts(7);  -- delete artifacts older than 7 days
+SELECT cleanup_old_export_artifacts();   -- uses 7-day default
 ```
+
+### Recommended production schedule
+
+Enable `pg_cron` in your Supabase project and add a weekly job:
+
+```sql
+SELECT cron.schedule(
+  'weekly-export-cleanup',
+  '0 3 * * 0',  -- 03:00 UTC every Sunday
+  $$ SELECT cleanup_old_export_artifacts(7); $$
+);
+```
+
+This can also be triggered from a Vercel Cron Job via an authenticated internal
+route if you prefer to avoid direct DB access from the scheduler.
 
 ---
 
@@ -215,8 +235,9 @@ Schema changes are applied forward-only.
    `/api/v1/` routes and the import endpoint. If it is compromised, rotate it
    immediately in Supabase and update the Vercel environment variable.
 
-3. **Export artifact accumulation**: Plan a cleanup job before significant
-   usage. See cleanup section above.
+3. **Export artifact cleanup**: V1 uses stable resource-scoped paths (one artifact
+   per export name), bounding growth automatically. Schedule the SQL cleanup
+   function for legacy artifact purge. See cleanup section above.
 
 4. **Rate limiting**: The in-process rate limiter is suitable for private
    beta. For production scale with multiple instances, add Vercel KV.

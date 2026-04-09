@@ -38,12 +38,14 @@ for the private beta scope.
 | Item | Status | Notes |
 |---|---|---|
 | Bearer token verification | ✅ | Constant-time hash comparison, expiry, status checks |
+| Token expiry default | ✅ | 90-day default on all new/rotated tokens |
 | Ownership checks on all API routes | ✅ | `allowedBoxIds` + workspace_id checks |
 | Guide note protection | ✅ | Enforced in lifecycle service and tested |
 | Write proposal trust model | ✅ | Proposals require human approval |
 | Import human-session-only | ✅ | External connections cannot initiate import |
 | Markdown sanitization | ✅ | `sanitize-html` applied at shared rendering seam |
-| Security headers | ✅ | X-Content-Type-Options, X-Frame-Options, etc. |
+| Content Security Policy | ✅ | Minimal meaningful CSP; unsafe-inline present but object-src/frame-src/base-uri protected |
+| Security headers | ✅ | X-Content-Type-Options, X-Frame-Options: DENY, etc. |
 | Service role key isolation | ✅ | Used only in admin client, server-only |
 | Error message leakage | ✅ | `E_INTERNAL` returns generic message |
 | Auth failure logging | ✅ | Token expiry, inactive status logged without leaking token value |
@@ -60,7 +62,8 @@ for the private beta scope.
 | Import vocabulary tests | ✅ | Canonical relationship types and read hints |
 | Rate limiter tests | ✅ | Window logic, per-key isolation, expiry |
 | Markdown sanitization tests | ✅ | XSS vectors, safe content preservation |
-| Integration tests | ⏳ Deferred | Needs test Supabase instance — post-launch |
+| Integration tests (service-level) | ✅ | 4 modules: conflict detection, generated note auth, stable ID, lifecycle protection |
+| DB integration tests | ⏳ Deferred | Needs test Supabase instance — post-launch |
 | E2E tests | ⏳ Deferred | No Playwright setup in V1 |
 
 ### Observability
@@ -96,7 +99,7 @@ for the private beta scope.
 | MCP env documented | ✅ | In `.env.example` and `docs/deployment_v1.md` |
 | Build passes with placeholder envs | ✅ | Verified by CI config |
 | Security headers in production | ✅ | Configured in `next.config.ts` |
-| Database migrations ready | ✅ | 11 SQL files in `supabase/migrations/` |
+| Database migrations ready | ✅ | 12 SQL files in `supabase/migrations/` |
 
 ### CI and developer workflow
 
@@ -142,39 +145,48 @@ documented mitigation path.
 - **Post-launch fix**: Replace in-memory store in `src/lib/api/rate_limit.ts`
   with Vercel KV (Upstash Redis).
 
-### No Content-Security-Policy header
+### CSP with `'unsafe-inline'`
 
-- **Risk**: Without a CSP, XSS payloads that bypass `sanitize-html` could
-  execute scripts inline.
-- **Severity**: Low — sanitize-html removes all script tags and event handlers.
-  Single-owner context means the attacker must control imported content.
-- **Mitigation in V1**: sanitize-html at rendering seam.
-- **Post-launch fix**: Add a restrictive CSP with nonce or hash for Next.js.
+- **Risk**: The V1 CSP includes `'unsafe-inline'` for script-src and style-src,
+  which limits the CSP's XSS-mitigation value for inline payloads.
+- **Severity**: Low — `sanitize-html` removes all script tags and event handlers
+  before render. The CSP still provides meaningful protection: `frame-src none`,
+  `object-src none`, `base-uri self`, `form-action self`, and restricted
+  `connect-src` all provide real hardening.
+- **Mitigation in V1**: CSP present; `sanitize-html` at rendering seam.
+- **Post-launch fix**: Nonce-based CSP to remove `'unsafe-inline'` from script-src.
 
-### Export artifact accumulation
+### Export artifact storage growth
 
-- **Risk**: Export zip files accumulate in the private `exports` Storage bucket
-  with no automatic purge.
-- **Severity**: Low — signed URLs expire in 1 hour, bucket is private.
-  Storage cost grows over time.
-- **Post-launch fix**: Add a Supabase Edge Function or cron job to delete
-  artifacts older than 24 hours.
+- **Risk**: Export zip files in the private `exports` Storage bucket grow over
+  time. Signed URLs expire in 1 hour but files persist.
+- **Severity**: Low — bucket is private; stable resource-scoped paths with
+  `upsert: true` mean re-exporting the same box overwrites its artifact,
+  bounding growth to one file per named export resource.
+- **Mitigation in V1**: Stable paths + upsert; SQL cleanup function installed
+  (`cleanup_old_export_artifacts()`).
+- **Post-launch action**: Schedule `cleanup_old_export_artifacts(7)` via pg_cron
+  or a weekly Vercel Cron Job.
 
-### Optional token expiry
+### Indefinite token lifetime possible
 
-- **Risk**: Bearer tokens with no `expires_at` are valid indefinitely until
-  explicitly revoked.
-- **Severity**: Low — owner controls token lifecycle; revocation is available
-  in Settings → Connections.
-- **Post-launch consideration**: Enforce maximum token lifetime in V2.
+- **Risk**: The explicit `null` bypass path in `connection_service.ts` allows
+  creating tokens without expiry. If used accidentally, tokens are valid
+  indefinitely until revoked.
+- **Severity**: Low — 90-day default is applied to all new and rotated tokens
+  via `createConnectionToken`. The bypass requires deliberate code change.
+- **Mitigation in V1**: 90-day default enforced at both creation points.
+- **Post-launch consideration**: Enforce hard maximum token lifetime in V2.
 
-### No integration or E2E tests
+### No DB-level integration or E2E tests
 
-- **Risk**: Service-level and route-level correctness not covered by automated
-  tests. Regressions in DB-dependent behavior (version history, RPC atomicity)
-  not caught before deploy.
+- **Risk**: DB-dependent behavior (version history, RPC atomicity, import
+  collision modes) not covered by automated tests.
 - **Severity**: Medium for ongoing development.
-- **Post-launch fix**: Set up integration test harness with Supabase branching.
+- **Mitigation in V1**: Service-level integration tests (mocked DB) cover the
+  four highest-risk flows: proposal conflicts, generated note auth, stable ID
+  resolution, lifecycle guide protection.
+- **Post-launch fix**: Set up DB integration test harness with Supabase branching.
 
 ---
 
@@ -191,6 +203,6 @@ Context Store V1 meets the requirements for a private beta launch:
 5. Known risks are bounded by the private beta audience ✅
 6. Audit trail and version history provide operational reversibility ✅
 
-The remaining known risks (distributed rate limiting, CSP, artifact cleanup)
-are appropriate post-launch hardening items and do not block private beta
-with a controlled audience.
+The remaining known risks (distributed rate limiting, CSP `unsafe-inline`,
+DB integration tests) are appropriate post-launch hardening items and do not
+block private beta with a controlled audience.

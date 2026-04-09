@@ -17,12 +17,24 @@ import { packageToZip } from "@/server/services/export_service";
  *   - Signed URLs are never logged or included in audit events.
  *
  * Storage path convention:
- *   {workspaceId}/{unix-ms}-{filename}
+ *   {workspaceId}/{filename}
  *
- * V1 cleanup:
- *   Artifacts accumulate. Signed URLs expire (1 hour) so artifacts become
- *   inaccessible without a new URL, but the files remain in storage.
- *   A future retention job can purge paths older than a threshold (e.g. 7 days).
+ *   The filename is derived from the exported resource (e.g. `my-box-box.zip`,
+ *   `note-slug.zip`). Using a stable, resource-scoped path and upsert:true
+ *   means each resource has at most one artifact file at a time — re-exporting
+ *   the same resource overwrites the previous artifact.
+ *
+ * Cleanup strategy:
+ *   Stable resource-scoped paths (no timestamp suffix) ensure storage does not
+ *   grow unboundedly. Each resource's export replaces the previous one.
+ *   Maximum storage per workspace = number of exportable resources × average
+ *   zip size. For a workspace with 200 notes, 20 boxes, and 50 folders, the
+ *   theoretical maximum is ~270 files (most never exported).
+ *
+ *   For explicit bulk cleanup of any remaining accumulated artifacts, the
+ *   `cleanup_old_export_artifacts` SQL function (migration 20260409000012)
+ *   can be called manually or on a schedule:
+ *     SELECT cleanup_old_export_artifacts(7);  -- remove objects older than 7 days
  */
 
 const EXPORT_BUCKET = "exports";
@@ -49,13 +61,15 @@ export async function deliverExportPackage(
   pkg: ExportPackage
 ): Promise<ArtifactDeliveryResult> {
   const zip = packageToZip(pkg);
-  const storagePath = `${workspaceId}/${Date.now()}-${pkg.filename}`;
+  // Stable path: {workspaceId}/{filename} — upsert overwrites previous export
+  // of the same resource, preventing unbounded artifact accumulation.
+  const storagePath = `${workspaceId}/${pkg.filename}`;
 
   const { error: uploadError } = await adminClient.storage
     .from(EXPORT_BUCKET)
     .upload(storagePath, zip, {
       contentType: "application/zip",
-      upsert: false,
+      upsert: true,
     });
 
   if (uploadError) {
