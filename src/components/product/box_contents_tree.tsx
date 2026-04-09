@@ -163,7 +163,7 @@ export function BoxContentsTree({ folders, notes, className, folderLifecycleMenu
   if (empty) {
     return (
       <p className={cn("px-4 py-3 text-sm text-muted-foreground", className)}>
-        No folders or notes yet.
+        No folders or notes yet. Use "New folder" or "New note" above to add content.
       </p>
     );
   }

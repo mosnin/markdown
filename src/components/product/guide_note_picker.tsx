@@ -85,10 +85,10 @@ export function GuideNotePicker({
             type="button"
             onClick={handleClear}
             disabled={isPending}
-            className="rounded p-0.5 text-muted-foreground transition-fast hover:bg-muted hover:text-foreground disabled:opacity-50"
-            title="Clear guide note"
+            className="rounded p-0.5 text-muted-foreground transition-fast hover:bg-muted hover:text-foreground disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            aria-label="Clear guide note assignment"
           >
-            <X className="h-3.5 w-3.5" />
+            <X className="h-3.5 w-3.5" aria-hidden="true" />
           </button>
         </div>
         {error && <p className="text-xs text-destructive">{error}</p>}
@@ -138,20 +138,28 @@ export function GuideNotePicker({
 
   return (
     <div className="flex flex-col gap-1.5">
-      <div className="flex items-center gap-2 rounded-md border border-dashed border-border px-3 py-2.5 text-sm text-muted-foreground">
-        <BookOpen className="h-3.5 w-3.5 shrink-0" />
-        <span className="flex-1">No guide note assigned</span>
-        {notes.length > 0 && (
-          <button
-            type="button"
-            onClick={() => setSelecting(true)}
-            className="text-xs text-muted-foreground underline underline-offset-2 transition-fast hover:text-foreground"
-          >
-            Assign
-          </button>
-        )}
+      <div className="flex flex-col gap-2 rounded-md border border-dashed border-border px-3 py-3">
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <BookOpen className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+          <span className="flex-1 font-medium">No guide note assigned</span>
+          {notes.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setSelecting(true)}
+              className="text-xs text-muted-foreground underline underline-offset-2 transition-fast hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded"
+            >
+              Assign
+            </button>
+          )}
+        </div>
+        <p className="text-xs text-muted-foreground/70 leading-relaxed">
+          A guide note orients retrieval for this box. AI agents read it first.
+          {notes.length === 0
+            ? " Create a note to assign as the guide."
+            : " Select a note to assign as the guide."}
+        </p>
       </div>
-      {error && <p className="text-xs text-destructive">{error}</p>}
+      {error && <p className="text-xs text-destructive" role="alert">{error}</p>}
     </div>
   );
 }

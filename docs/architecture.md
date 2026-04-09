@@ -473,6 +473,34 @@ src/components/product/
 └── audit_panel.tsx            Audit event list with filter + expand
 ```
 
+## Product maturity layer
+
+See [docs/onboarding_and_templates_v1.md](onboarding_and_templates_v1.md) and
+[docs/accessibility_notes_v1.md](accessibility_notes_v1.md).
+
+- **Templates**: structured box and note starting points; application calls normal service functions
+- **Onboarding**: first-run callout on home page when workspace has no boxes; teaches the product mental model
+- **Mobile nav**: `MobileSidebar` sheet-based drawer; `AppShell` renders mobile top bar on `< md` screens
+- **Accessibility**: skip link, landmark semantics, `aria-current`, icon button labels, `role="alert"` on errors
+- **Empty states**: improved copy across guide note picker, tree view, workspaces, linked notes, home page
+
+```
+src/lib/templates/
+└── index.ts                   BOX_TEMPLATES, NOTE_TEMPLATES, getBoxTemplate, getNoteTemplate
+
+src/app/app/boxes/actions.ts
+├── createNoteAction            Extended: accepts optional markdownContent
+└── applyBoxTemplateAction      Orchestrates template: folders + notes + guide assignment
+
+src/components/product/
+├── app_shell.tsx               Updated: skip link, <main> landmark, mobile top bar + MobileSidebar
+├── app_sidebar.tsx             Updated: aria-current, nav/ul/li, aria-label on icon links
+├── mobile_sidebar.tsx          New: Sheet-based left drawer with full nav hierarchy
+├── onboarding_callout.tsx      New: First-run mental model callout (home page, no boxes)
+├── create_box_dialog.tsx       Updated: template picker (BOX_TEMPLATES)
+└── create_note_dialog.tsx      Updated: starter template picker (NOTE_TEMPLATES)
+```
+
 ## Future prompts will add
 
 - `src/server/policies/` — authorization checks

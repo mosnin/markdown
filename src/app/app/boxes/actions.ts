@@ -8,6 +8,7 @@ import { createFolder, renameFolder } from "@/server/services/folder_service";
 import { createNote } from "@/server/services/note_service";
 import { assignGuideNote, clearGuideNote } from "@/server/services/guide_service";
 import { searchNotes, type NoteSearchResult } from "@/server/services/search_service";
+import { getBoxTemplate } from "@/lib/templates";
 
 export type ActionResult<T = void> =
   | { ok: true; data: T }
@@ -100,7 +101,8 @@ export async function createNoteAction(
   boxId: string,
   title: string,
   folderId?: string | null,
-  kind: "note" | "guide" | "bundle" = "note"
+  kind: "note" | "guide" | "bundle" = "note",
+  markdownContent?: string
 ): Promise<ActionResult<{ id: string }>> {
   try {
     const { supabase, userId, workspaceId } = await requireContext();
@@ -109,11 +111,69 @@ export async function createNoteAction(
       folderId: folderId ?? null,
       title: title.trim(),
       kind,
+      markdownContent: markdownContent ?? "",
     });
     revalidatePath(`/app/boxes/${boxId}`);
     return { ok: true, data: { id: note.id } };
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : "Failed to create note" };
+  }
+}
+
+/**
+ * Apply a box template: create folders and notes with initial content,
+ * optionally assign the guide note. Calls existing service functions —
+ * does not bypass versioning or audit.
+ */
+export async function applyBoxTemplateAction(
+  boxId: string,
+  templateId: string
+): Promise<ActionResult<{ guideNoteId: string | null }>> {
+  try {
+    const { supabase, userId, workspaceId } = await requireContext();
+    const template = getBoxTemplate(templateId);
+    if (!template) return { ok: false, error: "Template not found" };
+
+    // Create folders first, track key → id
+    const folderIdMap = new Map<string, string>();
+    for (const folderDef of template.folders) {
+      const folder = await createFolder(supabase, userId, workspaceId, {
+        boxId,
+        name: folderDef.name,
+        parentFolderId: null,
+      });
+      folderIdMap.set(folderDef.key, folder.id);
+    }
+
+    // Create notes
+    let guideNoteId: string | null = null;
+    for (const noteDef of template.notes) {
+      const folderId = noteDef.folderKey ? (folderIdMap.get(noteDef.folderKey) ?? null) : null;
+      const note = await createNote(supabase, userId, workspaceId, {
+        boxId,
+        folderId,
+        title: noteDef.title,
+        kind: noteDef.kind,
+        markdownContent: noteDef.markdownContent,
+      });
+      if (noteDef.isGuide) {
+        guideNoteId = note.id;
+      }
+    }
+
+    // Assign guide note if one was created
+    if (guideNoteId) {
+      await assignGuideNote(supabase, userId, workspaceId, boxId, guideNoteId);
+    }
+
+    revalidatePath(`/app/boxes/${boxId}`);
+    revalidatePath("/app");
+    return { ok: true, data: { guideNoteId } };
+  } catch (err) {
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : "Failed to apply template",
+    };
   }
 }
 

@@ -55,8 +55,8 @@ export function LinkedNotesSection({
       </div>
 
       {!hasLinks && (
-        <p className="text-xs text-muted-foreground">
-          No links yet. Add a link to connect this note to another.
+        <p className="text-xs text-muted-foreground leading-relaxed">
+          No links yet. Note links connect related notes within the same box and are included in context bundles.
         </p>
       )}
 

@@ -65,10 +65,14 @@ export default async function WorkspacesPage() {
             className="px-0"
           >
             {boxes.length === 0 ? (
-              <div className="rounded-lg border border-dashed border-border px-4 py-8 text-center">
-                <p className="text-sm text-muted-foreground">
-                  No boxes yet. Boxes are focused collections inside your workspace.
+              <div className="rounded-lg border border-dashed border-border px-6 py-10 text-center">
+                <p className="text-sm font-medium text-foreground">No boxes yet</p>
+                <p className="mt-1 max-w-sm mx-auto text-sm text-muted-foreground">
+                  Boxes are focused context domains — one per project, research area, or knowledge topic.
                 </p>
+                <div className="mt-4">
+                  <CreateBoxDialog />
+                </div>
               </div>
             ) : (
               <div className="flex flex-col divide-y divide-border rounded-lg border border-border overflow-hidden">

@@ -24,18 +24,6 @@ const primaryNav = [
   { label: "Audit log", href: "/app/audit", icon: ClipboardList },
 ];
 
-// ─── Styles ───────────────────────────────────────────────────────────────────
-
-function navItemClass(isActive: boolean) {
-  return cn(
-    "flex items-center gap-2.5 rounded-md px-2.5 py-2 text-sm transition-fast",
-    "hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
-    isActive
-      ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium"
-      : "text-sidebar-foreground/70"
-  );
-}
-
 // ─── Nav item ─────────────────────────────────────────────────────────────────
 
 function NavItem({
@@ -52,9 +40,22 @@ function NavItem({
   return (
     <Tooltip>
       <TooltipTrigger
-        render={<Link href={href} className={navItemClass(isActive)} />}
+        render={
+          <Link
+            href={href}
+            aria-current={isActive ? "page" : undefined}
+            className={cn(
+              "flex items-center gap-2.5 rounded-md px-2.5 py-2 text-sm transition-fast",
+              "hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+              isActive
+                ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium"
+                : "text-sidebar-foreground/70"
+            )}
+          />
+        }
       >
-        <Icon className="h-4 w-4 shrink-0" />
+        <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
         <span className="truncate">{label}</span>
       </TooltipTrigger>
       <TooltipContent side="right" sideOffset={8} className="text-xs">
@@ -70,15 +71,17 @@ function BoxNavItem({ box, isActive }: { box: BoxType; isActive: boolean }) {
   return (
     <Link
       href={`/app/boxes/${box.id}`}
+      aria-current={isActive ? "page" : undefined}
       className={cn(
         "flex items-center gap-2 rounded-md px-2.5 py-1.5 text-sm transition-fast",
         "hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
         isActive
           ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium"
           : "text-sidebar-foreground/60"
       )}
     >
-      <Box className="h-3.5 w-3.5 shrink-0" />
+      <Box className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
       <span className="truncate">{box.name}</span>
     </Link>
   );
@@ -101,13 +104,14 @@ export function AppSidebar({
 
   return (
     <aside
+      aria-label="Sidebar navigation"
       className={cn(
         "flex h-full w-56 shrink-0 flex-col",
         "border-r border-sidebar-border bg-sidebar"
       )}
     >
       {/* Logo / wordmark */}
-      <div className="flex h-12 items-center gap-2 border-b border-sidebar-border px-4">
+      <div className="flex h-12 items-center gap-2 border-b border-sidebar-border px-4" aria-hidden="true">
         <div className="h-5 w-5 rounded-md bg-foreground" />
         <span className="text-sm font-semibold tracking-tight text-sidebar-foreground">
           Context Store
@@ -116,16 +120,19 @@ export function AppSidebar({
 
       {/* Primary navigation */}
       <div className="px-2 pt-3 pb-1">
-        <nav className="flex flex-col gap-0.5">
-          {primaryNav.map((item) => (
-            <NavItem
-              key={item.href}
-              href={item.href}
-              icon={item.icon}
-              label={item.label}
-              isActive={pathname === item.href}
-            />
-          ))}
+        <nav aria-label="Primary navigation">
+          <ul className="flex flex-col gap-0.5 list-none">
+            {primaryNav.map((item) => (
+              <li key={item.href}>
+                <NavItem
+                  href={item.href}
+                  icon={item.icon}
+                  label={item.label}
+                  isActive={pathname === item.href}
+                />
+              </li>
+            ))}
+          </ul>
         </nav>
       </div>
 
@@ -139,10 +146,14 @@ export function AppSidebar({
           </span>
           <Link
             href="/app/workspaces"
-            className="rounded p-0.5 text-sidebar-foreground/40 transition-fast hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-            title="Workspace"
+            className={cn(
+              "rounded p-0.5 text-sidebar-foreground/40 transition-fast",
+              "hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            )}
+            aria-label="Manage workspace"
           >
-            <Plus className="h-3 w-3" />
+            <Plus className="h-3 w-3" aria-hidden="true" />
           </Link>
         </div>
 
@@ -151,14 +162,20 @@ export function AppSidebar({
             No boxes yet
           </p>
         ) : (
-          <nav className="flex flex-col gap-0.5">
-            {boxes.map((box) => (
-              <BoxNavItem
-                key={box.id}
-                box={box}
-                isActive={pathname === `/app/boxes/${box.id}` || pathname.startsWith(`/app/boxes/${box.id}/`)}
-              />
-            ))}
+          <nav aria-label="Boxes">
+            <ul className="flex flex-col gap-0.5 list-none">
+              {boxes.map((box) => (
+                <li key={box.id}>
+                  <BoxNavItem
+                    box={box}
+                    isActive={
+                      pathname === `/app/boxes/${box.id}` ||
+                      pathname.startsWith(`/app/boxes/${box.id}/`)
+                    }
+                  />
+                </li>
+              ))}
+            </ul>
           </nav>
         )}
       </ScrollArea>
@@ -168,14 +185,16 @@ export function AppSidebar({
         <div className="flex items-center justify-between px-3 py-2">
           <Link
             href="/app/settings"
+            aria-label="Settings"
+            aria-current={pathname === "/app/settings" ? "page" : undefined}
             className={cn(
               "flex items-center gap-2 rounded-md p-1.5 text-sidebar-foreground/60 transition-fast",
               "hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
               pathname === "/app/settings" && "text-sidebar-accent-foreground"
             )}
-            aria-label="Settings"
           >
-            <Settings className="h-4 w-4" />
+            <Settings className="h-4 w-4" aria-hidden="true" />
           </Link>
           <ThemeToggle />
         </div>
