@@ -10,13 +10,14 @@ import {
   type ImportAction,
   type ImportWarning,
 } from "@/server/domain/types/import_export";
-import { getBoxById } from "@/server/repositories/box_repository";
+import { getBoxById, updateBox } from "@/server/repositories/box_repository";
 import { getFolderById, createFolder, updateFolder } from "@/server/repositories/folder_repository";
 import { getNoteById, updateNote as repoUpdateNote } from "@/server/repositories/note_repository";
 import { createNoteLink } from "@/server/repositories/note_link_repository";
 import { getLatestVersionForNote, createNoteVersion } from "@/server/repositories/note_version_repository";
 import { slugify } from "@/lib/slugify";
 import { RELATIONSHIP_TYPE, NOTE_READ_HINT } from "@/server/domain/constants/note_constants";
+import { auditGuideNoteAssigned } from "@/server/services/audit_service";
 
 // ─── Canonical vocabulary sets ────────────────────────────────────────────────
 
@@ -317,6 +318,7 @@ async function importSingleMarkdown(
  */
 async function applyManifest(
   supabase: SupabaseClient,
+  workspaceId: string,
   boxId: string,
   targetFolderId: string | null,
   manifest: ExportManifest,
@@ -488,6 +490,41 @@ async function applyManifest(
         final_path: null,
         action: "skipped",
         reason: "Create failed",
+      });
+    }
+  }
+
+  // Step 4: Restore guide note assignment from manifest.
+  // The export marks the box's current guide note with is_guide_note: true.
+  // On import, if that note was successfully created or updated, assign it
+  // as the box's guide note. This preserves round-trip fidelity for full
+  // box exports. Fire-and-forget: a failure here is non-fatal.
+  const manifestGuideNote = manifest.notes.find((n) => n.is_guide_note);
+  if (manifestGuideNote) {
+    const finalGuideId = noteIdMap.get(manifestGuideNote.id);
+    if (finalGuideId) {
+      try {
+        await updateBox(supabase, boxId, { guide_note_id: finalGuideId });
+        auditGuideNoteAssigned(
+          supabase,
+          workspaceId,
+          actorId,
+          boxId,
+          finalGuideId,
+          manifestGuideNote.title
+        );
+      } catch {
+        warnings.push({
+          code: "guide_note_assignment_failed",
+          message: `Guide note assignment for "${manifestGuideNote.title}" failed — box guide note unchanged.`,
+          subject: manifestGuideNote.id,
+        });
+      }
+    } else {
+      warnings.push({
+        code: "guide_note_not_imported",
+        message: `Manifest declares "${manifestGuideNote.title}" as guide note, but it was not imported. Box guide note unchanged.`,
+        subject: manifestGuideNote.id,
       });
     }
   }
@@ -1003,6 +1040,7 @@ export async function importPackage(
     if (parsed.manifest) {
       await applyManifest(
         supabase,
+        workspaceId,
         target.boxId,
         target.targetFolderId ?? null,
         parsed.manifest,

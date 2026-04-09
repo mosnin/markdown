@@ -3,6 +3,7 @@ import { getConnectionContext } from "@/server/auth/get_connection_context";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getNoteById } from "@/server/repositories/note_repository";
 import { assembleContextBundle } from "@/server/services/context_bundle_service";
+import { auditBundleReadByConnection } from "@/server/services/audit_service";
 import {
   apiOk,
   E_UNAUTHORIZED,
@@ -70,6 +71,14 @@ export async function POST(request: NextRequest) {
         linkedLimit: body.linked_limit ?? 10,
       }
     );
+    // Audit the bundle read (fire-and-forget — must not abort the response).
+    auditBundleReadByConnection(adminClient, ctx.workspaceId, ctx.connection.id, note_id, {
+      box_id: bundle.box.id,
+      linked_count: bundle.linked_notes.length,
+      guide_included: bundle.guide_note !== null,
+      ancestor_summary_included: bundle.ancestor_summary_note !== null,
+      truncated: bundle.truncated,
+    });
     return apiOk(bundle);
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Assembly failed";

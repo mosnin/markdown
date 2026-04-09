@@ -54,6 +54,9 @@ export async function GET(
     read_hint: note.read_hint,
     kind: note.kind,
     status: note.status,
+    origin_type: note.origin_type,
+    is_generated: note.is_generated,
+    generated_by_connection_id: note.generated_by_connection_id,
     created_at: note.created_at,
     updated_at: note.updated_at,
   });

@@ -200,9 +200,14 @@ The note's box must be in the connection's allowed scopes.
   "markdown_content": "...", "summary": "...", "tags": [...],
   "read_hint": "...", "kind": "note" | "guide" | "bundle",
   "status": "active" | "archived",
+  "origin_type": "user_created" | "imported" | "generated_by_tool" | "duplicated" | "restored",
+  "is_generated": true | false,
+  "generated_by_connection_id": "..." | null,
   "created_at": "...", "updated_at": "..."
 }
 ```
+
+`is_generated` is `true` for notes created directly by a `generate_in_allowed_folders` connection that have not yet been promoted. `origin_type` and `generated_by_connection_id` are preserved after promotion.
 
 ---
 

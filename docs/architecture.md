@@ -531,6 +531,23 @@ src/components/product/
 └── create_note_dialog.tsx      Updated: starter template picker (NOTE_TEMPLATES)
 ```
 
+## V1 parity pass
+
+See [docs/v1_parity_report.md](v1_parity_report.md).
+
+Targeted corrections applied after a systematic review against the original acceptance criteria:
+
+- **Import guide note restoration**: `applyManifest` in `import_service.ts` now restores `boxes.guide_note_id` from the manifest's `is_guide_note` field after all notes are created. `guide_note.assigned` audit event fired on success.
+- **Bundle read audit**: `POST /api/v1/context_bundles` now fires `bundle.read` audit event with `actor_type='connection'` after successful assembly. `auditBundleReadByConnection()` added to audit_service.
+- **Note read response completeness**: `GET /api/v1/notes/[note_id]` now includes `origin_type`, `is_generated`, and `generated_by_connection_id` as specified in the generated note parity contract.
+- **Template service extraction**: Box template orchestration moved from `applyBoxTemplateAction` to `template_service.ts`.
+
+Stable ID resolution verified: all external API note lookups use UUID identity, not path. `path_cache` and `slug` are derived convenience fields only.
+
+Relationship explanation parity verified: `relationship_note` is propagated through linked notes API, box overview, context bundles, export manifests, import restore, and the human UI.
+
+Generated folder permission parity verified: four-layer check (permission_mode, box scope, folder policy, workspace ownership) confirmed in both route and service layers.
+
 ## Future prompts will add
 
 - `src/server/policies/` — authorization checks

@@ -156,6 +156,23 @@ export function auditBundleRead(
   return write(supabase, workspaceId, actorId, "note", noteId, "bundle.read", metadata);
 }
 
+/** Bundle assembled and read by an external connection (actor_type = 'connection'). */
+export function auditBundleReadByConnection(
+  supabase: SupabaseClient,
+  workspaceId: string,
+  connectionId: string,
+  noteId: string,
+  metadata: {
+    box_id: string;
+    linked_count: number;
+    guide_included: boolean;
+    ancestor_summary_included: boolean;
+    truncated: boolean;
+  }
+): Promise<void> {
+  return writeConnection(supabase, workspaceId, connectionId, "note", noteId, "bundle.read", metadata);
+}
+
 // ─── Note link events ────────────────────────────────────────────────────────
 
 export function auditNoteLinkCreated(

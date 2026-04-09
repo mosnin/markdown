@@ -253,7 +253,7 @@ Collision mode is chosen explicitly before import. There is no default that sile
 
 - Objects with colliding ids or paths receive new ids and `-copy` suffix-disambiguated slugs.
 - Existing content is never overwritten.
-- Guide assignment is not replaced automatically.
+- If the manifest declares a guide note (`is_guide_note: true`) and that note is successfully imported, the box guide note is updated.
 
 ### `replace_by_id`
 
@@ -261,20 +261,31 @@ Collision mode is chosen explicitly before import. There is no default that sile
 - Notes are updated via the `update_note_and_create_version` RPC — new version created atomically.
 - Folders update metadata and placement only.
 - Type mismatches (e.g. incoming id matches a folder but manifest says it's a note) produce a skip warning.
-- Guide assignment is not silently changed.
+- If the manifest declares a guide note and that note is successfully imported, the box guide note is updated.
 
 ### `merge_metadata_only`
 
 - Never replaces markdown body.
 - Merges `summary`, `tags`, and `read_hint` for matching notes.
 - Creates a new version only when metadata actually changed.
-- Guide assignment not replaced.
+- If the manifest declares a guide note and that note is successfully imported, the box guide note is updated.
 
 ### `remap_ids_and_import`
 
 - All colliding ids receive new generated ids.
 - Internal parent folder references and link references are rewritten to use new ids.
 - Original incoming ids are recorded in the import summary report for traceability.
+- If the manifest declares a guide note and that note is successfully imported (possibly with a remapped id), the box guide note is updated.
+
+### Guide note restoration
+
+When a manifest produced by a full box export includes a note with `is_guide_note: true`, the import service assigns that note as the box's guide note after all notes and links are created. This ensures guide note designation survives round-trip through export and re-import.
+
+Conditions for restoration:
+- The manifest must have been produced by a box export (includes `is_guide_note` fields).
+- The declared guide note must have been successfully created or updated during the import.
+- If the note was skipped (due to collision, wrong box, or failure), a warning is added and the box guide note is not changed.
+- `guide_note.assigned` audit event is fired on successful restoration.
 
 ---
 
