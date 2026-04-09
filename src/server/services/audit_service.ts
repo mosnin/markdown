@@ -589,6 +589,36 @@ export function auditGeneratedNoteCreated(
   );
 }
 
+// ─── Template events ─────────────────────────────────────────────────────────
+
+/**
+ * Box template applied — fired once per applyBoxTemplate call after all
+ * folders and notes are created.
+ */
+export function auditBoxTemplateApplied(
+  supabase: SupabaseClient,
+  workspaceId: string,
+  userId: string,
+  boxId: string,
+  metadata: { template_id: string; folder_count: number; note_count: number }
+): Promise<void> {
+  return write(supabase, workspaceId, userId, "box", boxId, "box.template_applied", metadata);
+}
+
+/**
+ * Note created from a starter template — fired in addition to note.created
+ * when createNoteAction is called with a templateId.
+ */
+export function auditNoteCreatedFromTemplate(
+  supabase: SupabaseClient,
+  workspaceId: string,
+  userId: string,
+  noteId: string,
+  metadata: { template_id: string; title: string; box_id: string }
+): Promise<void> {
+  return write(supabase, workspaceId, userId, "note", noteId, "note.template_applied", metadata);
+}
+
 /**
  * Generated note promoted to a standard user-managed note (actor_type = 'user').
  * Fired after is_generated is cleared and the promotion version is created.

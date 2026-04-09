@@ -66,24 +66,23 @@ versioning, audit, or ownership checks.
 
 #### Box templates
 
-Applied when creating a box. Creates folders and notes with initial content, and
-optionally assigns a guide note.
+Applied when creating a box. Creates folders and notes with initial content,
+sets `read_hint` on each note at creation time, and optionally assigns a guide note.
 
 | Template | Folders | Notes |
 |---|---|---|
-| Research box | Literature, Findings, Notes | Research guide (guide), Research overview |
-| Project box | Decisions, Resources, Notes | Project guide (guide), Decision log |
-| Knowledge box | Topics, Reference, Guides | Knowledge base guide (guide) |
+| Project context | Overview, Decisions, References, Active work, Glossary | Project guide (guide, read_first, isGuide), Project overview (note, core_reference), Decision log (note, supporting_context), Active work (note, supporting_context), Glossary (note, core_reference) |
 
 #### Note starter templates
 
-Applied when creating a note. Pre-populates the note's markdown content.
+Applied when creating a note. Pre-populates the note's markdown content and sets `read_hint`.
 
-| Template | Kind | Use case |
-|---|---|---|
-| Guide note | guide | Orients retrieval for a box |
-| Overview note | note | High-level synthesis of a topic |
-| Context bundle prep | bundle | Structured bundle assembly |
+| Template | Kind | read_hint | Use case |
+|---|---|---|---|
+| Prompt template | note | `core_reference` | Structured prompt definition with purpose, inputs, outputs, usage notes |
+| Agent template | note | `read_first` | Agent definition with role, objective, rules, tools, failure modes |
+| System template | note | `read_first` | System definition with constraints, invariants, retrieval hints, update policy |
+| Guide note | guide | `read_first` | Orients retrieval for a box — read first by AI agents |
 
 ### Template definitions
 
@@ -112,13 +111,28 @@ To add a template: add an entry to `BOX_TEMPLATES` or `NOTE_TEMPLATES` with a st
 3. `createNoteAction` is called with the template's `markdownContent` as `markdownContent`
 4. User lands on the note page with pre-populated content ready to edit
 
+### Service layer
+
+Template orchestration is extracted into `src/server/services/template_service.ts`.
+The action layer is a thin wrapper that adds cache revalidation and error shaping.
+
+```ts
+src/server/services/template_service.ts
+
+applyBoxTemplate(supabase, userId, workspaceId, boxId, templateId)
+// Creates folders → notes (with readHint) → assigns guide → fires box.template_applied audit
+```
+
 ### Server actions
 
 ```ts
 src/app/app/boxes/actions.ts
 
-applyBoxTemplateAction(boxId, templateId)  // orchestrates template application
-createNoteAction(boxId, title, folderId, kind, markdownContent)  // extended to accept initial content
+applyBoxTemplateAction(boxId, templateId)
+// Delegates to applyBoxTemplate(); revalidates paths
+
+createNoteAction(boxId, title, folderId, kind, markdownContent, templateId?)
+// Creates note; fires note.template_applied audit when templateId is provided
 ```
 
 ### Design decisions
