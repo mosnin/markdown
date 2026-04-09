@@ -7,6 +7,7 @@ import { createBox, updateBox } from "@/server/services/box_service";
 import { createFolder, renameFolder } from "@/server/services/folder_service";
 import { createNote } from "@/server/services/note_service";
 import { assignGuideNote, clearGuideNote } from "@/server/services/guide_service";
+import { searchNotes, type NoteSearchResult } from "@/server/services/search_service";
 
 export type ActionResult<T = void> =
   | { ok: true; data: T }
@@ -140,5 +141,23 @@ export async function clearGuideNoteAction(boxId: string): Promise<ActionResult>
     return { ok: true, data: undefined };
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : "Failed to clear guide note" };
+  }
+}
+
+// ─── Search action ────────────────────────────────────────────────────────────
+
+export async function searchNotesAction(
+  boxId: string,
+  query: string
+): Promise<ActionResult<NoteSearchResult[]>> {
+  try {
+    const { supabase } = await requireContext();
+    const results = await searchNotes(supabase, boxId, query);
+    return { ok: true, data: results };
+  } catch (err) {
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : "Search failed",
+    };
   }
 }

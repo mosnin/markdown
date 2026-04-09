@@ -1,12 +1,14 @@
 import { notFound } from "next/navigation";
-import { ChevronRight, Clock, GitBranch } from "lucide-react";
+import { ChevronRight, Clock, GitBranch, BookOpen } from "lucide-react";
 import Link from "next/link";
 import { requireAuthenticatedUser } from "@/server/auth/require_authenticated_user";
 import { createClient } from "@/lib/supabase/server";
-import { getNoteById } from "@/server/repositories/note_repository";
+import { getNoteById, listNotesByBox } from "@/server/repositories/note_repository";
 import { getBoxById } from "@/server/repositories/box_repository";
 import { getFolderById } from "@/server/repositories/folder_repository";
+import { listLinksForNote } from "@/server/services/link_service";
 import { NoteEditor } from "@/components/product/note_editor";
+import { LinkedNotesSection } from "@/components/product/linked_notes_section";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -38,11 +40,13 @@ function NoteMetaPanel({
   boxName,
   folderName,
   workspaceName,
+  isGuideNote,
 }: {
   note: NonNullable<Awaited<ReturnType<typeof getNoteById>>>;
   boxName: string;
   folderName: string | null;
   workspaceName: string;
+  isGuideNote: boolean;
 }) {
   const kindLabel: Record<string, string> = {
     note: "Note",
@@ -60,9 +64,20 @@ function NoteMetaPanel({
       <ScrollArea className="flex-1">
         {/* Identity */}
         <div className="border-b border-border px-4 py-3">
-          <p className="text-[10px] uppercase tracking-wider text-muted-foreground/60">
-            {kindLabel[note.kind] ?? note.kind}
-          </p>
+          <div className="flex items-center gap-2">
+            <p className="text-[10px] uppercase tracking-wider text-muted-foreground/60">
+              {kindLabel[note.kind] ?? note.kind}
+            </p>
+            {isGuideNote && (
+              <Badge
+                variant="secondary"
+                className="flex items-center gap-1 text-[10px] font-normal"
+              >
+                <BookOpen className="h-3 w-3" />
+                Box guide
+              </Badge>
+            )}
+          </div>
           <p className="mt-0.5 line-clamp-3 text-sm font-medium text-foreground">
             {note.title}
           </p>
@@ -135,7 +150,7 @@ function NoteMetaPanel({
 
         {/* Summary */}
         {note.summary && (
-          <div className="px-4 py-3">
+          <div className="border-b border-border px-4 py-3">
             <p className="mb-2 text-[10px] uppercase tracking-wider text-muted-foreground/60">
               Summary
             </p>
@@ -249,9 +264,14 @@ export default async function NotePage({
   const box = await getBoxById(supabase, note.box_id);
   if (!box || box.workspace_id !== ctx.workspace.id) notFound();
 
-  const folder = note.folder_id
-    ? await getFolderById(supabase, note.folder_id)
-    : null;
+  // Load supporting data in parallel
+  const [folder, allBoxNotes, links] = await Promise.all([
+    note.folder_id ? getFolderById(supabase, note.folder_id) : Promise.resolve(null),
+    listNotesByBox(supabase, note.box_id),
+    listLinksForNote(supabase, note_id),
+  ]);
+
+  const isGuideNote = box.guide_note_id === note_id;
 
   return (
     <div className="flex h-full overflow-hidden">
@@ -265,10 +285,29 @@ export default async function NotePage({
             boxName={box.name}
             folderName={folder?.name ?? null}
           />
+          {isGuideNote && (
+            <Badge
+              variant="secondary"
+              className="flex items-center gap-1 text-[10px] font-normal"
+            >
+              <BookOpen className="h-3 w-3" />
+              Guide
+            </Badge>
+          )}
         </div>
 
         {/* Editor fills the remaining space */}
         <NoteEditor note={note} />
+
+        {/* Linked notes section below editor */}
+        <div className="border-t border-border px-6 py-4">
+          <LinkedNotesSection
+            sourceNoteId={note_id}
+            outgoing={links.outgoing}
+            incoming={links.incoming}
+            allBoxNotes={allBoxNotes}
+          />
+        </div>
       </div>
 
       {/* Right metadata panel */}
@@ -278,6 +317,7 @@ export default async function NotePage({
           boxName={box.name}
           folderName={folder?.name ?? null}
           workspaceName={ctx.workspace.name}
+          isGuideNote={isGuideNote}
         />
       </aside>
     </div>

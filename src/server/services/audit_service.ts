@@ -113,6 +113,38 @@ export function auditNoteUpdated(
   });
 }
 
+// ─── Note link events ────────────────────────────────────────────────────────
+
+export function auditNoteLinkCreated(
+  supabase: SupabaseClient,
+  workspaceId: string,
+  actorId: string,
+  linkId: string,
+  sourceNoteId: string,
+  targetNoteId: string,
+  relationshipType: string
+): Promise<void> {
+  return write(supabase, workspaceId, actorId, "note_link", linkId, "note_link.created", {
+    source_note_id: sourceNoteId,
+    target_note_id: targetNoteId,
+    relationship_type: relationshipType,
+  });
+}
+
+export function auditNoteLinkDeleted(
+  supabase: SupabaseClient,
+  workspaceId: string,
+  actorId: string,
+  linkId: string,
+  sourceNoteId: string,
+  targetNoteId: string
+): Promise<void> {
+  return write(supabase, workspaceId, actorId, "note_link", linkId, "note_link.deleted", {
+    source_note_id: sourceNoteId,
+    target_note_id: targetNoteId,
+  });
+}
+
 // ─── Guide note events ────────────────────────────────────────────────────────
 
 export function auditGuideNoteAssigned(

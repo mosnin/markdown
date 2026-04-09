@@ -5,10 +5,15 @@ import { createClient } from "@/lib/supabase/server";
 import { getBoxById } from "@/server/repositories/box_repository";
 import { listFoldersByBox } from "@/server/repositories/folder_repository";
 import { listNotesByBox, getNoteById } from "@/server/repositories/note_repository";
+import { listLinksFromNote } from "@/server/repositories/note_link_repository";
+import { getBoxOverview } from "@/server/services/overview_service";
 import { PageHeader } from "@/components/product/page_header";
 import { PanelSection } from "@/components/product/panel_section";
 import { EmptyState } from "@/components/product/empty_state";
 import { BoxContentsTree } from "@/components/product/box_contents_tree";
+import { BoxGuidePanel } from "@/components/product/box_guide_panel";
+import { BoxOverviewPanel } from "@/components/product/box_overview_panel";
+import { BoxSearchPanel } from "@/components/product/box_search_panel";
 import { CreateFolderDialog } from "@/components/product/create_folder_dialog";
 import { CreateNoteDialog } from "@/components/product/create_note_dialog";
 import { GuideNotePicker } from "@/components/product/guide_note_picker";
@@ -17,6 +22,7 @@ import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { type NoteLink } from "@/server/domain/types/note_link";
 import Link from "next/link";
 
 function formatDate(dateStr: string): string {
@@ -168,6 +174,15 @@ export default async function BoxPage({
     ? await getNoteById(supabase, box.guide_note_id)
     : null;
 
+  // Load all links for all notes in this box (for guide panel)
+  const linkArrays = await Promise.all(
+    notes.map((n) => listLinksFromNote(supabase, n.id))
+  );
+  const allLinks: NoteLink[] = linkArrays.flat();
+
+  // Build overview
+  const overview = await getBoxOverview(supabase, box);
+
   const sortedNotes = [...notes].sort((a, b) =>
     b.updated_at.localeCompare(a.updated_at)
   );
@@ -197,9 +212,19 @@ export default async function BoxPage({
               <TabsTrigger value="tree" className="pb-3">
                 Tree
               </TabsTrigger>
+              <TabsTrigger value="guide" className="pb-3">
+                Guide
+              </TabsTrigger>
+              <TabsTrigger value="overview" className="pb-3">
+                Overview
+              </TabsTrigger>
+              <TabsTrigger value="search" className="pb-3">
+                Search
+              </TabsTrigger>
             </TabsList>
           </div>
 
+          {/* ── Notes tab ── */}
           <TabsContent value="notes" className="flex-1 overflow-hidden">
             <ScrollArea className="h-full">
               {sortedNotes.length === 0 ? (
@@ -228,10 +253,43 @@ export default async function BoxPage({
             </ScrollArea>
           </TabsContent>
 
+          {/* ── Tree tab ── */}
           <TabsContent value="tree" className="flex-1 overflow-hidden">
             <ScrollArea className="h-full">
               <div className="mx-auto max-w-3xl px-6 py-4">
                 <BoxContentsTree folders={folders} notes={notes} />
+              </div>
+            </ScrollArea>
+          </TabsContent>
+
+          {/* ── Guide tab ── */}
+          <TabsContent value="guide" className="flex-1 overflow-hidden">
+            <ScrollArea className="h-full">
+              <div className="mx-auto max-w-3xl px-6 py-6">
+                <BoxGuidePanel
+                  box={box}
+                  guideNote={guideNote ?? null}
+                  allNotes={notes}
+                  allLinks={allLinks}
+                />
+              </div>
+            </ScrollArea>
+          </TabsContent>
+
+          {/* ── Overview tab ── */}
+          <TabsContent value="overview" className="flex-1 overflow-hidden">
+            <ScrollArea className="h-full">
+              <div className="mx-auto max-w-3xl px-6 py-6">
+                <BoxOverviewPanel overview={overview} />
+              </div>
+            </ScrollArea>
+          </TabsContent>
+
+          {/* ── Search tab ── */}
+          <TabsContent value="search" className="flex-1 overflow-hidden">
+            <ScrollArea className="h-full">
+              <div className="mx-auto max-w-2xl px-6 py-6">
+                <BoxSearchPanel boxId={box.id} />
               </div>
             </ScrollArea>
           </TabsContent>
