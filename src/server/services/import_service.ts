@@ -421,6 +421,7 @@ async function applyManifest(
         source_note_id: finalSource,
         target_note_id: finalTarget,
         relationship_type: ml.relationship_type as never,
+        relationship_note: ml.relationship_note ?? null,
       });
       actions.push({
         object_type: "link",

@@ -12,10 +12,15 @@ import { deleteLinkAction } from "@/app/app/links/actions";
 
 const REL_LABEL: Record<string, string> = {
   related: "related",
-  references: "references",
+  depends_on: "depends on",
+  parent_of: "parent of",
+  child_of: "child of",
+  reference_for: "reference for",
   extends: "extends",
-  contradicts: "contradicts",
+  example_of: "example of",
+  sibling_of: "sibling of",
   supersedes: "supersedes",
+  derived_from: "derived from",
 };
 
 interface LinkedNotesSectionProps {
@@ -141,39 +146,46 @@ function LinkRow({
   const title = linkedNote?.title ?? "Unknown note";
 
   return (
-    <div className="group flex items-center gap-2 rounded-md border border-border bg-card px-2.5 py-2 text-sm">
-      <div className="min-w-0 flex-1">
-        {linkedNote ? (
-          <Link
-            href={`/app/notes/${noteId}`}
-            className="block truncate text-foreground hover:underline underline-offset-2"
+    <div className="group flex flex-col gap-1 rounded-md border border-border bg-card px-2.5 py-2 text-sm">
+      <div className="flex items-center gap-2">
+        <div className="min-w-0 flex-1">
+          {linkedNote ? (
+            <Link
+              href={`/app/notes/${noteId}`}
+              className="block truncate text-foreground hover:underline underline-offset-2"
+            >
+              {title}
+            </Link>
+          ) : (
+            <span className="truncate text-muted-foreground">{title}</span>
+          )}
+        </div>
+        <Badge
+          variant="secondary"
+          className="shrink-0 text-[10px] font-normal capitalize"
+        >
+          {REL_LABEL[link.relationship_type] ?? link.relationship_type}
+        </Badge>
+        {/* Delete — outgoing links only (we own the direction) */}
+        {direction === "outgoing" && (
+          <button
+            type="button"
+            onClick={handleDelete}
+            disabled={isPending}
+            className="shrink-0 rounded p-0.5 text-muted-foreground/50 opacity-0 transition-fast group-hover:opacity-100 hover:bg-destructive/10 hover:text-destructive disabled:opacity-50"
+            aria-label="Remove link"
           >
-            {title}
-          </Link>
-        ) : (
-          <span className="truncate text-muted-foreground">{title}</span>
+            <Trash2 className="h-3.5 w-3.5" />
+          </button>
         )}
       </div>
-      <Badge
-        variant="secondary"
-        className="shrink-0 text-[10px] font-normal capitalize"
-      >
-        {REL_LABEL[link.relationship_type] ?? link.relationship_type}
-      </Badge>
-      {/* Delete — outgoing links only (we own the direction) */}
-      {direction === "outgoing" && (
-        <button
-          type="button"
-          onClick={handleDelete}
-          disabled={isPending}
-          className="shrink-0 rounded p-0.5 text-muted-foreground/50 opacity-0 transition-fast group-hover:opacity-100 hover:bg-destructive/10 hover:text-destructive disabled:opacity-50"
-          title="Remove link"
-        >
-          <Trash2 className="h-3.5 w-3.5" />
-        </button>
+      {link.relationship_note && (
+        <p className="text-[11px] text-muted-foreground/70 leading-relaxed pl-0.5">
+          {link.relationship_note}
+        </p>
       )}
       {error && (
-        <p className="w-full text-xs text-destructive">{error}</p>
+        <p className="w-full text-xs text-destructive" role="alert">{error}</p>
       )}
     </div>
   );

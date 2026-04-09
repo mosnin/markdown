@@ -143,7 +143,7 @@ Hard limits: 1000 nodes, 2000 edges. `truncated: true` when a limit was hit.
     }
   ],
   "edges": [
-    { "id": "...", "sourceNoteId": "...", "targetNoteId": "...", "relationshipType": "..." }
+    { "id": "...", "sourceNoteId": "...", "targetNoteId": "...", "relationshipType": "...", "relationshipNote": "..." | null }
   ],
   "folder_count": 12,
   "note_count": 47,
@@ -218,7 +218,8 @@ Returns all notes explicitly linked to or from the given note. Only linked notes
   "links": [
     {
       "id": "...", "source_note_id": "...", "target_note_id": "...",
-      "relationship_type": "references" | "extends" | "related" | "contradicts" | "supersedes",
+      "relationship_type": "related" | "depends_on" | "parent_of" | "child_of" | "reference_for" | "extends" | "example_of" | "sibling_of" | "supersedes" | "derived_from",
+      "relationship_note": "..." | null,
       "direction": "outgoing" | "incoming",
       "created_at": "..."
     }

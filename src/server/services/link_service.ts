@@ -18,8 +18,11 @@ import {
  * Link service.
  *
  * Enforces same-box constraint (cannot be expressed as a DB CHECK).
- * Links have no UPDATE — changing relationship_type is delete + re-insert.
  * Self-links are rejected by the database CHECK constraint.
+ *
+ * Update semantics: there is no UPDATE on note_links. Changing relationship_type
+ * or relationship_note is delete + re-insert. The updateLink function handles
+ * this transparently, preserving unchanged fields.
  */
 
 export interface LinkedNoteSet {
@@ -79,10 +82,12 @@ export async function createLink(
     sourceNoteId,
     targetNoteId,
     relationshipType,
+    relationshipNote,
   }: {
     sourceNoteId: string;
     targetNoteId: string;
     relationshipType: RelationshipType;
+    relationshipNote?: string | null;
   }
 ): Promise<NoteLink> {
   await resolveAndValidateNotes(supabase, sourceNoteId, targetNoteId);
@@ -91,6 +96,7 @@ export async function createLink(
     source_note_id: sourceNoteId,
     target_note_id: targetNoteId,
     relationship_type: relationshipType,
+    relationship_note: relationshipNote ?? null,
   });
 
   await auditNoteLinkCreated(
@@ -107,27 +113,42 @@ export async function createLink(
 }
 
 /**
- * Change a link's relationship_type.
+ * Update a link's relationship_type and/or relationship_note.
  * Implemented as delete + re-insert (no UPDATE policy on note_links).
+ * Fields not provided are preserved from the existing link.
  */
-export async function updateLinkRelationshipType(
+export async function updateLink(
   supabase: SupabaseClient,
   userId: string,
   workspaceId: string,
   linkId: string,
-  newRelationshipType: RelationshipType
+  {
+    newRelationshipType,
+    newRelationshipNote,
+  }: {
+    newRelationshipType?: RelationshipType;
+    newRelationshipNote?: string | null;
+  }
 ): Promise<NoteLink> {
   const existing = await getNoteLinkById(supabase, linkId);
   if (!existing) throw new Error("Link not found");
 
+  const resolvedType = newRelationshipType ?? existing.relationship_type;
+  // undefined means "don't change"; null means "clear it"
+  const resolvedNote =
+    newRelationshipNote !== undefined
+      ? newRelationshipNote
+      : existing.relationship_note;
+
   // Delete old link
   await deleteNoteLink(supabase, linkId);
 
-  // Re-insert with new relationship_type
+  // Re-insert with updated fields
   const replacement = await createNoteLink(supabase, {
     source_note_id: existing.source_note_id,
     target_note_id: existing.target_note_id,
-    relationship_type: newRelationshipType,
+    relationship_type: resolvedType,
+    relationship_note: resolvedNote,
   });
 
   await auditNoteLinkCreated(
@@ -137,7 +158,7 @@ export async function updateLinkRelationshipType(
     replacement.id,
     existing.source_note_id,
     existing.target_note_id,
-    newRelationshipType
+    resolvedType
   );
 
   return replacement;

@@ -60,22 +60,31 @@ const FOLDER_WALK_LIMIT = 20;
  * Relationship importance scores for bundle-level ranking.
  * Lower score = higher importance (appears earlier in linked_notes).
  *
- * Mapping from existing relationship_type values to the canonical
- * importance ordering:
- *   extends    → 3  (like "derived_from" — builds on the target)
- *   references → 2  (like "reference_for" — cites the target)
- *   supersedes → 10 (exact match — replaces the target)
- *   related    → 6  (exact match — general association)
- *   contradicts → 11 (not in ideal list; conflicts are least useful for bounded context)
+ * Canonical 10-value vocabulary ordering:
+ *   depends_on     → 1  (critical dependency — must be read for source to make sense)
+ *   parent_of      → 2  (structural hierarchy — parent orients the child)
+ *   child_of       → 3  (structural hierarchy — child is directly scoped)
+ *   derived_from   → 4  (derivation chain — source derives from target)
+ *   extends        → 5  (builds upon — source extends target)
+ *   reference_for  → 6  (citation — source is a reference for target)
+ *   example_of     → 7  (concrete example — useful but not structural)
+ *   related        → 8  (general association)
+ *   sibling_of     → 9  (peer-level — less directive than hierarchical)
+ *   supersedes     → 10 (historical replacement — read for completeness)
  *
- * Unknown types get score 7 (between "related" and "sibling_of").
+ * Unknown types (should not occur with DB CHECK) get score 11.
  */
 const RELATIONSHIP_IMPORTANCE: Record<string, number> = {
-  extends: 3,
-  references: 2,
+  depends_on: 1,
+  parent_of: 2,
+  child_of: 3,
+  derived_from: 4,
+  extends: 5,
+  reference_for: 6,
+  example_of: 7,
+  related: 8,
+  sibling_of: 9,
   supersedes: 10,
-  related: 6,
-  contradicts: 11,
 };
 
 /**
@@ -419,7 +428,7 @@ export async function assembleContextBundle(
     const outLink = outgoingLinks.find((l) => l.target_note_id === note.id);
     const inLink = incomingLinks.find((l) => l.source_note_id === note.id);
 
-    let chosenLink: { id: string; relationship_type: string };
+    let chosenLink: { id: string; relationship_type: string; relationship_note: string | null };
     let chosenDirection: "outgoing" | "incoming";
 
     if (outLink && inLink) {
@@ -427,17 +436,17 @@ export async function assembleContextBundle(
       const outImportance = getRelationshipImportance(outLink.relationship_type);
       const inImportance = getRelationshipImportance(inLink.relationship_type);
       if (outImportance <= inImportance) {
-        chosenLink = { id: outLink.id, relationship_type: outLink.relationship_type };
+        chosenLink = { id: outLink.id, relationship_type: outLink.relationship_type, relationship_note: outLink.relationship_note };
         chosenDirection = "outgoing";
       } else {
-        chosenLink = { id: inLink.id, relationship_type: inLink.relationship_type };
+        chosenLink = { id: inLink.id, relationship_type: inLink.relationship_type, relationship_note: inLink.relationship_note };
         chosenDirection = "incoming";
       }
     } else if (outLink) {
-      chosenLink = { id: outLink.id, relationship_type: outLink.relationship_type };
+      chosenLink = { id: outLink.id, relationship_type: outLink.relationship_type, relationship_note: outLink.relationship_note };
       chosenDirection = "outgoing";
     } else if (inLink) {
-      chosenLink = { id: inLink.id, relationship_type: inLink.relationship_type };
+      chosenLink = { id: inLink.id, relationship_type: inLink.relationship_type, relationship_note: inLink.relationship_note };
       chosenDirection = "incoming";
     } else {
       continue; // no link found (shouldn't happen)
@@ -446,6 +455,7 @@ export async function assembleContextBundle(
     linkedNoteCandidates.push({
       ...toNoteRef(note),
       relationship_type: chosenLink.relationship_type,
+      relationship_note: chosenLink.relationship_note,
       direction: chosenDirection,
       link_id: chosenLink.id,
     });
@@ -527,6 +537,7 @@ export async function assembleContextBundle(
       source_note_id: l.source_note_id,
       target_note_id: l.target_note_id,
       relationship_type: l.relationship_type,
+      relationship_note: l.relationship_note,
     }));
 
   // ── 9. Assemble bundle ──────────────────────────────────────────────────

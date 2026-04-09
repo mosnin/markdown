@@ -96,7 +96,7 @@ function toManifestLink(link: NoteLink): ManifestLink {
     source_note_id: link.source_note_id,
     target_note_id: link.target_note_id,
     relationship_type: link.relationship_type,
-    relationship_note: null,
+    relationship_note: link.relationship_note,
   };
 }
 

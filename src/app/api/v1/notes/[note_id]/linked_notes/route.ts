@@ -75,10 +75,26 @@ export async function GET(
   const links = [
     ...outgoing
       .filter((l) => visibleNoteIds.has(l.target_note_id))
-      .map((l) => ({ ...l, direction: "outgoing" as const })),
+      .map((l) => ({
+        id: l.id,
+        source_note_id: l.source_note_id,
+        target_note_id: l.target_note_id,
+        relationship_type: l.relationship_type,
+        relationship_note: l.relationship_note,
+        created_at: l.created_at,
+        direction: "outgoing" as const,
+      })),
     ...incoming
       .filter((l) => visibleNoteIds.has(l.source_note_id))
-      .map((l) => ({ ...l, direction: "incoming" as const })),
+      .map((l) => ({
+        id: l.id,
+        source_note_id: l.source_note_id,
+        target_note_id: l.target_note_id,
+        relationship_type: l.relationship_type,
+        relationship_note: l.relationship_note,
+        created_at: l.created_at,
+        direction: "incoming" as const,
+      })),
   ];
 
   const notes = linkedNotes

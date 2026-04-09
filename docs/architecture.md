@@ -473,6 +473,36 @@ src/components/product/
 └── audit_panel.tsx            Audit event list with filter + expand
 ```
 
+## Relationship contract correction
+
+See [docs/relationship_contract_correction_v1.md](relationship_contract_correction_v1.md).
+
+- **Canonical vocabulary**: 10 relationship types replacing the original 5 (`related`, `depends_on`, `parent_of`, `child_of`, `reference_for`, `extends`, `example_of`, `sibling_of`, `supersedes`, `derived_from`)
+- **Data migration**: `references` → `reference_for`, `contradicts` → `related` (deterministic, in migration `20260409000008`)
+- **`relationship_note`**: first-class nullable text column on `note_links` — searchable, exported, imported
+- **Search**: `search_notes` RPC updated to include `relationship_note` match via EXISTS subquery (no schema denormalization)
+- **Context bundles**: `BundleLinkedNote` and `BundleRelationshipEdge` include `relationship_note`; importance ordering updated to 10-value map
+- **Export/import**: `ManifestLink.relationship_note` now carries actual value (was always `null`)
+- **Human UI**: `CreateLinkDialog` adds optional note textarea; `LinkedNotesSection` displays note inline
+
+```
+supabase/migrations/20260409000008_relationship_contract_correction.sql
+
+src/server/domain/constants/note_constants.ts   RELATIONSHIP_TYPE (10 values)
+src/server/domain/types/note_link.ts            NoteLink.relationship_note added
+src/server/domain/types/context_bundle.ts       BundleLinkedNote, BundleRelationshipEdge updated
+src/server/repositories/note_link_repository.ts CreateNoteLinkInput.relationship_note added
+src/server/services/link_service.ts             createLink, updateLink accept relationship_note
+src/server/services/context_bundle_service.ts   RELATIONSHIP_IMPORTANCE updated; relationship_note in edges
+src/server/services/overview_service.ts         OverviewEdge.relationshipNote added
+src/server/services/export_service.ts           toManifestLink uses actual relationship_note
+src/server/services/import_service.ts           createNoteLink preserves relationship_note
+src/app/api/v1/notes/[note_id]/linked_notes/route.ts  relationship_note in response
+src/app/app/links/actions.ts                    createLinkAction/updateLinkAction accept relationship_note
+src/components/product/create_link_dialog.tsx   10-value picker + optional note textarea
+src/components/product/linked_notes_section.tsx 10-value labels; display relationship_note
+```
+
 ## Product maturity layer
 
 See [docs/onboarding_and_templates_v1.md](onboarding_and_templates_v1.md) and

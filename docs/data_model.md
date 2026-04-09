@@ -155,13 +155,22 @@ Explicit directed relationships between notes.
 | `id` | uuid PK | |
 | `source_note_id` | uuid FK | → `notes` |
 | `target_note_id` | uuid FK | → `notes` |
-| `relationship_type` | text | `'related'` \| `'supports'` \| `'contradicts'` \| `'supersedes'` |
+| `relationship_type` | text | one of 10 canonical values (see below) |
+| `relationship_note` | text | nullable — optional annotation describing the specific link |
 | `created_at` | timestamptz | |
 
+**Canonical `relationship_type` values (10):**
+`related`, `depends_on`, `parent_of`, `child_of`, `reference_for`, `extends`, `example_of`, `sibling_of`, `supersedes`, `derived_from`
+
+See [docs/relationship_contract_correction_v1.md](relationship_contract_correction_v1.md) for the full vocabulary, importance ordering, and data migration history.
+
 **Constraints:**
+- `CHECK (relationship_type IN (...))` — database-enforced 10-value vocabulary.
 - `CHECK (source_note_id <> target_note_id)` — no self-links, enforced by the database.
-- `UNIQUE (source_note_id, target_note_id, relationship_type)` — no duplicate links.
+- `UNIQUE (source_note_id, target_note_id, relationship_type)` — no duplicate links per type.
 - Same-box enforcement is the service layer's responsibility (cannot be expressed as a DB CHECK without a subquery).
+
+**`relationship_note`:** Searchable via `search_notes` RPC — notes appear in results if any connected link has a matching `relationship_note`. Preserved in export manifests and import packages.
 
 ---
 

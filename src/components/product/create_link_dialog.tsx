@@ -21,10 +21,15 @@ import { createLinkAction } from "@/app/app/links/actions";
 
 const RELATIONSHIP_LABELS: Record<RelationshipType, string> = {
   related: "Related — general association",
-  references: "References — cites the target",
-  extends: "Extends — builds upon the target",
-  contradicts: "Contradicts — conflicts with the target",
-  supersedes: "Supersedes — replaces the target",
+  depends_on: "Depends on — source requires target to make sense",
+  parent_of: "Parent of — source is a conceptual parent of target",
+  child_of: "Child of — source is a conceptual child of target",
+  reference_for: "Reference for — source is cited as a reference",
+  extends: "Extends — source builds upon or continues target",
+  example_of: "Example of — source is a concrete example of target",
+  sibling_of: "Sibling of — source and target are peer-level",
+  supersedes: "Supersedes — source replaces or supersedes target",
+  derived_from: "Derived from — source was derived or extracted from target",
 };
 
 interface CreateLinkDialogProps {
@@ -36,7 +41,7 @@ interface CreateLinkDialogProps {
 
 /**
  * Dialog for creating a directed note link.
- * Source is fixed; user picks target note and relationship type.
+ * Source is fixed; user picks target note, relationship type, and optional note.
  */
 export function CreateLinkDialog({
   sourceNoteId,
@@ -45,6 +50,7 @@ export function CreateLinkDialog({
   const [open, setOpen] = useState(false);
   const [targetId, setTargetId] = useState("");
   const [relType, setRelType] = useState<RelationshipType>(RELATIONSHIP_TYPE.RELATED);
+  const [relNote, setRelNote] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const router = useRouter();
@@ -52,6 +58,7 @@ export function CreateLinkDialog({
   function reset() {
     setTargetId("");
     setRelType(RELATIONSHIP_TYPE.RELATED);
+    setRelNote("");
     setError(null);
   }
 
@@ -66,7 +73,12 @@ export function CreateLinkDialog({
     setError(null);
 
     startTransition(async () => {
-      const result = await createLinkAction(sourceNoteId, targetId, relType);
+      const result = await createLinkAction(
+        sourceNoteId,
+        targetId,
+        relType,
+        relNote.trim() || null
+      );
       if (result.ok) {
         setOpen(false);
         reset();
@@ -146,7 +158,23 @@ export function CreateLinkDialog({
             </select>
           </div>
 
-          {error && <p className="text-xs text-destructive">{error}</p>}
+          {/* Relationship note (optional) */}
+          <div className="flex flex-col gap-1.5">
+            <label className="text-xs font-medium text-foreground/80" htmlFor="link-rel-note">
+              Note <span className="font-normal text-muted-foreground">(optional)</span>
+            </label>
+            <textarea
+              id="link-rel-note"
+              value={relNote}
+              onChange={(e) => setRelNote(e.target.value)}
+              disabled={isPending}
+              rows={2}
+              placeholder="Describe the specific nature of this connection…"
+              className="w-full resize-none rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-50"
+            />
+          </div>
+
+          {error && <p className="text-xs text-destructive" role="alert">{error}</p>}
 
           <DialogFooter showCloseButton>
             <Button

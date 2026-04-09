@@ -46,6 +46,7 @@ export interface OverviewEdge {
   sourceNoteId: string;
   targetNoteId: string;
   relationshipType: string;
+  relationshipNote: string | null;
 }
 
 export interface BoxOverview {
@@ -119,6 +120,7 @@ export async function getBoxOverview(
       sourceNoteId: l.source_note_id,
       targetNoteId: l.target_note_id,
       relationshipType: l.relationship_type,
+      relationshipNote: l.relationship_note,
     }));
 
   return {

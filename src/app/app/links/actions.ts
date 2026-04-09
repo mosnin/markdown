@@ -2,7 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { getRequestContext } from "@/server/auth/get_request_context";
-import { createLink, updateLinkRelationshipType, deleteLink } from "@/server/services/link_service";
+import { createLink, updateLink, deleteLink } from "@/server/services/link_service";
 import { type RelationshipType } from "@/server/domain/constants/note_constants";
 import { type ActionResult } from "@/app/app/boxes/actions";
 
@@ -24,7 +24,8 @@ async function requireContext() {
 export async function createLinkAction(
   sourceNoteId: string,
   targetNoteId: string,
-  relationshipType: RelationshipType
+  relationshipType: RelationshipType,
+  relationshipNote?: string | null
 ): Promise<ActionResult<{ id: string }>> {
   try {
     const { supabase, userId, workspaceId } = await requireContext();
@@ -32,6 +33,7 @@ export async function createLinkAction(
       sourceNoteId,
       targetNoteId,
       relationshipType,
+      relationshipNote: relationshipNote ?? null,
     });
     return { ok: true, data: { id: link.id } };
   } catch (err) {
@@ -44,16 +46,20 @@ export async function createLinkAction(
 
 export async function updateLinkAction(
   linkId: string,
-  newRelationshipType: RelationshipType
+  newRelationshipType?: RelationshipType,
+  newRelationshipNote?: string | null
 ): Promise<ActionResult<{ id: string }>> {
   try {
     const { supabase, userId, workspaceId } = await requireContext();
-    const link = await updateLinkRelationshipType(
+    const link = await updateLink(
       supabase,
       userId,
       workspaceId,
       linkId,
-      newRelationshipType
+      {
+        newRelationshipType,
+        newRelationshipNote,
+      }
     );
     return { ok: true, data: { id: link.id } };
   } catch (err) {

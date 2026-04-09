@@ -16,6 +16,7 @@ export interface CreateNoteLinkInput {
   source_note_id: string;
   target_note_id: string;
   relationship_type: RelationshipType;
+  relationship_note?: string | null;
 }
 
 export async function getNoteLinkById(

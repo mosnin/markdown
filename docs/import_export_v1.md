@@ -78,7 +78,7 @@ manifest.json {
 | `source_note_id` | Source note id |
 | `target_note_id` | Target note id |
 | `relationship_type` | Exact value as stored — never normalized |
-| `relationship_note` | Optional annotation (null in V1) |
+| `relationship_note` | Optional annotation describing the specific link — preserved exactly on export; imported as stored |
 
 ### ManifestBundle (context bundle exports only)
 

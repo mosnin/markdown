@@ -69,16 +69,25 @@ Linked notes are ranked by these criteria **in order**:
 
 ### 1. Relationship importance (lower = higher priority)
 
+Canonical 10-value vocabulary importance ordering:
+
 | Relationship type | Importance score |
 |---|---|
-| `references` | 2 |
-| `extends` | 3 |
-| `related` | 6 |
+| `depends_on` | 1 |
+| `parent_of` | 2 |
+| `child_of` | 3 |
+| `derived_from` | 4 |
+| `extends` | 5 |
+| `reference_for` | 6 |
+| `example_of` | 7 |
+| `related` | 8 |
+| `sibling_of` | 9 |
 | `supersedes` | 10 |
-| `contradicts` | 11 |
-| _(unknown)_ | 7 |
+| _(unknown)_ | 11 |
 
 When a note is linked in **both directions** (bidirectional), the direction with the lower importance score is used.
+
+Each `BundleLinkedNote` and `BundleRelationshipEdge` includes `relationship_note: string | null` — the optional annotation from the link record.
 
 ### 2. Read hint priority (within same importance tier)
 

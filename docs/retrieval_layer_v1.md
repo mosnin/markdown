@@ -27,31 +27,40 @@ All retrieval in V1 is **deterministic and explainable**:
 |---|---|
 | `source_note_id` | The note that "points to" the target |
 | `target_note_id` | The note being pointed at |
-| `relationship_type` | Typed relationship (see below) |
+| `relationship_type` | Typed relationship — one of 10 canonical values |
+| `relationship_note` | Optional annotation describing the specific connection |
 
-### Relationship types
+### Relationship types (10 canonical values)
 
 | Type | Meaning |
 |---|---|
-| `extends` | Source builds upon or expands the target |
-| `references` | Source cites or references the target |
-| `supersedes` | Source is the newer, authoritative replacement for the target |
 | `related` | General association |
-| `contradicts` | Source presents information that conflicts with the target |
+| `depends_on` | Source note's understanding depends on target |
+| `parent_of` | Source is a conceptual parent of target |
+| `child_of` | Source is a conceptual child of target |
+| `reference_for` | Source is cited as a reference for target |
+| `extends` | Source builds upon or continues target |
+| `example_of` | Source is a concrete example of target |
+| `sibling_of` | Source and target are peer-level notes |
+| `supersedes` | Source replaces or supersedes target |
+| `derived_from` | Source was derived or extracted from target |
+
+See [docs/relationship_contract_correction_v1.md](relationship_contract_correction_v1.md) for the full vocabulary rationale and migration history.
 
 ### Constraints
 
 - Self-links rejected by a DB `CHECK` constraint.
+- `relationship_type` enforced by a DB `CHECK` against the 10-value list.
 - Same-box constraint enforced by `link_service.ts` (not expressible as a DB constraint without a subquery).
-- No `UPDATE` policy — changing a relationship type requires delete + re-insert.
+- No `UPDATE` policy — changing fields requires delete + re-insert.
 - `UNIQUE(source_note_id, target_note_id, relationship_type)`.
 
 ### API
 
 `src/server/services/link_service.ts`:
 - `listLinksForNote(supabase, noteId)` → `{ outgoing, incoming }`
-- `createLink(supabase, userId, workspaceId, { sourceNoteId, targetNoteId, relationshipType })`
-- `updateLinkRelationshipType(supabase, userId, workspaceId, linkId, newType)`
+- `createLink(supabase, userId, workspaceId, { sourceNoteId, targetNoteId, relationshipType, relationshipNote? })`
+- `updateLink(supabase, userId, workspaceId, linkId, { newRelationshipType?, newRelationshipNote? })`
 - `deleteLink(supabase, userId, workspaceId, linkId)`
 
 ---
@@ -71,6 +80,8 @@ All retrieval in V1 is **deterministic and explainable**:
 | `summary` | B | Medium-high |
 | `read_hint` | B | Medium-high |
 | `markdown_content` | C | Lowest |
+
+`relationship_note` is **not** stored in `notes.search_vector` (it lives on the `note_links` table). Instead, the `search_notes` RPC includes a matching subquery: a note appears in results if any link connected to it (either direction) has a `relationship_note` matching the query. Rank is computed from the note's own `search_vector` — the `relationship_note` match affects inclusion but not rank.
 
 ### Ranking (deterministic)
 

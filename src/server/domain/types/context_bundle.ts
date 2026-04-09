@@ -63,6 +63,8 @@ export interface BundleNoteRef {
 export interface BundleLinkedNote extends BundleNoteRef {
   /** The link's relationship_type value. */
   relationship_type: string;
+  /** Optional annotation describing the specific nature of this link. */
+  relationship_note: string | null;
   /**
    * Direction relative to the target note.
    *   'outgoing' — target note → this note
@@ -84,6 +86,8 @@ export interface BundleRelationshipEdge {
   source_note_id: string;
   target_note_id: string;
   relationship_type: string;
+  /** Optional annotation describing the specific nature of this link. */
+  relationship_note: string | null;
 }
 
 // ─── Parent path ──────────────────────────────────────────────────────────────
