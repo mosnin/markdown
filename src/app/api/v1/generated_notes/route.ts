@@ -63,9 +63,25 @@ export async function POST(request: NextRequest) {
   const { folder_id } = body;
   if (!folder_id) return E_BAD_REQUEST("folder_id is required");
 
+  // Field size guards
+  if (body.title && body.title.length > 500) {
+    return E_BAD_REQUEST("title must not exceed 500 characters");
+  }
+  if (body.markdown_content && body.markdown_content.length > 500_000) {
+    return E_BAD_REQUEST("markdown_content must not exceed 500,000 characters");
+  }
+  if (body.summary && body.summary.length > 2000) {
+    return E_BAD_REQUEST("summary must not exceed 2000 characters");
+  }
   if (Array.isArray(body.tags)) {
     if (!body.tags.every((t) => typeof t === "string")) {
       return E_BAD_REQUEST("tags must be an array of strings");
+    }
+    if (body.tags.length > 50) {
+      return E_BAD_REQUEST("tags must not exceed 50 tags");
+    }
+    if (body.tags.some((t: string) => t.length > 100)) {
+      return E_BAD_REQUEST("Each tag must not exceed 100 characters");
     }
   }
 

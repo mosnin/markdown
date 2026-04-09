@@ -20,6 +20,13 @@ const VALID_PROPOSAL_TYPES = ["create_note", "update_note", "append_note", "repl
 const VALID_STATUSES = ["pending", "approved", "rejected", "conflicted", "canceled", "expired"];
 const MAX_LIMIT = 100;
 const DEFAULT_LIMIT = 50;
+// Content/field size guards — prevents excessively large payloads reaching the DB
+const MAX_TITLE_LENGTH = 500;
+const MAX_CONTENT_LENGTH = 500_000; // ~500 KB of markdown
+const MAX_SUMMARY_LENGTH = 2000;
+const MAX_RATIONALE_LENGTH = 2000;
+const MAX_TAGS = 50;
+const MAX_TAG_LENGTH = 100;
 
 // ─── POST /api/v1/write_proposals ────────────────────────────────────────────
 //
@@ -77,9 +84,28 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  // Field size validation
+  if (body.proposed_title && body.proposed_title.length > MAX_TITLE_LENGTH) {
+    return E_BAD_REQUEST(`proposed_title must not exceed ${MAX_TITLE_LENGTH} characters`);
+  }
+  if (body.proposed_content && body.proposed_content.length > MAX_CONTENT_LENGTH) {
+    return E_BAD_REQUEST(`proposed_content must not exceed ${MAX_CONTENT_LENGTH} characters`);
+  }
+  if (body.proposed_summary && body.proposed_summary.length > MAX_SUMMARY_LENGTH) {
+    return E_BAD_REQUEST(`proposed_summary must not exceed ${MAX_SUMMARY_LENGTH} characters`);
+  }
+  if (body.rationale && body.rationale.length > MAX_RATIONALE_LENGTH) {
+    return E_BAD_REQUEST(`rationale must not exceed ${MAX_RATIONALE_LENGTH} characters`);
+  }
   if (Array.isArray(body.proposed_tags)) {
     if (!body.proposed_tags.every((t) => typeof t === "string")) {
       return E_BAD_REQUEST("proposed_tags must be an array of strings");
+    }
+    if (body.proposed_tags.length > MAX_TAGS) {
+      return E_BAD_REQUEST(`proposed_tags must not exceed ${MAX_TAGS} tags`);
+    }
+    if (body.proposed_tags.some((t) => t.length > MAX_TAG_LENGTH)) {
+      return E_BAD_REQUEST(`Each tag must not exceed ${MAX_TAG_LENGTH} characters`);
     }
   }
 

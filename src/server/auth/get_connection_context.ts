@@ -1,5 +1,6 @@
 import { createHash, timingSafeEqual } from "node:crypto";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { log } from "@/lib/logger";
 import { type Connection } from "@/server/domain/types/connection";
 import {
   CONNECTION_STATUS,
@@ -80,12 +81,16 @@ export async function getConnectionContext(
 
     const tokenRecord = await getConnectionTokenByPrefix(adminClient, token_prefix);
     if (!tokenRecord) return null;
-    if (tokenRecord.status !== TOKEN_STATUS.ACTIVE) return null;
+    if (tokenRecord.status !== TOKEN_STATUS.ACTIVE) {
+      log.warn("connection_token_inactive", { token_prefix });
+      return null;
+    }
 
     if (
       tokenRecord.expires_at &&
       new Date(tokenRecord.expires_at) < new Date()
     ) {
+      log.warn("connection_token_expired", { token_prefix });
       return null;
     }
 
@@ -100,7 +105,13 @@ export async function getConnectionContext(
       tokenRecord.connection_id
     );
     if (!connection) return null;
-    if (connection.status !== CONNECTION_STATUS.ACTIVE) return null;
+    if (connection.status !== CONNECTION_STATUS.ACTIVE) {
+      log.warn("connection_inactive", {
+        connection_id: connection.id,
+        token_prefix,
+      });
+      return null;
+    }
 
     const scopes = await listBoxScopesByConnection(adminClient, connection.id);
     const allowedBoxIds = new Set(scopes.map((s) => s.box_id));
@@ -114,7 +125,10 @@ export async function getConnectionContext(
       allowedBoxIds,
       tokenId: tokenRecord.id,
     };
-  } catch {
+  } catch (err) {
+    log.error("connection_auth_exception", {
+      reason: err instanceof Error ? err.message : "unknown",
+    });
     return null;
   }
 }

@@ -1,8 +1,27 @@
 # Context Store
 
-A structured, markdown-native context operating system for humans and AI.
+A structured, markdown-native context management system for humans and AI agents.
 
-Context Store is not a generic notes app. It is an opinionated system for capturing, organizing, and serving structured context — to yourself and to AI agents — through a clear information hierarchy: **workspaces → boxes → folders → notes / guides / bundles**.
+Context Store is not a generic notes app. It is an opinionated system for
+capturing, organizing, and serving structured context — to yourself and to AI
+agents — through a clear information hierarchy:
+**workspaces → boxes → folders → notes / guides / bundles**.
+
+---
+
+## What it is
+
+- **Deterministic retrieval** — context bundles assemble bounded, ranked note
+  sets based on stable retrieval priorities and link structure. Same inputs,
+  same output, every time.
+- **Trust layer** — external AI connections propose writes; humans review and
+  approve before anything changes in the knowledge base.
+- **Version history** — every note mutation creates an immutable version
+  snapshot. Rollback is a first-class operation.
+- **Portability** — notes, folders, boxes, and context bundles can be exported
+  as structured zip packages and re-imported with explicit collision behavior.
+- **Audit log** — all workspace events are append-only with full actor and
+  operation metadata.
 
 ---
 
@@ -11,8 +30,8 @@ Context Store is not a generic notes app. It is an opinionated system for captur
 ### Prerequisites
 
 - Node.js 20+
-- pnpm 9+
-- A Supabase project (free tier is fine)
+- pnpm 10+
+- A Supabase project (free tier works)
 
 ### Setup
 
@@ -20,32 +39,28 @@ Context Store is not a generic notes app. It is an opinionated system for captur
 # 1. Install dependencies
 pnpm install
 
-# 2. Copy environment variables and fill in Supabase credentials
+# 2. Copy environment variables and fill in values
 cp .env.example .env.local
+
+# 3. Apply database migrations
+npx supabase link --project-ref <your-project-ref>
+npx supabase db push
+
+# 4. Start the dev server
+pnpm dev
 ```
 
-Edit `.env.local`:
+Open `http://localhost:3000` and sign in via magic link.
 
-```bash
-NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
-NEXT_PUBLIC_APP_URL=http://localhost:3000
-```
-
-**Supabase project configuration** (one-time, in the Supabase dashboard):
+### Supabase configuration (one-time)
 
 1. **Enable Email OTP** — Authentication → Providers → Email → enable "Email OTP"
 2. **Add redirect URL** — Authentication → URL Configuration → Redirect URLs → add `http://localhost:3000/auth/callback`
 3. **Set site URL** — Authentication → URL Configuration → Site URL → `http://localhost:3000`
 
-```bash
-# 3. Start the dev server
-pnpm dev
-```
+---
 
-Open [http://localhost:3000](http://localhost:3000). Sign in at [http://localhost:3000/sign_in](http://localhost:3000/sign_in).
-
-### Available commands
+## Available commands
 
 | Command | Description |
 |---|---|
@@ -53,52 +68,56 @@ Open [http://localhost:3000](http://localhost:3000). Sign in at [http://localhos
 | `pnpm build` | Production build |
 | `pnpm start` | Serve production build |
 | `pnpm lint` | Run ESLint |
+| `pnpm typecheck` | TypeScript type check (`tsc --noEmit`) |
+| `pnpm test` | Run unit tests (vitest) |
+| `pnpm test:watch` | Test watch mode |
+| `pnpm test:coverage` | Tests with coverage report |
+| `pnpm ci` | Full local CI: typecheck + lint + test + build |
+| `pnpm mcp` | Run MCP server (requires `.env.mcp.local`) |
+| `pnpm build:mcp` | Build compiled MCP server to `dist/mcp/` |
 
 ---
 
-## Project status
+## MCP server
 
-### Implemented
+Context Store ships a standalone MCP server for AI agent integrations
+(Claude, Cursor, etc.).
 
-- [x] Next.js 16 App Router with TypeScript and Tailwind v4
-- [x] shadcn/ui component library (Base UI backend)
-- [x] Light / dark mode with next-themes
-- [x] Design token system in `globals.css`
-- [x] Application shell (sidebar, header, main, right panel)
-- [x] Routes: `/`, `/app`, `/app/workspaces`, `/app/boxes/[box_id]`, `/app/notes/[note_id]`, `/app/settings`
-- [x] Product UI components (tree, note card, metadata panel, empty state)
-- [x] **Supabase Auth with email magic link**
-- [x] **Session proxy middleware for token refresh**
-- [x] **Server-side route protection on `/app`**
-- [x] **Request context foundation (`getRequestContext`)**
-- [x] **Sign in / sign out flow**
+```bash
+# Configure MCP environment
+cp .env.example .env.mcp.local
+# Fill in CONTEXT_STORE_API_BASE_URL and CONTEXT_STORE_CONNECTION_SECRET
 
-### Not yet implemented
+# Run
+set -a; source .env.mcp.local; set +a
+pnpm mcp
+```
 
-- [ ] Database schema and migrations
-- [ ] Real workspace / box / note data
-- [ ] Markdown editor
-- [ ] REST API endpoints
-- [ ] MCP server
-- [ ] Import / export
-- [ ] OAuth providers
-- [ ] Role-based permissions
+See `docs/deployment_v1.md` for production MCP configuration.
 
 ---
 
-## Information architecture
+## Documentation
 
-```
-Workspace
-  └── Box
-        ├── Folder
-        │     ├── Note
-        │     ├── Guide note
-        │     └── Context bundle
-        ├── Note (root-level)
-        └── Context bundle (root-level)
-```
+| Document | Contents |
+|---|---|
+| `docs/architecture.md` | System architecture and module layout |
+| `docs/deployment_v1.md` | Deployment guide (Vercel + Supabase) |
+| `docs/production_readiness_v1.md` | Launch readiness checklist |
+| `docs/security_notes_v1.md` | Security model and known risks |
+| `docs/testing_strategy_v1.md` | Test strategy and coverage |
+| `docs/canonical_api_v1.md` | External API reference |
+| `docs/connections_v1.md` | External connection auth model |
+| `docs/import_export_v1.md` | Import/export portability contract |
+| `docs/context_bundle_v1.md` | Context bundle assembly |
+| `docs/machine_write_v1.md` | Write proposals and generated notes |
+| `docs/version_history_v1.md` | Version history and rollback |
+| `docs/lifecycle_controls_v1.md` | Archive / trash / restore |
+| `docs/v1_parity_report.md` | V1 acceptance criteria status |
 
-See [docs/architecture.md](docs/architecture.md) for the full module layout.
-See [docs/auth.md](docs/auth.md) for the auth architecture and setup guide.
-See [docs/design_system.md](docs/design_system.md) for UI rules and component guidance.
+---
+
+## V1 launch status
+
+Context Store V1 is **ready for private beta launch**.
+See `docs/production_readiness_v1.md` for the full readiness assessment.

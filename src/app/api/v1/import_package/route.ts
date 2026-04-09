@@ -4,12 +4,15 @@ import { getRequestContext } from "@/server/auth/get_request_context";
 import { importPackage } from "@/server/services/import_service";
 import { auditImportCompleted } from "@/server/services/audit_service";
 import { type CollisionMode } from "@/server/domain/types/import_export";
+import { log } from "@/lib/logger";
 import {
   apiOk,
   E_UNAUTHORIZED,
   E_BAD_REQUEST,
   E_INTERNAL,
 } from "@/lib/api/response";
+
+const MAX_UPLOAD_BYTES = 25 * 1024 * 1024; // 25 MB
 
 /**
  * POST /api/v1/import_package
@@ -119,6 +122,13 @@ export async function POST(request: NextRequest) {
   if (!boxId) return E_BAD_REQUEST("box_id is required");
   if (!rawCollisionMode) return E_BAD_REQUEST("collision_mode is required");
 
+  // Enforce size limit before reading into memory
+  if (file.size > MAX_UPLOAD_BYTES) {
+    return E_BAD_REQUEST(
+      `Package too large — maximum size is 25 MB (received ${(file.size / (1024 * 1024)).toFixed(1)} MB)`
+    );
+  }
+
   const validModes: CollisionMode[] = [
     "create_copy",
     "replace_by_id",
@@ -155,8 +165,13 @@ export async function POST(request: NextRequest) {
 
     return apiOk(report);
   } catch (err) {
-    const message =
-      err instanceof Error ? err.message : "Import failed";
+    const message = err instanceof Error ? err.message : "Import failed";
+    log.error("import_failed", {
+      workspace_id: workspaceId,
+      box_id: boxId,
+      filename: file.name,
+      reason: message,
+    });
     // Hard failures from the import service (malformed zip, invalid manifest,
     // bounds exceeded) are surfaced as 400 Bad Request with the original message.
     return E_BAD_REQUEST(message);
