@@ -23,6 +23,8 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { type NoteLink } from "@/server/domain/types/note_link";
+import { BoxExportMenu } from "@/components/product/export_menu";
+import { ImportTriggerButton } from "@/components/product/import_dialog";
 import Link from "next/link";
 
 function formatDate(dateStr: string): string {
@@ -197,6 +199,15 @@ export default async function BoxPage({
           description={box.description ?? undefined}
           actions={
             <div className="flex items-center gap-2">
+              <ImportTriggerButton
+                boxId={box.id}
+                folders={folders.map((f) => ({
+                  id: f.id,
+                  name: f.name,
+                  path_cache: f.path_cache,
+                }))}
+              />
+              <BoxExportMenu boxId={box.id} boxName={box.name} />
               <CreateFolderDialog boxId={box.id} />
               <CreateNoteDialog boxId={box.id} folders={folders} />
             </div>

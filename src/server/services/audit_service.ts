@@ -163,6 +163,63 @@ export function auditNoteLinkDeleted(
   });
 }
 
+// ─── Export events ────────────────────────────────────────────────────────────
+
+export function auditNoteExported(
+  supabase: SupabaseClient,
+  workspaceId: string,
+  actorId: string,
+  noteId: string
+): Promise<void> {
+  return write(supabase, workspaceId, actorId, "note", noteId, "note.exported", {});
+}
+
+export function auditFolderExported(
+  supabase: SupabaseClient,
+  workspaceId: string,
+  actorId: string,
+  folderId: string,
+  metadata: { note_count: number }
+): Promise<void> {
+  return write(supabase, workspaceId, actorId, "folder", folderId, "folder.exported", metadata);
+}
+
+export function auditBoxExported(
+  supabase: SupabaseClient,
+  workspaceId: string,
+  actorId: string,
+  boxId: string,
+  metadata: { note_count: number; folder_count: number }
+): Promise<void> {
+  return write(supabase, workspaceId, actorId, "box", boxId, "box.exported", metadata);
+}
+
+export function auditBundleExported(
+  supabase: SupabaseClient,
+  workspaceId: string,
+  actorId: string,
+  noteId: string,
+  metadata: { note_count: number; truncated: boolean }
+): Promise<void> {
+  return write(supabase, workspaceId, actorId, "note", noteId, "bundle.exported", metadata);
+}
+
+export function auditImportCompleted(
+  supabase: SupabaseClient,
+  workspaceId: string,
+  actorId: string,
+  boxId: string,
+  metadata: {
+    collision_mode: string;
+    created_notes: number;
+    created_folders: number;
+    created_links: number;
+    warnings: number;
+  }
+): Promise<void> {
+  return write(supabase, workspaceId, actorId, "box", boxId, "import.completed", metadata);
+}
+
 // ─── Guide note events ────────────────────────────────────────────────────────
 
 export function auditGuideNoteAssigned(

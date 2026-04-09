@@ -77,6 +77,49 @@ export async function listFoldersByParent(
   return data as Folder[];
 }
 
+/**
+ * Fetch all non-trashed folders in a box in a single query.
+ * Returns up to 1000 folders. Used for bulk export assembly.
+ */
+export async function listAllFoldersByBox(
+  supabase: SupabaseClient,
+  box_id: string,
+  { includeArchived = false }: { includeArchived?: boolean } = {}
+): Promise<Folder[]> {
+  let query = supabase
+    .from("folders")
+    .select("*")
+    .eq("box_id", box_id)
+    .neq("status", FOLDER_STATUS.TRASHED);
+
+  if (!includeArchived) {
+    query = query.neq("status", FOLDER_STATUS.ARCHIVED);
+  }
+
+  const { data, error } = await query
+    .order("path_cache", { ascending: true })
+    .limit(1000);
+
+  if (error || !data) return [];
+  return data as Folder[];
+}
+
+/** Bulk-fetch folders by ids. */
+export async function getFoldersByIds(
+  supabase: SupabaseClient,
+  ids: string[]
+): Promise<Folder[]> {
+  if (ids.length === 0) return [];
+
+  const { data, error } = await supabase
+    .from("folders")
+    .select("*")
+    .in("id", ids);
+
+  if (error || !data) return [];
+  return data as Folder[];
+}
+
 export async function createFolder(
   supabase: SupabaseClient,
   input: CreateFolderInput

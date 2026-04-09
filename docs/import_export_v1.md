@@ -1,0 +1,320 @@
+# Import / Export V1
+
+This document describes Context Store's portability layer — how notes, folders, boxes, and context bundles can be exported and re-imported.
+
+---
+
+## What portability means
+
+Context Store is not a local-only product. An authenticated owner can:
+
+- Export a note, folder, box, or context bundle as a structured zip package
+- Import a `.md` file or zip package into any owned box
+- Choose explicit collision behavior before import
+- Receive a legible summary report after import
+
+This is a first-class product capability, not a developer utility.
+
+---
+
+## Manifest schema
+
+Every exported zip contains a `manifest.json` at the root. The manifest is the authoritative description of the package.
+
+```
+manifest.json {
+  schema_version    "1.0"
+  export_type       "note" | "folder" | "box" | "bundle"
+  exported_at       ISO timestamp
+  workspace         { id, name }
+  box               { id, name, slug } | null   (null for note-only exports)
+  root              folder_id | null             (set for folder exports)
+  folders[]         ManifestFolder entries
+  notes[]           ManifestNote entries
+  links[]           ManifestLink entries
+  bundle            ManifestBundle | null        (only for bundle exports)
+  files[]           array of relative paths to markdown files
+  counts            { folders, notes, links, files }
+}
+```
+
+### ManifestFolder
+
+| Field | Description |
+|---|---|
+| `id` | Stable DB id |
+| `parent_id` | Parent folder id or null |
+| `name` | Display name |
+| `slug` | URL-safe slug |
+| `path` | Derived path (e.g. `research/papers`) |
+| `status` | `active`, `archived` |
+| `description` | Optional description |
+
+### ManifestNote
+
+| Field | Description |
+|---|---|
+| `id` | Stable DB id |
+| `folder_id` | Parent folder id or null |
+| `title` | Display title |
+| `slug` | URL-safe slug |
+| `path` | Derived path within box |
+| `status` | `active`, `archived`, etc. |
+| `summary` | Optional summary |
+| `tags` | Array of tag strings |
+| `origin_type` | `human`, `generated`, `imported` |
+| `read_hint` | Optional retrieval hint |
+| `is_generated` | Boolean |
+| `current_version_id` | Points to the version snapshot |
+| `is_guide_note` | True when this note is the box's guide |
+| `content_sha256` | SHA-256 of markdown_content |
+| `file_path` | Relative path to the `.md` file in the zip |
+
+### ManifestLink
+
+| Field | Description |
+|---|---|
+| `id` | Stable link id |
+| `source_note_id` | Source note id |
+| `target_note_id` | Target note id |
+| `relationship_type` | Exact value as stored — never normalized |
+| `relationship_note` | Optional annotation (null in V1) |
+
+### ManifestBundle (context bundle exports only)
+
+| Field | Description |
+|---|---|
+| `entry_note_id` | The note the bundle is centered on |
+| `guide_note_id` | Guide note id if included |
+| `ancestor_summary_note_id` | Ancestor summary note id if included |
+| `included_note_ids` | All note ids in the bundle |
+| `linked_limit` | The limit applied during assembly |
+| `truncated` | Whether any bound was hit |
+| `truncation_reasons` | Machine-readable reason strings |
+
+---
+
+## Export package structure
+
+### Note export
+
+```
+note-slug.zip
+├── manifest.json
+└── notes/
+    └── note-slug.md
+```
+
+### Folder export
+
+```
+folder-name-folder.zip
+├── manifest.json
+└── notes/
+    ├── folder-path_note-one.md
+    └── folder-path_note-two.md
+```
+
+Folder hierarchy is captured in the manifest. Notes are flat in the zip (path separators replaced with underscores).
+
+### Box export
+
+```
+box-name-box.zip
+├── manifest.json
+└── notes/
+    ├── note-one.md
+    └── subfolder_note-two.md
+```
+
+### Context bundle export
+
+```
+bundle-entry-note.zip
+├── manifest.json
+├── README.md
+└── notes/
+    ├── entry-note.md
+    ├── guide-note.md       (if included)
+    ├── ancestor-note.md    (if included)
+    └── linked-note.md      (one per linked note, in bundle order)
+```
+
+The README includes a suggested upload order:
+1. Guide note (if present)
+2. Entry note
+3. Ancestor summary note (if present)
+4. Linked notes in bundle order
+
+---
+
+## Export rules
+
+- Trashed content: **never included**
+- Archived content: **excluded by default** (no opt-in UI in V1; service layer supports `includeArchived` flag)
+- Relationship types: **preserved exactly as stored** — never renamed or normalized
+- Links: only included when **both endpoints** are inside the exported set
+- Guide note flag: derived from `boxes.guide_note_id` at export time; stored in `ManifestNote.is_guide_note`
+
+---
+
+## How context bundle export differs from context bundle viewing
+
+| | Bundle viewing (UI tab) | Bundle export |
+|---|---|---|
+| **Purpose** | Show bounded context in the app | Create a portable package for external use |
+| **ContextBundle type** | Used directly for display | Used only for note selection and order |
+| **Markdown bodies** | Not shown in bundle metadata | Fetched separately and included in zip |
+| **README** | Not produced | Produced with suggested upload order |
+| **Mutation of ContextBundle shape** | Not mutated | Not mutated — fetched alongside |
+
+The export service calls `assembleContextBundle` to determine which notes are included and in what order. It then fetches full note bodies separately via `getNotesByIds`. The `ContextBundle` output type is never extended to carry file content.
+
+---
+
+## Import
+
+### Supported inputs
+
+| Input | Behavior |
+|---|---|
+| `.md` file | One note created, title from first `# H1` or filename |
+| `.zip` without `manifest.json` | Each `.md` file becomes a note |
+| `.zip` with `manifest.json` | Manifest drives folder/note/link creation |
+
+### Import bounds
+
+| Limit | Value |
+|---|---|
+| Package size | 25 MB |
+| Combined folder + note count | 1,000 |
+| Supported file types in zip | `.md`, `manifest.json`, `README.md` |
+| Malformed zip | Hard failure |
+| Invalid manifest schema | Hard failure |
+| Unsupported collision mode | Hard failure |
+
+Non-recognized file types inside a zip generate a warning and are ignored. Missing link targets are warnings, not hard failures.
+
+---
+
+## Collision modes
+
+Collision mode is chosen explicitly before import. There is no default that silently overwrites.
+
+### `create_copy`
+
+- Objects with colliding ids or paths receive new ids and `-copy` suffix-disambiguated slugs.
+- Existing content is never overwritten.
+- Guide assignment is not replaced automatically.
+
+### `replace_by_id`
+
+- Objects whose ids match existing objects **of the same type** are updated in place.
+- Notes are updated via the `update_note_and_create_version` RPC — new version created atomically.
+- Folders update metadata and placement only.
+- Type mismatches (e.g. incoming id matches a folder but manifest says it's a note) produce a skip warning.
+- Guide assignment is not silently changed.
+
+### `merge_metadata_only`
+
+- Never replaces markdown body.
+- Merges `summary`, `tags`, and `read_hint` for matching notes.
+- Creates a new version only when metadata actually changed.
+- Guide assignment not replaced.
+
+### `remap_ids_and_import`
+
+- All colliding ids receive new generated ids.
+- Internal parent folder references and link references are rewritten to use new ids.
+- Original incoming ids are recorded in the import summary report for traceability.
+
+---
+
+## Import summary report
+
+After every import, a structured summary is returned and displayed in the UI.
+
+```
+ImportSummaryReport {
+  collision_mode
+  created_counts   { folders, notes, links }
+  replaced_counts  { notes, folders }
+  duplicated_counts { notes, folders }
+  remapped_counts  { notes, folders }
+  skipped_counts   { notes, folders, links }
+  actions[]
+  warnings[]
+}
+```
+
+Each `ImportAction` records:
+
+| Field | Description |
+|---|---|
+| `object_type` | `folder`, `note`, or `link` |
+| `incoming_id` | Id from the package |
+| `final_id` | Id written to the database |
+| `incoming_path` | Path from the package |
+| `final_path` | Path as written |
+| `action` | `created`, `replaced`, `duplicated`, `remapped`, or `skipped` |
+| `reason` | Human-readable explanation (especially for skipped) |
+
+---
+
+## Ownership checks
+
+All ownership verification happens inside the service layer before any read or write.
+
+**Export paths:**
+1. Resolve the note / folder / box
+2. Verify `box.workspace_id === workspaceId` (from `getRequestContext()`)
+3. Linked notes and folder descendants are fetched from the same owned box — implicitly owned
+
+**Import paths:**
+1. Verify target `box.workspace_id === workspaceId`
+2. Verify target folder (if provided) has `box_id === target.boxId`
+3. All notes and folders are created inside the verified owned box
+4. Incoming manifest ids are never trusted as proof of ownership
+
+**Two-hop pattern** (because `notes` and `folders` have no `workspace_id`):
+```
+note / folder → box → workspace_id
+```
+
+---
+
+## Versioning behavior
+
+| Operation | Versioning |
+|---|---|
+| Import creates note | Creates initial version via `create_note_with_initial_version` RPC |
+| `replace_by_id` update | Creates new version via `update_note_and_create_version` RPC |
+| `merge_metadata_only` with changes | Creates new version only when metadata actually changed |
+| `merge_metadata_only` no changes | No version created |
+
+---
+
+## Audit events
+
+| Event | Trigger |
+|---|---|
+| `note.exported` | Single note export |
+| `folder.exported` | Folder export |
+| `box.exported` | Box export |
+| `bundle.exported` | Context bundle export |
+| `import.completed` | Successful import (any type) |
+
+All events are append-only and include useful metadata (counts, collision mode, truncation status).
+
+---
+
+## Service and type locations
+
+| File | Purpose |
+|---|---|
+| `src/server/domain/types/import_export.ts` | `ExportManifest`, `ImportSummaryReport`, `CollisionMode`, etc. |
+| `src/server/services/export_service.ts` | `exportNote`, `exportFolder`, `exportBox`, `exportBundle`, `packageToZip` |
+| `src/server/services/import_service.ts` | `importPackage` — parse + validate + apply |
+| `src/app/app/import_export/actions.ts` | `exportNoteAction`, `exportBoxAction`, `exportBundleAction`, `importPackageAction` |
+| `src/components/product/export_menu.tsx` | `NoteExportMenu`, `BoxExportMenu` client components |
+| `src/components/product/import_dialog.tsx` | `ImportDialog`, `ImportTriggerButton` client components |

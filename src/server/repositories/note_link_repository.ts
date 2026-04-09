@@ -88,6 +88,25 @@ export async function deleteNoteLink(
   return !error;
 }
 
+/**
+ * Fetch all links where either source_note_id or target_note_id is in noteIds.
+ * Used for export to collect only links whose both endpoints are in the export set.
+ */
+export async function listLinksForNoteSet(
+  supabase: SupabaseClient,
+  noteIds: string[]
+): Promise<NoteLink[]> {
+  if (noteIds.length === 0) return [];
+
+  const { data, error } = await supabase
+    .from("note_links")
+    .select("*")
+    .or(`source_note_id.in.(${noteIds.join(",")}),target_note_id.in.(${noteIds.join(",")})`);
+
+  if (error || !data) return [];
+  return data as NoteLink[];
+}
+
 /** Remove all links between two specific notes (either direction). */
 export async function deleteNoteLinksBetween(
   supabase: SupabaseClient,

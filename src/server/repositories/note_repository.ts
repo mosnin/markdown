@@ -121,6 +121,33 @@ export async function updateNote(
   return data as Note;
 }
 
+/**
+ * Fetch all non-trashed notes in a box in a single query.
+ * Returns up to 1000 notes. Used for bulk export assembly.
+ */
+export async function listAllNotesByBox(
+  supabase: SupabaseClient,
+  box_id: string,
+  { includeArchived = false }: { includeArchived?: boolean } = {}
+): Promise<Note[]> {
+  let query = supabase
+    .from("notes")
+    .select("*")
+    .eq("box_id", box_id)
+    .neq("status", NOTE_STATUS.TRASHED);
+
+  if (!includeArchived) {
+    query = query.neq("status", NOTE_STATUS.ARCHIVED);
+  }
+
+  const { data, error } = await query
+    .order("path_cache", { ascending: true })
+    .limit(1000);
+
+  if (error || !data) return [];
+  return data as Note[];
+}
+
 /** Bulk-fetch notes by id. Used for bundle assembly and export prep. */
 export async function getNotesByIds(
   supabase: SupabaseClient,

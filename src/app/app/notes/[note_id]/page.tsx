@@ -12,6 +12,7 @@ import { auditBundleRead } from "@/server/services/audit_service";
 import { NoteEditor } from "@/components/product/note_editor";
 import { LinkedNotesSection } from "@/components/product/linked_notes_section";
 import { ContextBundleViewer } from "@/components/product/context_bundle_viewer";
+import { NoteExportMenu } from "@/components/product/export_menu";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -297,22 +298,25 @@ export default async function NotePage({
       {/* Main content area */}
       <div className="flex flex-1 flex-col overflow-hidden">
         {/* Breadcrumb */}
-        <div className="flex items-center gap-3 border-b border-border px-6 py-3">
-          <Breadcrumb
-            workspaceName={ctx.workspace.name}
-            boxId={box.id}
-            boxName={box.name}
-            folderName={folder?.name ?? null}
-          />
-          {isGuideNote && (
-            <Badge
-              variant="secondary"
-              className="flex items-center gap-1 text-[10px] font-normal"
-            >
-              <BookOpen className="h-3 w-3" />
-              Guide
-            </Badge>
-          )}
+        <div className="flex items-center justify-between gap-3 border-b border-border px-6 py-3">
+          <div className="flex items-center gap-3 min-w-0">
+            <Breadcrumb
+              workspaceName={ctx.workspace.name}
+              boxId={box.id}
+              boxName={box.name}
+              folderName={folder?.name ?? null}
+            />
+            {isGuideNote && (
+              <Badge
+                variant="secondary"
+                className="flex items-center gap-1 text-[10px] font-normal shrink-0"
+              >
+                <BookOpen className="h-3 w-3" />
+                Guide
+              </Badge>
+            )}
+          </div>
+          <NoteExportMenu noteId={note_id} noteTitle={note.title} />
         </div>
 
         {/* Edit / Bundle tabs */}

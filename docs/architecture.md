@@ -272,10 +272,35 @@ All markdown rendering goes through `src/lib/markdown.ts` → `renderMarkdown(co
 The `MarkdownPreview` component (`src/components/product/markdown_preview.tsx`) is the
 shared client component. Sanitization can be added in one place here when needed.
 
+## Portability layer
+
+See [docs/import_export_v1.md](import_export_v1.md) for the full import/export architecture:
+
+- Typed manifest schema (`ExportManifest`) shared by UI, future API, and MCP
+- `export_service.ts` — note, folder, box, and context bundle export assembly
+- `import_service.ts` — parse `.md` / `.zip`, four deterministic collision modes
+- Authenticated delivery via server actions returning base64 zip for client-side download
+- `ImportSummaryReport` — typed per-object action log surfaced in the UI
+
+```
+src/server/services/
+├── export_service.ts          Note/folder/box/bundle assembly → zip
+└── import_service.ts          Parse + validate + apply with collision handling
+
+src/server/domain/types/
+└── import_export.ts           ExportManifest, ImportSummaryReport, CollisionMode
+
+src/app/app/import_export/
+└── actions.ts                 Export/import server actions
+
+src/components/product/
+├── export_menu.tsx            NoteExportMenu, BoxExportMenu (client)
+└── import_dialog.tsx          ImportDialog, ImportTriggerButton (client)
+```
+
 ## Future prompts will add
 
 - `src/server/api/` — REST endpoints
 - `src/server/mcp/` — MCP tools and resources
 - `src/server/policies/` — authorization checks
-- Import, export, manifest generation
 - Connection management, write proposals
