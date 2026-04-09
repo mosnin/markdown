@@ -196,3 +196,48 @@ export async function searchNotesAction(
     };
   }
 }
+
+// ─── Box tree action ──────────────────────────────────────────────────────────
+
+/**
+ * Fetch the folder and note tree for a box.
+ * Used by the sidebar tree component to lazily load tree data.
+ */
+export async function getBoxTreeAction(boxId: string): Promise<ActionResult<{
+  folders: Array<{ id: string; name: string; parent_folder_id: string | null; status: string }>;
+  notes: Array<{ id: string; title: string; kind: string; folder_id: string | null }>;
+}>> {
+  try {
+    const { supabase, workspaceId } = await requireContext();
+    const { getBoxById } = await import("@/server/repositories/box_repository");
+    const box = await getBoxById(supabase, boxId);
+    if (!box || box.workspace_id !== workspaceId) {
+      return { ok: false, error: "Box not found" };
+    }
+    const { listFoldersByBox } = await import("@/server/repositories/folder_repository");
+    const { listNotesByBox } = await import("@/server/repositories/note_repository");
+    const [folders, notes] = await Promise.all([
+      listFoldersByBox(supabase, boxId),
+      listNotesByBox(supabase, boxId),
+    ]);
+    return {
+      ok: true,
+      data: {
+        folders: folders.map((f) => ({
+          id: f.id,
+          name: f.name,
+          parent_folder_id: f.parent_folder_id,
+          status: f.status,
+        })),
+        notes: notes.map((n) => ({
+          id: n.id,
+          title: n.title,
+          kind: n.kind,
+          folder_id: n.folder_id,
+        })),
+      },
+    };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Failed to load tree" };
+  }
+}

@@ -1,5 +1,15 @@
 import { notFound } from "next/navigation";
-import { Bot, FileText, Folder, Archive, RotateCcw } from "lucide-react";
+import {
+  Archive,
+  BookOpen,
+  Bot,
+  FileText,
+  Folder,
+  Network,
+  RotateCcw,
+  Search,
+} from "lucide-react";
+import Link from "next/link";
 import { requireAuthenticatedUser } from "@/server/auth/require_authenticated_user";
 import { createClient } from "@/lib/supabase/server";
 import { getBoxById } from "@/server/repositories/box_repository";
@@ -16,12 +26,10 @@ import {
 } from "@/server/repositories/folder_repository";
 import { listLinksFromNote } from "@/server/repositories/note_link_repository";
 import { getBoxOverview } from "@/server/services/overview_service";
-import { PageHeader } from "@/components/product/page_header";
-import { PanelSection } from "@/components/product/panel_section";
 import { EmptyState } from "@/components/product/empty_state";
 import { BoxContentsTree } from "@/components/product/box_contents_tree";
 import { BoxGuidePanel } from "@/components/product/box_guide_panel";
-import { BoxOverviewPanel } from "@/components/product/box_overview_panel";
+import { GraphPanel } from "@/components/product/graph_panel";
 import { BoxSearchPanel } from "@/components/product/box_search_panel";
 import { CreateFolderDialog } from "@/components/product/create_folder_dialog";
 import { CreateNoteDialog } from "@/components/product/create_note_dialog";
@@ -29,6 +37,7 @@ import { GuideNotePicker } from "@/components/product/guide_note_picker";
 import { NoteStub } from "@/components/product/note_stub";
 import { BoxLifecycleMenu } from "@/components/product/box_lifecycle_menu";
 import { FolderLifecycleMenu } from "@/components/product/folder_lifecycle_menu";
+import { PanelSection } from "@/components/product/panel_section";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
@@ -37,7 +46,6 @@ import { type NoteLink } from "@/server/domain/types/note_link";
 import { BoxExportMenu } from "@/components/product/export_menu";
 import { ImportTriggerButton } from "@/components/product/import_dialog";
 import { FolderPolicyToggle } from "@/components/product/folder_policy_toggle";
-import Link from "next/link";
 
 function formatDate(dateStr: string): string {
   return new Date(dateStr).toLocaleDateString("en-US", {
@@ -59,7 +67,7 @@ function formatRelativeDate(dateStr: string): string {
 
 // ─── Right panel ──────────────────────────────────────────────────────────────
 
-async function BoxPanel({
+async function BoxContextPanel({
   box,
   guideNote,
   notes,
@@ -78,8 +86,8 @@ async function BoxPanel({
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
-      <div className="border-b border-border px-4 py-3">
-        <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+      <div className="border-b border-border px-4 py-2.5">
+        <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
           Box overview
         </p>
       </div>
@@ -87,21 +95,28 @@ async function BoxPanel({
         {/* Identity */}
         <div className="border-b border-border px-4 py-3">
           <p className="text-[10px] uppercase tracking-wider text-muted-foreground/60">
-            box
+            Box
           </p>
-          <p className="mt-0.5 text-sm font-medium text-foreground">{box.name}</p>
+          <p className="mt-0.5 text-sm font-medium text-foreground">
+            {box.name}
+          </p>
           {box.description && (
-            <p className="mt-1 text-xs text-muted-foreground">{box.description}</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              {box.description}
+            </p>
           )}
           {box.status === "archived" && (
-            <Badge variant="secondary" className="mt-2 flex items-center gap-1 w-fit text-[10px] font-normal">
-              <Archive className="h-3 w-3" />
+            <Badge
+              variant="secondary"
+              className="mt-2 flex items-center gap-1 w-fit text-[10px] font-normal"
+            >
+              <Archive className="h-3 w-3" aria-hidden="true" />
               Archived
             </Badge>
           )}
         </div>
 
-        {/* Guide note */}
+        {/* Guide note picker */}
         <PanelSection title="Guide note" noSeparator>
           <GuideNotePicker
             boxId={box.id}
@@ -117,26 +132,32 @@ async function BoxPanel({
           <div className="flex flex-col gap-1 text-xs text-muted-foreground">
             <div className="flex items-center justify-between py-0.5">
               <div className="flex items-center gap-1.5">
-                <Folder className="h-3 w-3" />
+                <Folder className="h-3 w-3" aria-hidden="true" />
                 <span>Folders</span>
               </div>
-              <Badge variant="secondary" className="h-4 px-1.5 text-[10px] font-normal">
+              <Badge
+                variant="secondary"
+                className="h-4 px-1.5 text-[10px] font-normal"
+              >
                 {folderCount}
               </Badge>
             </div>
             <div className="flex items-center justify-between py-0.5">
               <div className="flex items-center gap-1.5">
-                <FileText className="h-3 w-3" />
+                <FileText className="h-3 w-3" aria-hidden="true" />
                 <span>Notes</span>
               </div>
-              <Badge variant="secondary" className="h-4 px-1.5 text-[10px] font-normal">
+              <Badge
+                variant="secondary"
+                className="h-4 px-1.5 text-[10px] font-normal"
+              >
                 {noteCount}
               </Badge>
             </div>
           </div>
         </PanelSection>
 
-        {/* Folder generated-note policies */}
+        {/* Folder AI policies */}
         {folders.length > 0 && (
           <>
             <Separator />
@@ -151,7 +172,10 @@ async function BoxPanel({
                     className="flex items-center justify-between gap-2 rounded-md px-1.5 py-1 text-xs"
                   >
                     <div className="flex items-center gap-1.5 min-w-0">
-                      <Folder className="h-3 w-3 shrink-0 text-muted-foreground/60" />
+                      <Folder
+                        className="h-3 w-3 shrink-0 text-muted-foreground/60"
+                        aria-hidden="true"
+                      />
                       <span className="truncate text-muted-foreground">
                         {folder.name}
                       </span>
@@ -181,12 +205,6 @@ async function BoxPanel({
             </div>
             <div>
               <p className="text-[10px] uppercase tracking-wider text-muted-foreground/60">
-                Updated
-              </p>
-              <p className="text-foreground/80">{formatDate(box.updated_at)}</p>
-            </div>
-            <div>
-              <p className="text-[10px] uppercase tracking-wider text-muted-foreground/60">
                 Slug
               </p>
               <p className="font-mono text-foreground/80">{box.slug}</p>
@@ -209,14 +227,17 @@ export default async function BoxPage({
   const ctx = await requireAuthenticatedUser();
   const supabase = await createClient();
 
-  // Load box and verify ownership
   const box = await getBoxById(supabase, box_id);
-  if (!box || box.workspace_id !== ctx.workspace.id) {
-    notFound();
-  }
+  if (!box || box.workspace_id !== ctx.workspace.id) notFound();
 
-  // Load active contents + archived/trashed for discovery tabs
-  const [folders, notes, archivedNotes, trashedNotes, archivedFolders, trashedFolders] = await Promise.all([
+  const [
+    folders,
+    notes,
+    archivedNotes,
+    trashedNotes,
+    archivedFolders,
+    trashedFolders,
+  ] = await Promise.all([
     listFoldersByBox(supabase, box.id),
     listNotesByBox(supabase, box.id),
     listArchivedNotesByBox(supabase, box.id),
@@ -225,18 +246,15 @@ export default async function BoxPage({
     listTrashedFoldersByBox(supabase, box.id),
   ]);
 
-  // Load guide note if assigned
   const guideNote = box.guide_note_id
     ? await getNoteById(supabase, box.guide_note_id)
     : null;
 
-  // Load all links for all notes in this box (for guide panel)
   const linkArrays = await Promise.all(
     notes.map((n) => listLinksFromNote(supabase, n.id))
   );
   const allLinks: NoteLink[] = linkArrays.flat();
 
-  // Build overview
   const overview = await getBoxOverview(supabase, box);
 
   const sortedNotes = [...notes].sort((a, b) =>
@@ -249,13 +267,48 @@ export default async function BoxPage({
   return (
     <div className="flex h-full overflow-hidden">
       {/* Main content */}
-      <div className="flex flex-1 flex-col overflow-hidden">
-        <PageHeader
-          eyebrow={ctx.workspace.name}
-          title={box.name}
-          description={box.description ?? undefined}
-          actions={
-            <div className="flex items-center gap-2">
+      <div className="flex flex-1 flex-col overflow-hidden min-w-0">
+
+        {/* Box header */}
+        <div className="border-b border-border px-6 py-4">
+          <div className="flex items-start justify-between gap-4">
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2 mb-0.5">
+                <p className="text-xs text-muted-foreground">{ctx.workspace.name}</p>
+                {box.status === "archived" && (
+                  <Badge variant="secondary" className="text-[10px] font-normal">
+                    Archived
+                  </Badge>
+                )}
+              </div>
+              <h1 className="text-xl font-semibold tracking-tight text-foreground truncate">
+                {box.name}
+              </h1>
+              {box.description && (
+                <p className="mt-1 text-sm text-muted-foreground">
+                  {box.description}
+                </p>
+              )}
+              {/* Guide note status strip */}
+              {guideNote ? (
+                <div className="mt-2 flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <BookOpen className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                  <span>Guide: </span>
+                  <Link
+                    href={`/app/notes/${guideNote.id}`}
+                    className="font-medium text-foreground hover:underline underline-offset-2 truncate"
+                  >
+                    {guideNote.title}
+                  </Link>
+                </div>
+              ) : (
+                <div className="mt-2 flex items-center gap-1.5 text-xs text-muted-foreground/60">
+                  <BookOpen className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                  <span>No guide note — assign one in the box overview panel</span>
+                </div>
+              )}
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
               <ImportTriggerButton
                 boxId={box.id}
                 folders={folders.map((f) => ({
@@ -272,9 +325,10 @@ export default async function BoxPage({
               <CreateFolderDialog boxId={box.id} />
               <CreateNoteDialog boxId={box.id} folders={folders} />
             </div>
-          }
-        />
+          </div>
+        </div>
 
+        {/* Tabs */}
         <Tabs defaultValue="notes" className="flex flex-1 flex-col overflow-hidden">
           <div className="border-b border-border px-6">
             <TabsList variant="line" className="h-auto pb-0">
@@ -287,16 +341,21 @@ export default async function BoxPage({
               <TabsTrigger value="guide" className="pb-3">
                 Guide
               </TabsTrigger>
-              <TabsTrigger value="overview" className="pb-3">
-                Overview
+              <TabsTrigger value="graph" className="pb-3">
+                Graph
               </TabsTrigger>
               <TabsTrigger value="search" className="pb-3">
+                <Search className="h-3.5 w-3.5 mr-1" aria-hidden="true" />
                 Search
               </TabsTrigger>
               {archivedCount > 0 && (
                 <TabsTrigger value="archived" className="pb-3">
+                  <Archive className="h-3.5 w-3.5 mr-1" aria-hidden="true" />
                   Archived
-                  <Badge variant="secondary" className="ml-1.5 h-4 px-1.5 text-[10px] font-normal">
+                  <Badge
+                    variant="secondary"
+                    className="ml-1.5 h-4 px-1.5 text-[10px] font-normal"
+                  >
                     {archivedCount}
                   </Badge>
                 </TabsTrigger>
@@ -304,7 +363,10 @@ export default async function BoxPage({
               {trashedCount > 0 && (
                 <TabsTrigger value="trashed" className="pb-3">
                   Trash
-                  <Badge variant="secondary" className="ml-1.5 h-4 px-1.5 text-[10px] font-normal">
+                  <Badge
+                    variant="secondary"
+                    className="ml-1.5 h-4 px-1.5 text-[10px] font-normal"
+                  >
                     {trashedCount}
                   </Badge>
                 </TabsTrigger>
@@ -326,7 +388,11 @@ export default async function BoxPage({
               ) : (
                 <div className="mx-auto max-w-3xl flex flex-col gap-2 px-6 py-4">
                   {sortedNotes.map((note) => (
-                    <Link key={note.id} href={`/app/notes/${note.id}`} className="block">
+                    <Link
+                      key={note.id}
+                      href={`/app/notes/${note.id}`}
+                      className="block"
+                    >
                       <NoteStub
                         title={note.title}
                         kind={note.kind as "note" | "guide" | "bundle"}
@@ -351,7 +417,9 @@ export default async function BoxPage({
                   folderLifecycleMenu={(folder) => (
                     <FolderLifecycleMenu
                       folderId={folder.id}
-                      folderStatus={folder.status as "active" | "archived" | "trashed"}
+                      folderStatus={
+                        folder.status as "active" | "archived" | "trashed"
+                      }
                     />
                   )}
                 />
@@ -373,11 +441,11 @@ export default async function BoxPage({
             </ScrollArea>
           </TabsContent>
 
-          {/* ── Overview tab ── */}
-          <TabsContent value="overview" className="flex-1 overflow-hidden">
+          {/* ── Graph tab ── */}
+          <TabsContent value="graph" className="flex-1 overflow-hidden">
             <ScrollArea className="h-full">
               <div className="mx-auto max-w-3xl px-6 py-6">
-                <BoxOverviewPanel overview={overview} />
+                <GraphPanel overview={overview} />
               </div>
             </ScrollArea>
           </TabsContent>
@@ -397,7 +465,7 @@ export default async function BoxPage({
               <ScrollArea className="h-full">
                 <div className="mx-auto max-w-3xl px-6 py-4">
                   <p className="mb-3 text-xs text-muted-foreground">
-                    Archived content is hidden from active views. Use the lifecycle menu on each item to unarchive.
+                    Archived content is hidden from active views. Use the lifecycle menu to unarchive.
                   </p>
                   {archivedFolders.length > 0 && (
                     <div className="mb-4">
@@ -411,9 +479,13 @@ export default async function BoxPage({
                             className="flex items-center justify-between gap-2 rounded-md border border-border px-3 py-2"
                           >
                             <div className="flex items-center gap-2 min-w-0">
-                              <Folder className="h-3.5 w-3.5 shrink-0 text-muted-foreground/60" />
-                              <span className="truncate text-sm text-foreground/80">{folder.name}</span>
-                              <span className="text-xs text-muted-foreground/60 truncate">{folder.path_cache}</span>
+                              <Folder
+                                className="h-3.5 w-3.5 shrink-0 text-muted-foreground/60"
+                                aria-hidden="true"
+                              />
+                              <span className="truncate text-sm text-foreground/80">
+                                {folder.name}
+                              </span>
                             </div>
                             <FolderLifecycleMenu
                               folderId={folder.id}
@@ -431,7 +503,11 @@ export default async function BoxPage({
                       </p>
                       <div className="flex flex-col gap-2">
                         {archivedNotes.map((note) => (
-                          <Link key={note.id} href={`/app/notes/${note.id}`} className="block">
+                          <Link
+                            key={note.id}
+                            href={`/app/notes/${note.id}`}
+                            className="block"
+                          >
                             <NoteStub
                               title={note.title}
                               kind={note.kind as "note" | "guide" | "bundle"}
@@ -455,7 +531,7 @@ export default async function BoxPage({
               <ScrollArea className="h-full">
                 <div className="mx-auto max-w-3xl px-6 py-4">
                   <p className="mb-3 text-xs text-muted-foreground">
-                    Trashed content is excluded from all retrieval and context building. Restore to make it active again.
+                    Trashed content is excluded from retrieval and context bundles. Restore to make it active.
                   </p>
                   {trashedFolders.length > 0 && (
                     <div className="mb-4">
@@ -469,9 +545,13 @@ export default async function BoxPage({
                             className="flex items-center justify-between gap-2 rounded-md border border-border px-3 py-2"
                           >
                             <div className="flex items-center gap-2 min-w-0">
-                              <Folder className="h-3.5 w-3.5 shrink-0 text-muted-foreground/60" />
-                              <span className="truncate text-sm text-foreground/80">{folder.name}</span>
-                              <span className="text-xs text-muted-foreground/60 truncate">{folder.path_cache}</span>
+                              <Folder
+                                className="h-3.5 w-3.5 shrink-0 text-muted-foreground/60"
+                                aria-hidden="true"
+                              />
+                              <span className="truncate text-sm text-foreground/80">
+                                {folder.name}
+                              </span>
                             </div>
                             <FolderLifecycleMenu
                               folderId={folder.id}
@@ -489,7 +569,11 @@ export default async function BoxPage({
                       </p>
                       <div className="flex flex-col gap-2">
                         {trashedNotes.map((note) => (
-                          <Link key={note.id} href={`/app/notes/${note.id}`} className="block">
+                          <Link
+                            key={note.id}
+                            href={`/app/notes/${note.id}`}
+                            className="block"
+                          >
                             <NoteStub
                               title={note.title}
                               kind={note.kind as "note" | "guide" | "bundle"}
@@ -510,8 +594,11 @@ export default async function BoxPage({
       </div>
 
       {/* Right panel */}
-      <aside className="hidden lg:flex lg:h-full lg:w-72 lg:shrink-0 lg:flex-col lg:border-l lg:border-border lg:bg-background">
-        <BoxPanel
+      <aside
+        aria-label="Box context panel"
+        className="hidden lg:flex lg:h-full lg:w-72 lg:shrink-0 lg:flex-col lg:border-l lg:border-border lg:bg-background"
+      >
+        <BoxContextPanel
           box={box}
           guideNote={guideNote}
           notes={notes}

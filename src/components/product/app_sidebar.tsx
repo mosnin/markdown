@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Archive, Box, ClipboardList, Home, Inbox, Plus, Settings } from "lucide-react";
+import { ClipboardList, Home, Inbox, Plus, Settings, Archive } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { type Box as BoxType } from "@/server/domain/types/box";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/tooltip";
 import { ThemeToggle } from "@/components/product/theme_toggle";
 import { UserMenu } from "@/components/product/user_menu";
+import { TreeSidebar } from "@/components/product/tree_sidebar";
 
 // ─── Nav items ────────────────────────────────────────────────────────────────
 
@@ -65,28 +66,6 @@ function NavItem({
   );
 }
 
-// ─── Box nav item ─────────────────────────────────────────────────────────────
-
-function BoxNavItem({ box, isActive }: { box: BoxType; isActive: boolean }) {
-  return (
-    <Link
-      href={`/app/boxes/${box.id}`}
-      aria-current={isActive ? "page" : undefined}
-      className={cn(
-        "flex items-center gap-2 rounded-md px-2.5 py-1.5 text-sm transition-fast",
-        "hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
-        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-        isActive
-          ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium"
-          : "text-sidebar-foreground/60"
-      )}
-    >
-      <Box className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-      <span className="truncate">{box.name}</span>
-    </Link>
-  );
-}
-
 // ─── Sidebar ──────────────────────────────────────────────────────────────────
 
 interface AppSidebarProps {
@@ -102,16 +81,25 @@ export function AppSidebar({
 }: AppSidebarProps) {
   const pathname = usePathname();
 
+  // Extract the current box and note IDs from the pathname
+  const boxMatch = pathname.match(/\/app\/boxes\/([^/]+)/);
+  const noteMatch = pathname.match(/\/app\/notes\/([^/]+)/);
+  const currentBoxId = boxMatch?.[1];
+  const currentNoteId = noteMatch?.[1];
+
   return (
     <aside
       aria-label="Sidebar navigation"
       className={cn(
-        "flex h-full w-56 shrink-0 flex-col",
+        "flex h-full w-60 shrink-0 flex-col",
         "border-r border-sidebar-border bg-sidebar"
       )}
     >
       {/* Logo / wordmark */}
-      <div className="flex h-12 items-center gap-2 border-b border-sidebar-border px-4" aria-hidden="true">
+      <div
+        className="flex h-12 items-center gap-2 border-b border-sidebar-border px-4"
+        aria-hidden="true"
+      >
         <div className="h-5 w-5 rounded-md bg-foreground" />
         <span className="text-sm font-semibold tracking-tight text-sidebar-foreground">
           Context Store
@@ -138,9 +126,9 @@ export function AppSidebar({
 
       <Separator className="mx-2 my-1 bg-sidebar-border" />
 
-      {/* Workspace boxes */}
-      <ScrollArea className="flex-1 px-2 py-1">
-        <div className="mb-1 flex items-center justify-between px-2.5 py-1">
+      {/* Workspace label + boxes tree */}
+      <div className="flex min-h-0 flex-1 flex-col">
+        <div className="flex items-center justify-between px-4 py-2">
           <span className="text-xs font-medium uppercase tracking-wider text-sidebar-foreground/40">
             {workspaceName}
           </span>
@@ -157,36 +145,28 @@ export function AppSidebar({
           </Link>
         </div>
 
-        {boxes.length === 0 ? (
-          <Link
-            href="/app/workspaces"
-            className={cn(
-              "flex items-center gap-1.5 rounded-md px-2.5 py-2 text-xs transition-fast",
-              "text-sidebar-foreground/40 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
-              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            )}
-          >
-            <Plus className="h-3 w-3 shrink-0" aria-hidden="true" />
-            Create your first box
-          </Link>
-        ) : (
-          <nav aria-label="Boxes">
-            <ul className="flex flex-col gap-0.5 list-none">
-              {boxes.map((box) => (
-                <li key={box.id}>
-                  <BoxNavItem
-                    box={box}
-                    isActive={
-                      pathname === `/app/boxes/${box.id}` ||
-                      pathname.startsWith(`/app/boxes/${box.id}/`)
-                    }
-                  />
-                </li>
-              ))}
-            </ul>
-          </nav>
-        )}
-      </ScrollArea>
+        <ScrollArea className="flex-1 px-2">
+          {boxes.length === 0 ? (
+            <Link
+              href="/app/workspaces"
+              className={cn(
+                "flex items-center gap-1.5 rounded-md px-2.5 py-2 text-xs transition-fast",
+                "text-sidebar-foreground/40 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              )}
+            >
+              <Plus className="h-3 w-3 shrink-0" aria-hidden="true" />
+              Create your first box
+            </Link>
+          ) : (
+            <TreeSidebar
+              boxes={boxes}
+              currentBoxId={currentBoxId}
+              currentNoteId={currentNoteId}
+            />
+          )}
+        </ScrollArea>
+      </div>
 
       {/* Bottom chrome */}
       <div className="border-t border-sidebar-border">

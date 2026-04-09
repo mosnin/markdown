@@ -531,6 +531,41 @@ src/components/product/
 └── create_note_dialog.tsx      Updated: starter template picker (NOTE_TEMPLATES)
 ```
 
+## Workspace layout layer
+
+See [docs/workspace_layout_correction_v1.md](workspace_layout_correction_v1.md) for the
+full workspace layout architecture.
+
+- **Three-pane model**: `[sidebar 240px] | [center flex-1] | [right pane 288px]`; right pane hidden < lg; shell stays thin, pages own panel space
+- **`TreeSidebar`**: client component, lazy-loads box tree via `getBoxTreeAction` on first expand, auto-expands current box from pathname
+- **`AppSidebar` + `MobileSidebar`**: both use `TreeSidebar`; mobile uses Sheet drawer
+- **Note editor**: three modes (Document / Edit / Source); Document mode is the default reading experience, Source mode shows exact stored markdown labeled for AI
+- **Autosave**: 1500ms debounce via `useEffect` + `useRef`; calls `saveNoteAction` (same as manual save); every autosave creates an immutable version via `update_note_and_create_version` RPC
+- **`AutosaveStatus`**: subtle toolbar indicator (idle renders nothing, saved fades to idle after 4s, error shows Retry button)
+- **`SemanticLinksPanel`**: replaces `LinkedNotesSection` in right pane; "Context relationships" framing (not backlinks)
+- **`GraphPanel`**: read-only structured view using `BoxOverview` data; no D3 or force layout
+- **Workspace home (cockpit)**: status tiles + recent notes + boxes grid + connections + proposals
+- **Box page**: guide status always above the fold; "Overview" tab renamed to "Graph" using `GraphPanel`
+- **Note page**: center pane = breadcrumb + NoteEditor; right pane = Info/Links/Bundle/History tabs
+
+```
+src/app/app/page.tsx               Workspace cockpit (DashboardSection + DashboardCard)
+src/app/app/boxes/[box_id]/page.tsx  Box operating surface (guide header, Graph tab)
+src/app/app/notes/[note_id]/page.tsx  Note workspace (NoteEditor + NoteContextPanel)
+src/app/app/boxes/actions.ts         Added: getBoxTreeAction (lazy tree data for sidebar)
+
+src/components/product/
+├── tree_sidebar.tsx               New: expandable box/folder/note tree (client)
+├── autosave_status.tsx            New: autosave state indicator
+├── note_editor.tsx                Rewritten: three modes + autosave
+├── semantic_links_panel.tsx       New: context relationships panel
+├── graph_panel.tsx                New: read-only box hierarchy + link edges
+├── dashboard_section.tsx          New: cockpit section wrapper
+├── dashboard_card.tsx             New: cockpit card (link or static)
+├── app_sidebar.tsx                Updated: uses TreeSidebar, 240px width
+└── mobile_sidebar.tsx             Updated: uses TreeSidebar
+```
+
 ## V1 parity pass
 
 See [docs/v1_parity_report.md](v1_parity_report.md).

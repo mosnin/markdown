@@ -5,7 +5,6 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   Archive,
-  Box,
   ClipboardList,
   Home,
   Inbox,
@@ -26,13 +25,14 @@ import { ThemeToggle } from "@/components/product/theme_toggle";
 import { UserMenu } from "@/components/product/user_menu";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
+import { TreeSidebar } from "@/components/product/tree_sidebar";
 
 /**
  * Mobile navigation sidebar.
  *
  * Renders as a sheet (left-side drawer) on small screens.
- * The trigger button is embedded here so layout is self-contained.
- * Content mirrors the AppSidebar information hierarchy.
+ * Content mirrors the AppSidebar information hierarchy, including
+ * the expandable box tree.
  */
 
 const primaryNav = [
@@ -56,13 +56,18 @@ export function MobileSidebar({
   const [open, setOpen] = useState(false);
   const pathname = usePathname();
 
+  const boxMatch = pathname.match(/\/app\/boxes\/([^/]+)/);
+  const noteMatch = pathname.match(/\/app\/notes\/([^/]+)/);
+  const currentBoxId = boxMatch?.[1];
+  const currentNoteId = noteMatch?.[1];
+
   function close() {
     setOpen(false);
   }
 
   return (
     <>
-      {/* Hamburger trigger — only visible on mobile */}
+      {/* Hamburger trigger */}
       <button
         onClick={() => setOpen(true)}
         className={cn(
@@ -106,10 +111,7 @@ export function MobileSidebar({
           </SheetHeader>
 
           {/* Primary nav */}
-          <nav
-            aria-label="Primary navigation"
-            className="px-2 pt-3 pb-1"
-          >
+          <nav aria-label="Primary navigation" className="px-2 pt-3 pb-1">
             <ul className="flex flex-col gap-0.5 list-none">
               {primaryNav.map((item) => {
                 const isActive = pathname === item.href;
@@ -139,59 +141,45 @@ export function MobileSidebar({
 
           <Separator className="mx-2 my-1 bg-sidebar-border" />
 
-          {/* Workspace boxes */}
-          <ScrollArea className="flex-1 px-2 py-1">
-            <div className="mb-1 flex items-center justify-between px-2.5 py-1">
-              <span className="text-xs font-medium uppercase tracking-wider text-sidebar-foreground/40">
-                {workspaceName}
-              </span>
+          {/* Workspace + tree */}
+          <div className="flex items-center justify-between px-4 py-2">
+            <span className="text-xs font-medium uppercase tracking-wider text-sidebar-foreground/40">
+              {workspaceName}
+            </span>
+            <Link
+              href="/app/workspaces"
+              onClick={close}
+              className={cn(
+                "rounded p-0.5 text-sidebar-foreground/40 transition-fast",
+                "hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              )}
+              aria-label="Manage workspace"
+            >
+              <Plus className="h-3 w-3" aria-hidden="true" />
+            </Link>
+          </div>
+
+          <ScrollArea className="flex-1 px-2">
+            {boxes.length === 0 ? (
               <Link
                 href="/app/workspaces"
                 onClick={close}
                 className={cn(
-                  "rounded p-0.5 text-sidebar-foreground/40 transition-fast",
-                  "hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
-                  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  "flex items-center gap-1.5 rounded-md px-2.5 py-2 text-xs transition-fast",
+                  "text-sidebar-foreground/40 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
                 )}
-                aria-label="Manage workspace"
               >
-                <Plus className="h-3 w-3" aria-hidden="true" />
+                <Plus className="h-3 w-3 shrink-0" aria-hidden="true" />
+                Create your first box
               </Link>
-            </div>
-
-            {boxes.length === 0 ? (
-              <p className="px-2.5 py-2 text-xs text-sidebar-foreground/40">
-                No boxes yet
-              </p>
             ) : (
-              <nav aria-label="Boxes">
-                <ul className="flex flex-col gap-0.5 list-none">
-                  {boxes.map((box) => {
-                    const isActive =
-                      pathname === `/app/boxes/${box.id}` ||
-                      pathname.startsWith(`/app/boxes/${box.id}/`);
-                    return (
-                      <li key={box.id}>
-                        <Link
-                          href={`/app/boxes/${box.id}`}
-                          onClick={close}
-                          className={cn(
-                            "flex items-center gap-2 rounded-md px-2.5 py-1.5 text-sm transition-fast",
-                            "hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
-                            isActive
-                              ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium"
-                              : "text-sidebar-foreground/60"
-                          )}
-                          aria-current={isActive ? "page" : undefined}
-                        >
-                          <Box className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-                          <span className="truncate">{box.name}</span>
-                        </Link>
-                      </li>
-                    );
-                  })}
-                </ul>
-              </nav>
+              <TreeSidebar
+                boxes={boxes}
+                currentBoxId={currentBoxId}
+                currentNoteId={currentNoteId}
+                onNavigate={close}
+              />
             )}
           </ScrollArea>
 

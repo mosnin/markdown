@@ -153,18 +153,61 @@ Installed primitives:
 | Component | Purpose |
 |---|---|
 | `AppShell` | Root layout: sidebar + main + optional right panel |
-| `AppSidebar` | Left navigation rail with workspace tree |
+| `AppSidebar` | Left navigation rail with expandable workspace tree |
 | `AppHeader` | Top command bar (breadcrumbs, toolbar) |
+| `MobileSidebar` | Sheet-based left drawer for mobile; mirrors sidebar tree |
+| `TreeSidebar` | Expandable box/folder/note tree (client); lazy-loads via `getBoxTreeAction` |
 | `PageHeader` | Per-page title, description, and action slot |
 | `EmptyState` | Consistent empty list/view message |
 | `PanelSection` | Labeled section for panels and detail views |
-| `TreeStub` | Hierarchical tree for box/folder navigation |
+| `NoteEditor` | Three-mode note editor: Document / Edit / Source |
+| `AutosaveStatus` | Subtle autosave indicator (idle/saving/saved/error) for note toolbar |
+| `SemanticLinksPanel` | Context relationships panel for note right pane |
+| `GraphPanel` | Read-only box hierarchy + link edge visualization |
+| `DashboardSection` | Section wrapper for the workspace cockpit home |
+| `DashboardCard` | Card component (link or static) for the cockpit |
 | `NoteStub` | Note card for list and search views |
 | `NoteStubSkeleton` | Loading state for NoteStub |
-| `MetadataPanelStub` | Right-panel metadata for note, box, guide, bundle |
-| `MetadataPanelSkeleton` | Loading state for MetadataPanelStub |
 | `ThemeProvider` | next-themes wrapper |
 | `ThemeToggle` | Light/dark toggle |
+
+### Three-pane workspace layout
+
+Desktop layout uses a fixed three-pane model:
+
+```
+[left sidebar 240px] | [center pane flex-1] | [right context pane 288px]
+```
+
+The right pane is hidden below `lg` breakpoint. It is embedded in page components (not
+in `AppShell`) so the shell stays thin and pages own their panel space.
+
+On mobile (< md), the left sidebar becomes a full-height sheet drawer triggered by a
+hamburger button in a top bar. The right pane is hidden on mobile — its content is
+accessible via right-panel tabs in the note and box pages.
+
+### Note editor modes
+
+The `NoteEditor` component exposes three modes via a toolbar toggle:
+
+| Mode | Description |
+|---|---|
+| Document | Rendered markdown — primary reading experience |
+| Edit | Markdown textarea with autosave (1.5s debounce) and metadata section |
+| Source | Raw markdown, read-only — labeled "what the AI model receives" |
+
+**Document mode** is the default when opening a note. Clicking the document or focusing
+the title switches to Edit mode. Source mode shows the exact stored markdown string with
+no transformation.
+
+### Semantic links framing
+
+Note links are **explicit semantic context relationships**, not backlinks. Always use:
+- Section title: "Context relationships"
+- Outgoing: "This note →"
+- Incoming: "→ Referred by"
+
+Do not label them "Linked notes", "Backlinks", or "Related notes".
 
 ### Naming
 
