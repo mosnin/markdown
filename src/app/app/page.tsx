@@ -1,90 +1,164 @@
-import { Archive, BookOpen, Box, FileText } from "lucide-react";
+import Link from "next/link";
+import { Box, FileText, Plus } from "lucide-react";
+import { requireAuthenticatedUser } from "@/server/auth/require_authenticated_user";
+import { createClient } from "@/lib/supabase/server";
+import { listBoxesByWorkspace } from "@/server/repositories/box_repository";
+import { listNotesByBox } from "@/server/repositories/note_repository";
 import { PageHeader } from "@/components/product/page_header";
 import { NoteStub } from "@/components/product/note_stub";
+import { EmptyState } from "@/components/product/empty_state";
 import { PanelSection } from "@/components/product/panel_section";
+import { CreateBoxDialog } from "@/components/product/create_box_dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { cn } from "@/lib/utils";
 
-// ─── Stub data — replaced with server queries in a later prompt ──────────────
+function formatRelativeDate(dateStr: string): string {
+  const now = new Date();
+  const d = new Date(dateStr);
+  const diffMs = now.getTime() - d.getTime();
+  const diffDays = Math.floor(diffMs / 86400000);
+  if (diffDays === 0) return "Today";
+  if (diffDays === 1) return "Yesterday";
+  if (diffDays < 7) return `${diffDays} days ago`;
+  if (diffDays < 30) return `${Math.floor(diffDays / 7)} weeks ago`;
+  return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+}
 
-const recentNotes = [
-  {
-    id: "note-1",
-    title: "Getting started with Context Store",
-    kind: "guide" as const,
-    excerpt:
-      "Context Store is a structured, markdown-native operating system for both human and AI context.",
-    updatedAt: "Just now",
-    tags: ["onboarding", "context"],
-  },
-  {
-    id: "note-2",
-    title: "Weekly research digest",
-    kind: "note" as const,
-    excerpt:
-      "A running collection of reading notes and references from this week.",
-    updatedAt: "2 days ago",
-    tags: ["research"],
-  },
-  {
-    id: "note-3",
-    title: "Project Alpha context bundle",
-    kind: "bundle" as const,
-    excerpt:
-      "Curated context for Project Alpha: goals, constraints, key decisions, open questions.",
-    updatedAt: "3 days ago",
-    tags: ["project-alpha"],
-  },
-];
+export default async function AppHomePage() {
+  const ctx = await requireAuthenticatedUser();
+  const supabase = await createClient();
 
-const statCards = [
-  { label: "Workspaces", value: "1", icon: Archive },
-  { label: "Boxes", value: "3", icon: Box },
-  { label: "Notes", value: "12", icon: FileText },
-  { label: "Guides", value: "2", icon: BookOpen },
-];
+  const boxes = await listBoxesByWorkspace(supabase, ctx.workspace.id);
 
-// ─── Page ────────────────────────────────────────────────────────────────────
+  // Collect recent notes across all boxes (up to 10)
+  const notesByBox = await Promise.all(
+    boxes.slice(0, 5).map((box) =>
+      listNotesByBox(supabase, box.id, { limit: 10 })
+    )
+  );
+  const allNotes = notesByBox
+    .flat()
+    .sort((a, b) => b.updated_at.localeCompare(a.updated_at))
+    .slice(0, 8);
 
-export default function AppHomePage() {
   return (
     <div className="flex h-full flex-col overflow-hidden">
       <PageHeader
-        title="Home"
-        description="Recent activity across your workspaces."
+        title={ctx.workspace.name}
+        description="Your context workspace."
+        actions={<CreateBoxDialog />}
       />
 
       <ScrollArea className="flex-1">
         <div className="mx-auto max-w-3xl space-y-8 px-6 py-6">
-          {/* Quick stats */}
-          <section>
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-              {statCards.map(({ label, value, icon: Icon }) => (
-                <div
-                  key={label}
-                  className="flex flex-col gap-1 rounded-lg border border-border bg-card px-4 py-3"
-                >
-                  <div className="flex items-center gap-1.5 text-muted-foreground">
-                    <Icon className="h-3.5 w-3.5" />
-                    <span className="text-xs">{label}</span>
-                  </div>
-                  <span className="text-2xl font-semibold tracking-tight text-foreground">
-                    {value}
-                  </span>
-                </div>
-              ))}
-            </div>
+          {/* Summary stats */}
+          <section className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+            <StatCard
+              icon={Box}
+              label="Boxes"
+              value={boxes.length}
+              href="/app/workspaces"
+            />
+            <StatCard
+              icon={FileText}
+              label="Notes"
+              value={allNotes.length > 0 ? `${allNotes.length}+` : "0"}
+            />
           </section>
 
+          {/* Box list — only shown if boxes exist and no recent notes */}
+          {boxes.length > 0 && allNotes.length === 0 && (
+            <PanelSection title="Boxes" noSeparator className="px-0">
+              <div className="flex flex-col gap-2">
+                {boxes.map((box) => (
+                  <Link
+                    key={box.id}
+                    href={`/app/boxes/${box.id}`}
+                    className="flex items-center gap-3 rounded-lg border border-border bg-card px-4 py-3 text-sm transition-standard hover:border-border-strong hover:shadow-sm"
+                  >
+                    <Box className="h-4 w-4 shrink-0 text-muted-foreground" />
+                    <div className="min-w-0 flex-1">
+                      <p className="font-medium text-foreground truncate">
+                        {box.name}
+                      </p>
+                      {box.description && (
+                        <p className="truncate text-xs text-muted-foreground">
+                          {box.description}
+                        </p>
+                      )}
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            </PanelSection>
+          )}
+
           {/* Recent notes */}
-          <PanelSection title="Recent" noSeparator className="px-0">
-            <div className="flex flex-col gap-2">
-              {recentNotes.map((note) => (
-                <NoteStub key={note.id} {...note} />
-              ))}
-            </div>
-          </PanelSection>
+          {allNotes.length > 0 && (
+            <PanelSection title="Recent notes" noSeparator className="px-0">
+              <div className="flex flex-col gap-2">
+                {allNotes.map((note) => (
+                  <Link key={note.id} href={`/app/notes/${note.id}`} className="block">
+                    <NoteStub
+                      title={note.title}
+                      kind={note.kind as "note" | "guide" | "bundle"}
+                      excerpt={note.summary ?? undefined}
+                      updatedAt={formatRelativeDate(note.updated_at)}
+                      tags={note.tags.slice(0, 3)}
+                    />
+                  </Link>
+                ))}
+              </div>
+            </PanelSection>
+          )}
+
+          {/* Empty state */}
+          {boxes.length === 0 && (
+            <EmptyState
+              icon={<Box className="h-5 w-5" />}
+              title="No boxes yet"
+              description="Boxes are focused collections inside your workspace. Create one to start organizing context."
+              action={<CreateBoxDialog />}
+            />
+          )}
         </div>
       </ScrollArea>
     </div>
   );
+}
+
+function StatCard({
+  icon: Icon,
+  label,
+  value,
+  href,
+}: {
+  icon: React.ElementType;
+  label: string;
+  value: string | number;
+  href?: string;
+}) {
+  const inner = (
+    <div className="flex flex-col gap-1 rounded-lg border border-border bg-card px-4 py-3">
+      <div className="flex items-center gap-1.5 text-muted-foreground">
+        <Icon className="h-3.5 w-3.5" />
+        <span className="text-xs">{label}</span>
+      </div>
+      <span className="text-2xl font-semibold tracking-tight text-foreground">
+        {value}
+      </span>
+    </div>
+  );
+
+  if (href) {
+    return (
+      <Link
+        href={href}
+        className="transition-standard hover:opacity-80"
+      >
+        {inner}
+      </Link>
+    );
+  }
+  return inner;
 }

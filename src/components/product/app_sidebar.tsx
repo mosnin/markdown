@@ -2,16 +2,9 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import {
-  Archive,
-  BookOpen,
-  Box,
-  ChevronRight,
-  FolderOpen,
-  Home,
-  Settings,
-} from "lucide-react";
+import { Archive, Box, Home, Plus, Settings } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { type Box as BoxType } from "@/server/domain/types/box";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import {
@@ -22,24 +15,14 @@ import {
 import { ThemeToggle } from "@/components/product/theme_toggle";
 import { UserMenu } from "@/components/product/user_menu";
 
-// ─── Navigation items ────────────────────────────────────────────────────────
+// ─── Nav items ────────────────────────────────────────────────────────────────
 
 const primaryNav = [
   { label: "Home", href: "/app", icon: Home },
-  { label: "Workspaces", href: "/app/workspaces", icon: Archive },
+  { label: "Workspace", href: "/app/workspaces", icon: Archive },
 ];
 
-// Stub workspace tree — replaced with real data in a later prompt.
-const stubWorkspace = {
-  label: "Personal",
-  boxes: [
-    { id: "box-1", label: "Research", icon: Box },
-    { id: "box-2", label: "Projects", icon: FolderOpen },
-    { id: "box-3", label: "Guides", icon: BookOpen },
-  ],
-};
-
-// ─── Nav item link styles ─────────────────────────────────────────────────────
+// ─── Styles ───────────────────────────────────────────────────────────────────
 
 function navItemClass(isActive: boolean) {
   return cn(
@@ -51,7 +34,7 @@ function navItemClass(isActive: boolean) {
   );
 }
 
-// ─── Rail nav item ────────────────────────────────────────────────────────────
+// ─── Nav item ─────────────────────────────────────────────────────────────────
 
 function NavItem({
   href,
@@ -66,7 +49,6 @@ function NavItem({
 }) {
   return (
     <Tooltip>
-      {/* Base UI Tooltip: use render prop instead of asChild */}
       <TooltipTrigger
         render={<Link href={href} className={navItemClass(isActive)} />}
       >
@@ -82,20 +64,10 @@ function NavItem({
 
 // ─── Box nav item ─────────────────────────────────────────────────────────────
 
-function BoxNavItem({
-  id,
-  label,
-  icon: Icon,
-  isActive,
-}: {
-  id: string;
-  label: string;
-  icon: React.ElementType;
-  isActive: boolean;
-}) {
+function BoxNavItem({ box, isActive }: { box: BoxType; isActive: boolean }) {
   return (
     <Link
-      href={`/app/boxes/${id}`}
+      href={`/app/boxes/${box.id}`}
       className={cn(
         "flex items-center gap-2 rounded-md px-2.5 py-1.5 text-sm transition-fast",
         "hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
@@ -104,8 +76,8 @@ function BoxNavItem({
           : "text-sidebar-foreground/60"
       )}
     >
-      <Icon className="h-3.5 w-3.5 shrink-0" />
-      <span className="truncate">{label}</span>
+      <Box className="h-3.5 w-3.5 shrink-0" />
+      <span className="truncate">{box.name}</span>
     </Link>
   );
 }
@@ -113,14 +85,16 @@ function BoxNavItem({
 // ─── Sidebar ──────────────────────────────────────────────────────────────────
 
 interface AppSidebarProps {
-  /**
-   * Authenticated user's email, passed from the server layout.
-   * Rendered in the user menu at the bottom of the sidebar.
-   */
   userEmail?: string;
+  workspaceName?: string;
+  boxes?: BoxType[];
 }
 
-export function AppSidebar({ userEmail }: AppSidebarProps) {
+export function AppSidebar({
+  userEmail,
+  workspaceName = "My Workspace",
+  boxes = [],
+}: AppSidebarProps) {
   const pathname = usePathname();
 
   return (
@@ -155,30 +129,40 @@ export function AppSidebar({ userEmail }: AppSidebarProps) {
 
       <Separator className="mx-2 my-1 bg-sidebar-border" />
 
-      {/* Workspace tree */}
+      {/* Workspace boxes */}
       <ScrollArea className="flex-1 px-2 py-1">
-        <div className="mb-1 flex items-center gap-1 px-2.5 py-1">
-          <ChevronRight className="h-3 w-3 text-sidebar-foreground/40" />
+        <div className="mb-1 flex items-center justify-between px-2.5 py-1">
           <span className="text-xs font-medium uppercase tracking-wider text-sidebar-foreground/40">
-            {stubWorkspace.label}
+            {workspaceName}
           </span>
+          <Link
+            href="/app/workspaces"
+            className="rounded p-0.5 text-sidebar-foreground/40 transition-fast hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+            title="Workspace"
+          >
+            <Plus className="h-3 w-3" />
+          </Link>
         </div>
-        <nav className="flex flex-col gap-0.5">
-          {stubWorkspace.boxes.map((box) => (
-            <BoxNavItem
-              key={box.id}
-              id={box.id}
-              label={box.label}
-              icon={box.icon}
-              isActive={pathname === `/app/boxes/${box.id}`}
-            />
-          ))}
-        </nav>
+
+        {boxes.length === 0 ? (
+          <p className="px-2.5 py-2 text-xs text-sidebar-foreground/40">
+            No boxes yet
+          </p>
+        ) : (
+          <nav className="flex flex-col gap-0.5">
+            {boxes.map((box) => (
+              <BoxNavItem
+                key={box.id}
+                box={box}
+                isActive={pathname === `/app/boxes/${box.id}` || pathname.startsWith(`/app/boxes/${box.id}/`)}
+              />
+            ))}
+          </nav>
+        )}
       </ScrollArea>
 
       {/* Bottom chrome */}
       <div className="border-t border-sidebar-border">
-        {/* Settings + theme toggle row */}
         <div className="flex items-center justify-between px-3 py-2">
           <Link
             href="/app/settings"
@@ -194,7 +178,6 @@ export function AppSidebar({ userEmail }: AppSidebarProps) {
           <ThemeToggle />
         </div>
 
-        {/* User menu row */}
         {userEmail && (
           <div className="border-t border-sidebar-border px-2 py-2">
             <UserMenu email={userEmail} />

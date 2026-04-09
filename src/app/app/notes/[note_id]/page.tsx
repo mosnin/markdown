@@ -1,41 +1,55 @@
-import { BookOpen, ChevronRight, Clock, FileText } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { notFound } from "next/navigation";
+import { ChevronRight, Clock, GitBranch } from "lucide-react";
+import Link from "next/link";
+import { requireAuthenticatedUser } from "@/server/auth/require_authenticated_user";
+import { createClient } from "@/lib/supabase/server";
+import { getNoteById } from "@/server/repositories/note_repository";
+import { getBoxById } from "@/server/repositories/box_repository";
+import { getFolderById } from "@/server/repositories/folder_repository";
+import { NoteEditor } from "@/components/product/note_editor";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { AppShell } from "@/components/product/app_shell";
-import { MetadataPanelStub } from "@/components/product/metadata_panel_stub";
-import { PageHeader } from "@/components/product/page_header";
 
-// ─── Stub data ───────────────────────────────────────────────────────────────
+function formatDate(dateStr: string): string {
+  return new Date(dateStr).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
 
-const stubNote = {
-  id: "note-1",
-  title: "The Almanack of Naval Ravikant",
-  kind: "note" as const,
-  box: "Research",
-  workspace: "Personal",
-  folder: "Reading notes",
-  updatedAt: "2 days ago",
-  createdAt: "2 weeks ago",
-  tags: ["books", "wealth", "thinking"],
-  wordCount: 1240,
-  excerpt: `Notes from reading The Almanack of Naval Ravikant, a collection of Naval's wisdom on wealth, happiness, and philosophy.
+function formatRelativeDate(dateStr: string): string {
+  const now = new Date();
+  const d = new Date(dateStr);
+  const diffDays = Math.floor((now.getTime() - d.getTime()) / 86400000);
+  if (diffDays === 0) return "Today";
+  if (diffDays === 1) return "Yesterday";
+  if (diffDays < 7) return `${diffDays} days ago`;
+  return formatDate(dateStr);
+}
 
-## Key ideas
+// ─── Right panel ──────────────────────────────────────────────────────────────
 
-- Specific knowledge is knowledge you cannot be trained for. If society can train you, they can train someone else and replace you.
-- Leverage comes from labour, capital, code, and media. Code and media are permissionless levers.
-- Play long-term games with long-term people. Long-term games have compounding returns.
+function NoteMetaPanel({
+  note,
+  boxName,
+  folderName,
+  workspaceName,
+}: {
+  note: NonNullable<Awaited<ReturnType<typeof getNoteById>>>;
+  boxName: string;
+  folderName: string | null;
+  workspaceName: string;
+}) {
+  const kindLabel: Record<string, string> = {
+    note: "Note",
+    guide: "Guide",
+    bundle: "Bundle",
+  };
 
-## On reading
-
-Read what you love until you love to read. Reading is not a race to finish books. It is a habit of returning to ideas.`,
-};
-
-// ─── Right panel ─────────────────────────────────────────────────────────────
-
-function NoteMetadataPanel() {
   return (
     <div className="flex h-full flex-col overflow-hidden">
       <div className="border-b border-border px-4 py-3">
@@ -44,147 +58,228 @@ function NoteMetadataPanel() {
         </p>
       </div>
       <ScrollArea className="flex-1">
-        <MetadataPanelStub
-          title={stubNote.title}
-          kind={stubNote.kind}
-          tags={stubNote.tags}
-          metadata={[
-            { label: "Workspace", value: stubNote.workspace },
-            { label: "Box", value: stubNote.box },
-            { label: "Folder", value: stubNote.folder },
-            { label: "Created", value: stubNote.createdAt },
-            { label: "Updated", value: stubNote.updatedAt },
-          ]}
-        />
+        {/* Identity */}
+        <div className="border-b border-border px-4 py-3">
+          <p className="text-[10px] uppercase tracking-wider text-muted-foreground/60">
+            {kindLabel[note.kind] ?? note.kind}
+          </p>
+          <p className="mt-0.5 line-clamp-3 text-sm font-medium text-foreground">
+            {note.title}
+          </p>
+        </div>
+
+        {/* Tags */}
+        {note.tags.length > 0 && (
+          <div className="border-b border-border px-4 py-3">
+            <p className="mb-2 text-[10px] uppercase tracking-wider text-muted-foreground/60">
+              Tags
+            </p>
+            <div className="flex flex-wrap gap-1">
+              {note.tags.map((tag) => (
+                <Badge key={tag} variant="secondary" className="text-xs font-normal">
+                  {tag}
+                </Badge>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Location */}
+        <div className="border-b border-border px-4 py-3">
+          <p className="mb-2 text-[10px] uppercase tracking-wider text-muted-foreground/60">
+            Location
+          </p>
+          <div className="flex flex-col gap-1 text-xs">
+            <MetaRow label="Workspace" value={workspaceName} />
+            <MetaRow
+              label="Box"
+              value={boxName}
+              href={`/app/boxes/${note.box_id}`}
+            />
+            {folderName && <MetaRow label="Folder" value={folderName} />}
+          </div>
+        </div>
+
+        {/* Version info */}
+        <div className="border-b border-border px-4 py-3">
+          <p className="mb-2 text-[10px] uppercase tracking-wider text-muted-foreground/60">
+            Version
+          </p>
+          <div className="flex flex-col gap-1 text-xs">
+            <div className="flex items-start gap-2 py-0.5">
+              <GitBranch className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground/60" />
+              <div>
+                <p className="text-[10px] uppercase tracking-wider text-muted-foreground/60">
+                  Current version
+                </p>
+                <p className="font-mono text-[11px] text-foreground/80">
+                  {note.current_version_id
+                    ? note.current_version_id.slice(0, 8) + "…"
+                    : "—"}
+                </p>
+              </div>
+            </div>
+            <div className="flex items-start gap-2 py-0.5">
+              <Clock className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground/60" />
+              <div>
+                <p className="text-[10px] uppercase tracking-wider text-muted-foreground/60">
+                  Last updated
+                </p>
+                <p className="text-foreground/80">
+                  {formatRelativeDate(note.updated_at)}
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Summary */}
+        {note.summary && (
+          <div className="px-4 py-3">
+            <p className="mb-2 text-[10px] uppercase tracking-wider text-muted-foreground/60">
+              Summary
+            </p>
+            <p className="text-xs text-foreground/80 leading-relaxed">
+              {note.summary}
+            </p>
+          </div>
+        )}
+
+        {/* Read hint */}
+        {note.read_hint && (
+          <div className="px-4 py-3">
+            <p className="mb-2 text-[10px] uppercase tracking-wider text-muted-foreground/60">
+              Read hint
+            </p>
+            <p className="text-xs text-muted-foreground italic leading-relaxed">
+              {note.read_hint}
+            </p>
+          </div>
+        )}
       </ScrollArea>
     </div>
   );
 }
 
-// ─── Breadcrumb ──────────────────────────────────────────────────────────────
+function MetaRow({
+  label,
+  value,
+  href,
+}: {
+  label: string;
+  value: string;
+  href?: string;
+}) {
+  return (
+    <div className="flex items-start gap-2 py-0.5">
+      <div className="min-w-0 flex-1">
+        <p className="text-[10px] uppercase tracking-wider text-muted-foreground/60">
+          {label}
+        </p>
+        {href ? (
+          <Link
+            href={href}
+            className="text-foreground/80 hover:text-foreground hover:underline underline-offset-2"
+          >
+            {value}
+          </Link>
+        ) : (
+          <p className="text-foreground/80">{value}</p>
+        )}
+      </div>
+    </div>
+  );
+}
 
-function Breadcrumb() {
-  const parts = [stubNote.workspace, stubNote.box, stubNote.folder];
+// ─── Breadcrumb ───────────────────────────────────────────────────────────────
+
+function Breadcrumb({
+  workspaceName,
+  boxId,
+  boxName,
+  folderName,
+}: {
+  workspaceName: string;
+  boxId: string;
+  boxName: string;
+  folderName: string | null;
+}) {
+  const parts = [
+    { label: workspaceName, href: "/app/workspaces" },
+    { label: boxName, href: `/app/boxes/${boxId}` },
+    ...(folderName ? [{ label: folderName, href: null }] : []),
+  ];
+
   return (
     <div className="flex items-center gap-1 text-xs text-muted-foreground">
       {parts.map((part, i) => (
-        <span key={part} className="flex items-center gap-1">
+        <span key={part.label} className="flex items-center gap-1">
           {i > 0 && <ChevronRight className="h-3 w-3" />}
-          <span>{part}</span>
+          {part.href ? (
+            <Link
+              href={part.href}
+              className="hover:text-foreground hover:underline underline-offset-2"
+            >
+              {part.label}
+            </Link>
+          ) : (
+            <span>{part.label}</span>
+          )}
         </span>
       ))}
     </div>
   );
 }
 
-// ─── Placeholder content body ─────────────────────────────────────────────────
+// ─── Page ─────────────────────────────────────────────────────────────────────
 
-function NoteBody({ content }: { content: string }) {
-  return (
-    <div className="prose prose-sm prose-neutral dark:prose-invert max-w-none">
-      {content.split("\n\n").map((block, i) => {
-        if (block.startsWith("## ")) {
-          return (
-            <h2
-              key={i}
-              className="mt-6 mb-2 text-base font-semibold tracking-tight text-foreground"
-            >
-              {block.replace("## ", "")}
-            </h2>
-          );
-        }
-        if (block.startsWith("- ")) {
-          const items = block.split("\n").filter((l) => l.startsWith("- "));
-          return (
-            <ul key={i} className="my-2 ml-4 space-y-1.5 text-sm text-foreground/80">
-              {items.map((item, j) => (
-                <li key={j} className="list-disc">
-                  {item.replace("- ", "")}
-                </li>
-              ))}
-            </ul>
-          );
-        }
-        return (
-          <p key={i} className="my-2 text-sm leading-relaxed text-foreground/80">
-            {block}
-          </p>
-        );
-      })}
-    </div>
-  );
-}
-
-// ─── Page ────────────────────────────────────────────────────────────────────
-
-export default function NotePage({
+export default async function NotePage({
   params,
 }: {
   params: Promise<{ note_id: string }>;
 }) {
-  void params; // note_id used for data fetching in a later prompt
+  const { note_id } = await params;
+  const ctx = await requireAuthenticatedUser();
+  const supabase = await createClient();
+
+  // Load note and verify ownership via its box
+  const note = await getNoteById(supabase, note_id);
+  if (!note) notFound();
+
+  const box = await getBoxById(supabase, note.box_id);
+  if (!box || box.workspace_id !== ctx.workspace.id) notFound();
+
+  const folder = note.folder_id
+    ? await getFolderById(supabase, note.folder_id)
+    : null;
 
   return (
-    <AppShell rightPanel={<NoteMetadataPanel />}>
-      <div className="flex h-full flex-col overflow-hidden">
-        <PageHeader
-          title={stubNote.title}
-          eyebrow={`${stubNote.box} / ${stubNote.folder}`}
-          actions={
-            <Button variant="outline" size="sm">
-              Edit
-            </Button>
-          }
-        />
+    <div className="flex h-full overflow-hidden">
+      {/* Main editing area */}
+      <div className="flex flex-1 flex-col overflow-hidden">
+        {/* Breadcrumb header */}
+        <div className="flex items-center gap-3 border-b border-border px-6 py-3">
+          <Breadcrumb
+            workspaceName={ctx.workspace.name}
+            boxId={box.id}
+            boxName={box.name}
+            folderName={folder?.name ?? null}
+          />
+        </div>
 
-        <ScrollArea className="flex-1">
-          <div className="mx-auto max-w-2xl px-6 py-6">
-            {/* Meta bar */}
-            <div className="mb-6 flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
-              <Breadcrumb />
-              <Separator orientation="vertical" className="h-3" />
-              <div className="flex items-center gap-1">
-                {stubNote.kind === "note" ? (
-                  <FileText className="h-3 w-3" />
-                ) : (
-                  <BookOpen className="h-3 w-3" />
-                )}
-                <span className="capitalize">{stubNote.kind}</span>
-              </div>
-              <Separator orientation="vertical" className="h-3" />
-              <div className="flex items-center gap-1">
-                <Clock className="h-3 w-3" />
-                <span>Updated {stubNote.updatedAt}</span>
-              </div>
-              <Separator orientation="vertical" className="h-3" />
-              <span>{stubNote.wordCount.toLocaleString()} words</span>
-            </div>
-
-            {/* Tags */}
-            {stubNote.tags.length > 0 && (
-              <div className="mb-6 flex flex-wrap gap-1.5">
-                {stubNote.tags.map((tag) => (
-                  <Badge key={tag} variant="secondary" className="text-xs font-normal">
-                    {tag}
-                  </Badge>
-                ))}
-              </div>
-            )}
-
-            <Separator className="mb-6" />
-
-            {/* Note content — placeholder rendering, no editor yet */}
-            <div className="rounded-lg border border-dashed border-border/60 bg-muted/20 px-4 py-3 mb-6">
-              <p className="text-xs text-muted-foreground">
-                Note editor placeholder — markdown rendering and editing
-                will be wired in a later prompt.
-              </p>
-            </div>
-
-            <NoteBody content={stubNote.excerpt} />
-          </div>
-        </ScrollArea>
+        {/* Editor fills the remaining space */}
+        <NoteEditor note={note} />
       </div>
-    </AppShell>
+
+      {/* Right metadata panel */}
+      <aside className="hidden lg:flex lg:h-full lg:w-72 lg:shrink-0 lg:flex-col lg:border-l lg:border-border lg:bg-background">
+        <NoteMetaPanel
+          note={note}
+          boxName={box.name}
+          folderName={folder?.name ?? null}
+          workspaceName={ctx.workspace.name}
+        />
+      </aside>
+    </div>
   );
 }

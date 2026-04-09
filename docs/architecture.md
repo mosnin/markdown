@@ -204,17 +204,45 @@ src/server/
 │   ├── connection_repository.ts
 │   └── write_proposal_repository.ts
 ├── services/                           Business logic layer
-│   └── workspace_bootstrap/
-│       └── get_or_create_default_workspace.ts   V1 workspace bootstrapping
+│   ├── workspace_bootstrap/
+│   │   └── get_or_create_default_workspace.ts
+│   ├── audit_service.ts                Audit event helpers (append-only, fire-and-forget)
+│   ├── box_service.ts                  Box CRUD, slug generation, ownership checks
+│   ├── folder_service.ts               Folder CRUD, path_cache derivation and cascade
+│   ├── note_service.ts                 Note create/update via atomic RPC functions
+│   └── guide_service.ts                Guide note assign/clear (boxes.guide_note_id)
 ├── api/                                (future) Route handler layer
 ├── policies/                           (future) Authorization checks
-├── resolvers/                          (future) Server Actions
 └── mcp/                                (future) MCP server implementation
 ```
+
+## Atomicity: note versioning
+
+Note creation and editing are the only operations that require strict atomicity.
+Both go through Postgres RPC functions defined in migration `20260409000003`:
+
+- `create_note_with_initial_version(...)` — inserts note + version_1 + updates `current_version_id` in one transaction
+- `update_note_and_create_version(...)` — inserts a new version + updates note content and `current_version_id` in one transaction
+
+`note_service.ts` calls these via `supabase.rpc()`. Application-layer retry is not used — the function either succeeds atomically or throws.
+
+## Page layout pattern
+
+Pages that need a right panel (box, note) use an inline flex layout rather than
+AppShell's `rightPanel` prop:
+
+```tsx
+<div className="flex h-full overflow-hidden">
+  <div className="flex-1 flex-col overflow-hidden">…main…</div>
+  <aside className="hidden lg:flex lg:w-72 lg:border-l">…panel…</aside>
+</div>
+```
+
+The AppShell in the layout provides only the sidebar. Pages own their own panel space.
 
 ## Future prompts will add
 
 - `src/server/api/` — REST endpoints
 - `src/server/mcp/` — MCP tools and resources
 - `src/server/policies/` — authorization checks
-- UI flows for creating and navigating workspaces, boxes, and notes
+- Note links, search, context bundles, connection management

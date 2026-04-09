@@ -322,9 +322,33 @@ Hard deletes are not issued by application code. Future retention/purge jobs may
 |---|---|
 | `supabase/migrations/20260409000001_core_schema.sql` | All 11 tables, indexes, triggers, helper functions |
 | `supabase/migrations/20260409000002_rls_policies.sql` | RLS enable + all policies |
+| `supabase/migrations/20260409000003_note_rpc_functions.sql` | Atomic note create and update RPC functions |
 
 Circular FK references are resolved in the schema migration using `ALTER TABLE ... ADD CONSTRAINT` after both tables exist:
 
 - `boxes.guide_note_id → notes`
 - `notes.current_version_id → note_versions`
 - `notes.generated_by_connection_id → connections`
+
+## Atomic Note Operations
+
+Note creation and editing use Postgres RPC functions to guarantee atomicity:
+
+### `create_note_with_initial_version`
+
+1. `INSERT INTO notes` (current_version_id = NULL)
+2. `INSERT INTO note_versions` (version_number = 1, no parent)
+3. `UPDATE notes SET current_version_id = <new version id>`
+
+Returns `jsonb: { note: {...}, version: {...} }`
+
+### `update_note_and_create_version`
+
+1. `SELECT * FROM notes WHERE id = p_note_id` (RLS blocks if not owned)
+2. Compute `MAX(version_number) + 1`
+3. `INSERT INTO note_versions` (parent = current_version_id)
+4. `UPDATE notes` content fields + `current_version_id`
+
+Returns `jsonb: { note: {...}, version: {...} }`
+
+Both functions are `SECURITY INVOKER` — RLS policies from the calling user's JWT apply normally.
