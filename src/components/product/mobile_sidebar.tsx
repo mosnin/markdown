@@ -10,6 +10,7 @@ import {
   Inbox,
   Menu,
   Plus,
+  Search,
   Settings,
   X,
 } from "lucide-react";
@@ -37,6 +38,7 @@ import { TreeSidebar } from "@/components/product/tree_sidebar";
 
 const primaryNav = [
   { label: "Home", href: "/app", icon: Home },
+  { label: "Search", href: "/app/search", icon: Search },
   { label: "Workspace", href: "/app/workspaces", icon: Archive },
   { label: "Proposals", href: "/app/proposals", icon: Inbox },
   { label: "Audit log", href: "/app/audit", icon: ClipboardList },

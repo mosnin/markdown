@@ -11,6 +11,7 @@ import {
   Folder,
   Loader2,
   Package,
+  Plus,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { getBoxTreeAction } from "@/app/app/boxes/actions";
@@ -79,6 +80,29 @@ function buildTree(data: BoxTreeData): { rootFolders: TreeFolderNode[]; rootNote
   return { rootFolders, rootNotes };
 }
 
+// ─── Collect all folder IDs that are ancestors of a note ─────────────────────
+
+function collectAncestorFolderIds(
+  data: BoxTreeData,
+  noteId: string
+): Set<string> {
+  const note = data.notes.find((n) => n.id === noteId);
+  if (!note?.folder_id) return new Set();
+
+  const parentMap = new Map<string, string | null>();
+  for (const f of data.folders) {
+    parentMap.set(f.id, f.parent_folder_id);
+  }
+
+  const ancestors = new Set<string>();
+  let current: string | null = note.folder_id;
+  while (current) {
+    ancestors.add(current);
+    current = parentMap.get(current) ?? null;
+  }
+  return ancestors;
+}
+
 // ─── Note icon ────────────────────────────────────────────────────────────────
 
 function noteIcon(kind: string) {
@@ -112,7 +136,7 @@ function NoteRow({
           ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium"
           : "text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
       )}
-      style={{ paddingLeft: `${0.75 + depth * 0.875}rem` }}
+      style={{ paddingLeft: `${0.625 + depth * 0.875}rem` }}
       aria-current={isActive ? "page" : undefined}
     >
       <Icon className="h-3 w-3 shrink-0" aria-hidden="true" />
@@ -121,46 +145,91 @@ function NoteRow({
   );
 }
 
-// ─── Folder node ──────────────────────────────────────────────────────────────
+// ─── Folder node (collapsible) ────────────────────────────────────────────────
 
 function FolderNode({
   folder,
   depth,
   currentNoteId,
+  defaultOpen,
   onNavigate,
 }: {
   folder: TreeFolderNode;
   depth: number;
   currentNoteId?: string;
+  /** Whether this folder should be open by default (e.g., it's an ancestor of the active note) */
+  defaultOpen?: boolean;
   onNavigate?: () => void;
 }) {
+  const [isOpen, setIsOpen] = useState(defaultOpen ?? false);
+  const Chevron = isOpen ? ChevronDown : ChevronRight;
+  const hasChildren = folder.children.length > 0 || folder.notes.length > 0;
+
   return (
     <div>
+      {/* Folder header row */}
       <div
-        className="flex items-center gap-1.5 rounded-md py-1 pr-2 text-xs text-sidebar-foreground/70"
-        style={{ paddingLeft: `${0.75 + depth * 0.875}rem` }}
+        className="group flex items-center gap-0.5"
+        style={{ paddingLeft: `${0.625 + depth * 0.875}rem` }}
       >
-        <Folder className="h-3 w-3 shrink-0 text-sidebar-foreground/50" aria-hidden="true" />
-        <span className="truncate font-medium">{folder.name}</span>
+        {/* Chevron toggle — always present for alignment; non-interactive if empty */}
+        <button
+          type="button"
+          onClick={() => hasChildren && setIsOpen((o) => !o)}
+          className={cn(
+            "flex h-5 w-5 shrink-0 items-center justify-center rounded transition-fast",
+            hasChildren
+              ? "text-sidebar-foreground/40 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground cursor-pointer"
+              : "text-sidebar-foreground/20 cursor-default",
+            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          )}
+          aria-label={isOpen ? `Collapse ${folder.name}` : `Expand ${folder.name}`}
+          aria-expanded={hasChildren ? isOpen : undefined}
+          tabIndex={hasChildren ? 0 : -1}
+        >
+          <Chevron className="h-2.5 w-2.5" aria-hidden="true" />
+        </button>
+
+        {/* Folder name */}
+        <button
+          type="button"
+          onClick={() => hasChildren && setIsOpen((o) => !o)}
+          className={cn(
+            "flex flex-1 items-center gap-1.5 rounded-md px-1 py-1 text-xs transition-fast min-w-0",
+            hasChildren
+              ? "text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground cursor-pointer"
+              : "text-sidebar-foreground/50 cursor-default",
+            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          )}
+        >
+          <Folder className="h-3 w-3 shrink-0 text-sidebar-foreground/50" aria-hidden="true" />
+          <span className="truncate font-medium">{folder.name}</span>
+        </button>
       </div>
-      {folder.notes.map((note) => (
-        <NoteRow
-          key={note.id}
-          note={note}
-          depth={depth + 1}
-          isActive={note.id === currentNoteId}
-          onNavigate={onNavigate}
-        />
-      ))}
-      {folder.children.map((child) => (
-        <FolderNode
-          key={child.id}
-          folder={child}
-          depth={depth + 1}
-          currentNoteId={currentNoteId}
-          onNavigate={onNavigate}
-        />
-      ))}
+
+      {/* Children — shown when folder is open */}
+      {isOpen && (
+        <div>
+          {folder.notes.map((note) => (
+            <NoteRow
+              key={note.id}
+              note={note}
+              depth={depth + 1}
+              isActive={note.id === currentNoteId}
+              onNavigate={onNavigate}
+            />
+          ))}
+          {folder.children.map((child) => (
+            <FolderNode
+              key={child.id}
+              folder={child}
+              depth={depth + 1}
+              currentNoteId={currentNoteId}
+              onNavigate={onNavigate}
+            />
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -178,6 +247,7 @@ function BoxTree({
 }) {
   const { rootFolders, rootNotes } = buildTree(data);
   const empty = rootFolders.length === 0 && rootNotes.length === 0;
+  const ancestorIds = currentNoteId ? collectAncestorFolderIds(data, currentNoteId) : new Set<string>();
 
   if (empty) {
     return (
@@ -195,6 +265,7 @@ function BoxTree({
           folder={folder}
           depth={1}
           currentNoteId={currentNoteId}
+          defaultOpen={ancestorIds.has(folder.id)}
           onNavigate={onNavigate}
         />
       ))}
@@ -237,7 +308,7 @@ function BoxRow({
   return (
     <div>
       {/* Box header row */}
-      <div className="flex items-center gap-0.5">
+      <div className="group flex items-center gap-0.5 pr-1">
         {/* Chevron toggle */}
         <button
           type="button"
@@ -263,7 +334,7 @@ function BoxRow({
           onClick={onNavigate}
           aria-current={isBoxActive ? "page" : undefined}
           className={cn(
-            "flex flex-1 items-center gap-1.5 rounded-md px-1.5 py-1 text-sm transition-fast",
+            "flex flex-1 min-w-0 items-center gap-1.5 rounded-md px-1.5 py-1 text-sm transition-fast",
             "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
             isBoxActive
               ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium"
@@ -272,6 +343,21 @@ function BoxRow({
         >
           <Box className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
           <span className="truncate">{box.name}</span>
+        </Link>
+
+        {/* Hover-revealed quick-create link — navigates to box page where dialogs live */}
+        <Link
+          href={`/app/boxes/${box.id}`}
+          onClick={onNavigate}
+          aria-label={`Create in ${box.name}`}
+          className={cn(
+            "flex h-5 w-5 shrink-0 items-center justify-center rounded opacity-0 transition-fast",
+            "group-hover:opacity-100",
+            "text-sidebar-foreground/40 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:opacity-100"
+          )}
+        >
+          <Plus className="h-3 w-3" aria-hidden="true" />
         </Link>
       </div>
 
@@ -299,7 +385,6 @@ function BoxRow({
 
 export function TreeSidebar({
   boxes,
-  workspaceName,
   currentNoteId,
   currentBoxId,
   onNavigate,
@@ -319,7 +404,6 @@ export function TreeSidebar({
     // Fetch tree data if not already loaded
     setTreeData((prev) => {
       if (prev.has(activeBoxId)) return prev;
-      // Trigger fetch
       fetchTree(activeBoxId);
       return prev;
     });
