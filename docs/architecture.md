@@ -219,7 +219,19 @@ src/server/
 │   └── context_bundle_service.ts       Deterministic context bundle assembly
 ├── api/                                (future) Route handler layer
 ├── policies/                           (future) Authorization checks
-└── mcp/                                (future) MCP server implementation
+└── mcp/                                MCP server (stdio, 9 read tools, proxies canonical API)
+    ├── index.ts                        Entrypoint — StdioServerTransport
+    ├── server.ts                       McpServer factory
+    ├── config.ts                       Env validation
+    ├── errors.ts                       ApiError + error mapper
+    ├── client/
+    │   └── canonical_api_client.ts     HTTP client for /api/v1 routes
+    └── tools/
+        ├── register_tools.ts           Central tool registration
+        ├── system_guide.ts             get_system_guide
+        ├── boxes.ts                    list_boxes, get_box_guide, get_box_overview
+        ├── notes.ts                    list_folder_contents, get_note, get_linked_notes, search_notes
+        └── bundles.ts                  get_context_bundle
 ```
 
 ## Atomicity: note versioning
@@ -344,8 +356,21 @@ src/components/product/
 └── connections_panel.tsx      ConnectionsPanel (create, list, rotate, revoke)
 ```
 
+## MCP server
+
+See [docs/mcp_v1.md](mcp_v1.md) for the full MCP architecture.
+
+- Read-only, stateless stdio MCP server
+- 9 tools matching the 9 canonical read endpoints
+- Proxies all calls to the running Next.js app over HTTP — no direct DB access
+- Auth via connection bearer token (`csk_v1_...`) — same as the external API
+
+```
+pnpm mcp       # run with tsx (dev)
+pnpm build:mcp # compile to dist/mcp/ (prod)
+```
+
 ## Future prompts will add
 
-- `src/server/mcp/` — MCP server implementation
 - `src/server/policies/` — authorization checks
 - Write proposals
