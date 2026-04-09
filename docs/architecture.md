@@ -298,9 +298,54 @@ src/components/product/
 └── import_dialog.tsx          ImportDialog, ImportTriggerButton (client)
 ```
 
+## External trust boundary (connections + canonical API)
+
+See [docs/connections_v1.md](connections_v1.md) and [docs/canonical_api_v1.md](canonical_api_v1.md).
+
+- Bearer token auth separate from human session auth — `get_connection_context.ts`
+- Admin Supabase client (service role) for token lookup only — `src/lib/supabase/admin.ts`
+- 13 canonical API endpoints under `src/app/api/v1/`
+- Connection management UI in Settings → Connections
+
+```
+src/lib/supabase/
+└── admin.ts                   Admin client factory (service role, bypasses RLS)
+
+src/lib/api/
+└── response.ts                apiOk(), apiError(), E_UNAUTHORIZED, E_FORBIDDEN, etc.
+
+src/server/auth/
+└── get_connection_context.ts  Bearer token → ConnectionRequestContext
+
+src/server/services/
+└── connection_service.ts      createConnection, rotateConnectionToken, revokeConnection, listConnectionsWithScopes
+
+src/app/api/v1/
+├── system_guide/route.ts
+├── boxes/route.ts
+├── boxes/[box_id]/
+│   ├── box_guide/route.ts
+│   ├── box_overview/route.ts
+│   └── folder_contents/route.ts
+├── notes/[note_id]/
+│   ├── route.ts
+│   └── linked_notes/route.ts
+├── search_notes/route.ts
+├── context_bundles/route.ts
+├── export_note/route.ts
+├── export_folder/route.ts
+├── export_box/route.ts
+└── export_context_bundle/route.ts
+
+src/app/app/settings/
+└── connections_actions.ts     Server actions for UI
+
+src/components/product/
+└── connections_panel.tsx      ConnectionsPanel (create, list, rotate, revoke)
+```
+
 ## Future prompts will add
 
-- `src/server/api/` — REST endpoints
-- `src/server/mcp/` — MCP tools and resources
+- `src/server/mcp/` — MCP server implementation
 - `src/server/policies/` — authorization checks
-- Connection management, write proposals
+- Write proposals

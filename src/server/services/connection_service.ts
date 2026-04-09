@@ -1,0 +1,292 @@
+import { randomBytes, createHash } from "node:crypto";
+import { type SupabaseClient } from "@supabase/supabase-js";
+import {
+  type Connection,
+  type ConnectionToken,
+  type ConnectionBoxScope,
+} from "@/server/domain/types/connection";
+import {
+  type ConnectionType,
+  type PermissionMode,
+  CONNECTION_STATUS,
+  TOKEN_STATUS,
+} from "@/server/domain/constants/connection_constants";
+import {
+  createConnection as repoCreateConnection,
+  updateConnection as repoUpdateConnection,
+  getConnectionById,
+  listConnectionsByWorkspace,
+  createConnectionToken,
+  listTokensByConnection,
+  updateConnectionToken,
+  addBoxScope as repoAddBoxScope,
+  removeBoxScope as repoRemoveBoxScope,
+  listBoxScopesByConnection,
+} from "@/server/repositories/connection_repository";
+import {
+  auditConnectionCreated,
+  auditConnectionRevoked,
+  auditConnectionUpdated,
+  auditTokenRotated,
+} from "@/server/services/audit_service";
+
+// ─── Token generation ─────────────────────────────────────────────────────────
+
+/**
+ * Generate a fresh API token.
+ *
+ * Token format shown to the user: csk_v1_<64hex>
+ *   - "csk" = Context Store Key
+ *   - "v1"  = token format version
+ *
+ * Stored in DB:
+ *   - token_prefix: first 8 hex chars — used for fast DB lookup
+ *   - secret_hash:  sha256(<64hex>) — used for constant-time verification
+ *
+ * The raw token is NEVER stored. It is shown to the user exactly once.
+ */
+function generateToken(): {
+  rawToken: string;
+  token_prefix: string;
+  secret_hash: string;
+} {
+  const hex = randomBytes(32).toString("hex"); // 64 hex chars
+  return {
+    rawToken: `csk_v1_${hex}`,
+    token_prefix: hex.slice(0, 8),
+    secret_hash: createHash("sha256").update(hex).digest("hex"),
+  };
+}
+
+// ─── Connection lifecycle ─────────────────────────────────────────────────────
+
+export interface CreateConnectionInput {
+  name: string;
+  description?: string | null;
+  connection_type: ConnectionType;
+  permission_mode: PermissionMode;
+  /** Box IDs to scope this connection to. Empty = no access to any box. */
+  boxIds?: string[];
+}
+
+export interface CreateConnectionResult {
+  connection: Connection;
+  /** The one-time raw token — display to the user and discard. */
+  rawToken: string;
+}
+
+/**
+ * Create a new connection with an initial bearer token.
+ * Returns the raw token — this is the only time it is available.
+ *
+ * Caller must verify that all boxIds belong to the given workspaceId
+ * before calling this function.
+ */
+export async function createConnection(
+  supabase: SupabaseClient,
+  workspaceId: string,
+  actorId: string,
+  input: CreateConnectionInput
+): Promise<CreateConnectionResult> {
+  const connection = await repoCreateConnection(supabase, {
+    workspace_id: workspaceId,
+    name: input.name,
+    description: input.description ?? null,
+    connection_type: input.connection_type,
+    permission_mode: input.permission_mode,
+  });
+
+  const { rawToken, token_prefix, secret_hash } = generateToken();
+  await createConnectionToken(supabase, {
+    connection_id: connection.id,
+    token_prefix,
+    secret_hash,
+    label: "Initial token",
+  });
+
+  if (input.boxIds?.length) {
+    await Promise.all(
+      input.boxIds.map((boxId) => repoAddBoxScope(supabase, connection.id, boxId))
+    );
+  }
+
+  void auditConnectionCreated(supabase, workspaceId, actorId, connection.id, {
+    name: connection.name,
+    permission_mode: connection.permission_mode,
+  });
+
+  return { connection, rawToken };
+}
+
+/**
+ * Rotate the token for a connection.
+ * All existing active tokens are revoked; a new one is generated.
+ * Returns the new raw token — show once and discard.
+ */
+export async function rotateConnectionToken(
+  supabase: SupabaseClient,
+  connectionId: string,
+  workspaceId: string,
+  actorId: string
+): Promise<{ rawToken: string }> {
+  const connection = await getConnectionById(supabase, connectionId);
+  if (!connection || connection.workspace_id !== workspaceId) {
+    throw new Error("Connection not found");
+  }
+  if (connection.status !== CONNECTION_STATUS.ACTIVE) {
+    throw new Error("Connection is not active");
+  }
+
+  const existing = await listTokensByConnection(supabase, connectionId);
+  const now = new Date().toISOString();
+  await Promise.all(
+    existing
+      .filter((t) => t.status === TOKEN_STATUS.ACTIVE)
+      .map((t) =>
+        updateConnectionToken(supabase, t.id, {
+          status: TOKEN_STATUS.REVOKED,
+          revoked_at: now,
+        })
+      )
+  );
+
+  const { rawToken, token_prefix, secret_hash } = generateToken();
+  await createConnectionToken(supabase, {
+    connection_id: connectionId,
+    token_prefix,
+    secret_hash,
+    label: "Rotated token",
+  });
+
+  void auditTokenRotated(supabase, workspaceId, actorId, connectionId);
+
+  return { rawToken };
+}
+
+/**
+ * Revoke a connection.
+ * All active tokens are revoked; the connection status is set to 'revoked'.
+ */
+export async function revokeConnection(
+  supabase: SupabaseClient,
+  connectionId: string,
+  workspaceId: string,
+  actorId: string
+): Promise<void> {
+  const connection = await getConnectionById(supabase, connectionId);
+  if (!connection || connection.workspace_id !== workspaceId) {
+    throw new Error("Connection not found");
+  }
+
+  const now = new Date().toISOString();
+  const tokens = await listTokensByConnection(supabase, connectionId);
+  await Promise.all(
+    tokens
+      .filter((t) => t.status === TOKEN_STATUS.ACTIVE)
+      .map((t) =>
+        updateConnectionToken(supabase, t.id, {
+          status: TOKEN_STATUS.REVOKED,
+          revoked_at: now,
+        })
+      )
+  );
+
+  await repoUpdateConnection(supabase, connectionId, {
+    status: CONNECTION_STATUS.REVOKED,
+  });
+
+  void auditConnectionRevoked(supabase, workspaceId, actorId, connectionId, {
+    name: connection.name,
+  });
+}
+
+/**
+ * Update connection metadata (name, description, permission_mode).
+ * Does not affect tokens or box scopes.
+ */
+export async function updateConnectionMeta(
+  supabase: SupabaseClient,
+  connectionId: string,
+  workspaceId: string,
+  actorId: string,
+  input: {
+    name?: string;
+    description?: string | null;
+    permission_mode?: PermissionMode;
+  }
+): Promise<Connection> {
+  const connection = await getConnectionById(supabase, connectionId);
+  if (!connection || connection.workspace_id !== workspaceId) {
+    throw new Error("Connection not found");
+  }
+
+  const updated = await repoUpdateConnection(supabase, connectionId, input);
+  if (!updated) throw new Error("Failed to update connection");
+
+  void auditConnectionUpdated(supabase, workspaceId, actorId, connectionId, {
+    name: updated.name,
+  });
+
+  return updated;
+}
+
+// ─── Box scope management ─────────────────────────────────────────────────────
+
+/**
+ * Add a box scope to a connection.
+ * Caller must verify the box belongs to workspaceId first.
+ */
+export async function addConnectionBoxScope(
+  supabase: SupabaseClient,
+  connectionId: string,
+  workspaceId: string,
+  boxId: string
+): Promise<ConnectionBoxScope> {
+  const connection = await getConnectionById(supabase, connectionId);
+  if (!connection || connection.workspace_id !== workspaceId) {
+    throw new Error("Connection not found");
+  }
+  return repoAddBoxScope(supabase, connectionId, boxId);
+}
+
+/**
+ * Remove a box scope from a connection.
+ */
+export async function removeConnectionBoxScope(
+  supabase: SupabaseClient,
+  connectionId: string,
+  workspaceId: string,
+  boxId: string
+): Promise<void> {
+  const connection = await getConnectionById(supabase, connectionId);
+  if (!connection || connection.workspace_id !== workspaceId) {
+    throw new Error("Connection not found");
+  }
+  await repoRemoveBoxScope(supabase, connectionId, boxId);
+}
+
+// ─── Queries ──────────────────────────────────────────────────────────────────
+
+export interface ConnectionWithScopes extends Connection {
+  box_scopes: ConnectionBoxScope[];
+}
+
+/**
+ * List all non-revoked connections for a workspace, with their box scopes.
+ */
+export async function listConnectionsWithScopes(
+  supabase: SupabaseClient,
+  workspaceId: string,
+  { includeRevoked = false }: { includeRevoked?: boolean } = {}
+): Promise<ConnectionWithScopes[]> {
+  const connections = await listConnectionsByWorkspace(supabase, workspaceId, {
+    includeRevoked,
+  });
+
+  return Promise.all(
+    connections.map(async (conn) => {
+      const box_scopes = await listBoxScopesByConnection(supabase, conn.id);
+      return { ...conn, box_scopes };
+    })
+  );
+}

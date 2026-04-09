@@ -244,3 +244,75 @@ export function auditGuideNoteCleared(
 ): Promise<void> {
   return write(supabase, workspaceId, actorId, "box", boxId, "guide_note.cleared", {});
 }
+
+// ─── Connection events ────────────────────────────────────────────────────────
+
+export function auditConnectionCreated(
+  supabase: SupabaseClient,
+  workspaceId: string,
+  actorId: string,
+  connectionId: string,
+  metadata: { name: string; permission_mode: string }
+): Promise<void> {
+  return write(
+    supabase,
+    workspaceId,
+    actorId,
+    "connection",
+    connectionId,
+    "connection.created",
+    metadata
+  );
+}
+
+export function auditConnectionRevoked(
+  supabase: SupabaseClient,
+  workspaceId: string,
+  actorId: string,
+  connectionId: string,
+  metadata: { name: string }
+): Promise<void> {
+  return write(
+    supabase,
+    workspaceId,
+    actorId,
+    "connection",
+    connectionId,
+    "connection.revoked",
+    metadata
+  );
+}
+
+export function auditConnectionUpdated(
+  supabase: SupabaseClient,
+  workspaceId: string,
+  actorId: string,
+  connectionId: string,
+  metadata: { name: string }
+): Promise<void> {
+  return write(
+    supabase,
+    workspaceId,
+    actorId,
+    "connection",
+    connectionId,
+    "connection.updated",
+    metadata
+  );
+}
+
+export function auditTokenRotated(
+  supabase: SupabaseClient,
+  workspaceId: string,
+  actorId: string,
+  connectionId: string
+): Promise<void> {
+  return write(
+    supabase,
+    workspaceId,
+    actorId,
+    "connection",
+    connectionId,
+    "connection.token_rotated"
+  );
+}

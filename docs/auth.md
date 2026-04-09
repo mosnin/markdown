@@ -127,6 +127,70 @@ The `signOut` server action (in `src/app/app/actions.ts`) calls `supabase.auth.s
 
 ---
 
+## External API auth (bearer tokens)
+
+API route handlers do not use the cookie-based session. Instead, they use a separate auth path: `getConnectionContext()`.
+
+```
+External API request
+  → Authorization: Bearer csk_v1_<64hex>
+  → getConnectionContext(request)
+        → createAdminClient()  (service role, bypasses RLS)
+        → lookup token by prefix
+        → verify sha256 hash (timingSafeEqual)
+        → load connection + box scopes
+        → return ConnectionRequestContext
+  → route handler checks ctx.allowedBoxIds
+  → data queries use adminClient with explicit workspace_id filters
+```
+
+### Two auth systems — never mix
+
+| Property | Human session (`getRequestContext`) | API token (`getConnectionContext`) |
+|---|---|---|
+| Client | Cookie-based (`createClient`) | Admin (`createAdminClient`) |
+| RLS | Active | Bypassed — app-level filters required |
+| Identity | Supabase `User` | `Connection` record |
+| Scope | Workspace | Set of allowed boxes |
+| Entry point | `get_request_context.ts` | `get_connection_context.ts` |
+
+### Token format
+
+```
+csk_v1_<64 hex chars>
+Bearer csk_v1_a3f9bc12d7...  (Authorization header)
+```
+
+Stored in DB:
+- `token_prefix` = first 8 hex chars — indexed, used for fast lookup
+- `secret_hash` = sha256 of the 64 hex chars — compared with timingSafeEqual
+
+The raw secret is never persisted. It is shown to the user once at creation/rotation time.
+
+### Admin client security contract
+
+`createAdminClient()` uses the `SUPABASE_SERVICE_ROLE_KEY`, which bypasses all RLS policies.
+
+Rules:
+- NEVER use the admin client in human-facing product code. Only for API token auth.
+- ALWAYS add explicit `workspace_id` and `box_id` ownership filters to every query.
+- The admin client should only be called from `get_connection_context.ts` and API route handlers.
+
+### Connection context type
+
+```ts
+interface ConnectionRequestContext {
+  connection: Connection;      // The authenticated connection
+  workspaceId: string;         // connection.workspace_id
+  allowedBoxIds: Set<string>;  // connection_box_scopes → box_id set
+  tokenId: string;             // For last_used_at tracking
+}
+```
+
+See `src/server/auth/get_connection_context.ts` and `docs/connections_v1.md` for full details.
+
+---
+
 ## Future extensions
 
 | Feature | Where to add |
@@ -136,3 +200,5 @@ The `signOut` server action (in `src/app/app/actions.ts`) calls `supabase.auth.s
 | Role-based permissions | `src/server/policies/` + new field in `RequestContext` |
 | Session expiry handling | Already covered by middleware proxy refresh |
 | Account management (email change, etc.) | `src/app/app/settings/` + new actions |
+| Token expiry enforcement | Set `connection_tokens.expires_at`; checked in `getConnectionContext` |
+| Write proposals via API | Add `propose_writes` handler; check `permission_mode` in route handler |

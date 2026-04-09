@@ -9,11 +9,13 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
-import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/product/page_header";
-import { PanelSection } from "@/components/product/panel_section";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ConnectionsPanel } from "@/components/product/connections_panel";
+import { requireAuthenticatedUser } from "@/server/auth/require_authenticated_user";
+import { createClient } from "@/lib/supabase/server";
+import { listBoxesByWorkspace } from "@/server/repositories/box_repository";
+import { listConnectionsWithScopes } from "@/server/services/connection_service";
 
 // ─── Section nav ─────────────────────────────────────────────────────────────
 
@@ -21,7 +23,7 @@ const settingsNav = [
   { id: "profile", label: "Profile", icon: User },
   { id: "appearance", label: "Appearance", icon: Palette },
   { id: "notifications", label: "Notifications", icon: Bell },
-  { id: "api", label: "API", icon: Key },
+  { id: "api", label: "Connections", icon: Key },
   { id: "security", label: "Security", icon: Shield },
 ];
 
@@ -104,38 +106,17 @@ function AppearanceSection() {
   );
 }
 
-// ─── API section ─────────────────────────────────────────────────────────────
-
-function ApiSection() {
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="text-base">API access</CardTitle>
-        <CardDescription>
-          Manage personal API tokens for programmatic and MCP access.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <div className="rounded-lg border border-dashed border-border bg-muted/30 px-4 py-4 text-center">
-          <p className="text-sm font-medium text-muted-foreground">
-            API token management — available in a later release
-          </p>
-          <p className="mt-1 text-xs text-muted-foreground/70">
-            Personal tokens, MCP integration, and export API will be
-            configured here.
-          </p>
-          <Badge variant="outline" className="mt-2 text-xs font-normal">
-            Coming soon
-          </Badge>
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
 // ─── Page ────────────────────────────────────────────────────────────────────
 
-export default function SettingsPage() {
+export default async function SettingsPage() {
+  const ctx = await requireAuthenticatedUser();
+  const supabase = await createClient();
+
+  const [boxes, connections] = await Promise.all([
+    listBoxesByWorkspace(supabase, ctx.workspace.id),
+    listConnectionsWithScopes(supabase, ctx.workspace.id),
+  ]);
+
   return (
     <div className="flex h-full flex-col overflow-hidden">
       <PageHeader
@@ -162,7 +143,10 @@ export default function SettingsPage() {
           <div className="mx-auto max-w-2xl space-y-4 px-6 py-6">
             <ProfileSection />
             <AppearanceSection />
-            <ApiSection />
+            <ConnectionsPanel
+              initialConnections={connections}
+              boxes={boxes}
+            />
           </div>
         </ScrollArea>
       </div>
