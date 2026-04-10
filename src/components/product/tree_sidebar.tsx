@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   BookOpen,
   Box,
@@ -9,12 +10,28 @@ import {
   ChevronRight,
   FileText,
   Folder,
+  FolderPlus,
   Loader2,
   Package,
   Plus,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { getBoxTreeAction } from "@/app/app/boxes/actions";
+import { getBoxTreeAction, createNoteAction, createFolderAction } from "@/app/app/boxes/actions";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -355,6 +372,146 @@ function BoxTree({
   );
 }
 
+// ─── Box quick-create menu ────────────────────────────────────────────────────
+
+/**
+ * Plus button attached to each BoxRow in the sidebar.
+ * Opens a dropdown with two options (new note, new folder) each backed
+ * by a minimal dialog — no folder list needed since both items land at root.
+ */
+function BoxQuickCreateMenu({
+  box,
+  onNavigate,
+}: {
+  box: { id: string; name: string };
+  onNavigate?: () => void;
+}) {
+  const [noteOpen, setNoteOpen] = useState(false);
+  const [folderOpen, setFolderOpen] = useState(false);
+  const [noteTitle, setNoteTitle] = useState("");
+  const [folderName, setFolderName] = useState("");
+  const [noteError, setNoteError] = useState<string | null>(null);
+  const [folderError, setFolderError] = useState<string | null>(null);
+  const [isPending, startTransition] = useTransition();
+  const router = useRouter();
+
+  function handleCreateNote(e: React.FormEvent) {
+    e.preventDefault();
+    if (!noteTitle.trim()) return;
+    setNoteError(null);
+    startTransition(async () => {
+      const result = await createNoteAction(box.id, noteTitle.trim());
+      if (result.ok) {
+        setNoteOpen(false);
+        setNoteTitle("");
+        onNavigate?.();
+        router.push(`/app/notes/${result.data.id}`);
+      } else {
+        setNoteError(result.error);
+      }
+    });
+  }
+
+  function handleCreateFolder(e: React.FormEvent) {
+    e.preventDefault();
+    if (!folderName.trim()) return;
+    setFolderError(null);
+    startTransition(async () => {
+      const result = await createFolderAction(box.id, folderName.trim());
+      if (result.ok) {
+        setFolderOpen(false);
+        setFolderName("");
+        router.refresh();
+      } else {
+        setFolderError(result.error);
+      }
+    });
+  }
+
+  return (
+    <>
+      <DropdownMenu>
+        <DropdownMenuTrigger
+          className={cn(
+            "flex h-5 w-5 shrink-0 items-center justify-center rounded",
+            "opacity-30 transition-all duration-150",
+            "group-hover:opacity-100",
+            "text-muted-foreground hover:bg-accent/50 hover:text-foreground",
+            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:opacity-100"
+          )}
+          aria-label={`Create in ${box.name}`}
+        >
+          <Plus className="h-3.5 w-3.5" aria-hidden="true" />
+        </DropdownMenuTrigger>
+        <DropdownMenuContent side="right" align="start" sideOffset={4}>
+          <DropdownMenuItem onClick={() => setNoteOpen(true)}>
+            <FileText className="h-3.5 w-3.5" aria-hidden="true" />
+            New note
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => setFolderOpen(true)}>
+            <FolderPlus className="h-3.5 w-3.5" aria-hidden="true" />
+            New folder
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+
+      {/* Note creation dialog */}
+      <Dialog open={noteOpen} onOpenChange={(v) => { setNoteOpen(v); if (!v) { setNoteTitle(""); setNoteError(null); } }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>New note in {box.name}</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleCreateNote} className="flex flex-col gap-3">
+            <Input
+              placeholder="Note title"
+              value={noteTitle}
+              onChange={(e) => setNoteTitle(e.target.value)}
+              autoFocus
+              required
+              disabled={isPending}
+            />
+            {noteError && (
+              <p className="text-xs text-destructive" role="alert">{noteError}</p>
+            )}
+            <DialogFooter showCloseButton>
+              <Button type="submit" size="sm" disabled={isPending || !noteTitle.trim()}>
+                {isPending ? "Creating…" : "Create note"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Folder creation dialog */}
+      <Dialog open={folderOpen} onOpenChange={(v) => { setFolderOpen(v); if (!v) { setFolderName(""); setFolderError(null); } }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>New folder in {box.name}</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleCreateFolder} className="flex flex-col gap-3">
+            <Input
+              placeholder="Folder name"
+              value={folderName}
+              onChange={(e) => setFolderName(e.target.value)}
+              autoFocus
+              required
+              disabled={isPending}
+            />
+            {folderError && (
+              <p className="text-xs text-destructive" role="alert">{folderError}</p>
+            )}
+            <DialogFooter showCloseButton>
+              <Button type="submit" size="sm" disabled={isPending || !folderName.trim()}>
+                {isPending ? "Creating…" : "Create folder"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}
+
 // ─── Box row ──────────────────────────────────────────────────────────────────
 
 function BoxRow({
@@ -420,21 +577,8 @@ function BoxRow({
           <span className="truncate">{box.name}</span>
         </Link>
 
-        {/* Quick-create link — visible at low opacity, full opacity on hover/focus */}
-        <Link
-          href={`/app/boxes/${box.id}`}
-          onClick={onNavigate}
-          aria-label={`Open ${box.name} to create content`}
-          className={cn(
-            "flex h-5 w-5 shrink-0 items-center justify-center rounded",
-            "opacity-30 transition-all duration-150",
-            "group-hover:opacity-100",
-            "text-muted-foreground hover:bg-accent/50 hover:text-foreground",
-            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:opacity-100"
-          )}
-        >
-          <Plus className="h-3.5 w-3.5" aria-hidden="true" />
-        </Link>
+        {/* Quick-create menu — note or folder, visible on hover */}
+        <BoxQuickCreateMenu box={box} onNavigate={onNavigate} />
       </div>
 
       {/* Expanded tree — animated */}

@@ -21,6 +21,14 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { ThemeToggle } from "@/components/product/theme_toggle";
 import { UserMenu } from "@/components/product/user_menu";
 import { TreeSidebar } from "@/components/product/tree_sidebar";
@@ -109,24 +117,39 @@ export function AppSidebar({
     >
       {/* Workspace selector pill */}
       <div className="px-3 pt-3 pb-2">
-        <Link
-          href="/app/workspaces"
-          className={cn(
-            "flex items-center gap-2 rounded-lg px-2.5 py-2 transition-fast",
-            "hover:bg-accent/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          )}
-          title={`Workspace: ${workspaceName}`}
-        >
-          {/* Avatar initial */}
-          <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-foreground text-[11px] font-semibold text-background">
-            {workspaceInitial}
-          </div>
-          {/* Workspace name */}
-          <span className="min-w-0 flex-1 truncate text-sm font-semibold tracking-tight text-foreground">
-            {workspaceName}
-          </span>
-          <ChevronDown className="h-3.5 w-3.5 shrink-0 text-foreground/40" aria-hidden="true" />
-        </Link>
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            className={cn(
+              "flex w-full items-center gap-2 rounded-lg px-2.5 py-2 transition-fast",
+              "hover:bg-accent/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            )}
+            aria-label={`Workspace: ${workspaceName}`}
+          >
+            {/* Avatar initial */}
+            <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-foreground text-[11px] font-semibold text-background">
+              {workspaceInitial}
+            </div>
+            {/* Workspace name */}
+            <span className="min-w-0 flex-1 truncate text-sm font-semibold tracking-tight text-foreground text-left">
+              {workspaceName}
+            </span>
+            <ChevronDown className="h-3.5 w-3.5 shrink-0 text-foreground/40" aria-hidden="true" />
+          </DropdownMenuTrigger>
+          <DropdownMenuContent side="bottom" align="start">
+            <DropdownMenuLabel className="text-xs text-muted-foreground">
+              {workspaceName}
+            </DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem render={<Link href="/app/workspaces" />}>
+              <LayoutGrid className="h-3.5 w-3.5" aria-hidden="true" />
+              Manage boxes
+            </DropdownMenuItem>
+            <DropdownMenuItem render={<Link href="/app/settings" />}>
+              <Settings className="h-3.5 w-3.5" aria-hidden="true" />
+              Workspace settings
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
 
       <Separator className="mx-3 mb-1" />

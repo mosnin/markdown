@@ -47,6 +47,8 @@ import { type NoteLink } from "@/server/domain/types/note_link";
 import { BoxExportMenu } from "@/components/product/export_menu";
 import { ImportTriggerButton } from "@/components/product/import_dialog";
 import { FolderPolicyToggle } from "@/components/product/folder_policy_toggle";
+import { BoxEditDialog } from "@/components/product/box_edit_dialog";
+import { BoxOverviewPanel } from "@/components/product/box_overview_panel";
 import { type Folder as FolderType } from "@/server/domain/types/folder";
 import { type Note } from "@/server/domain/types/note";
 
@@ -278,7 +280,7 @@ async function BoxContextPanel({
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
-const VALID_BOX_TABS = ["notes", "tree", "guide", "graph", "search", "archived", "trashed"] as const;
+const VALID_BOX_TABS = ["notes", "overview", "tree", "guide", "graph", "search", "archived", "trashed"] as const;
 type BoxTab = (typeof VALID_BOX_TABS)[number];
 
 export default async function BoxPage({
@@ -356,9 +358,16 @@ export default async function BoxPage({
                   </Badge>
                 )}
               </div>
-              <h1 className="text-2xl font-semibold tracking-tight text-foreground truncate">
-                {box.name}
-              </h1>
+              <div className="flex items-center gap-1">
+                <h1 className="text-2xl font-semibold tracking-tight text-foreground truncate">
+                  {box.name}
+                </h1>
+                <BoxEditDialog
+                  boxId={box.id}
+                  initialName={box.name}
+                  initialDescription={box.description}
+                />
+              </div>
               {box.description && (
                 <p className="mt-1 text-sm text-muted-foreground">
                   {box.description}
@@ -414,6 +423,9 @@ export default async function BoxPage({
             <TabsList variant="line" className="h-auto pb-0">
               <TabsTrigger value="notes" className="pb-3">
                 Notes
+              </TabsTrigger>
+              <TabsTrigger value="overview" className="pb-3">
+                Overview
               </TabsTrigger>
               <TabsTrigger value="tree" className="pb-3">
                 Tree
@@ -486,6 +498,15 @@ export default async function BoxPage({
                   </div>
                 )}
               </Suspense>
+            </ScrollArea>
+          </TabsContent>
+
+          {/* ── Overview tab ── */}
+          <TabsContent value="overview" className="flex-1 overflow-hidden">
+            <ScrollArea className="h-full">
+              <div className="mx-auto max-w-3xl px-6 py-6">
+                <BoxOverviewPanel overview={overview} />
+              </div>
             </ScrollArea>
           </TabsContent>
 
