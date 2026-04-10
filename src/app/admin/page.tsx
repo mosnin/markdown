@@ -32,18 +32,21 @@ export default async function AdminOverviewPage() {
 
   // Pro subscribers — gracefully handle missing table
   let proSubscribers: number | null = 0;
+  let metricsError = false;
   try {
     const { count, error } = await adminClient
       .from("workspace_subscriptions")
       .select("id", { count: "exact", head: true })
       .eq("status", "active");
     if (error) {
-      proSubscribers = 0;
+      console.error("[admin/overview] metrics query failed:", error);
+      metricsError = true;
     } else {
       proSubscribers = count ?? 0;
     }
-  } catch {
-    proSubscribers = 0;
+  } catch (err) {
+    console.error("[admin/overview] metrics query failed:", err);
+    metricsError = true;
   }
 
   // ── Recent signups (last 10) ───────────────────────────────────────────────
@@ -94,6 +97,13 @@ export default async function AdminOverviewPage() {
           Platform-wide metrics for Context Store.
         </p>
       </div>
+
+      {/* Metrics error banner */}
+      {metricsError && (
+        <div className="rounded-md border border-amber-500/50 bg-amber-500/10 px-4 py-2 text-sm text-amber-700 dark:text-amber-400">
+          Some metrics failed to load. Data shown may be incomplete.
+        </div>
+      )}
 
       {/* Stat cards */}
       <section aria-label="Platform metrics">

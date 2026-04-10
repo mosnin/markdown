@@ -11,6 +11,11 @@ export interface AdminActionResult {
   error?: string;
 }
 
+// ─── Validation ───────────────────────────────────────────────────────────────
+
+const UUID_REGEX =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 // ─── Suspend user ─────────────────────────────────────────────────────────────
 
 /**
@@ -22,16 +27,26 @@ export interface AdminActionResult {
 export async function suspendUserAction(
   userId: string
 ): Promise<AdminActionResult> {
+  if (!userId || !UUID_REGEX.test(userId)) {
+    return { ok: false, error: "Invalid user ID" };
+  }
+
   await requireAdmin();
 
   const adminClient = createAdminClient();
 
-  const { error } = await adminClient.auth.admin.updateUserById(userId, {
-    ban_duration: "87600h", // 10 years — effectively permanent
-  });
+  try {
+    const { error } = await adminClient.auth.admin.updateUserById(userId, {
+      ban_duration: "87600h", // 10 years — effectively permanent
+    });
 
-  if (error) {
-    return { ok: false, error: error.message };
+    if (error) {
+      console.error("[admin/suspendUser] Error:", error);
+      return { ok: false, error: "Failed to update user. Please try again." };
+    }
+  } catch (err) {
+    console.error("[admin/suspendUser] Error:", err);
+    return { ok: false, error: "Failed to update user. Please try again." };
   }
 
   revalidatePath("/admin/users");
@@ -49,16 +64,26 @@ export async function suspendUserAction(
 export async function unsuspendUserAction(
   userId: string
 ): Promise<AdminActionResult> {
+  if (!userId || !UUID_REGEX.test(userId)) {
+    return { ok: false, error: "Invalid user ID" };
+  }
+
   await requireAdmin();
 
   const adminClient = createAdminClient();
 
-  const { error } = await adminClient.auth.admin.updateUserById(userId, {
-    ban_duration: "none",
-  });
+  try {
+    const { error } = await adminClient.auth.admin.updateUserById(userId, {
+      ban_duration: "none",
+    });
 
-  if (error) {
-    return { ok: false, error: error.message };
+    if (error) {
+      console.error("[admin/unsuspendUser] Error:", error);
+      return { ok: false, error: "Failed to update user. Please try again." };
+    }
+  } catch (err) {
+    console.error("[admin/unsuspendUser] Error:", err);
+    return { ok: false, error: "Failed to update user. Please try again." };
   }
 
   revalidatePath("/admin/users");

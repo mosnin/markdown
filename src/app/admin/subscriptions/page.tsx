@@ -44,24 +44,12 @@ async function fetchSubscriptionRows(): Promise<SubscriptionRow[]> {
     )
   );
 
-  // Collect all owner_ids to resolve emails via auth.users (service role only)
-  const ownerIds = [
-    ...new Set(
-      (workspaces as Array<{ id: string; name: string; owner_id: string }>).map(
-        (w) => w.owner_id
-      )
-    ),
-  ];
-
-  // Resolve emails: fetch users one-by-one (admin API, small N in practice)
-  const emailMap = new Map<string, string>();
-  await Promise.all(
-    ownerIds.map(async (uid) => {
-      const { data } = await adminClient.auth.admin.getUserById(uid);
-      if (data?.user?.email) {
-        emailMap.set(uid, data.user.email);
-      }
-    })
+  // Resolve emails: fetch all users in a single call and build a lookup map
+  const { data: { users: allUsers } } = await adminClient.auth.admin.listUsers({
+    perPage: 1000,
+  });
+  const emailMap = new Map(
+    allUsers.filter((u) => u.email).map((u) => [u.id, u.email as string])
   );
 
   // Assemble the final rows
