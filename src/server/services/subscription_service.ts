@@ -28,11 +28,13 @@ export async function getWorkspacePlan(
     if (error || !data) return "free";
 
     // Only treat active pro subscriptions as pro
-    if (data.plan === "pro") return "pro";
+    if (data.plan === "pro" && data.status === "active") return "pro";
     return "free";
-  } catch {
-    // Table may not exist yet — degrade gracefully
-    return "free";
+  } catch (err: unknown) {
+    const code = (err as { code?: string })?.code;
+    // PGRST116 = table not found, 42P01 = undefined_table
+    if (code === "PGRST116" || code === "42P01") return "free";
+    throw err;
   }
 }
 

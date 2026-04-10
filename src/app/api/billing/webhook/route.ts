@@ -18,8 +18,13 @@ export const runtime = "nodejs";
  *   subscription.expired  → plan='free', status='cancelled'
  *   subscription.past_due → status='past_due'
  */
-export const POST = Webhook({
-  webhookSecret: process.env.CREEM_WEBHOOK_SECRET!,
+function getWebhookHandler() {
+  const secret = process.env.CREEM_WEBHOOK_SECRET;
+  if (!secret) {
+    return async () => new Response("Webhook secret not configured", { status: 500 });
+  }
+  return Webhook({
+    webhookSecret: secret,
 
   // ── checkout.completed ─────────────────────────────────────────────────────
   onCheckoutCompleted: async ({ id, customer, subscription, metadata }) => {
@@ -133,7 +138,10 @@ export const POST = Webhook({
       metadata,
     });
   },
-});
+  });
+}
+
+export const POST = getWebhookHandler();
 
 // ── Shared upsert helper ─────────────────────────────────────────────────────
 

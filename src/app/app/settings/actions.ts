@@ -57,8 +57,13 @@ export async function changePasswordAction(
   _prevState: ChangePasswordState,
   formData: FormData
 ): Promise<ChangePasswordState> {
+  const currentPassword = formData.get("currentPassword") as string | null;
   const newPassword = formData.get("newPassword") as string | null;
   const confirmPassword = formData.get("confirmPassword") as string | null;
+
+  if (!currentPassword) {
+    return { status: "error", message: "Current password is required." };
+  }
 
   if (!newPassword || !confirmPassword) {
     return { status: "error", message: "Both password fields are required." };
@@ -77,6 +82,21 @@ export async function changePasswordAction(
 
   try {
     const { supabase } = await requireContext();
+
+    const { data: userData, error: userError } = await supabase.auth.getUser();
+    if (userError || !userData.user?.email) {
+      return { status: "error", message: "Could not verify user. Please try again." };
+    }
+
+    const { error: signInError } = await supabase.auth.signInWithPassword({
+      email: userData.user.email,
+      password: currentPassword,
+    });
+
+    if (signInError) {
+      return { status: "error", message: "Current password is incorrect." };
+    }
+
     const { error } = await supabase.auth.updateUser({ password: newPassword });
 
     if (error) {

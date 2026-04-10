@@ -645,6 +645,7 @@ export function SecuritySection() {
             </label>
             <Input
               id="current-password"
+              name="currentPassword"
               type="password"
               placeholder="Enter current password"
               autoComplete="current-password"
