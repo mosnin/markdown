@@ -278,12 +278,20 @@ async function BoxContextPanel({
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
+const VALID_BOX_TABS = ["notes", "tree", "guide", "graph", "search", "archived", "trashed"] as const;
+type BoxTab = (typeof VALID_BOX_TABS)[number];
+
 export default async function BoxPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ box_id: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const { box_id } = await params;
+  const resolvedSearch = await searchParams;
+  const rawTab = typeof resolvedSearch.tab === "string" ? resolvedSearch.tab : "notes";
+  const requestedTab = VALID_BOX_TABS.includes(rawTab as BoxTab) ? (rawTab as BoxTab) : "notes";
   const ctx = await requireAuthenticatedUser();
   const supabase = await createClient();
 
@@ -323,6 +331,13 @@ export default async function BoxPage({
 
   const archivedCount = archivedNotes.length + archivedFolders.length;
   const trashedCount = trashedNotes.length + trashedFolders.length;
+
+  // Guard: archived/trashed tabs are conditional; fall back to notes if empty
+  const defaultTab: BoxTab =
+    (requestedTab === "archived" && archivedCount === 0) ||
+    (requestedTab === "trashed" && trashedCount === 0)
+      ? "notes"
+      : requestedTab;
 
   return (
     <div className="flex h-full overflow-hidden">
@@ -394,7 +409,7 @@ export default async function BoxPage({
         </div>
 
         {/* Tabs */}
-        <Tabs defaultValue="notes" className="flex flex-1 flex-col overflow-hidden">
+        <Tabs defaultValue={defaultTab} className="flex flex-1 flex-col overflow-hidden">
           <div className="border-b border-border px-6">
             <TabsList variant="line" className="h-auto pb-0">
               <TabsTrigger value="notes" className="pb-3">
