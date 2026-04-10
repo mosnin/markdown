@@ -23,7 +23,7 @@ export function DashboardCard({ href, className, children }: DashboardCardProps)
         href={href}
         className={cn(
           baseClasses,
-          "block transition-fast hover:border-border/80 hover:shadow-sm",
+          "block transition-fast hover:border-ring/40 hover:bg-accent/30 hover:shadow-sm",
           className
         )}
       >

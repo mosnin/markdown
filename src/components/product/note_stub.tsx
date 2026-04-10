@@ -55,24 +55,37 @@ export function NoteStub({
       onKeyDown={(e) => e.key === "Enter" && onClick?.()}
       className={cn(
         "group flex flex-col gap-1.5 rounded-lg border border-border bg-card px-4 py-3.5",
-        "transition-standard",
-        onClick && "cursor-pointer hover:border-border-strong hover:shadow-sm",
+        "transition-standard hover:border-border-strong hover:shadow-sm",
+        onClick && "cursor-pointer",
         className
       )}
     >
       {/* Header row */}
       <div className="flex items-start justify-between gap-2">
         <div className="flex min-w-0 items-center gap-2">
-          <span className="shrink-0 text-muted-foreground">
+          <span
+            className={cn(
+              "shrink-0 transition-fast",
+              kind === "guide"
+                ? "text-amber-600 dark:text-amber-500"
+                : "text-muted-foreground group-hover:text-foreground"
+            )}
+          >
             {kindIcon[kind]}
           </span>
           <span className="truncate text-sm font-medium text-foreground">
             {title}
           </span>
         </div>
-        <Badge variant="secondary" className="shrink-0 text-xs font-normal">
-          {kindLabel[kind]}
-        </Badge>
+        {/* Only show badge for non-standard kinds */}
+        {kind !== "note" && (
+          <Badge
+            variant={kind === "guide" ? "warning" : "secondary"}
+            className="shrink-0 text-[10px] font-normal"
+          >
+            {kindLabel[kind]}
+          </Badge>
+        )}
       </div>
 
       {/* Excerpt */}
