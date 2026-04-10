@@ -88,12 +88,14 @@ function NavItem({
 interface AppSidebarProps {
   userEmail?: string;
   workspaceName?: string;
+  workspaceId?: string;
   boxes?: BoxType[];
 }
 
 export function AppSidebar({
   userEmail,
   workspaceName = "My Workspace",
+  workspaceId,
   boxes = [],
 }: AppSidebarProps) {
   const pathname = usePathname();
@@ -218,6 +220,7 @@ export function AppSidebar({
           ) : (
             <TreeSidebar
               boxes={boxes}
+              workspaceId={workspaceId}
               currentBoxId={currentBoxId}
               currentNoteId={currentNoteId}
             />

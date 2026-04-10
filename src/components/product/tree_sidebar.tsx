@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, useTransition } from "react";
+import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -16,6 +16,7 @@ import {
   Plus,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { createClient } from "@/lib/supabase/browser";
 import { getBoxTreeAction, createNoteAction, createFolderAction } from "@/app/app/boxes/actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -56,6 +57,8 @@ type TreeFolderNode = {
 export interface TreeSidebarProps {
   boxes: Array<{ id: string; name: string; guide_note_id: string | null }>;
   workspaceName?: string;
+  /** Workspace ID — used to scope Supabase Realtime subscriptions */
+  workspaceId?: string;
   /** Current note ID extracted from URL, if on a note page */
   currentNoteId?: string;
   /** Current box ID extracted from URL, if on a box page */
@@ -382,9 +385,12 @@ function BoxTree({
 function BoxQuickCreateMenu({
   box,
   onNavigate,
+  onTreeRefresh,
 }: {
   box: { id: string; name: string };
   onNavigate?: () => void;
+  /** Called immediately after a note or folder is created so the tree refreshes without waiting for realtime */
+  onTreeRefresh?: () => void;
 }) {
   const [noteOpen, setNoteOpen] = useState(false);
   const [folderOpen, setFolderOpen] = useState(false);
@@ -405,6 +411,7 @@ function BoxQuickCreateMenu({
         setNoteOpen(false);
         setNoteTitle("");
         onNavigate?.();
+        onTreeRefresh?.(); // Refresh tree immediately; realtime will also fire shortly after
         router.push(`/app/notes/${result.data.id}`);
       } else {
         setNoteError(result.error);
@@ -421,7 +428,7 @@ function BoxQuickCreateMenu({
       if (result.ok) {
         setFolderOpen(false);
         setFolderName("");
-        router.refresh();
+        onTreeRefresh?.(); // Refresh tree immediately instead of full page refresh
       } else {
         setFolderError(result.error);
       }
@@ -523,6 +530,7 @@ function BoxRow({
   currentNoteId,
   onToggle,
   onNavigate,
+  onTreeRefresh,
 }: {
   box: { id: string; name: string; guide_note_id: string | null };
   isExpanded: boolean;
@@ -532,6 +540,7 @@ function BoxRow({
   currentNoteId?: string;
   onToggle: () => void;
   onNavigate?: () => void;
+  onTreeRefresh?: () => void;
 }) {
   return (
     <div>
@@ -578,7 +587,7 @@ function BoxRow({
         </Link>
 
         {/* Quick-create menu — note or folder, visible on hover */}
-        <BoxQuickCreateMenu box={box} onNavigate={onNavigate} />
+        <BoxQuickCreateMenu box={box} onNavigate={onNavigate} onTreeRefresh={onTreeRefresh} />
       </div>
 
       {/* Expanded tree — animated */}
@@ -605,13 +614,112 @@ function BoxRow({
 
 export function TreeSidebar({
   boxes,
+  workspaceId,
   currentNoteId,
   currentBoxId,
   onNavigate,
 }: TreeSidebarProps) {
+  const router = useRouter();
   const [expandedBoxIds, setExpandedBoxIds] = useState<Set<string>>(new Set());
   const [treeData, setTreeData] = useState<Map<string, BoxTreeData>>(new Map());
   const [loading, setLoading] = useState<Set<string>>(new Set());
+
+  // Refs for stable access inside realtime event handlers (avoids stale closures)
+  const treeDataRef = useRef<Map<string, BoxTreeData>>(new Map());
+  const boxIdsRef = useRef<Set<string>>(new Set(boxes.map((b) => b.id)));
+  const realtimeDebounceRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+
+  // Keep refs in sync with state/props
+  useEffect(() => { treeDataRef.current = treeData; }, [treeData]);
+  useEffect(() => { boxIdsRef.current = new Set(boxes.map((b) => b.id)); }, [boxes]);
+
+  // Stable fetch function — state setters from useState are already stable
+  const fetchTree = useCallback(async (boxId: string) => {
+    setLoading((prev) => new Set([...prev, boxId]));
+    try {
+      const result = await getBoxTreeAction(boxId);
+      if (result.ok) {
+        setTreeData((prev) => new Map([...prev, [boxId, result.data]]));
+      }
+    } finally {
+      setLoading((prev) => {
+        const next = new Set(prev);
+        next.delete(boxId);
+        return next;
+      });
+    }
+  }, []);
+
+  // Debounced refetch — coalesces rapid realtime events (e.g. template applying multiple notes)
+  const scheduleTreeRefetch = useCallback((boxId: string) => {
+    const debounceMap = realtimeDebounceRef.current;
+    const existing = debounceMap.get(boxId);
+    if (existing) clearTimeout(existing);
+    const timer = setTimeout(() => {
+      debounceMap.delete(boxId);
+      void fetchTree(boxId);
+    }, 300);
+    debounceMap.set(boxId, timer);
+  }, [fetchTree]);
+
+  // Supabase Realtime subscription — keeps the sidebar tree up to date without refresh
+  useEffect(() => {
+    if (!workspaceId) return;
+
+    const supabase = createClient();
+
+    const handleContentChange = (
+      newRecord: Record<string, unknown>,
+      oldRecord: Record<string, unknown>
+    ) => {
+      const boxId = (newRecord.box_id ?? oldRecord.box_id) as string | undefined;
+      if (!boxId) return;
+      // Only refresh if this box belongs to the workspace and its tree is loaded
+      if (!boxIdsRef.current.has(boxId)) return;
+      if (!treeDataRef.current.has(boxId)) return;
+      scheduleTreeRefetch(boxId);
+    };
+
+    const channel = supabase
+      .channel(`workspace-tree:${workspaceId}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "notes", filter: `workspace_id=eq.${workspaceId}` },
+        (payload) =>
+          handleContentChange(
+            payload.new as Record<string, unknown>,
+            payload.old as Record<string, unknown>
+          )
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "folders", filter: `workspace_id=eq.${workspaceId}` },
+        (payload) =>
+          handleContentChange(
+            payload.new as Record<string, unknown>,
+            payload.old as Record<string, unknown>
+          )
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "boxes", filter: `workspace_id=eq.${workspaceId}` },
+        () => router.refresh()
+      )
+      .subscribe();
+
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [workspaceId, scheduleTreeRefetch, router]);
+
+  // Cleanup pending debounce timers on unmount
+  useEffect(() => {
+    return () => {
+      for (const timer of realtimeDebounceRef.current.values()) {
+        clearTimeout(timer);
+      }
+    };
+  }, []);
 
   // Auto-expand active box and refresh its tree data when currentBoxId changes
   useEffect(() => {
@@ -628,25 +736,8 @@ export function TreeSidebar({
       return new Set([...prev, activeBoxId]);
     });
     // Fetch fresh tree data for the active box
-    fetchTree(activeBoxId);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentBoxId]);
-
-  async function fetchTree(boxId: string) {
-    setLoading((prev) => new Set([...prev, boxId]));
-    try {
-      const result = await getBoxTreeAction(boxId);
-      if (result.ok) {
-        setTreeData((prev) => new Map([...prev, [boxId, result.data]]));
-      }
-    } finally {
-      setLoading((prev) => {
-        const next = new Set(prev);
-        next.delete(boxId);
-        return next;
-      });
-    }
-  }
+    void fetchTree(activeBoxId);
+  }, [currentBoxId, fetchTree]);
 
   function toggleBox(boxId: string) {
     const willExpand = !expandedBoxIds.has(boxId);
@@ -660,7 +751,7 @@ export function TreeSidebar({
       return next;
     });
     if (willExpand && !treeData.has(boxId) && !loading.has(boxId)) {
-      fetchTree(boxId);
+      void fetchTree(boxId);
     }
   }
 
@@ -683,6 +774,7 @@ export function TreeSidebar({
                 currentNoteId={currentNoteId}
                 onToggle={() => toggleBox(box.id)}
                 onNavigate={onNavigate}
+                onTreeRefresh={() => void fetchTree(box.id)}
               />
             </li>
           ))}

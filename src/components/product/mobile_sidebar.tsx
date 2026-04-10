@@ -47,12 +47,14 @@ const primaryNav = [
 interface MobileSidebarProps {
   userEmail?: string;
   workspaceName?: string;
+  workspaceId?: string;
   boxes?: BoxType[];
 }
 
 export function MobileSidebar({
   userEmail,
   workspaceName = "My Workspace",
+  workspaceId,
   boxes = [],
 }: MobileSidebarProps) {
   const [open, setOpen] = useState(false);
@@ -176,6 +178,7 @@ export function MobileSidebar({
             ) : (
               <TreeSidebar
                 boxes={boxes}
+                workspaceId={workspaceId}
                 currentBoxId={currentBoxId}
                 currentNoteId={currentNoteId}
                 onNavigate={close}

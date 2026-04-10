@@ -539,7 +539,7 @@ full workspace layout architecture.
 - **Three-pane model**: `[sidebar 240px] | [center flex-1] | [right pane 288px]`; right pane hidden < lg; shell stays thin, pages own panel space
 - **`TreeSidebar`**: client component, lazy-loads box tree via `getBoxTreeAction` on first expand, auto-expands current box from pathname
 - **`AppSidebar` + `MobileSidebar`**: both use `TreeSidebar`; mobile uses Sheet drawer
-- **Note editor**: two modes (Document / Markdown); Document is the default reading surface; Markdown mode is editable textarea labeled as the exact AI-facing source — no separate "Source" mode
+- **Note editor**: two modes (Document / Markdown); Document mode is an editable proportional-font textarea for natural writing (default); Markdown mode is an editable monospace textarea labeled as the exact AI-facing source — both modes edit the same content string, no conversion
 - **Autosave**: 1500ms debounce via `useEffect` + `useRef`; calls `saveNoteAction` (same as manual save); every autosave creates an immutable version via `update_note_and_create_version` RPC; see [docs/note_dual_view_and_autosave_v1.md](note_dual_view_and_autosave_v1.md)
 - **`AutosaveStatus`**: five states — idle/unsaved/saving/saved/error; "unsaved" shows dim dot while timer runs; error shows Retry button and does not auto-dismiss
 - **`SemanticLinksPanel`**: replaces `LinkedNotesSection` in right pane; "Context relationships" framing (not backlinks)
@@ -648,6 +648,36 @@ Server components render the `BoxTemplateSetup` client component only when the
 box is empty (`notes.length === 0 && folders.length === 0`). This prevents
 accidental re-application to boxes with existing content (bookmarked URLs,
 shared links, etc.).
+
+## Document editing and real-time sync
+
+See [docs/document_editing_and_realtime_fix_v1.md](document_editing_and_realtime_fix_v1.md).
+
+**Document mode editing**: Document mode is now an editable textarea with proportional
+font. Users write naturally without markdown syntax. Switching to Markdown mode shows the
+same content string in monospace with a label indicating it is the exact AI-facing source.
+No conversion happens between modes; both edit the same `content` state.
+
+**Supabase Realtime**: `TreeSidebar` subscribes to `postgres_changes` on `notes`,
+`folders`, and `boxes` tables filtered by `workspace_id`. On notes/folders change, the
+affected box's tree is re-fetched with a 300ms debounce (coalesces bursts like template
+application). On boxes change, `router.refresh()` triggers a server re-render so the box
+list updates. The subscription is scoped to the workspace and only refreshes trees that
+are already loaded (collapsed boxes are not pre-fetched).
+
+**Immediate QuickCreate sync**: After creating a note or folder via `BoxQuickCreateMenu`,
+the tree is refreshed immediately via `fetchTree(boxId)` — before waiting for the realtime
+event — so the new item appears in the sidebar within milliseconds of navigation.
+
+```
+src/components/product/
+├── note_editor.tsx          Updated: document mode = editable textarea (proportional font)
+├── tree_sidebar.tsx         Updated: Supabase Realtime subscription + onTreeRefresh callback
+├── app_sidebar.tsx          Updated: workspaceId prop → TreeSidebar
+└── mobile_sidebar.tsx       Updated: workspaceId prop → TreeSidebar
+
+src/app/app/layout.tsx       Updated: passes workspaceId to AppSidebar + MobileSidebar
+```
 
 ## Future prompts will add
 

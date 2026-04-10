@@ -51,6 +51,7 @@ export default async function AppLayout({
         <AppSidebar
           userEmail={userEmail}
           workspaceName={workspaceName}
+          workspaceId={ctx.workspace.id}
           boxes={boxes}
         />
       </div>
@@ -64,6 +65,7 @@ export default async function AppLayout({
             <MobileSidebar
               userEmail={userEmail}
               workspaceName={workspaceName}
+              workspaceId={ctx.workspace.id}
               boxes={boxes}
             />
             <span className="text-sm font-semibold tracking-tight truncate">

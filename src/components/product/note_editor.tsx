@@ -6,7 +6,6 @@ import { Code2, Eye } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
-import { renderMarkdown } from "@/lib/markdown";
 import { type Note } from "@/server/domain/types/note";
 import { saveNoteAction } from "@/app/app/notes/actions";
 import {
@@ -27,12 +26,13 @@ const AUTOSAVE_DEBOUNCE_MS = 1500;
 /**
  * Two view modes for the note editor:
  *
- *   document  — rendered markdown presented as a readable document (default).
- *               Clicking anywhere or focusing the title switches to markdown mode.
+ *   document  — editable textarea with proportional font (default). Users write
+ *               naturally without markdown syntax. Both modes edit the same content
+ *               string — no conversion happens between modes.
  *
- *   markdown  — editable raw markdown textarea, explicitly labeled as the exact
- *               source the AI model receives. Autosave and metadata editing happen here.
- *               No hidden conversion; the stored string equals what is shown.
+ *   markdown  — editable raw markdown textarea with monospace font, explicitly labeled
+ *               as the exact source the AI model receives. Autosave and metadata
+ *               editing work in both modes.
  */
 export type NoteViewMode = "document" | "markdown";
 
@@ -203,8 +203,6 @@ export function NoteEditor({ note, initialMode = "document" }: NoteEditorProps) 
     };
   }, []);
 
-  const renderedHtml = renderMarkdown(content);
-
   return (
     <div className="flex h-full flex-col overflow-hidden">
       {/* ── Title ─────────────────────────────────────────────────────────── */}
@@ -212,13 +210,7 @@ export function NoteEditor({ note, initialMode = "document" }: NoteEditorProps) 
         <input
           type="text"
           value={title}
-          onChange={(e) => {
-            setTitle(e.target.value);
-            if (mode === "document") setMode("markdown");
-          }}
-          onFocus={() => {
-            if (mode === "document") setMode("markdown");
-          }}
+          onChange={(e) => setTitle(e.target.value)}
           placeholder="Untitled note"
           aria-label="Note title"
           className={cn(
@@ -306,37 +298,21 @@ export function NoteEditor({ note, initialMode = "document" }: NoteEditorProps) 
       {/* ── Content area ──────────────────────────────────────────────────── */}
       <div className="flex-1 overflow-auto">
 
-        {/* Document mode — rendered markdown for human reading */}
+        {/* Document mode — editable proportional-font textarea for natural writing */}
         {mode === "document" && (
-          <div
-            role="tabpanel"
-            aria-label="Document view"
-            tabIndex={0}
-            className="h-full cursor-text focus:outline-none"
-            onClick={() => setMode("markdown")}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" || e.key === " ") setMode("markdown");
-            }}
-          >
-            {content ? (
-              <div
-                className="prose prose-neutral dark:prose-invert max-w-none px-8 py-6 text-base leading-7"
-                // renderMarkdown output is sanitized — see src/lib/markdown.ts
-                dangerouslySetInnerHTML={{ __html: renderedHtml }}
-              />
-            ) : (
-              <div
-                className="flex h-full flex-col items-center justify-center gap-2 px-8"
-                aria-hidden="true"
-              >
-                <p className="text-sm font-medium text-muted-foreground/60">
-                  This note is empty
-                </p>
-                <p className="text-xs text-muted-foreground/40">
-                  Click anywhere or switch to Markdown to start writing
-                </p>
-              </div>
-            )}
+          <div role="tabpanel" aria-label="Document view" className="flex h-full flex-col">
+            <textarea
+              value={content}
+              onChange={(e) => setContent(e.target.value)}
+              placeholder="Start writing…"
+              spellCheck
+              aria-label="Note content"
+              className={cn(
+                "flex-1 resize-none bg-transparent px-8 py-6",
+                "text-base leading-8 text-foreground",
+                "placeholder:text-muted-foreground/40 focus:outline-none"
+              )}
+            />
           </div>
         )}
 
