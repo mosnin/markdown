@@ -126,6 +126,9 @@ function InfoLabel({ children }: { children: React.ReactNode }) {
 
 // ─── Right panel — Note context ───────────────────────────────────────────────
 
+const VALID_TABS = ["info", "links", "bundle", "history"] as const;
+type NoteContextTab = (typeof VALID_TABS)[number];
+
 function NoteContextPanel({
   note,
   boxId,
@@ -138,6 +141,7 @@ function NoteContextPanel({
   allBoxNotes,
   initialBundle,
   historyResult,
+  defaultTab = "info",
 }: {
   note: NonNullable<Awaited<ReturnType<typeof getNoteById>>>;
   boxId: string;
@@ -153,6 +157,7 @@ function NoteContextPanel({
   allBoxNotes: Awaited<ReturnType<typeof listNotesByBox>>;
   initialBundle: Awaited<ReturnType<typeof assembleContextBundle>>;
   historyResult: Awaited<ReturnType<typeof listVersionsForNote>>;
+  defaultTab?: NoteContextTab;
 }) {
   const kindLabel: Record<string, string> = {
     note: "Note",
@@ -183,7 +188,7 @@ function NoteContextPanel({
       </div>
 
       {/* Tabs */}
-      <Tabs defaultValue="info" className="flex flex-1 flex-col overflow-hidden">
+      <Tabs defaultValue={defaultTab} className="flex flex-1 flex-col overflow-hidden">
         <div className="border-b border-border px-4">
           <TabsList variant="line" className="h-auto pb-0">
             <TabsTrigger value="info" className="pb-2.5 text-xs">
@@ -438,10 +443,17 @@ function NoteContextPanel({
 
 export default async function NotePage({
   params,
+  searchParams,
 }: {
   params: Promise<{ note_id: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const { note_id } = await params;
+  const resolvedSearch = await searchParams;
+  const rawTab = typeof resolvedSearch.tab === "string" ? resolvedSearch.tab : "info";
+  const defaultTab: NoteContextTab = VALID_TABS.includes(rawTab as NoteContextTab)
+    ? (rawTab as NoteContextTab)
+    : "info";
   const ctx = await requireAuthenticatedUser();
   const supabase = await createClient();
   const adminClient = createAdminClient();
@@ -520,8 +532,8 @@ export default async function NotePage({
           </div>
           <div className="flex shrink-0 items-center gap-1.5">
             {/* Version history — opens the History tab in the context panel */}
-            <a
-              href="#history"
+            <Link
+              href="?tab=history"
               aria-label="Version history"
               title="Version history"
               className={cn(
@@ -531,7 +543,7 @@ export default async function NotePage({
             >
               <History className="h-3.5 w-3.5" aria-hidden="true" />
               <span className="hidden sm:inline">History</span>
-            </a>
+            </Link>
             <NoteLifecycleMenu
               noteId={note_id}
               noteStatus={
@@ -607,6 +619,7 @@ export default async function NotePage({
           allBoxNotes={allBoxNotes}
           initialBundle={initialBundle}
           historyResult={historyResult}
+          defaultTab={defaultTab}
         />
       </aside>
     </div>
