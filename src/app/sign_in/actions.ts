@@ -1,61 +1,95 @@
 "use server";
 
+import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
-export type SignInState =
+export type AuthState =
   | { status: "idle" }
-  | { status: "success" }
+  | { status: "confirm"; message: string }
   | { status: "error"; message: string };
 
-// ─── Action ──────────────────────────────────────────────────────────────────
+// ─── Sign in ─────────────────────────────────────────────────────────────────
 
-/**
- * Server action: request a magic link for the given email.
- *
- * Compatible with React 19 `useActionState`. Accepts `prevState` and
- * `formData` and returns the next state.
- *
- * On success the user receives an email with a sign-in link that routes
- * through /auth/callback, which exchanges the code for a session and
- * redirects to /app.
- */
-export async function signInWithEmail(
-  _prevState: SignInState,
+export async function signIn(
+  _prevState: AuthState,
   formData: FormData
-): Promise<SignInState> {
+): Promise<AuthState> {
   const email = (formData.get("email") as string | null)?.trim();
+  const password = formData.get("password") as string | null;
 
-  if (!email) {
-    return { status: "error", message: "Email address is required." };
+  if (!email || !password) {
+    return { status: "error", message: "Email and password are required." };
   }
 
-  // Basic format check before hitting Supabase.
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
     return { status: "error", message: "Enter a valid email address." };
   }
 
   const supabase = await createClient();
+  const { error } = await supabase.auth.signInWithPassword({ email, password });
 
-  const { error } = await supabase.auth.signInWithOtp({
+  if (error) {
+    const message =
+      error.status === 429
+        ? "Too many attempts. Please wait a moment before trying again."
+        : "Invalid email or password.";
+    return { status: "error", message };
+  }
+
+  redirect("/app");
+}
+
+// ─── Sign up ─────────────────────────────────────────────────────────────────
+
+export async function signUp(
+  _prevState: AuthState,
+  formData: FormData
+): Promise<AuthState> {
+  const email = (formData.get("email") as string | null)?.trim();
+  const password = formData.get("password") as string | null;
+  const confirmPassword = formData.get("confirmPassword") as string | null;
+
+  if (!email || !password || !confirmPassword) {
+    return { status: "error", message: "All fields are required." };
+  }
+
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    return { status: "error", message: "Enter a valid email address." };
+  }
+
+  if (password.length < 8) {
+    return {
+      status: "error",
+      message: "Password must be at least 8 characters.",
+    };
+  }
+
+  if (password !== confirmPassword) {
+    return { status: "error", message: "Passwords do not match." };
+  }
+
+  const supabase = await createClient();
+  const { error } = await supabase.auth.signUp({
     email,
+    password,
     options: {
-      // The callback URL must be in the "Redirect URLs" allow-list in your
-      // Supabase project: Authentication → URL Configuration.
       emailRedirectTo: `${process.env.NEXT_PUBLIC_APP_URL}/auth/callback`,
-      shouldCreateUser: true,
     },
   });
 
   if (error) {
-    // Surface a clean message — avoid leaking Supabase internals.
     const message =
       error.status === 429
-        ? "Too many requests. Please wait a moment before trying again."
-        : "Could not send the sign-in link. Please try again.";
+        ? "Too many attempts. Please wait a moment before trying again."
+        : error.message ?? "Could not create account. Please try again.";
     return { status: "error", message };
   }
 
-  return { status: "success" };
+  return {
+    status: "confirm",
+    message:
+      "Check your email to confirm your account. The link expires in 1 hour.",
+  };
 }
