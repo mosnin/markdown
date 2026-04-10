@@ -176,7 +176,7 @@ export function NoteEditor({ note, initialMode = "document" }: NoteEditorProps) 
           className={cn(
             "w-full bg-transparent text-3xl font-bold tracking-tight text-foreground",
             "border-b-2 border-transparent pb-1",
-            "transition-[border-color] duration-150 ease-standard",
+            "transition-[border-color] duration-150",
             "focus:border-border focus:outline-none",
             "placeholder:text-muted-foreground/40"
           )}
@@ -230,7 +230,7 @@ export function NoteEditor({ note, initialMode = "document" }: NoteEditorProps) 
         <div className="flex items-center gap-2">
           <span
             className={cn(
-              "transition-opacity duration-300 ease-standard",
+              "transition-opacity duration-300",
               autosaveState === "idle" ? "opacity-0" : "opacity-100"
             )}
           >
