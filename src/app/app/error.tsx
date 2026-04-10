@@ -48,8 +48,8 @@ export default function AppError({
           <RefreshCw className="h-3.5 w-3.5" aria-hidden="true" />
           Try again
         </Button>
-        <Button variant="outline" size="sm" asChild>
-          <a href="/app">Go to dashboard</a>
+        <Button variant="outline" size="sm" render={<a href="/app" />}>
+          Go to dashboard
         </Button>
       </div>
     </div>
