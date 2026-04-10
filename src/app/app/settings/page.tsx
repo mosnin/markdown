@@ -1,6 +1,5 @@
 import { Bell, CreditCard, Key, Palette, Shield, Sparkles, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import {
   Card,
   CardContent,
@@ -16,6 +15,8 @@ import { requireAuthenticatedUser } from "@/server/auth/require_authenticated_us
 import { createClient } from "@/lib/supabase/server";
 import { listBoxesByWorkspace } from "@/server/repositories/box_repository";
 import { listConnectionsWithScopes } from "@/server/services/connection_service";
+import { ProfileSection, AppearanceSection, SecuritySection } from "./settings_client";
+import type { Theme } from "./actions";
 
 // ─── Section nav ─────────────────────────────────────────────────────────────
 
@@ -27,83 +28,6 @@ const settingsNav = [
   { id: "connections", label: "Connections", icon: Key },
   { id: "security", label: "Security", icon: Shield },
 ];
-
-// ─── Profile section ──────────────────────────────────────────────────────────
-
-function ProfileSection({
-  email,
-  displayName,
-}: {
-  email: string;
-  displayName?: string;
-}) {
-  const initials = email.slice(0, 2).toUpperCase();
-  return (
-    <Card id="settings-profile">
-      <CardHeader className="px-6 pt-6 pb-4">
-        <CardTitle className="text-base font-semibold">Profile</CardTitle>
-        <CardDescription className="text-sm text-muted-foreground">
-          Your public-facing identity within Context Store.
-        </CardDescription>
-      </CardHeader>
-      <Separator />
-      <CardContent className="px-6 pt-5 pb-6 space-y-5">
-        {/* Avatar */}
-        <div className="flex items-center gap-4">
-          <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-muted text-sm font-semibold text-muted-foreground select-none">
-            {initials}
-          </div>
-          <div className="flex flex-col gap-1">
-            <Button variant="outline" size="sm">
-              Change avatar
-            </Button>
-            <p className="text-xs text-muted-foreground">
-              JPG, PNG, or WebP. Max 2 MB.
-            </p>
-          </div>
-        </div>
-
-        {/* Fields */}
-        <div className="grid gap-y-4 sm:grid-cols-2 sm:gap-x-4">
-          <div className="flex flex-col gap-1.5">
-            <label
-              htmlFor="display-name"
-              className="text-sm font-medium text-foreground"
-            >
-              Display name
-            </label>
-            <Input
-              id="display-name"
-              defaultValue={displayName ?? ""}
-              placeholder="Your name"
-            />
-          </div>
-          <div className="flex flex-col gap-1.5">
-            <label
-              htmlFor="email"
-              className="text-sm font-medium text-foreground"
-            >
-              Email address
-            </label>
-            <Input
-              id="email"
-              defaultValue={email}
-              placeholder="you@example.com"
-              type="email"
-            />
-            <p className="text-xs text-muted-foreground">
-              Changing your email requires re-verification.
-            </p>
-          </div>
-        </div>
-
-        <div className="flex justify-end pt-1">
-          <Button size="sm">Save changes</Button>
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
 
 // ─── Billing section ──────────────────────────────────────────────────────────
 
@@ -176,52 +100,6 @@ function BillingSection() {
   );
 }
 
-// ─── Appearance section ───────────────────────────────────────────────────────
-
-function AppearanceSection() {
-  return (
-    <Card id="settings-appearance">
-      <CardHeader className="px-6 pt-6 pb-4">
-        <CardTitle className="text-base font-semibold">Appearance</CardTitle>
-        <CardDescription className="text-sm text-muted-foreground">
-          Control the visual presentation of Context Store.
-        </CardDescription>
-      </CardHeader>
-      <Separator />
-      <CardContent className="px-6 pt-5 pb-6 space-y-5">
-        <div className="flex flex-col gap-1.5">
-          <label
-            htmlFor="theme-selector"
-            className="text-sm font-medium text-foreground"
-          >
-            Theme
-          </label>
-          <div className="flex gap-2" id="theme-selector">
-            {["Light", "Dark", "System"].map((t) => (
-              <Button
-                key={t}
-                variant={t === "System" ? "default" : "outline"}
-                size="sm"
-                className="min-w-[80px]"
-              >
-                {t}
-              </Button>
-            ))}
-          </div>
-          <p className="text-xs text-muted-foreground">
-            Theme toggle is also available in the sidebar. This setting persists
-            your preference.
-          </p>
-        </div>
-
-        <div className="flex justify-end pt-1">
-          <Button size="sm">Save changes</Button>
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
 // ─── Notifications section ────────────────────────────────────────────────────
 
 function NotificationsSection() {
@@ -270,73 +148,6 @@ function NotificationsSection() {
             />
           </label>
         ))}
-
-        <div className="flex justify-end pt-1">
-          <Button size="sm">Save changes</Button>
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
-// ─── Security section ─────────────────────────────────────────────────────────
-
-function SecuritySection() {
-  return (
-    <Card id="settings-security">
-      <CardHeader className="px-6 pt-6 pb-4">
-        <CardTitle className="text-base font-semibold">Security</CardTitle>
-        <CardDescription className="text-sm text-muted-foreground">
-          Manage your password and active sessions.
-        </CardDescription>
-      </CardHeader>
-      <Separator />
-      <CardContent className="px-6 pt-5 pb-6 space-y-5">
-        {/* Password update */}
-        <div className="flex flex-col gap-4">
-          <div className="flex flex-col gap-1.5">
-            <label
-              htmlFor="current-password"
-              className="text-sm font-medium text-foreground"
-            >
-              Current password
-            </label>
-            <Input
-              id="current-password"
-              type="password"
-              placeholder="Enter current password"
-              autoComplete="current-password"
-            />
-          </div>
-          <div className="flex flex-col gap-1.5">
-            <label
-              htmlFor="new-password"
-              className="text-sm font-medium text-foreground"
-            >
-              New password
-            </label>
-            <Input
-              id="new-password"
-              type="password"
-              placeholder="At least 8 characters"
-              autoComplete="new-password"
-            />
-          </div>
-          <div className="flex flex-col gap-1.5">
-            <label
-              htmlFor="confirm-password"
-              className="text-sm font-medium text-foreground"
-            >
-              Confirm new password
-            </label>
-            <Input
-              id="confirm-password"
-              type="password"
-              placeholder="Repeat new password"
-              autoComplete="new-password"
-            />
-          </div>
-        </div>
 
         <div className="flex justify-end pt-1">
           <Button size="sm">Save changes</Button>
@@ -459,7 +270,11 @@ export default async function SettingsPage() {
 
             <BillingSection />
 
-            <AppearanceSection />
+            <AppearanceSection
+              currentTheme={
+                (ctx.user.user_metadata?.theme as Theme | undefined)
+              }
+            />
 
             <NotificationsSection />
 
