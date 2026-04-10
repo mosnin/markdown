@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition, useRef } from "react";
-import { BookOpen, Bot, FileText, Search, Package, Package2 } from "lucide-react";
+import { AlertCircle, BookOpen, Bot, FileText, Search, Package, Package2 } from "lucide-react";
 import Link from "next/link";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -122,6 +122,7 @@ export function BoxSearchPanel({ boxId, guideNoteId }: BoxSearchPanelProps) {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<NoteSearchResult[]>([]);
   const [searched, setSearched] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -134,15 +135,21 @@ export function BoxSearchPanel({ boxId, guideNoteId }: BoxSearchPanelProps) {
     if (!q.trim()) {
       setResults([]);
       setSearched(false);
+      setSearchError(null);
       return;
     }
 
     debounceRef.current = setTimeout(() => {
       startTransition(async () => {
+        setSearchError(null);
         const result = await searchNotesAction(boxId, q.trim());
         if (result.ok) {
           setResults(result.data);
           setSearched(true);
+        } else {
+          setSearchError("Search failed. Please try again.");
+          setResults([]);
+          setSearched(false);
         }
       });
     }, 300);
@@ -187,8 +194,16 @@ export function BoxSearchPanel({ boxId, guideNoteId }: BoxSearchPanelProps) {
       {/* Loading */}
       {query.trim() && isPending && <SearchSkeletonRows count={4} />}
 
+      {/* Error state */}
+      {searchError && !isPending && (
+        <div className="flex items-center gap-3 rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3">
+          <AlertCircle className="h-4 w-4 shrink-0 text-destructive" aria-hidden="true" />
+          <p className="text-sm text-destructive">{searchError}</p>
+        </div>
+      )}
+
       {/* No results */}
-      {query.trim() && !isPending && searched && results.length === 0 && (
+      {query.trim() && !isPending && searched && results.length === 0 && !searchError && (
         <div className="flex flex-col items-center gap-1.5 py-6 text-center">
           <p className="text-sm font-medium text-foreground">
             No results for &ldquo;{query}&rdquo;

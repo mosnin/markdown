@@ -89,15 +89,13 @@ export default async function AppLayout({
           </div>
         </header>
 
-        {/* Page content — <main> landmark with padding and scroll */}
+        {/* Page content — <main> landmark, scroll and overflow managed per-page */}
         <main
           id="main-content"
-          className="flex flex-1 flex-col overflow-auto"
+          className="flex flex-1 flex-col overflow-hidden"
           tabIndex={-1}
         >
-          <div className="flex flex-1 flex-col p-6">
-            {children}
-          </div>
+          {children}
         </main>
       </div>
     </div>

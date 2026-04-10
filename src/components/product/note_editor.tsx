@@ -263,7 +263,8 @@ export function NoteEditor({ note, initialMode = "document" }: NoteEditorProps) 
           <div
             role="tabpanel"
             aria-label="Document view"
-            className="h-full cursor-text"
+            tabIndex={0}
+            className="h-full cursor-text focus:outline-none"
             onClick={() => setMode("markdown")}
             onKeyDown={(e) => {
               if (e.key === "Enter" || e.key === " ") setMode("markdown");
@@ -329,7 +330,7 @@ export function NoteEditor({ note, initialMode = "document" }: NoteEditorProps) 
       {/* ── Metadata — shown in markdown mode ─────────────────────────────── */}
       {mode === "markdown" && (
         <div className="border-t border-border">
-          <details className="group">
+          <details className="group" open>
             <summary className="flex cursor-pointer items-center justify-between px-8 py-2 text-xs font-medium text-muted-foreground hover:text-foreground">
               Metadata
               <span className="text-[10px] uppercase tracking-wider opacity-60 group-open:hidden">
