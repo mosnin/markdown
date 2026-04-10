@@ -1,20 +1,11 @@
-import Link from "next/link";
-import { Box, Building2, Plus } from "lucide-react";
+import { Building2 } from "lucide-react";
 import { requireAuthenticatedUser } from "@/server/auth/require_authenticated_user";
 import { createClient } from "@/lib/supabase/server";
 import { listBoxesByWorkspace } from "@/server/repositories/box_repository";
 import { PageHeader } from "@/components/product/page_header";
 import { CreateBoxDialog } from "@/components/product/create_box_dialog";
 import { Badge } from "@/components/ui/badge";
-import { cn } from "@/lib/utils";
-
-function formatDate(dateStr: string): string {
-  return new Date(dateStr).toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
-}
+import { BoxList } from "./box_list";
 
 // ─── Loading skeleton (exported for Suspense boundary use) ────────────────────
 
@@ -131,38 +122,7 @@ export default async function WorkspacesPage() {
                 <EmptyBoxes />
               </div>
             ) : (
-              <div className="flex flex-col divide-y divide-border rounded-lg border border-border bg-card overflow-hidden shadow-xs">
-                {boxes.map((box) => (
-                  <Link
-                    key={box.id}
-                    href={`/app/boxes/${box.id}`}
-                    className={cn(
-                      "group flex items-center gap-3 px-4 py-3.5",
-                      "transition-fast hover:bg-accent/30",
-                      "focus-visible:outline-none focus-visible:bg-accent/40"
-                    )}
-                  >
-                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground group-hover:bg-accent group-hover:text-accent-foreground transition-fast">
-                      <Box className="h-4 w-4" aria-hidden="true" />
-                    </div>
-
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm font-semibold text-foreground truncate">
-                        {box.name}
-                      </p>
-                      {box.description && (
-                        <p className="mt-0.5 text-xs text-muted-foreground truncate">
-                          {box.description}
-                        </p>
-                      )}
-                    </div>
-
-                    <span className="shrink-0 text-xs text-muted-foreground whitespace-nowrap">
-                      {formatDate(box.updated_at)}
-                    </span>
-                  </Link>
-                ))}
-              </div>
+              <BoxList boxes={boxes} />
             )}
           </section>
 
