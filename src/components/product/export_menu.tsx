@@ -126,14 +126,14 @@ export function NoteExportMenu({
               <ExportMenuItem
                 icon={<FileText className="h-4 w-4" />}
                 label="Export note"
-                description="Markdown + manifest.json — link expires in 1 hour"
+                description="Markdown file + export manifest with note metadata — signed link valid 1 hour"
                 onClick={() => handleExport("note")}
                 loading={loading === "note"}
               />
               <ExportMenuItem
                 icon={<Layers className="h-4 w-4" />}
                 label="Export context bundle"
-                description="Bundle with linked notes + README"
+                description="Note + linked context + guide note if assigned + README — signed link valid 1 hour"
                 onClick={() => handleExport("bundle")}
                 loading={loading === "bundle"}
               />
@@ -221,7 +221,7 @@ export function BoxExportMenu({
               <ExportMenuItem
                 icon={<Package className="h-4 w-4" />}
                 label={`Export box "${boxName}"`}
-                description="All notes, folders, and links — link expires in 1 hour"
+                description="All notes, folders, semantic links, and manifest — signed link valid 1 hour"
                 onClick={() => handleExport("box")}
                 loading={loading === "box"}
               />
@@ -229,7 +229,7 @@ export function BoxExportMenu({
                 <ExportMenuItem
                   icon={<Folder className="h-4 w-4" />}
                   label={`Export folder "${folderName}"`}
-                  description="This folder and its descendants"
+                  description="This folder and all descendant notes — signed link valid 1 hour"
                   onClick={() => handleExport("folder")}
                   loading={loading === "folder"}
                 />

@@ -1,4 +1,4 @@
-import { BookOpen, Box, FileText, Layers, Search } from "lucide-react";
+import { BookOpen, Box, FileText, Layers, Link2, Search, Upload } from "lucide-react";
 import { CreateBoxDialog } from "@/components/product/create_box_dialog";
 
 /**
@@ -7,6 +7,10 @@ import { CreateBoxDialog } from "@/components/product/create_box_dialog";
  * Shown on the home page when the workspace has no boxes yet.
  * Explains the core mental model in product-specific language and
  * prompts the user toward their first meaningful action.
+ *
+ * Six concepts taught: Box, Folder, Note, Guide note, Explicit links,
+ * Context bundle. Three starter paths offered: blank box, template box,
+ * and import guide.
  *
  * Server component — no client state needed.
  */
@@ -37,6 +41,12 @@ const concepts = [
       "One note per box that orients retrieval. AI agents read this first. Keep it current and concise.",
   },
   {
+    icon: Link2,
+    term: "Explicit links",
+    description:
+      "Directed semantic relationships between notes. Connect context with a type and an explanation. Not backlinks.",
+  },
+  {
     icon: Search,
     term: "Context bundle",
     description:
@@ -54,8 +64,7 @@ export function OnboardingCallout() {
         </h2>
         <p className="mt-1 text-sm text-muted-foreground">
           Context Store is a structured context workspace for humans and AI
-          agents. It is not a generic notes app — content is organized around
-          a clear information hierarchy.
+          agents. Content is organized around a clear information hierarchy.
         </p>
       </div>
 
@@ -72,7 +81,7 @@ export function OnboardingCallout() {
               </div>
               <div>
                 <p className="text-sm font-medium text-foreground">{term}</p>
-                <p className="mt-0.5 text-xs text-muted-foreground leading-relaxed">
+                <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">
                   {description}
                 </p>
               </div>
@@ -81,21 +90,39 @@ export function OnboardingCallout() {
         </div>
       </div>
 
-      {/* First action */}
-      <div className="border-t border-border bg-muted/30 rounded-b-xl px-6 py-4">
-        <div className="flex items-center justify-between gap-4">
+      {/* Starter actions */}
+      <div className="rounded-b-xl border-t border-border bg-muted/30">
+        {/* Primary CTA */}
+        <div className="flex flex-col gap-4 px-6 py-5 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <p className="text-sm font-medium text-foreground">
               Create your first box
             </p>
             <p className="mt-0.5 text-xs text-muted-foreground">
-              Start with a box for a project, research area, or knowledge domain.
-              You can choose a template to get started faster.
+              Start blank or choose the{" "}
+              <span className="font-medium text-foreground">Project context</span>{" "}
+              template for a structured starting point with folders, guide note,
+              and core reference notes.
             </p>
           </div>
           <div className="shrink-0">
             <CreateBoxDialog />
           </div>
+        </div>
+
+        {/* Import hint */}
+        <div className="flex items-start gap-2.5 border-t border-border px-6 py-3">
+          <Upload
+            className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground/60"
+            aria-hidden="true"
+          />
+          <p className="text-xs text-muted-foreground/70">
+            Have existing notes?{" "}
+            <span className="text-muted-foreground">
+              Create a box first, then use the Import button in the box header
+              to bring in .md files or .zip packages.
+            </span>
+          </p>
         </div>
       </div>
     </div>

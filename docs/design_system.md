@@ -177,6 +177,11 @@ Installed primitives:
 | `AuditPanel` | Append-only workspace activity journal with actor/object filters |
 | `ConnectionsPanel` | Access control surface: connection cards, permission modes, box scopes |
 | `GeneratedNoteBanner` | Provenance banner for generated notes; promote-to-standard action |
+| `OnboardingCallout` | First-run mental model callout (no boxes); 6 concepts + Create Box + import hint |
+| `QuickStartPanel` | Sparse workspace starter panel (boxes but no notes); 3 guided actions |
+| `ImportDialog` / `ImportTriggerButton` | Import modal with file upload, collision mode picker, summary panel |
+| `NoteExportMenu` | Note-surface export dropdown: note export + context bundle export |
+| `BoxExportMenu` | Box-surface export dropdown: box export + folder export |
 
 ### Three-pane workspace layout
 

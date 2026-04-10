@@ -20,7 +20,7 @@ home page content (stat cards + recent notes).
 
 ### What it teaches
 
-Five concepts in product-specific language:
+Six concepts in product-specific language (2×3 grid):
 
 | Term | Description shown |
 |---|---|
@@ -28,14 +28,33 @@ Five concepts in product-specific language:
 | **Folder** | Optional structure inside a box. Folders organize notes — they don't change retrieval semantics. |
 | **Note** | Markdown content with a title, tags, and optional summary. The primary unit of context. |
 | **Guide note** | One note per box that orients retrieval. AI agents read this first. |
+| **Explicit links** | Directed semantic relationships between notes. Connect context with a type and an explanation. Not backlinks. |
 | **Context bundle** | A bounded retrieval package assembled from a note and its linked context. |
+
+### Starter paths offered
+
+The onboarding footer shows two things:
+
+1. **Create your first box** — `CreateBoxDialog` CTA, with copy mentioning the
+   "Project context" template as an option.
+2. **Import hint** — Secondary text: "Have existing notes? Create a box first,
+   then use the Import button in the box header to bring in .md files or .zip packages."
+
+### Quick start panel
+
+When `boxes.length > 0` but `allNotes.length === 0` (boxes exist but are empty),
+`QuickStartPanel` is shown instead of `OnboardingCallout`. It links to the first
+box and explains three starter actions:
+1. Import existing content (Import button in box header)
+2. Start from a note template (New note → template picker)
+3. Create a guide note (context panel on right side)
 
 ### Design principles
 
 - Server component — no client state, no dismiss tracking
 - No cookie or database flag for "onboarding complete" — the workspace state is the source of truth
 - Lightweight: one callout card, then the normal product surface takes over
-- Action-oriented: the callout ends with a `CreateBoxDialog` trigger
+- Action-oriented: the callout ends with a `CreateBoxDialog` trigger + import hint
 - Not marketing copy — language stays precise and product-appropriate
 
 ### Where it lives

@@ -432,7 +432,7 @@ export default async function BoxPage({
                 <EmptyState
                   icon={<FileText className="h-5 w-5" />}
                   title="No notes yet"
-                  description="Create a note to start capturing context in this box."
+                  description="Create your first note, choose a starter template, or use the Import button above to bring in existing Markdown content."
                   action={<CreateNoteDialog boxId={box.id} folders={folders} />}
                   className="h-full"
                 />

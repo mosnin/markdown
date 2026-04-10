@@ -12,6 +12,7 @@ import { DashboardSection } from "@/components/product/dashboard_section";
 import { DashboardCard } from "@/components/product/dashboard_card";
 import { CreateBoxDialog } from "@/components/product/create_box_dialog";
 import { OnboardingCallout } from "@/components/product/onboarding_callout";
+import { QuickStartPanel } from "@/components/product/quick_start_panel";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { CONNECTION_STATUS } from "@/server/domain/constants/connection_constants";
@@ -72,8 +73,13 @@ export default async function AppHomePage() {
       <ScrollArea className="flex-1">
         <div className="mx-auto max-w-3xl space-y-8 px-6 py-6">
 
-          {/* First-run */}
+          {/* First-run: no boxes */}
           {!hasBoxes && <OnboardingCallout />}
+
+          {/* Quick start: boxes exist but no notes yet */}
+          {hasBoxes && allNotes.length === 0 && (
+            <QuickStartPanel firstBox={{ id: boxes[0].id, name: boxes[0].name }} />
+          )}
 
           {/* Status row — only when there's content */}
           {hasBoxes && (

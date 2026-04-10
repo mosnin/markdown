@@ -568,6 +568,27 @@ src/components/product/
 └── mobile_sidebar.tsx             Updated: uses TreeSidebar
 ```
 
+## Starter and portability surface layer
+
+See [docs/starter_and_portability_surface_v1.md](starter_and_portability_surface_v1.md)
+for the full starter and portability architecture.
+
+- **Onboarding**: `OnboardingCallout` shown when no boxes; teaches 6 concepts (Box, Folder, Note, Guide note, Explicit links, Context bundle); footer has Create Box CTA (with template mention) + import hint
+- **Quick start**: `QuickStartPanel` shown when boxes exist but no notes yet; 3 instructional entries: import, template, guide note — all link to first box page
+- **Templates**: Box template (Project context) available in `CreateBoxDialog`; note templates (Prompt, Agent, System, Guide note) in `CreateNoteDialog`; code-defined, no builder
+- **Import**: `ImportTriggerButton` and `ImportDialog` on box page header; 4 collision modes; import summary panel after completion; always box-scoped
+- **Export**: `NoteExportMenu` on note page; `BoxExportMenu` on box page; all descriptions include "signed link valid 1 hour"; guide note mention in bundle description
+- **Empty states**: `EmptyState` component used consistently; box Notes tab, Tree tab, Search tab, audit, proposals, connections all have appropriate empty state copy
+
+```
+src/components/product/
+├── onboarding_callout.tsx      Updated: 6 concepts (added Explicit links), import hint in footer
+├── quick_start_panel.tsx       New: sparse workspace starter panel (server component)
+├── import_dialog.tsx           Stable: modal with collision modes, summary panel
+├── export_menu.tsx             Updated: improved what's-included descriptions for all 4 export types
+└── box_contents_tree.tsx       Updated: improved empty tree message mentions Import
+```
+
 ## Trust workspace surface layer
 
 See [docs/trust_workspace_surface_v1.md](trust_workspace_surface_v1.md) for the full
