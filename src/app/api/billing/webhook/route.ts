@@ -28,7 +28,7 @@ function getWebhookHandler() {
 
   // ── checkout.completed ─────────────────────────────────────────────────────
   onCheckoutCompleted: async ({ id, customer, subscription, metadata }) => {
-    const workspaceId = (metadata?.workspace_id as string | undefined) ?? null;
+    const workspaceId = typeof metadata?.workspace_id === 'string' ? metadata.workspace_id : null;
 
     if (!workspaceId) {
       console.warn(
@@ -78,8 +78,8 @@ function getWebhookHandler() {
       subscriptionId: id,
       customerId: typeof customer === "object" ? customer.id : undefined,
       periodEnd:
-        current_period_end_date instanceof Date
-          ? current_period_end_date.toISOString()
+        current_period_end_date
+          ? String(current_period_end_date)
           : undefined,
       plan: "pro",
       status: "active",
@@ -98,8 +98,8 @@ function getWebhookHandler() {
       subscriptionId: id,
       customerId: typeof customer === "object" ? customer.id : undefined,
       periodEnd:
-        current_period_end_date instanceof Date
-          ? current_period_end_date.toISOString()
+        current_period_end_date
+          ? String(current_period_end_date)
           : undefined,
       plan: "pro",
       status: "active",
@@ -162,7 +162,7 @@ async function upsertSubscription({
   status,
   metadata,
 }: UpsertSubscriptionOptions): Promise<void> {
-  const workspaceId = (metadata?.workspace_id as string | undefined) ?? null;
+  const workspaceId = typeof metadata?.workspace_id === 'string' ? metadata.workspace_id : null;
 
   if (!workspaceId) {
     console.warn(

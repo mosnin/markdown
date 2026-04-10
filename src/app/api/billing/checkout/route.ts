@@ -1,5 +1,5 @@
 import { getRequestContext } from "@/server/auth/get_request_context";
-import { createCreem } from "creem_io";
+import { createCheckout } from "@/lib/creem";
 
 export const runtime = "nodejs";
 
@@ -23,12 +23,16 @@ export async function POST() {
   const { user, workspace } = ctx;
 
   // ── Env vars ────────────────────────────────────────────────────────────────
-  const apiKey = process.env.CREEM_API_KEY;
   const productId = process.env.CREEM_PRO_PRODUCT_ID;
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL;
 
-  if (!apiKey || !productId) {
-    console.error("Missing CREEM_API_KEY or CREEM_PRO_PRODUCT_ID env vars");
+  if (!appUrl) {
+    console.error("[billing/checkout] NEXT_PUBLIC_APP_URL is not set");
+    return Response.json({ error: "Server configuration error" }, { status: 500 });
+  }
+
+  if (!productId) {
+    console.error("Missing CREEM_PRO_PRODUCT_ID env var");
     return Response.json({ error: "Billing not configured" }, { status: 500 });
   }
 
@@ -36,20 +40,14 @@ export async function POST() {
   const successUrl = `${appUrl}/app/settings?billing=success`;
   const cancelUrl = `${appUrl}/app/settings?billing=cancelled`;
 
-  const creem = createCreem({
-    apiKey,
-    testMode: process.env.NODE_ENV !== "production",
-  });
-
-  let checkout;
+  let result;
   try {
-    checkout = await creem.checkouts.create({
+    result = await createCheckout({
       productId,
       successUrl,
-      ...(user.email ? { customer: { email: user.email } } : {}),
-      metadata: {
-        workspace_id: workspace.id,
-      },
+      cancelUrl,
+      customerEmail: user.email ?? undefined,
+      metadata: { workspace_id: workspace.id },
     });
   } catch (err) {
     console.error("Creem checkout error:", err);
@@ -59,16 +57,5 @@ export async function POST() {
     );
   }
 
-  // SDK returns checkoutUrl (camelCase). The confirmed spec refers to
-  // checkout.checkout_url — both are the same field from the API response.
-  const checkoutUrl = checkout.checkoutUrl;
-
-  if (!checkoutUrl) {
-    console.error("Creem checkout response missing checkoutUrl:", checkout);
-    return Response.json({ error: "Invalid checkout response" }, { status: 502 });
-  }
-
-  void cancelUrl; // retained for future cancel_url support in the SDK
-
-  return Response.json({ checkoutUrl });
+  return Response.json({ checkoutUrl: result.checkoutUrl });
 }

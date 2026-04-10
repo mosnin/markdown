@@ -1,6 +1,6 @@
 import { getRequestContext } from "@/server/auth/get_request_context";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { createCreem } from "creem_io";
+import { createPortalSession } from "@/lib/creem";
 
 export const runtime = "nodejs";
 
@@ -47,27 +47,10 @@ export async function POST() {
     );
   }
 
-  // ── Env vars ────────────────────────────────────────────────────────────────
-  const apiKey = process.env.CREEM_API_KEY;
-
-  if (!apiKey) {
-    console.error("Missing CREEM_API_KEY env var");
-    return Response.json({ error: "Billing not configured" }, { status: 500 });
-  }
-
   // ── Create Creem customer portal session ────────────────────────────────────
-  const creem = createCreem({
-    apiKey,
-    testMode: process.env.NODE_ENV !== "production",
-  });
-
-  let portalResult;
+  let result;
   try {
-    // creem.customers.createPortal({ customerId }) returns CustomerLinks
-    // with .customerPortalLink — equivalent to creem.customers.billing(customerId).url
-    portalResult = await creem.customers.createPortal({
-      customerId: creemCustomerId,
-    });
+    result = await createPortalSession(creemCustomerId);
   } catch (err) {
     console.error("Creem portal error:", err);
     return Response.json(
@@ -76,10 +59,10 @@ export async function POST() {
     );
   }
 
-  const portalUrl = portalResult?.customerPortalLink;
+  const portalUrl = result.customerPortalLink;
 
   if (!portalUrl) {
-    console.error("Creem portal response missing URL field:", portalResult);
+    console.error("Creem portal response missing URL field:", result);
     return Response.json({ error: "Invalid portal response" }, { status: 502 });
   }
 
