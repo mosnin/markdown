@@ -7,6 +7,7 @@ import {
   rotateConnectionToken,
   revokeConnection,
   updateConnectionMeta,
+  toggleConnectionPause,
   addConnectionBoxScope,
   removeConnectionBoxScope,
   listConnectionsWithScopes,
@@ -41,6 +42,7 @@ async function requireContext() {
 
 export type ConnectionWithScopes = Connection & {
   box_scopes: ConnectionBoxScope[];
+  token_expires_at: string | null;
 };
 
 export async function listConnectionsAction(): Promise<
@@ -131,6 +133,31 @@ export async function revokeConnectionAction(
     return {
       ok: false,
       error: err instanceof Error ? err.message : "Failed to revoke connection",
+    };
+  }
+}
+
+// ─── Pause / unpause ──────────────────────────────────────────────────────────
+
+export async function toggleConnectionPauseAction(
+  connectionId: string
+): Promise<ActionResult<Connection>> {
+  try {
+    const { supabase, userId, workspaceId } = await requireContext();
+    const updated = await toggleConnectionPause(
+      supabase,
+      connectionId,
+      workspaceId,
+      userId
+    );
+    return { ok: true, data: updated };
+  } catch (err) {
+    return {
+      ok: false,
+      error:
+        err instanceof Error
+          ? err.message
+          : "Failed to update connection status",
     };
   }
 }

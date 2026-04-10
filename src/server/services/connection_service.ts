@@ -290,14 +290,54 @@ export async function removeConnectionBoxScope(
   await repoRemoveBoxScope(supabase, connectionId, boxId);
 }
 
+// ─── Pause / unpause ─────────────────────────────────────────────────────────
+
+/**
+ * Toggle a connection between active and paused.
+ * Revoked connections cannot be paused or unpaused.
+ */
+export async function toggleConnectionPause(
+  supabase: SupabaseClient,
+  connectionId: string,
+  workspaceId: string,
+  actorId: string
+): Promise<Connection> {
+  const connection = await getConnectionById(supabase, connectionId);
+  if (!connection || connection.workspace_id !== workspaceId) {
+    throw new Error("Connection not found");
+  }
+  if (connection.status === CONNECTION_STATUS.REVOKED) {
+    throw new Error("Cannot pause or unpause a revoked connection");
+  }
+
+  const newStatus =
+    connection.status === CONNECTION_STATUS.ACTIVE
+      ? CONNECTION_STATUS.PAUSED
+      : CONNECTION_STATUS.ACTIVE;
+
+  const updated = await repoUpdateConnection(supabase, connectionId, {
+    status: newStatus,
+  });
+  if (!updated) throw new Error("Failed to update connection status");
+
+  void auditConnectionUpdated(supabase, workspaceId, actorId, connectionId, {
+    name: updated.name,
+  });
+
+  return updated;
+}
+
 // ─── Queries ──────────────────────────────────────────────────────────────────
 
 export interface ConnectionWithScopes extends Connection {
   box_scopes: ConnectionBoxScope[];
+  /** expires_at from the most recently created active token, or null */
+  token_expires_at: string | null;
 }
 
 /**
- * List all non-revoked connections for a workspace, with their box scopes.
+ * List all non-revoked connections for a workspace, with their box scopes
+ * and the expiry date of the most recent active token.
  */
 export async function listConnectionsWithScopes(
   supabase: SupabaseClient,
@@ -310,8 +350,19 @@ export async function listConnectionsWithScopes(
 
   return Promise.all(
     connections.map(async (conn) => {
-      const box_scopes = await listBoxScopesByConnection(supabase, conn.id);
-      return { ...conn, box_scopes };
+      const [box_scopes, tokens] = await Promise.all([
+        listBoxScopesByConnection(supabase, conn.id),
+        listTokensByConnection(supabase, conn.id),
+      ]);
+
+      // Find the most recently created active token's expiry
+      const activeTokens = tokens.filter(
+        (t) => t.status === TOKEN_STATUS.ACTIVE
+      );
+      const latestActive = activeTokens[activeTokens.length - 1] ?? null;
+      const token_expires_at = latestActive?.expires_at ?? null;
+
+      return { ...conn, box_scopes, token_expires_at };
     })
   );
 }

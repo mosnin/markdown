@@ -2,7 +2,16 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ClipboardList, Home, Inbox, LayoutGrid, Plus, Search, Settings } from "lucide-react";
+import {
+  ChevronDown,
+  ClipboardList,
+  Home,
+  Inbox,
+  LayoutGrid,
+  Plus,
+  Search,
+  Settings,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 import { type Box as BoxType } from "@/server/domain/types/box";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -48,11 +57,10 @@ function NavItem({
             aria-current={isActive ? "page" : undefined}
             className={cn(
               "flex items-center gap-2.5 rounded-md px-2.5 py-2 text-sm transition-fast",
-              "hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
               "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
               isActive
-                ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium"
-                : "text-sidebar-foreground/70"
+                ? "bg-accent text-foreground font-medium"
+                : "text-foreground/60 hover:text-foreground hover:bg-accent/60"
             )}
           />
         }
@@ -88,27 +96,43 @@ export function AppSidebar({
   const currentBoxId = boxMatch?.[1];
   const currentNoteId = noteMatch?.[1];
 
+  // Derive initials for the workspace avatar pill
+  const workspaceInitial = (workspaceName ?? "W").charAt(0).toUpperCase();
+
   return (
     <aside
       aria-label="Sidebar navigation"
       className={cn(
         "flex h-full w-60 shrink-0 flex-col",
-        "border-r border-sidebar-border bg-sidebar"
+        "bg-white dark:bg-background border-r border-border/40"
       )}
     >
-      {/* Logo / wordmark */}
-      <div
-        className="flex h-12 items-center gap-2 border-b border-sidebar-border px-4"
-        aria-hidden="true"
-      >
-        <div className="h-5 w-5 rounded-md bg-foreground" />
-        <span className="text-sm font-semibold tracking-tight text-sidebar-foreground">
-          Context Store
-        </span>
+      {/* Workspace selector pill */}
+      <div className="px-3 pt-3 pb-2">
+        <Link
+          href="/app/workspaces"
+          className={cn(
+            "flex items-center gap-2 rounded-lg px-2.5 py-2 transition-fast",
+            "hover:bg-accent/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          )}
+          title={`Workspace: ${workspaceName}`}
+        >
+          {/* Avatar initial */}
+          <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-foreground text-[11px] font-semibold text-background">
+            {workspaceInitial}
+          </div>
+          {/* Workspace name */}
+          <span className="min-w-0 flex-1 truncate text-sm font-semibold tracking-tight text-foreground">
+            {workspaceName}
+          </span>
+          <ChevronDown className="h-3.5 w-3.5 shrink-0 text-foreground/40" aria-hidden="true" />
+        </Link>
       </div>
 
+      <Separator className="mx-3 mb-1" />
+
       {/* Primary navigation */}
-      <div className="px-2 pt-3 pb-1">
+      <div className="px-2 pt-1 pb-1">
         <nav aria-label="Primary navigation">
           <ul className="flex flex-col gap-0.5 list-none">
             {primaryNav.map((item) => (
@@ -125,7 +149,7 @@ export function AppSidebar({
         </nav>
       </div>
 
-      <Separator className="mx-2 my-1 bg-sidebar-border" />
+      <Separator className="mx-2 my-1" />
 
       {/* Workspace label + boxes tree */}
       <div className="flex min-h-0 flex-1 flex-col">
@@ -134,19 +158,19 @@ export function AppSidebar({
             href="/app/workspaces"
             className={cn(
               "min-w-0 flex-1 text-[11px] font-semibold uppercase tracking-wider",
-              "text-sidebar-foreground/40 transition-fast truncate",
-              "hover:text-sidebar-foreground/70",
+              "text-foreground/40 transition-fast truncate",
+              "hover:text-foreground/70",
               "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:rounded-sm"
             )}
             title={`Workspace: ${workspaceName}`}
           >
-            {workspaceName}
+            Boxes
           </Link>
           <Link
             href="/app/workspaces"
             className={cn(
-              "ml-1 shrink-0 rounded p-0.5 text-sidebar-foreground/30 transition-fast",
-              "hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+              "ml-1 shrink-0 rounded p-0.5 text-foreground/30 transition-fast",
+              "hover:bg-accent/60 hover:text-foreground",
               "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             )}
             aria-label="Manage boxes and workspace"
@@ -161,7 +185,7 @@ export function AppSidebar({
               href="/app/workspaces"
               className={cn(
                 "flex items-center gap-1.5 rounded-md px-2.5 py-2 text-xs transition-fast",
-                "text-sidebar-foreground/40 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+                "text-foreground/40 hover:bg-accent/60 hover:text-foreground",
                 "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               )}
             >
@@ -179,17 +203,17 @@ export function AppSidebar({
       </div>
 
       {/* Bottom chrome */}
-      <div className="border-t border-sidebar-border">
+      <div className="border-t border-border/40">
         <div className="flex items-center justify-between px-3 py-2">
           <Link
             href="/app/settings"
             aria-label="Settings"
             aria-current={pathname === "/app/settings" ? "page" : undefined}
             className={cn(
-              "flex items-center gap-2 rounded-md p-1.5 text-sidebar-foreground/60 transition-fast",
-              "hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+              "flex items-center gap-2 rounded-md p-1.5 text-foreground/50 transition-fast",
+              "hover:bg-accent/60 hover:text-foreground",
               "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-              pathname === "/app/settings" && "text-sidebar-accent-foreground"
+              pathname === "/app/settings" && "text-foreground"
             )}
           >
             <Settings className="h-4 w-4" aria-hidden="true" />
@@ -198,7 +222,7 @@ export function AppSidebar({
         </div>
 
         {userEmail && (
-          <div className="border-t border-sidebar-border px-2 py-2">
+          <div className="border-t border-border/40 px-2 py-2">
             <UserMenu email={userEmail} />
           </div>
         )}

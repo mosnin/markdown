@@ -3,6 +3,7 @@
 import { useState, useActionState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Card,
   CardContent,
@@ -11,7 +12,16 @@ import {
   CardDescription,
 } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
-import { updateProfileAction, updateThemeAction, changePasswordAction, type Theme, type ChangePasswordState } from "./actions";
+import {
+  updateProfileAction,
+  updateThemeAction,
+  changePasswordAction,
+  updateNotificationsAction,
+  updateWorkspaceAction,
+  type Theme,
+  type ChangePasswordState,
+  type NotificationPreferences,
+} from "./actions";
 
 // ─── Profile section ──────────────────────────────────────────────────────────
 
@@ -202,6 +212,199 @@ export function AppearanceSection({
             {status === "saving" ? "Saving…" : "Save changes"}
           </Button>
         </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+// ─── Notifications section ────────────────────────────────────────────────────
+
+const NOTIFICATION_ITEMS = [
+  {
+    key: "activity" as const,
+    id: "notif-activity",
+    label: "Activity updates",
+    description: "Get notified when teammates comment or make changes.",
+  },
+  {
+    key: "security" as const,
+    id: "notif-security",
+    label: "Security alerts",
+    description: "Receive alerts for new sign-ins and sensitive account changes.",
+  },
+  {
+    key: "announcements" as const,
+    id: "notif-product",
+    label: "Product announcements",
+    description: "Occasional emails about new features and improvements.",
+  },
+];
+
+export function NotificationsSection({
+  initialActivity,
+  initialSecurity,
+  initialAnnouncements,
+}: {
+  initialActivity: boolean;
+  initialSecurity: boolean;
+  initialAnnouncements: boolean;
+}) {
+  const [prefs, setPrefs] = useState<NotificationPreferences>({
+    activity: initialActivity,
+    security: initialSecurity,
+    announcements: initialAnnouncements,
+  });
+  const [status, setStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const [errorMsg, setErrorMsg] = useState<string>("");
+
+  function toggle(key: keyof NotificationPreferences) {
+    setPrefs((p) => ({ ...p, [key]: !p[key] }));
+    setStatus("idle");
+  }
+
+  async function handleSave() {
+    setStatus("saving");
+    setErrorMsg("");
+    const result = await updateNotificationsAction(prefs);
+    if (result.ok) {
+      setStatus("saved");
+    } else {
+      setStatus("error");
+      setErrorMsg(result.error);
+    }
+  }
+
+  return (
+    <Card id="settings-notifications">
+      <CardHeader className="px-6 pt-6 pb-4">
+        <CardTitle className="text-base font-semibold">Notifications</CardTitle>
+        <CardDescription className="text-sm text-muted-foreground">
+          Choose when and how you receive notifications.
+        </CardDescription>
+      </CardHeader>
+      <Separator />
+      <CardContent className="px-6 pt-5 pb-6 space-y-4">
+        {NOTIFICATION_ITEMS.map(({ key, id, label, description }) => (
+          <label
+            key={id}
+            htmlFor={id}
+            className="flex cursor-pointer items-start justify-between gap-4 rounded-lg border border-border px-4 py-3 hover:bg-muted/30 transition-colors"
+          >
+            <div className="flex flex-col gap-0.5">
+              <p className="text-sm font-medium text-foreground">{label}</p>
+              <p className="text-xs text-muted-foreground">{description}</p>
+            </div>
+            <input
+              id={id}
+              type="checkbox"
+              checked={prefs[key]}
+              onChange={() => toggle(key)}
+              className="mt-0.5 shrink-0 accent-foreground"
+            />
+          </label>
+        ))}
+
+        <div className="flex items-center justify-end gap-3 pt-1">
+          {status === "saved" && (
+            <p className="text-xs text-muted-foreground">Preferences saved.</p>
+          )}
+          {status === "error" && (
+            <p className="text-xs text-destructive">{errorMsg}</p>
+          )}
+          <Button
+            size="sm"
+            type="button"
+            disabled={status === "saving"}
+            onClick={handleSave}
+          >
+            {status === "saving" ? "Saving…" : "Save changes"}
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+// ─── Workspace section ────────────────────────────────────────────────────────
+
+export function WorkspaceSection({
+  initialName,
+  initialDescription,
+}: {
+  initialName: string;
+  initialDescription: string | null;
+}) {
+  const [status, setStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const [errorMsg, setErrorMsg] = useState<string>("");
+
+  async function handleSubmit(formData: FormData) {
+    setStatus("saving");
+    setErrorMsg("");
+    const result = await updateWorkspaceAction(formData);
+    if (result.ok) {
+      setStatus("saved");
+    } else {
+      setStatus("error");
+      setErrorMsg(result.error);
+    }
+  }
+
+  return (
+    <Card id="settings-workspace">
+      <CardHeader className="px-6 pt-6 pb-4">
+        <CardTitle className="text-base font-semibold">Workspace</CardTitle>
+        <CardDescription className="text-sm text-muted-foreground">
+          Update your workspace name and description.
+        </CardDescription>
+      </CardHeader>
+      <Separator />
+      <CardContent className="px-6 pt-5 pb-6">
+        <form action={handleSubmit} className="flex flex-col gap-4">
+          <div className="flex flex-col gap-1.5">
+            <label
+              htmlFor="workspace-name"
+              className="text-sm font-medium text-foreground"
+            >
+              Workspace name
+            </label>
+            <Input
+              id="workspace-name"
+              name="name"
+              defaultValue={initialName}
+              placeholder="My workspace"
+              required
+            />
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <label
+              htmlFor="workspace-description"
+              className="text-sm font-medium text-foreground"
+            >
+              Description
+            </label>
+            <Textarea
+              id="workspace-description"
+              name="description"
+              defaultValue={initialDescription ?? ""}
+              placeholder="What is this workspace for?"
+              rows={3}
+              className="resize-none"
+            />
+          </div>
+
+          <div className="flex items-center justify-end gap-3 pt-1">
+            {status === "saved" && (
+              <p className="text-xs text-muted-foreground">Workspace updated.</p>
+            )}
+            {status === "error" && (
+              <p className="text-xs text-destructive">{errorMsg}</p>
+            )}
+            <Button size="sm" type="submit" disabled={status === "saving"}>
+              {status === "saving" ? "Saving…" : "Save changes"}
+            </Button>
+          </div>
+        </form>
       </CardContent>
     </Card>
   );

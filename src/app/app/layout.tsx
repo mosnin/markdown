@@ -58,7 +58,7 @@ export default async function AppLayout({
       {/* Main content column — flex column filling remaining width */}
       <div className="flex flex-1 flex-col overflow-hidden min-w-0">
         {/* ── Top bar ────────────────────────────────────────────────────────── */}
-        <header className="flex h-12 shrink-0 items-center gap-3 border-b border-border bg-background px-3 md:px-4">
+        <header className="flex h-12 shrink-0 items-center gap-3 border-b border-border/40 bg-background px-3 md:px-4">
           {/* Mobile: hamburger + workspace name */}
           <div className="flex items-center gap-3 md:hidden">
             <MobileSidebar
@@ -66,12 +66,9 @@ export default async function AppLayout({
               workspaceName={workspaceName}
               boxes={boxes}
             />
-            <div className="flex items-center gap-2 min-w-0">
-              <div className="h-4 w-4 shrink-0 rounded-sm bg-foreground" aria-hidden="true" />
-              <span className="text-sm font-semibold tracking-tight truncate">
-                {workspaceName ?? "Context Store"}
-              </span>
-            </div>
+            <span className="text-sm font-semibold tracking-tight truncate">
+              {workspaceName ?? "Context Store"}
+            </span>
           </div>
 
           {/* Desktop: breadcrumb area (left) */}
@@ -79,12 +76,20 @@ export default async function AppLayout({
             <AppBreadcrumbs />
           </div>
 
-          {/* Desktop: user actions (right) — theme toggle */}
+          {/* Desktop: utility links + theme toggle (right) */}
           <div
-            className="hidden md:flex md:items-center md:gap-1 md:ml-auto"
+            className="hidden md:flex md:items-center md:gap-2 md:ml-auto"
             role="toolbar"
             aria-label="User actions"
           >
+            <a
+              href="https://docs.contextstore.app"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-xs text-foreground/50 hover:text-foreground transition-fast focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded"
+            >
+              Docs
+            </a>
             <ThemeToggle />
           </div>
         </header>

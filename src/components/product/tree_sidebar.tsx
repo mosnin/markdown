@@ -257,7 +257,7 @@ function FolderNode({
             "flex flex-1 items-center gap-1.5 rounded-md px-1 py-1 text-xs min-w-0",
             "transition-colors duration-150",
             hasChildren
-              ? "text-sidebar-foreground/70 hover:bg-accent/50 hover:text-foreground cursor-pointer"
+              ? "text-foreground/60 hover:bg-accent/50 hover:text-foreground cursor-pointer"
               : "text-muted-foreground/40 cursor-default",
             "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
           )}

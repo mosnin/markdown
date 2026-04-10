@@ -13,6 +13,8 @@ import {
   Key,
   Zap,
   Webhook,
+  Pause,
+  Play,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
@@ -41,6 +43,7 @@ import {
   createConnectionAction,
   rotateTokenAction,
   revokeConnectionAction,
+  toggleConnectionPauseAction,
 } from "@/app/app/settings/connections_actions";
 import type { Box } from "@/server/domain/types/box";
 
@@ -48,6 +51,7 @@ import type { Box } from "@/server/domain/types/box";
 
 export type ConnectionWithScopes = Connection & {
   box_scopes: ConnectionBoxScope[];
+  token_expires_at: string | null;
 };
 
 // ─── Labels ───────────────────────────────────────────────────────────────────
@@ -71,11 +75,12 @@ const PERMISSION_LABEL: Record<PermissionMode, string> = {
 };
 
 const PERMISSION_DESCRIPTION: Record<PermissionMode, string> = {
-  read_only: "May only read notes, folders, and metadata.",
+  read_only:
+    "Read-only access to notes, folders, and metadata. No writes of any kind are permitted.",
   propose_writes:
-    "May submit write proposals for human review. Cannot write directly.",
+    "Can submit write proposals that require a human to review and approve before any change is applied. No direct writes.",
   generate_in_allowed_folders:
-    "May write directly to folders where accepts_generated_notes = true.",
+    "Can write directly to folders that have 'accepts generated notes' enabled. All other folders remain read-only.",
 };
 
 const STATUS_CONFIG: Record<
@@ -202,6 +207,7 @@ function CreateConnectionDialog({
         onCreated(
           {
             ...result.data.connection,
+            token_expires_at: null,
             box_scopes: Array.from(selectedBoxIds).map((box_id) => ({
               id: "",
               connection_id: result.data.connection.id,
@@ -398,14 +404,17 @@ function ConnectionCard({
   boxes,
   onRevoked,
   onRotated,
+  onStatusChanged,
 }: {
   connection: ConnectionWithScopes;
   boxes: Box[];
   onRevoked: (id: string) => void;
   onRotated: (rawToken: string) => void;
+  onStatusChanged: (updated: ConnectionWithScopes) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
   const [confirmRevoke, setConfirmRevoke] = useState(false);
+  const [confirmRotate, setConfirmRotate] = useState(false);
   const [isPending, startTransition] = useTransition();
 
   const TypeIcon = TYPE_ICON[connection.connection_type];
@@ -417,12 +426,25 @@ function ConnectionCard({
     ? new Date(connection.last_used_at).toLocaleDateString()
     : "Never";
 
+  const tokenExpiryLabel = (() => {
+    if (!connection.token_expires_at) return null;
+    const expiryDate = new Date(connection.token_expires_at);
+    const now = new Date();
+    const diffMs = expiryDate.getTime() - now.getTime();
+    const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+    if (diffDays <= 0) return "Expired";
+    if (diffDays <= 14)
+      return `Expires in ${diffDays} day${diffDays !== 1 ? "s" : ""}`;
+    return `Expires ${expiryDate.toLocaleDateString()}`;
+  })();
+
   function handleRotate() {
     startTransition(async () => {
       const result = await rotateTokenAction(connection.id);
       if (result.ok) {
         onRotated(result.data.rawToken);
       }
+      setConfirmRotate(false);
     });
   }
 
@@ -433,6 +455,15 @@ function ConnectionCard({
         onRevoked(connection.id);
       }
       setConfirmRevoke(false);
+    });
+  }
+
+  function handleTogglePause() {
+    startTransition(async () => {
+      const result = await toggleConnectionPauseAction(connection.id);
+      if (result.ok) {
+        onStatusChanged({ ...connection, status: result.data.status });
+      }
     });
   }
 
@@ -474,6 +505,19 @@ function ConnectionCard({
             {scopedBoxes.length > 0 && (
               <span className="ml-2">
                 · {scopedBoxes.length} box{scopedBoxes.length !== 1 ? "es" : ""}
+              </span>
+            )}
+            {tokenExpiryLabel && (
+              <span
+                className={cn(
+                  "ml-2",
+                  tokenExpiryLabel === "Expired" ||
+                    tokenExpiryLabel.startsWith("Expires in")
+                    ? "text-warning"
+                    : ""
+                )}
+              >
+                · {tokenExpiryLabel}
               </span>
             )}
           </p>
@@ -549,18 +593,69 @@ function ConnectionCard({
           </div>
 
           {/* Actions */}
-          <div className="flex items-center gap-2 border-t border-border pt-2.5">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleRotate}
-              disabled={isPending}
-              className="h-7 px-2.5 text-xs gap-1.5"
-            >
-              <RotateCcw className="h-3 w-3" />
-              Rotate token
-            </Button>
+          <div className="flex flex-wrap items-center gap-2 border-t border-border pt-2.5">
+            {/* Rotate token — with confirmation */}
+            {confirmRotate ? (
+              <div className="flex items-center gap-1.5">
+                <span className="text-xs text-muted-foreground">Rotate token?</span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleRotate}
+                  disabled={isPending}
+                  className="h-7 px-2.5 text-xs"
+                >
+                  Confirm
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setConfirmRotate(false)}
+                  className="h-7 px-2.5 text-xs"
+                >
+                  Cancel
+                </Button>
+              </div>
+            ) : (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setConfirmRotate(true)}
+                disabled={
+                  isPending ||
+                  connection.status !== CONNECTION_STATUS.ACTIVE
+                }
+                className="h-7 px-2.5 text-xs gap-1.5"
+              >
+                <RotateCcw className="h-3 w-3" />
+                Rotate token
+              </Button>
+            )}
 
+            {/* Pause / unpause — only when neither confirm dialog is open */}
+            {!confirmRotate && !confirmRevoke && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleTogglePause}
+                disabled={isPending}
+                className="h-7 px-2.5 text-xs gap-1.5"
+              >
+                {connection.status === CONNECTION_STATUS.PAUSED ? (
+                  <>
+                    <Play className="h-3 w-3" />
+                    Resume
+                  </>
+                ) : (
+                  <>
+                    <Pause className="h-3 w-3" />
+                    Pause
+                  </>
+                )}
+              </Button>
+            )}
+
+            {/* Revoke — with confirmation */}
             {confirmRevoke ? (
               <div className="flex items-center gap-1.5 ml-auto">
                 <span className="text-xs text-destructive">Revoke this connection?</span>
@@ -583,16 +678,18 @@ function ConnectionCard({
                 </Button>
               </div>
             ) : (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setConfirmRevoke(true)}
-                disabled={isPending}
-                className="h-7 px-2.5 text-xs gap-1.5 text-destructive hover:text-destructive hover:bg-destructive/10 ml-auto"
-              >
-                <Trash2 className="h-3 w-3" />
-                Revoke
-              </Button>
+              !confirmRotate && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setConfirmRevoke(true)}
+                  disabled={isPending}
+                  className="h-7 px-2.5 text-xs gap-1.5 text-destructive hover:text-destructive hover:bg-destructive/10 ml-auto"
+                >
+                  <Trash2 className="h-3 w-3" />
+                  Revoke
+                </Button>
+              )
             )}
           </div>
         </div>
@@ -632,6 +729,12 @@ export function ConnectionsPanel({
 
   function handleRotated(rawToken: string) {
     setRevealToken({ rawToken, isRotate: true });
+  }
+
+  function handleStatusChanged(updated: ConnectionWithScopes) {
+    setConnections((prev) =>
+      prev.map((c) => (c.id === updated.id ? updated : c))
+    );
   }
 
   return (
@@ -675,6 +778,7 @@ export function ConnectionsPanel({
                 boxes={boxes}
                 onRevoked={handleRevoked}
                 onRotated={handleRotated}
+                onStatusChanged={handleStatusChanged}
               />
             ))
           )}
