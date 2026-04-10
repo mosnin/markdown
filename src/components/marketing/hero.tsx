@@ -118,7 +118,7 @@ export function HeroSection() {
 						<p className="font-mono text-xs">NEW</p>
 					</div>
 					<span className="text-xs">
-						Real-time sync, folder import &amp; note-level import
+						MCP access, context bundles &amp; version history
 					</span>
 					<span className="block h-5 border-l" />
 					<div className="pr-1">
@@ -133,9 +133,9 @@ export function HeroSection() {
 						"text-balance font-bold text-4xl text-foreground leading-tight md:text-5xl",
 					)}
 				>
-					Sharpen your AI context.
+					Structured context.
 					<br />
-					Build smarter.
+					Built for AI.
 				</GlitchTitle>
 
 				{/* Description */}
@@ -145,9 +145,10 @@ export function HeroSection() {
 					transition={{ delay: 0.2, duration: 0.5, ease: "easeOut" }}
 					className="text-muted-foreground text-sm tracking-wide sm:text-lg md:text-xl"
 				>
-					A markdown-native knowledge base for AI-native work. Organize notes
-					in structured boxes, bundle the right context for any agent, and
-					version everything automatically.
+					Poggle is a structured, markdown-native context layer for AI
+					workflows. Write notes in semantic boxes with guide notes, assemble
+					token-aware bundles, and deliver clean context to any model via
+					paste, API, or MCP.
 				</motion.p>
 
 				{/* CTA */}

@@ -5,7 +5,7 @@ import Link from "next/link";
 import { Check } from "lucide-react";
 
 export const metadata = {
-  title: "Sign in — Context Store",
+  title: "Sign in — Poggle",
 };
 
 const FEATURES = [
@@ -45,7 +45,7 @@ export default async function SignInPage({
           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-violet-600">
             <div className="h-3 w-3 rounded-sm bg-white" />
           </div>
-          <span className="text-sm font-semibold text-white">Context Store</span>
+          <span className="text-sm font-semibold text-white">Poggle</span>
         </Link>
 
         {/* Center content */}
@@ -77,7 +77,7 @@ export default async function SignInPage({
         {/* Bottom quote */}
         <blockquote className="relative space-y-2">
           <p className="text-sm italic leading-relaxed text-white/60">
-            &ldquo;Context Store changed how I work with AI. Every conversation
+            &ldquo;Poggle changed how I work with AI. Every conversation
             starts with the right knowledge, not a blank slate.&rdquo;
           </p>
           <footer className="text-xs text-white/40">
@@ -95,7 +95,7 @@ export default async function SignInPage({
               <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-violet-600">
                 <div className="h-3 w-3 rounded-sm bg-background" />
               </div>
-              <span className="text-sm font-semibold text-foreground">Context Store</span>
+              <span className="text-sm font-semibold text-foreground">Poggle</span>
             </Link>
           </div>
 

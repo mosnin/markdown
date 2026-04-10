@@ -27,7 +27,7 @@ import { FeatureCard } from "@/components/ui/grid-feature-cards";
 import { GridCard } from "@/components/ui/grid-card";
 
 export const metadata: Metadata = {
-  title: "Features — Context Store",
+  title: "Features — Poggle",
   description:
     "Everything you need to organize knowledge and build perfect AI context. Boxes, bundles, version history, and more.",
 };
@@ -47,7 +47,7 @@ const CATEGORIES = [
         icon: ArrowLeftRight,
         title: "Bidirectional Links",
         description:
-          "Link notes to each other. Context Store tracks both directions automatically so nothing gets lost.",
+          "Link notes to each other. Poggle tracks both directions automatically so nothing gets lost.",
       },
       {
         icon: Layers,
@@ -89,7 +89,7 @@ const CATEGORIES = [
         icon: Cpu,
         title: "Token-Aware Packing",
         description:
-          "Context Store trims, prioritizes, and fits your notes into any model's context window without overflow.",
+          "Poggle trims, prioritizes, and fits your notes into any model's context window without overflow.",
       },
       {
         icon: TrendingUp,
@@ -113,7 +113,7 @@ const CATEGORIES = [
         icon: Code,
         title: "API Access",
         description:
-          "Integrate Context Store into your own AI pipelines via REST API. Build custom retrieval and bundling workflows.",
+          "Integrate Poggle into your own AI pipelines via REST API or MCP. Build custom retrieval and bundling workflows.",
       },
     ],
   },
@@ -190,7 +190,7 @@ export default function FeaturesPage() {
       <PageHeroSection
         eyebrow="Features"
         title={<>Everything you need to build<br className="hidden sm:block" /> perfect AI context</>}
-        description="Context Store combines structured note-taking, token-aware AI bundling, and full version history into one focused tool."
+        description="Poggle combines structured note-taking, token-aware AI bundling, and full version history into one focused context layer."
         ctaPrimary={{ label: "Start free trial", href: "/sign_in" }}
         ctaSecondary={{ label: "View pricing", href: "/pricing" }}
       />

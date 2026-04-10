@@ -269,7 +269,7 @@ const companyLinks: LinkItem[] = [
 	{
 		title: 'About Us',
 		href: '/about',
-		description: 'Our story and the team behind Context Store',
+		description: 'Our story and the team behind Poggle',
 		icon: Users,
 	},
 	{
@@ -289,7 +289,7 @@ const companyLinks: LinkItem[] = [
 const companyLinks2: LinkItem[] = [
 	{
 		title: 'Docs',
-		href: 'https://docs.contextstore.app',
+		href: 'https://docs.poggle.app',
 		icon: BookOpen,
 	},
 	{
@@ -345,7 +345,7 @@ function WordmarkLogo() {
 				<div className="h-1.5 w-1.5 rounded-sm bg-white" />
 			</div>
 			<span className="text-sm font-semibold tracking-tight text-foreground">
-				Context Store
+				Poggle
 			</span>
 		</>
 	);

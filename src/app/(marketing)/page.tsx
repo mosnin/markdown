@@ -18,7 +18,7 @@ function AppMockup() {
           <div className="h-2.5 w-2.5 rounded-full bg-yellow-400/70" />
           <div className="h-2.5 w-2.5 rounded-full bg-green-400/70" />
           <span className="ml-3 font-mono text-[11px] text-muted-foreground/60">
-            architecture.md — Context Store
+            architecture.md — Poggle
           </span>
         </div>
         <div className="grid grid-cols-5 divide-x divide-border/40">
@@ -82,7 +82,7 @@ function BoxesMockup() {
           <div className="h-2.5 w-2.5 rounded-full bg-red-400/70" />
           <div className="h-2.5 w-2.5 rounded-full bg-yellow-400/70" />
           <div className="h-2.5 w-2.5 rounded-full bg-green-400/70" />
-          <span className="ml-2 text-muted-foreground/60">context-store</span>
+          <span className="ml-2 text-muted-foreground/60">poggle</span>
         </div>
         <div className="space-y-1 p-4 leading-relaxed text-muted-foreground/70">
           <p>
@@ -281,7 +281,7 @@ export default function HomePage() {
               </div>
               <div className="space-y-4">
                 <Bullet title="Token-aware export">
-                  Set a budget and Context Store selects the most relevant notes that fit within it.
+                  Set a budget and Poggle selects the most relevant notes that fit within it.
                 </Bullet>
                 <Bullet title="Freshness scoring">
                   Recently updated notes surface first so your AI always gets current context.
@@ -305,7 +305,7 @@ export default function HomePage() {
                   Own your history.
                 </h2>
                 <p className="text-base leading-relaxed text-muted-foreground">
-                  Every edit is tracked. Every version is restorable. Context Store maintains
+                  Every edit is tracked. Every version is restorable. Poggle maintains
                   a complete audit trail so nothing is ever truly gone.
                 </p>
               </div>
@@ -453,7 +453,7 @@ export default function HomePage() {
               href="/sign_in"
               className="inline-flex items-center gap-2 rounded-lg bg-violet-600 px-8 py-3.5 text-base font-semibold text-white shadow-sm transition-colors hover:bg-violet-500"
             >
-              Get Context Store
+              Get Poggle
             </Link>
           </div>
         </div>

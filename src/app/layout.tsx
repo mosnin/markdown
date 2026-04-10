@@ -6,7 +6,7 @@ import { ThemeProvider } from "@/components/product/theme_provider";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Context Store",
+  title: "Poggle",
   description:
     "A structured, markdown-native context operating system for humans and AI.",
 };
