@@ -1,5 +1,11 @@
 import { notFound } from "next/navigation";
-import { BookOpen, Bot, ChevronRight, Clock, GitBranch } from "lucide-react";
+import {
+  BookOpen,
+  Bot,
+  ChevronRight,
+  Clock,
+  GitBranch,
+} from "lucide-react";
 import Link from "next/link";
 import { requireAuthenticatedUser } from "@/server/auth/require_authenticated_user";
 import { createClient } from "@/lib/supabase/server";
@@ -19,9 +25,11 @@ import { NoteHistoryPanel } from "@/components/product/note_history_panel";
 import { NoteExportMenu } from "@/components/product/export_menu";
 import { NoteLifecycleMenu } from "@/components/product/note_lifecycle_menu";
 import { GeneratedNoteBanner } from "@/components/product/generated_note_banner";
+import { RetrievalHintBadge } from "@/components/product/retrieval_hint_badge";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { cn } from "@/lib/utils";
 
 function formatDate(dateStr: string): string {
   return new Date(dateStr).toLocaleDateString("en-US", {
@@ -81,6 +89,30 @@ function Breadcrumb({
   );
 }
 
+// ─── Info tab sections ────────────────────────────────────────────────────────
+
+function InfoSection({
+  children,
+  border = true,
+}: {
+  children: React.ReactNode;
+  border?: boolean;
+}) {
+  return (
+    <div className={cn("px-4 py-3", border && "border-b border-border")}>
+      {children}
+    </div>
+  );
+}
+
+function InfoLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <p className="mb-1.5 text-[10px] font-medium uppercase tracking-wider text-muted-foreground/60">
+      {children}
+    </p>
+  );
+}
+
 // ─── Right panel — Note context ───────────────────────────────────────────────
 
 function NoteContextPanel({
@@ -90,6 +122,7 @@ function NoteContextPanel({
   folderName,
   workspaceName,
   isGuideNote,
+  generatingConnectionName,
   links,
   allBoxNotes,
   initialBundle,
@@ -101,7 +134,11 @@ function NoteContextPanel({
   folderName: string | null;
   workspaceName: string;
   isGuideNote: boolean;
-  links: { outgoing: Awaited<ReturnType<typeof listLinksForNote>>["outgoing"]; incoming: Awaited<ReturnType<typeof listLinksForNote>>["incoming"] };
+  generatingConnectionName: string | null;
+  links: {
+    outgoing: Awaited<ReturnType<typeof listLinksForNote>>["outgoing"];
+    incoming: Awaited<ReturnType<typeof listLinksForNote>>["incoming"];
+  };
   allBoxNotes: Awaited<ReturnType<typeof listNotesByBox>>;
   initialBundle: Awaited<ReturnType<typeof assembleContextBundle>>;
   historyResult: Awaited<ReturnType<typeof listVersionsForNote>>;
@@ -112,6 +149,19 @@ function NoteContextPanel({
     bundle: "Bundle",
   };
 
+  const ORIGIN_TYPE_LABEL: Record<string, string> = {
+    user_created: "User created",
+    imported: "Imported",
+    generated_by_tool: "AI generated",
+    duplicated: "Duplicated",
+    restored: "Restored",
+  };
+
+  const hasRetrieval =
+    !!note.read_hint || note.retrieval_priority > 0;
+
+  const linkCount = links.outgoing.length + links.incoming.length;
+
   return (
     <div className="flex h-full flex-col overflow-hidden">
       {/* Panel header */}
@@ -121,15 +171,20 @@ function NoteContextPanel({
         </p>
       </div>
 
-      {/* Tabs: Info | Bundle | History */}
+      {/* Tabs */}
       <Tabs defaultValue="info" className="flex flex-1 flex-col overflow-hidden">
         <div className="border-b border-border px-4">
           <TabsList variant="line" className="h-auto pb-0">
             <TabsTrigger value="info" className="pb-2.5 text-xs">
               Info
             </TabsTrigger>
-            <TabsTrigger value="links" className="pb-2.5 text-xs">
+            <TabsTrigger value="links" className="relative pb-2.5 text-xs">
               Links
+              {linkCount > 0 && (
+                <span className="ml-1 rounded-full bg-muted px-1 text-[10px] text-muted-foreground">
+                  {linkCount}
+                </span>
+              )}
             </TabsTrigger>
             <TabsTrigger value="bundle" className="pb-2.5 text-xs">
               Bundle
@@ -143,33 +198,80 @@ function NoteContextPanel({
         {/* ── Info tab ── */}
         <TabsContent value="info" className="flex-1 overflow-hidden">
           <ScrollArea className="h-full">
-            {/* Kind + Guide status */}
-            <div className="border-b border-border px-4 py-3">
+
+            {/* Guide note callout — shown prominently when this IS the guide */}
+            {isGuideNote && (
+              <div className="border-b border-amber-300/50 bg-amber-50/40 px-4 py-3 dark:border-amber-600/30 dark:bg-amber-900/10">
+                <div className="flex items-center gap-2">
+                  <BookOpen
+                    className="h-3.5 w-3.5 shrink-0 text-amber-600 dark:text-amber-500"
+                    aria-hidden="true"
+                  />
+                  <p className="text-xs font-medium text-amber-700 dark:text-amber-400">
+                    This is the guide note for{" "}
+                    <Link
+                      href={`/app/boxes/${boxId}`}
+                      className="underline underline-offset-2 hover:text-amber-800 dark:hover:text-amber-300 transition-fast"
+                    >
+                      {boxName}
+                    </Link>
+                  </p>
+                </div>
+                <p className="mt-1 pl-5 text-[11px] text-amber-700/70 dark:text-amber-400/70">
+                  AI agents read this note first when assembling context for
+                  this box.
+                </p>
+              </div>
+            )}
+
+            {/* Identity */}
+            <InfoSection>
               <div className="flex items-center gap-2 flex-wrap">
                 <span className="text-[10px] uppercase tracking-wider text-muted-foreground/60">
                   {kindLabel[note.kind] ?? note.kind}
                 </span>
-                {isGuideNote && (
-                  <Badge
-                    variant="secondary"
-                    className="flex items-center gap-1 text-[10px] font-normal"
-                  >
-                    <BookOpen className="h-3 w-3" aria-hidden="true" />
-                    Box guide
+                {note.kind !== "note" && (
+                  <Badge variant="secondary" className="text-[10px] font-normal capitalize">
+                    {note.kind}
                   </Badge>
                 )}
               </div>
               <p className="mt-1 line-clamp-3 text-sm font-medium text-foreground">
                 {note.title}
               </p>
-            </div>
+            </InfoSection>
+
+            {/* Summary — first-class, not buried at bottom */}
+            {note.summary && (
+              <InfoSection>
+                <InfoLabel>Summary</InfoLabel>
+                <p className="text-xs leading-relaxed text-foreground/80">
+                  {note.summary}
+                </p>
+              </InfoSection>
+            )}
+
+            {/* Retrieval signals */}
+            {hasRetrieval && (
+              <InfoSection>
+                <InfoLabel>Retrieval</InfoLabel>
+                <RetrievalHintBadge
+                  readHint={note.read_hint}
+                  retrievalPriority={note.retrieval_priority}
+                />
+                <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground/60">
+                  {note.retrieval_priority > 0 &&
+                    "Priority affects context bundle inclusion order. "}
+                  {note.read_hint &&
+                    "Read hint guides AI and human readers on how to use this note."}
+                </p>
+              </InfoSection>
+            )}
 
             {/* Tags */}
             {note.tags.length > 0 && (
-              <div className="border-b border-border px-4 py-3">
-                <p className="mb-2 text-[10px] uppercase tracking-wider text-muted-foreground/60">
-                  Tags
-                </p>
+              <InfoSection>
+                <InfoLabel>Tags</InfoLabel>
                 <div className="flex flex-wrap gap-1">
                   {note.tags.map((tag) => (
                     <Badge key={tag} variant="secondary" className="text-xs font-normal">
@@ -177,33 +279,78 @@ function NoteContextPanel({
                     </Badge>
                   ))}
                 </div>
-              </div>
+              </InfoSection>
             )}
 
             {/* Location */}
-            <div className="border-b border-border px-4 py-3">
-              <p className="mb-2 text-[10px] uppercase tracking-wider text-muted-foreground/60">
-                Location
-              </p>
-              <div className="flex flex-col gap-1.5 text-xs">
-                <MetaField label="Workspace" value={workspaceName} />
-                <MetaField
-                  label="Box"
-                  value={boxName}
+            <InfoSection>
+              <InfoLabel>Location</InfoLabel>
+              <nav
+                aria-label="Note location"
+                className="flex items-center gap-1 flex-wrap text-xs text-muted-foreground"
+              >
+                <Link
+                  href="/app"
+                  className="hover:text-foreground hover:underline underline-offset-2 transition-fast"
+                >
+                  {workspaceName}
+                </Link>
+                <ChevronRight className="h-3 w-3 shrink-0 text-muted-foreground/40" aria-hidden="true" />
+                <Link
                   href={`/app/boxes/${boxId}`}
-                />
-                {folderName && <MetaField label="Folder" value={folderName} />}
-              </div>
-            </div>
+                  className="hover:text-foreground hover:underline underline-offset-2 transition-fast"
+                >
+                  {boxName}
+                </Link>
+                {folderName && (
+                  <>
+                    <ChevronRight className="h-3 w-3 shrink-0 text-muted-foreground/40" aria-hidden="true" />
+                    <span>{folderName}</span>
+                  </>
+                )}
+              </nav>
+              {note.path_cache && (
+                <p className="mt-1.5 font-mono text-[10px] text-muted-foreground/50">
+                  {note.path_cache}
+                </p>
+              )}
+            </InfoSection>
+
+            {/* Machine origin — shown when note is generated */}
+            {note.is_generated && (
+              <InfoSection>
+                <InfoLabel>Machine origin</InfoLabel>
+                <div className="flex flex-col gap-1.5">
+                  <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                    <Bot className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                    <span>
+                      Generated by{" "}
+                      {generatingConnectionName ? (
+                        <span className="font-medium text-foreground/80">
+                          {generatingConnectionName}
+                        </span>
+                      ) : (
+                        "an external tool"
+                      )}
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-muted-foreground/60">
+                    Promote this note to take ownership. Provenance and history
+                    are preserved.
+                  </p>
+                </div>
+              </InfoSection>
+            )}
 
             {/* Version */}
-            <div className="border-b border-border px-4 py-3">
-              <p className="mb-2 text-[10px] uppercase tracking-wider text-muted-foreground/60">
-                Version
-              </p>
-              <div className="flex flex-col gap-2 text-xs">
+            <InfoSection border={false}>
+              <InfoLabel>Version</InfoLabel>
+              <div className="flex flex-col gap-1.5 text-xs">
                 <div className="flex items-center gap-2">
-                  <GitBranch className="h-3.5 w-3.5 shrink-0 text-muted-foreground/60" aria-hidden="true" />
+                  <GitBranch
+                    className="h-3.5 w-3.5 shrink-0 text-muted-foreground/60"
+                    aria-hidden="true"
+                  />
                   <span className="font-mono text-[11px] text-foreground/70">
                     {note.current_version_id
                       ? note.current_version_id.slice(0, 8) + "…"
@@ -211,37 +358,24 @@ function NoteContextPanel({
                   </span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <Clock className="h-3.5 w-3.5 shrink-0 text-muted-foreground/60" aria-hidden="true" />
+                  <Clock
+                    className="h-3.5 w-3.5 shrink-0 text-muted-foreground/60"
+                    aria-hidden="true"
+                  />
                   <span className="text-foreground/70">
                     {formatRelativeDate(note.updated_at)}
                   </span>
                 </div>
+                {note.origin_type && note.origin_type !== "user_created" && (
+                  <div className="flex items-center gap-2">
+                    <span className="text-muted-foreground/50">Origin:</span>
+                    <span className="text-foreground/70">
+                      {ORIGIN_TYPE_LABEL[note.origin_type] ?? note.origin_type}
+                    </span>
+                  </div>
+                )}
               </div>
-            </div>
-
-            {/* Summary */}
-            {note.summary && (
-              <div className="border-b border-border px-4 py-3">
-                <p className="mb-1.5 text-[10px] uppercase tracking-wider text-muted-foreground/60">
-                  Summary
-                </p>
-                <p className="text-xs leading-relaxed text-foreground/80">
-                  {note.summary}
-                </p>
-              </div>
-            )}
-
-            {/* Read hint */}
-            {note.read_hint && (
-              <div className="px-4 py-3">
-                <p className="mb-1.5 text-[10px] uppercase tracking-wider text-muted-foreground/60">
-                  Read hint
-                </p>
-                <p className="text-xs italic leading-relaxed text-muted-foreground">
-                  {note.read_hint}
-                </p>
-              </div>
-            )}
+            </InfoSection>
           </ScrollArea>
         </TabsContent>
 
@@ -280,34 +414,6 @@ function NoteContextPanel({
           />
         </TabsContent>
       </Tabs>
-    </div>
-  );
-}
-
-function MetaField({
-  label,
-  value,
-  href,
-}: {
-  label: string;
-  value: string;
-  href?: string;
-}) {
-  return (
-    <div className="flex flex-col gap-0.5">
-      <p className="text-[10px] uppercase tracking-wider text-muted-foreground/60">
-        {label}
-      </p>
-      {href ? (
-        <Link
-          href={href}
-          className="text-foreground/80 hover:text-foreground hover:underline underline-offset-2 transition-fast"
-        >
-          {value}
-        </Link>
-      ) : (
-        <p className="text-foreground/80">{value}</p>
-      )}
     </div>
   );
 }
@@ -367,7 +473,7 @@ export default async function NotePage({
     <div className="flex h-full overflow-hidden">
       {/* Center — note editor */}
       <div className="flex flex-1 flex-col overflow-hidden min-w-0">
-        {/* Top bar: breadcrumb + actions */}
+        {/* Top bar: breadcrumb + badges + actions */}
         <div className="flex items-center justify-between gap-3 border-b border-border px-6 py-2.5">
           <div className="flex items-center gap-3 min-w-0">
             <Breadcrumb
@@ -379,7 +485,7 @@ export default async function NotePage({
             {isGuideNote && (
               <Badge
                 variant="secondary"
-                className="flex items-center gap-1 text-[10px] font-normal shrink-0"
+                className="flex shrink-0 items-center gap-1 border-amber-300/60 bg-amber-50/60 text-[10px] font-normal text-amber-700 dark:border-amber-600/40 dark:bg-amber-900/20 dark:text-amber-400"
               >
                 <BookOpen className="h-3 w-3" aria-hidden="true" />
                 Guide
@@ -388,14 +494,14 @@ export default async function NotePage({
             {note.is_generated && (
               <Badge
                 variant="outline"
-                className="flex items-center gap-1 text-[10px] font-normal shrink-0"
+                className="flex shrink-0 items-center gap-1 text-[10px] font-normal"
               >
                 <Bot className="h-3 w-3" aria-hidden="true" />
                 Generated
               </Badge>
             )}
           </div>
-          <div className="flex items-center gap-1.5 shrink-0">
+          <div className="flex shrink-0 items-center gap-1.5">
             <NoteLifecycleMenu
               noteId={note_id}
               noteStatus={
@@ -432,6 +538,7 @@ export default async function NotePage({
           folderName={folder?.name ?? null}
           workspaceName={ctx.workspace.name}
           isGuideNote={isGuideNote}
+          generatingConnectionName={generatingConnection?.name ?? null}
           links={links}
           allBoxNotes={allBoxNotes}
           initialBundle={initialBundle}

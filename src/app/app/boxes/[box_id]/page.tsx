@@ -5,7 +5,6 @@ import {
   Bot,
   FileText,
   Folder,
-  Network,
   RotateCcw,
   Search,
 } from "lucide-react";
@@ -46,6 +45,8 @@ import { type NoteLink } from "@/server/domain/types/note_link";
 import { BoxExportMenu } from "@/components/product/export_menu";
 import { ImportTriggerButton } from "@/components/product/import_dialog";
 import { FolderPolicyToggle } from "@/components/product/folder_policy_toggle";
+import { type Folder as FolderType } from "@/server/domain/types/folder";
+import { type Note } from "@/server/domain/types/note";
 
 function formatDate(dateStr: string): string {
   return new Date(dateStr).toLocaleDateString("en-US", {
@@ -76,23 +77,83 @@ async function BoxContextPanel({
   noteCount,
 }: {
   box: Awaited<ReturnType<typeof getBoxById>>;
-  guideNote: Awaited<ReturnType<typeof getNoteById>>;
-  notes: Awaited<ReturnType<typeof listNotesByBox>>;
-  folders: Awaited<ReturnType<typeof listFoldersByBox>>;
+  guideNote: Note | null;
+  notes: Note[];
+  folders: FolderType[];
   folderCount: number;
   noteCount: number;
 }) {
   if (!box) return null;
 
+  const hasGeneratedFolders = folders.some((f) => f.accepts_generated_notes);
+
   return (
     <div className="flex h-full flex-col overflow-hidden">
       <div className="border-b border-border px-4 py-2.5">
         <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
-          Box overview
+          Box context
         </p>
       </div>
       <ScrollArea className="flex-1">
-        {/* Identity */}
+
+        {/* Guide note — front door */}
+        <div className="border-b border-border px-4 py-3">
+          <p className="mb-2 text-[10px] font-medium uppercase tracking-wider text-muted-foreground/60">
+            Guide note
+          </p>
+          {guideNote ? (
+            <div className="flex flex-col gap-2">
+              {/* Guide note card */}
+              <Link
+                href={`/app/notes/${guideNote.id}`}
+                className="flex flex-col gap-1.5 rounded-md border border-amber-300/60 bg-amber-50/40 p-3 transition-fast hover:border-amber-400/60 hover:shadow-sm dark:border-amber-600/40 dark:bg-amber-900/10"
+                aria-label={`Open guide note: ${guideNote.title}`}
+              >
+                <div className="flex items-start gap-2">
+                  <BookOpen
+                    className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-600 dark:text-amber-500"
+                    aria-hidden="true"
+                  />
+                  <span className="flex-1 text-sm font-medium leading-snug text-foreground hover:underline underline-offset-2">
+                    {guideNote.title}
+                  </span>
+                </div>
+                {guideNote.summary && (
+                  <p className="pl-5 text-xs leading-relaxed text-muted-foreground line-clamp-3">
+                    {guideNote.summary}
+                  </p>
+                )}
+              </Link>
+              {/* Assignment control inline below */}
+              <GuideNotePicker
+                boxId={box.id}
+                currentGuideNote={guideNote}
+                notes={notes}
+              />
+            </div>
+          ) : (
+            <div className="flex flex-col gap-2">
+              {/* Empty state callout */}
+              <div className="flex flex-col gap-1.5 rounded-md border border-dashed border-border px-3 py-3">
+                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <BookOpen className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                  <span className="font-medium">No guide note</span>
+                </div>
+                <p className="text-xs leading-relaxed text-muted-foreground/70">
+                  The guide note is read first by AI agents and orients retrieval
+                  for this box. Assign one below.
+                </p>
+              </div>
+              <GuideNotePicker
+                boxId={box.id}
+                currentGuideNote={null}
+                notes={notes}
+              />
+            </div>
+          )}
+        </div>
+
+        {/* Box identity */}
         <div className="border-b border-border px-4 py-3">
           <p className="text-[10px] uppercase tracking-wider text-muted-foreground/60">
             Box
@@ -108,24 +169,13 @@ async function BoxContextPanel({
           {box.status === "archived" && (
             <Badge
               variant="secondary"
-              className="mt-2 flex items-center gap-1 w-fit text-[10px] font-normal"
+              className="mt-2 flex w-fit items-center gap-1 text-[10px] font-normal"
             >
               <Archive className="h-3 w-3" aria-hidden="true" />
               Archived
             </Badge>
           )}
         </div>
-
-        {/* Guide note picker */}
-        <PanelSection title="Guide note" noSeparator>
-          <GuideNotePicker
-            boxId={box.id}
-            currentGuideNote={guideNote ?? null}
-            notes={notes}
-          />
-        </PanelSection>
-
-        <Separator />
 
         {/* Stats */}
         <PanelSection title="Contents" noSeparator>
@@ -135,10 +185,7 @@ async function BoxContextPanel({
                 <Folder className="h-3 w-3" aria-hidden="true" />
                 <span>Folders</span>
               </div>
-              <Badge
-                variant="secondary"
-                className="h-4 px-1.5 text-[10px] font-normal"
-              >
+              <Badge variant="secondary" className="h-4 px-1.5 text-[10px] font-normal">
                 {folderCount}
               </Badge>
             </div>
@@ -147,10 +194,7 @@ async function BoxContextPanel({
                 <FileText className="h-3 w-3" aria-hidden="true" />
                 <span>Notes</span>
               </div>
-              <Badge
-                variant="secondary"
-                className="h-4 px-1.5 text-[10px] font-normal"
-              >
+              <Badge variant="secondary" className="h-4 px-1.5 text-[10px] font-normal">
                 {noteCount}
               </Badge>
             </div>
@@ -163,15 +207,17 @@ async function BoxContextPanel({
             <Separator />
             <PanelSection title="Folder policies" noSeparator>
               <div className="flex flex-col gap-1">
-                <p className="text-[10px] text-muted-foreground/70 mb-1">
-                  Folders that accept AI-generated notes
+                <p className="mb-1 text-[10px] text-muted-foreground/70">
+                  {hasGeneratedFolders
+                    ? "Folders that accept AI-generated notes directly:"
+                    : "No folders are open for direct AI writes."}
                 </p>
                 {folders.map((folder) => (
                   <div
                     key={folder.id}
                     className="flex items-center justify-between gap-2 rounded-md px-1.5 py-1 text-xs"
                   >
-                    <div className="flex items-center gap-1.5 min-w-0">
+                    <div className="flex min-w-0 items-center gap-1.5">
                       <Folder
                         className="h-3 w-3 shrink-0 text-muted-foreground/60"
                         aria-hidden="true"
@@ -194,7 +240,7 @@ async function BoxContextPanel({
 
         <Separator />
 
-        {/* Metadata */}
+        {/* Details */}
         <PanelSection title="Details" noSeparator>
           <div className="flex flex-col gap-2 text-xs">
             <div>
@@ -289,26 +335,31 @@ export default async function BoxPage({
                   {box.description}
                 </p>
               )}
-              {/* Guide note status strip */}
+
+              {/* Guide note — front door strip */}
               {guideNote ? (
-                <div className="mt-2 flex items-center gap-1.5 text-xs text-muted-foreground">
-                  <BookOpen className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-                  <span>Guide: </span>
-                  <Link
-                    href={`/app/notes/${guideNote.id}`}
-                    className="font-medium text-foreground hover:underline underline-offset-2 truncate"
-                  >
+                <Link
+                  href={`/app/notes/${guideNote.id}`}
+                  className="mt-2 flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-fast group"
+                  aria-label={`Open guide note: ${guideNote.title}`}
+                >
+                  <BookOpen
+                    className="h-3.5 w-3.5 shrink-0 text-amber-600/80 dark:text-amber-500/80"
+                    aria-hidden="true"
+                  />
+                  <span className="text-muted-foreground/70">Guide —</span>
+                  <span className="font-medium text-foreground group-hover:underline underline-offset-2 truncate">
                     {guideNote.title}
-                  </Link>
-                </div>
+                  </span>
+                </Link>
               ) : (
-                <div className="mt-2 flex items-center gap-1.5 text-xs text-muted-foreground/60">
+                <div className="mt-2 flex items-center gap-1.5 text-xs text-muted-foreground/50">
                   <BookOpen className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-                  <span>No guide note — assign one in the box overview panel</span>
+                  <span>No guide note — assign one in the box context panel</span>
                 </div>
               )}
             </div>
-            <div className="flex items-center gap-2 shrink-0">
+            <div className="flex shrink-0 items-center gap-2">
               <ImportTriggerButton
                 boxId={box.id}
                 folders={folders.map((f) => ({
@@ -345,12 +396,12 @@ export default async function BoxPage({
                 Graph
               </TabsTrigger>
               <TabsTrigger value="search" className="pb-3">
-                <Search className="h-3.5 w-3.5 mr-1" aria-hidden="true" />
+                <Search className="mr-1 h-3.5 w-3.5" aria-hidden="true" />
                 Search
               </TabsTrigger>
               {archivedCount > 0 && (
                 <TabsTrigger value="archived" className="pb-3">
-                  <Archive className="h-3.5 w-3.5 mr-1" aria-hidden="true" />
+                  <Archive className="mr-1 h-3.5 w-3.5" aria-hidden="true" />
                   Archived
                   <Badge
                     variant="secondary"
@@ -386,13 +437,9 @@ export default async function BoxPage({
                   className="h-full"
                 />
               ) : (
-                <div className="mx-auto max-w-3xl flex flex-col gap-2 px-6 py-4">
+                <div className="mx-auto flex max-w-3xl flex-col gap-2 px-6 py-4">
                   {sortedNotes.map((note) => (
-                    <Link
-                      key={note.id}
-                      href={`/app/notes/${note.id}`}
-                      className="block"
-                    >
+                    <Link key={note.id} href={`/app/notes/${note.id}`} className="block">
                       <NoteStub
                         title={note.title}
                         kind={note.kind as "note" | "guide" | "bundle"}
@@ -417,9 +464,7 @@ export default async function BoxPage({
                   folderLifecycleMenu={(folder) => (
                     <FolderLifecycleMenu
                       folderId={folder.id}
-                      folderStatus={
-                        folder.status as "active" | "archived" | "trashed"
-                      }
+                      folderStatus={folder.status as "active" | "archived" | "trashed"}
                     />
                   )}
                 />
@@ -436,6 +481,7 @@ export default async function BoxPage({
                   guideNote={guideNote ?? null}
                   allNotes={notes}
                   allLinks={allLinks}
+                  folders={folders}
                 />
               </div>
             </ScrollArea>
@@ -454,7 +500,10 @@ export default async function BoxPage({
           <TabsContent value="search" className="flex-1 overflow-hidden">
             <ScrollArea className="h-full">
               <div className="mx-auto max-w-2xl px-6 py-6">
-                <BoxSearchPanel boxId={box.id} />
+                <BoxSearchPanel
+                  boxId={box.id}
+                  guideNoteId={box.guide_note_id}
+                />
               </div>
             </ScrollArea>
           </TabsContent>
@@ -465,7 +514,8 @@ export default async function BoxPage({
               <ScrollArea className="h-full">
                 <div className="mx-auto max-w-3xl px-6 py-4">
                   <p className="mb-3 text-xs text-muted-foreground">
-                    Archived content is hidden from active views. Use the lifecycle menu to unarchive.
+                    Archived content is hidden from active views and excluded from
+                    context bundles by default. Use the lifecycle menu to unarchive.
                   </p>
                   {archivedFolders.length > 0 && (
                     <div className="mb-4">
@@ -478,7 +528,7 @@ export default async function BoxPage({
                             key={folder.id}
                             className="flex items-center justify-between gap-2 rounded-md border border-border px-3 py-2"
                           >
-                            <div className="flex items-center gap-2 min-w-0">
+                            <div className="flex min-w-0 items-center gap-2">
                               <Folder
                                 className="h-3.5 w-3.5 shrink-0 text-muted-foreground/60"
                                 aria-hidden="true"
@@ -503,11 +553,7 @@ export default async function BoxPage({
                       </p>
                       <div className="flex flex-col gap-2">
                         {archivedNotes.map((note) => (
-                          <Link
-                            key={note.id}
-                            href={`/app/notes/${note.id}`}
-                            className="block"
-                          >
+                          <Link key={note.id} href={`/app/notes/${note.id}`} className="block">
                             <NoteStub
                               title={note.title}
                               kind={note.kind as "note" | "guide" | "bundle"}
@@ -531,7 +577,8 @@ export default async function BoxPage({
               <ScrollArea className="h-full">
                 <div className="mx-auto max-w-3xl px-6 py-4">
                   <p className="mb-3 text-xs text-muted-foreground">
-                    Trashed content is excluded from retrieval and context bundles. Restore to make it active.
+                    Trashed content is excluded from retrieval and context bundles.
+                    Restore to make it active again.
                   </p>
                   {trashedFolders.length > 0 && (
                     <div className="mb-4">
@@ -544,7 +591,7 @@ export default async function BoxPage({
                             key={folder.id}
                             className="flex items-center justify-between gap-2 rounded-md border border-border px-3 py-2"
                           >
-                            <div className="flex items-center gap-2 min-w-0">
+                            <div className="flex min-w-0 items-center gap-2">
                               <Folder
                                 className="h-3.5 w-3.5 shrink-0 text-muted-foreground/60"
                                 aria-hidden="true"
@@ -569,11 +616,7 @@ export default async function BoxPage({
                       </p>
                       <div className="flex flex-col gap-2">
                         {trashedNotes.map((note) => (
-                          <Link
-                            key={note.id}
-                            href={`/app/notes/${note.id}`}
-                            className="block"
-                          >
+                          <Link key={note.id} href={`/app/notes/${note.id}`} className="block">
                             <NoteStub
                               title={note.title}
                               kind={note.kind as "note" | "guide" | "bundle"}

@@ -544,6 +544,7 @@ full workspace layout architecture.
 - **`AutosaveStatus`**: five states — idle/unsaved/saving/saved/error; "unsaved" shows dim dot while timer runs; error shows Retry button and does not auto-dismiss
 - **`SemanticLinksPanel`**: replaces `LinkedNotesSection` in right pane; "Context relationships" framing (not backlinks)
 - **`GraphPanel`** + **`BoxGraphView`**: `GraphPanel` is a thin server component (stats + truncation warning); `BoxGraphView` is the interactive client component; hierarchy shown as spatial folder containers, semantic links as directed edge rows — two visually distinct edge types; guide note highlighted in amber; node selection reveals detail and highlights connected nodes; folder scope filter + hierarchy/links toggles; no D3 or force layout; see [docs/graph_view_v1.md](graph_view_v1.md)
+- **Context intelligence surfaces**: see [docs/context_intelligence_surface_v1.md](context_intelligence_surface_v1.md) — right pane system, guide note front door, semantic link framing, retrieval signals, box guide as machine interpretation layer, precision search, context bundle presentation, machine workflow visibility
 - **Workspace home (cockpit)**: status tiles + recent notes + boxes grid + connections + proposals
 - **Box page**: guide status always above the fold; "Overview" tab renamed to "Graph" using `GraphPanel`
 - **Note page**: center pane = breadcrumb + NoteEditor; right pane = Info/Links/Bundle/History tabs

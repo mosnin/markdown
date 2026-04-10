@@ -162,9 +162,10 @@ Installed primitives:
 | `PanelSection` | Labeled section for panels and detail views |
 | `NoteEditor` | Two-mode note editor: Document (rendered) / Markdown (editable raw source) |
 | `AutosaveStatus` | Subtle autosave indicator (idle/unsaved/saving/saved/error) for note toolbar |
-| `SemanticLinksPanel` | Context relationships panel for note right pane |
+| `SemanticLinksPanel` | Context relationships panel (outgoing + incoming, with relationship_note annotations) |
 | `GraphPanel` | Server wrapper for box graph tab: stats, truncation warning, renders BoxGraphView |
 | `BoxGraphView` | Interactive read-only graph: hierarchy canvas + semantic link rows + node detail |
+| `RetrievalHintBadge` | Compact display of `read_hint` + `retrieval_priority` signals; renders nothing when unset |
 | `DashboardSection` | Section wrapper for the workspace cockpit home |
 | `DashboardCard` | Card component (link or static) for the cockpit |
 | `NoteStub` | Note card for list and search views |
@@ -186,6 +187,32 @@ in `AppShell`) so the shell stays thin and pages own their panel space.
 On mobile (< md), the left sidebar becomes a full-height sheet drawer triggered by a
 hamburger button in a top bar. The right pane is hidden on mobile — its content is
 accessible via right-panel tabs in the note and box pages.
+
+### Context intelligence surfaces
+
+The right pane is a context intelligence surface — not a utility drawer. Its purpose is
+to make the current note or box feel situated in a structured knowledge system.
+
+**Note right pane tabs:**
+
+| Tab | Contents |
+|---|---|
+| Info | Guide callout (if applicable), kind, summary, retrieval signals, location, machine origin, version |
+| Links | Semantic context relationships (outgoing / incoming) with relationship_note annotations |
+| Bundle | Context bundle: bounded retrieval package with assembly options |
+| History | Immutable version timeline with rollback |
+
+**Info tab section order:** guide callout → identity → summary → retrieval signals → tags → location → machine origin → version. Empty sections are hidden.
+
+**Box right pane:**
+
+Guide note is always the first section (front door). Sections: guide note card + picker → box identity → contents stats → folder policies → details.
+
+**Guide note color treatment:** always amber (`border-amber-300/60 bg-amber-50/40` light, `border-amber-600/40 bg-amber-900/10` dark). Used consistently across the guide note card, chips in the graph, badges in breadcrumbs, and the Info tab callout.
+
+**Retrieval signals (`RetrievalHintBadge`):** `retrieval_priority` shown as `p1`, `p2`, … in a monospace pill. `read_hint` shown as italic text (known values normalized). Renders nothing when both are unset.
+
+See [docs/context_intelligence_surface_v1.md](context_intelligence_surface_v1.md) for the full specification.
 
 ### Note editor modes
 

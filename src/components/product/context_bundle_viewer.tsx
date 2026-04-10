@@ -31,14 +31,19 @@ const TRUNCATION_LABELS: Record<string, string> = {
   archived_excluded: "Some linked notes are archived and were excluded.",
 };
 
-// ─── Relationship direction label ─────────────────────────────────────────────
+// ─── Relationship labels (10-value canonical vocabulary) ──────────────────────
 
 const REL_LABEL: Record<string, string> = {
-  related: "related",
-  references: "references",
-  extends: "extends",
-  contradicts: "contradicts",
-  supersedes: "supersedes",
+  related: "Related to",
+  depends_on: "Depends on",
+  parent_of: "Parent of",
+  child_of: "Child of",
+  reference_for: "Reference for",
+  extends: "Extends",
+  example_of: "Example of",
+  sibling_of: "Sibling of",
+  supersedes: "Supersedes",
+  derived_from: "Derived from",
 };
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
@@ -139,44 +144,55 @@ function LinkedNoteCard({ note }: { note: BundleLinkedNote }) {
   const isOutgoing = note.direction === "outgoing";
 
   return (
-    <div className="flex items-start gap-2.5 rounded-md border border-border bg-card p-3">
-      {/* Direction + relationship */}
-      <div className="flex shrink-0 flex-col items-center gap-1 pt-0.5">
-        {isOutgoing ? (
-          <ArrowRight className="h-3.5 w-3.5 text-muted-foreground/60" />
-        ) : (
-          <ArrowLeft className="h-3.5 w-3.5 text-muted-foreground/60" />
-        )}
-      </div>
-
-      <div className="flex min-w-0 flex-1 flex-col gap-1">
-        <div className="flex items-start gap-2">
-          <Link
-            href={`/app/notes/${note.id}`}
-            className="flex-1 truncate text-sm font-medium text-foreground hover:underline underline-offset-2"
-          >
-            {note.title}
-          </Link>
-          <Badge
-            variant="secondary"
-            className="shrink-0 text-[10px] font-normal capitalize"
-          >
-            {REL_LABEL[note.relationship_type] ?? note.relationship_type}
-          </Badge>
+    <div className="flex flex-col gap-0 rounded-md border border-border bg-card">
+      <div className="flex items-start gap-2.5 p-3">
+        {/* Direction arrow */}
+        <div className="flex shrink-0 flex-col items-center gap-1 pt-0.5">
+          {isOutgoing ? (
+            <ArrowRight className="h-3.5 w-3.5 text-muted-foreground/60" aria-hidden="true" />
+          ) : (
+            <ArrowLeft className="h-3.5 w-3.5 text-muted-foreground/60" aria-hidden="true" />
+          )}
         </div>
 
-        {note.folder_path_cache && (
-          <p className="text-[10px] text-muted-foreground/50 font-mono">
-            {note.folder_path_cache}
-          </p>
-        )}
+        <div className="flex min-w-0 flex-1 flex-col gap-1">
+          <div className="flex items-start gap-2">
+            <Link
+              href={`/app/notes/${note.id}`}
+              className="flex-1 truncate text-sm font-medium text-foreground hover:underline underline-offset-2"
+            >
+              {note.title}
+            </Link>
+            <Badge
+              variant="secondary"
+              className="shrink-0 text-[10px] font-normal"
+            >
+              {REL_LABEL[note.relationship_type] ?? note.relationship_type.replace(/_/g, " ")}
+            </Badge>
+          </div>
 
-        {note.summary && (
-          <p className="text-xs text-muted-foreground line-clamp-2">
-            {note.summary}
-          </p>
-        )}
+          {note.folder_path_cache && (
+            <p className="font-mono text-[10px] text-muted-foreground/50">
+              {note.folder_path_cache}
+            </p>
+          )}
+
+          {note.summary && (
+            <p className="line-clamp-2 text-xs text-muted-foreground">
+              {note.summary}
+            </p>
+          )}
+        </div>
       </div>
+
+      {/* Relationship annotation */}
+      {note.relationship_note && (
+        <div className="border-t border-border/50 px-3 pb-2.5 pt-2">
+          <p className="text-[11px] italic leading-relaxed text-muted-foreground/70">
+            {note.relationship_note}
+          </p>
+        </div>
+      )}
     </div>
   );
 }
