@@ -26,6 +26,9 @@ importers:
       clsx:
         specifier: ^2.1.1
         version: 2.1.1
+      creem:
+        specifier: ^1.4.4
+        version: 1.4.4
       fflate:
         specifier: ^0.8.2
         version: 0.8.2
@@ -1590,6 +1593,10 @@ packages:
     peerDependenciesMeta:
       typescript:
         optional: true
+
+  creem@1.4.4:
+    resolution: {integrity: sha512-hfnHOIqNERf783FMJOOpbmD701y4t6HuVKR8kIm16X3l5OK6yMM0ifd2zY8CbRqSLeqK/iQV1D8FLgZEVs7Alg==}
+    hasBin: true
 
   cross-spawn@7.0.6:
     resolution: {integrity: sha512-uV2QOWP2nWzsy2aMp8aRibhi9dlzF5Hgh5SHaB9OiTGEyDTiJJyx0uy51QXdyWbtAHNua4XJzUKca3OzKUd3vA==}
@@ -5010,6 +5017,14 @@ snapshots:
       parse-json: 5.2.0
     optionalDependencies:
       typescript: 5.9.3
+
+  creem@1.4.4:
+    dependencies:
+      '@modelcontextprotocol/sdk': 1.29.0(zod@4.3.6)
+      zod: 4.3.6
+    transitivePeerDependencies:
+      - '@cfworker/json-schema'
+      - supports-color
 
   cross-spawn@7.0.6:
     dependencies:
