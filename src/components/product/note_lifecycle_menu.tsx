@@ -67,6 +67,12 @@ export function NoteLifecycleMenu({ noteId, noteStatus }: NoteLifecycleMenuProps
       </button>
 
       {open && (
+        <>
+          <div
+            className="fixed inset-0 z-40"
+            onClick={() => { setOpen(false); setConfirmTrash(false); }}
+            aria-hidden
+          />
         <div role="menu" aria-label="Note actions" className="absolute right-0 top-full z-50 mt-1 min-w-48 rounded-md border border-border bg-background shadow-md">
           <div className="p-1">
             {!isTrashed && (
@@ -161,6 +167,7 @@ export function NoteLifecycleMenu({ noteId, noteStatus }: NoteLifecycleMenuProps
             </div>
           )}
         </div>
+        </>
       )}
     </div>
   );

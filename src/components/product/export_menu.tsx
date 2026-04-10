@@ -104,6 +104,8 @@ export function NoteExportMenu({
           "text-muted-foreground hover:text-foreground hover:bg-muted/40 transition-colors"
         )}
         aria-label="Export options"
+        aria-haspopup="menu"
+        aria-expanded={open}
       >
         <Download className="h-3.5 w-3.5" />
         Export
@@ -116,7 +118,7 @@ export function NoteExportMenu({
             onClick={() => setOpen(false)}
             aria-hidden
           />
-          <div className="absolute right-0 top-full z-40 mt-1.5 w-64 rounded-lg border border-border bg-popover shadow-md">
+          <div role="menu" className="absolute right-0 top-full z-40 mt-1.5 w-64 rounded-lg border border-border bg-popover shadow-md">
             <div className="border-b border-border px-3 py-2">
               <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
                 Export &quot;{noteTitle}&quot;
@@ -199,6 +201,8 @@ export function BoxExportMenu({
           "text-muted-foreground hover:text-foreground hover:bg-muted/40 transition-colors"
         )}
         aria-label="Export options"
+        aria-haspopup="menu"
+        aria-expanded={open}
       >
         <Download className="h-3.5 w-3.5" />
         Export
@@ -211,10 +215,10 @@ export function BoxExportMenu({
             onClick={() => setOpen(false)}
             aria-hidden
           />
-          <div className="absolute right-0 top-full z-40 mt-1.5 w-64 rounded-lg border border-border bg-popover shadow-md">
+          <div role="menu" className="absolute right-0 top-full z-40 mt-1.5 w-64 rounded-lg border border-border bg-popover shadow-md">
             <div className="border-b border-border px-3 py-2">
               <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                Export
+                Export &quot;{boxName}&quot;
               </p>
             </div>
             <div className="p-1.5">

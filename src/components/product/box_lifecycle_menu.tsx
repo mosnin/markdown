@@ -61,7 +61,13 @@ export function BoxLifecycleMenu({ boxId, boxStatus }: BoxLifecycleMenuProps) {
       </button>
 
       {open && (
-        <div role="menu" aria-label="Box actions" className="absolute right-0 top-full z-50 mt-1 min-w-52 rounded-md border border-border bg-background shadow-md">
+        <>
+          <div
+            className="fixed inset-0 z-40"
+            onClick={() => { setOpen(false); setConfirmArchive(false); }}
+            aria-hidden
+          />
+          <div role="menu" aria-label="Box actions" className="absolute right-0 top-full z-50 mt-1 min-w-52 rounded-md border border-border bg-background shadow-md">
           <div className="p-1">
             {isArchived ? (
               <button
@@ -120,7 +126,8 @@ export function BoxLifecycleMenu({ boxId, boxStatus }: BoxLifecycleMenuProps) {
               <p className="text-xs text-destructive">{error}</p>
             </div>
           )}
-        </div>
+          </div>
+        </>
       )}
     </div>
   );
