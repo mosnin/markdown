@@ -55,6 +55,11 @@ export function NoteEditor({ note, initialMode = "document" }: NoteEditorProps) 
   const [saveError, setSaveError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
 
+  // Ref-based guard to prevent concurrent saves across stale closures (Bug 2)
+  const isSavingRef = useRef(false);
+  // Ref to track the status-fade timeout so we can cancel it before setting a new one (Bug 4)
+  const statusTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const router = useRouter();
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -67,6 +72,36 @@ export function NoteEditor({ note, initialMode = "document" }: NoteEditorProps) 
     tagsInput: note.tags.join(", "),
     readHint: note.read_hint ?? "",
   });
+
+  // Bug 1: Reset all editor state when navigating to a different note
+  useEffect(() => {
+    setTitle(note.title);
+    setContent(note.markdown_content);
+    setSummary(note.summary ?? "");
+    setTagsInput(note.tags.join(", "));
+    setReadHint(note.read_hint ?? "");
+    setAutosaveState("idle");
+    setSaveError(null);
+    // Cancel any pending debounce so it can't fire Note A's data into Note B
+    if (debounceTimer.current) {
+      clearTimeout(debounceTimer.current);
+      debounceTimer.current = null;
+    }
+    // Cancel any pending status-fade timeout
+    if (statusTimeoutRef.current) {
+      clearTimeout(statusTimeoutRef.current);
+      statusTimeoutRef.current = null;
+    }
+    // Reset the last saved snapshot to the new note's data
+    lastSavedSnapshot.current = {
+      title: note.title,
+      content: note.markdown_content,
+      summary: note.summary ?? "",
+      tagsInput: note.tags.join(", "),
+      readHint: note.read_hint ?? "",
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [note.id]);
 
   function parseTags(raw: string): string[] {
     return raw
@@ -99,35 +134,48 @@ export function NoteEditor({ note, initialMode = "document" }: NoteEditorProps) 
    * Optimistic locking is handled by the RPC; this function does not bypass it.
    */
   const performSave = useCallback(async () => {
-    if (!title.trim() || isSaving) return;
+    // Bug 2: Use ref for guard to avoid stale-closure false negatives
+    if (!title.trim() || isSavingRef.current) return;
+    isSavingRef.current = true;
     setIsSaving(true);
     setAutosaveState("saving");
     setSaveError(null);
 
-    const result = await saveNoteAction(note.id, {
-      title,
-      markdownContent: content,
-      summary: summary.trim() || null,
-      tags: parseTags(tagsInput),
-      readHint: readHint.trim() || null,
-    });
+    try {
+      const result = await saveNoteAction(note.id, {
+        title,
+        markdownContent: content,
+        summary: summary.trim() || null,
+        tags: parseTags(tagsInput),
+        readHint: readHint.trim() || null,
+      });
 
-    setIsSaving(false);
-    if (result.ok) {
-      const now = new Date();
-      setSavedAt(now);
-      setAutosaveState("saved");
-      lastSavedSnapshot.current = { title, content, summary, tagsInput, readHint };
-      router.refresh();
-      // Fade to idle after a few seconds
-      setTimeout(() => {
-        setAutosaveState((s: AutosaveState) => (s === "saved" ? "idle" : s));
-      }, 4000);
-    } else {
-      setSaveError(result.error);
-      setAutosaveState("error");
+      if (result.ok) {
+        const now = new Date();
+        setSavedAt(now);
+        setAutosaveState("saved");
+        // Bug 3: Capture whether title changed before updating the snapshot, so
+        // we can decide whether to call router.refresh() for sidebar sync.
+        // Don't refresh after every autosave — it would clobber in-flight edits.
+        const titleChanged = title !== lastSavedSnapshot.current.title;
+        lastSavedSnapshot.current = { title, content, summary, tagsInput, readHint };
+        if (titleChanged) {
+          router.refresh();
+        }
+        // Bug 4: Cancel the previous status-fade timeout before scheduling a new one
+        if (statusTimeoutRef.current) clearTimeout(statusTimeoutRef.current);
+        statusTimeoutRef.current = setTimeout(() => {
+          setAutosaveState((s: AutosaveState) => (s === "saved" ? "idle" : s));
+        }, 4000);
+      } else {
+        setSaveError(result.error);
+        setAutosaveState("error");
+      }
+    } finally {
+      isSavingRef.current = false;
+      setIsSaving(false);
     }
-  }, [note.id, title, content, summary, tagsInput, readHint, isSaving, router]);
+  }, [note.id, title, content, summary, tagsInput, readHint, router]);
 
   /**
    * Autosave debounce effect.
