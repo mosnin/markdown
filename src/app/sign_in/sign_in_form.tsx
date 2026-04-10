@@ -4,7 +4,7 @@ import { useActionState, useState } from "react";
 import { Eye, EyeOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { signIn, signUp, type AuthState } from "./actions";
+import { signIn, signUp, requestPasswordReset, type AuthState } from "./actions";
 
 const INITIAL: AuthState = { status: "idle" };
 
@@ -68,9 +68,88 @@ function ConfirmView({ message }: { message: string }) {
   );
 }
 
+// ─── Forgot password form ────────────────────────────────────────────────────
+
+function ForgotPasswordForm({ onBack }: { onBack: () => void }) {
+  const [state, formAction, pending] = useActionState(requestPasswordReset, { status: "idle" } as AuthState);
+
+  if (state.status === "confirm") {
+    return (
+      <div className="flex flex-col items-center gap-4 text-center">
+        <div className="flex h-12 w-12 items-center justify-center rounded-full bg-violet-500/10">
+          <span className="text-xl">✉️</span>
+        </div>
+        <div className="space-y-1.5">
+          <p className="text-sm font-semibold text-foreground">Check your email</p>
+          <p className="text-sm text-muted-foreground">{state.message}</p>
+        </div>
+        <button
+          type="button"
+          className="text-xs font-medium text-foreground underline-offset-2 hover:underline"
+          onClick={onBack}
+        >
+          Back to sign in
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <form action={formAction} className="flex flex-col gap-3">
+      <div className="space-y-1">
+        <p className="text-sm font-semibold text-foreground">Reset your password</p>
+        <p className="text-xs text-muted-foreground">
+          Enter your email and we&apos;ll send you a reset link.
+        </p>
+      </div>
+
+      <div className="flex flex-col gap-1.5">
+        <label htmlFor="reset-email" className="text-sm font-medium text-foreground">
+          Email address
+        </label>
+        <Input
+          id="reset-email"
+          name="email"
+          type="email"
+          placeholder="you@example.com"
+          autoComplete="email"
+          autoFocus
+          required
+          disabled={pending}
+          className="h-9"
+        />
+      </div>
+
+      {state.status === "error" && (
+        <p role="alert" className="text-xs text-destructive">{state.message}</p>
+      )}
+
+      <Button type="submit" disabled={pending} className="mt-1 w-full">
+        {pending ? "Sending…" : "Send reset link"}
+      </Button>
+
+      <p className="text-center text-xs text-muted-foreground">
+        <button
+          type="button"
+          className="font-medium text-foreground underline-offset-2 hover:underline"
+          onClick={onBack}
+        >
+          Back to sign in
+        </button>
+      </p>
+    </form>
+  );
+}
+
 // ─── Login form ──────────────────────────────────────────────────────────────
 
-function LoginForm({ onSwitch }: { onSwitch: () => void }) {
+function LoginForm({
+  onSwitch,
+  onForgotPassword,
+}: {
+  onSwitch: () => void;
+  onForgotPassword: () => void;
+}) {
   const [state, formAction, pending] = useActionState(signIn, INITIAL);
 
   return (
@@ -95,9 +174,18 @@ function LoginForm({ onSwitch }: { onSwitch: () => void }) {
 
       {/* Password */}
       <div className="flex flex-col gap-1.5">
-        <label htmlFor="signin-password" className="text-sm font-medium text-foreground">
-          Password
-        </label>
+        <div className="flex items-center justify-between">
+          <label htmlFor="signin-password" className="text-sm font-medium text-foreground">
+            Password
+          </label>
+          <button
+            type="button"
+            className="text-xs text-muted-foreground hover:text-foreground underline-offset-2 hover:underline transition-colors"
+            onClick={onForgotPassword}
+          >
+            Forgot password?
+          </button>
+        </div>
         <PasswordInput
           id="signin-password"
           name="password"
@@ -221,33 +309,42 @@ export function AuthPanel({
 }: {
   defaultMode?: "signin" | "signup";
 }) {
-  const [mode, setMode] = useState<"signin" | "signup">(defaultMode);
+  const [mode, setMode] = useState<"signin" | "signup" | "forgot">(defaultMode);
 
   return (
     <div className="flex w-full flex-col gap-6">
-      {/* Mode toggle */}
-      <div className="flex rounded-lg border border-border bg-muted/40 p-0.5">
-        {(["signin", "signup"] as const).map((m) => (
-          <button
-            key={m}
-            type="button"
-            onClick={() => setMode(m)}
-            className={`flex-1 rounded-md py-1.5 text-sm font-medium transition-colors ${
-              mode === m
-                ? "bg-background text-foreground shadow-sm"
-                : "text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            {m === "signin" ? "Sign in" : "Create account"}
-          </button>
-        ))}
-      </div>
+      {/* Mode toggle — hidden in forgot-password view */}
+      {mode !== "forgot" && (
+        <div className="flex rounded-lg border border-border bg-muted/40 p-0.5">
+          {(["signin", "signup"] as const).map((m) => (
+            <button
+              key={m}
+              type="button"
+              onClick={() => setMode(m)}
+              className={`flex-1 rounded-md py-1.5 text-sm font-medium transition-colors ${
+                mode === m
+                  ? "bg-background text-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              {m === "signin" ? "Sign in" : "Create account"}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* Form */}
-      {mode === "signin" ? (
-        <LoginForm onSwitch={() => setMode("signup")} />
-      ) : (
+      {mode === "signin" && (
+        <LoginForm
+          onSwitch={() => setMode("signup")}
+          onForgotPassword={() => setMode("forgot")}
+        />
+      )}
+      {mode === "signup" && (
         <SignUpForm onSwitch={() => setMode("signin")} />
+      )}
+      {mode === "forgot" && (
+        <ForgotPasswordForm onBack={() => setMode("signin")} />
       )}
     </div>
   );
