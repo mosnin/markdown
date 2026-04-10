@@ -1,4 +1,4 @@
-import { Bell, CreditCard, Key, Palette, Shield, Sparkles, User } from "lucide-react";
+import { Bell, CreditCard, Key, Palette, Shield, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -17,6 +17,7 @@ import { listBoxesByWorkspace } from "@/server/repositories/box_repository";
 import { listConnectionsWithScopes } from "@/server/services/connection_service";
 import { ProfileSection, AppearanceSection, SecuritySection } from "./settings_client";
 import type { Theme } from "./actions";
+import { DeleteAccountButton } from "./delete_account_button";
 
 // ─── Section nav ─────────────────────────────────────────────────────────────
 
@@ -37,36 +38,35 @@ function BillingSection() {
       <CardHeader className="px-6 pt-6 pb-4">
         <CardTitle className="text-base font-semibold">Billing &amp; Plans</CardTitle>
         <CardDescription className="text-sm text-muted-foreground">
-          Manage your subscription, payment method, and invoices.
+          Your current plan and what&apos;s coming next.
         </CardDescription>
       </CardHeader>
       <Separator />
       <CardContent className="px-6 pt-5 pb-6 space-y-5">
         {/* Current plan */}
-        <div className="flex items-start justify-between gap-4 rounded-lg border border-border bg-muted/30 p-4">
+        <div className="flex items-start gap-4 rounded-lg border border-border bg-muted/30 p-4">
           <div className="flex flex-col gap-1">
             <div className="flex items-center gap-2">
               <p className="text-sm font-semibold text-foreground">Free plan</p>
               <Badge variant="secondary" className="text-xs">Current</Badge>
             </div>
             <p className="text-sm text-muted-foreground">
-              Up to 3 boxes, 100 MB storage, community support.
+              You&apos;re on the free plan during our beta. Paid plans are coming soon.
             </p>
             <p className="text-xs text-muted-foreground/70 mt-0.5">
               $0 / month &middot; No credit card required
             </p>
           </div>
-          <Button size="sm" className="shrink-0 gap-1.5">
-            <Sparkles className="h-3.5 w-3.5" />
-            Upgrade
-          </Button>
         </div>
 
-        {/* Plan features teaser */}
+        {/* Pro plan teaser */}
         <div className="flex flex-col gap-2">
-          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-            Pro plan includes
-          </p>
+          <div className="flex items-center gap-2">
+            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+              Pro plan
+            </p>
+            <Badge variant="outline" className="text-xs">Coming soon</Badge>
+          </div>
           <ul className="grid grid-cols-1 gap-1 sm:grid-cols-2">
             {[
               "Unlimited boxes",
@@ -88,12 +88,12 @@ function BillingSection() {
         </div>
 
         <div className="flex items-center gap-3 border-t border-border pt-4">
-          <Button variant="outline" size="sm">
-            Manage billing
-          </Button>
-          <Button variant="ghost" size="sm" className="text-muted-foreground">
-            View invoices
-          </Button>
+          <a
+            href="mailto:hello@contextstore.app?subject=Paid%20plan%20waitlist"
+            className="inline-flex items-center justify-center gap-1.5 rounded-md border border-input bg-background px-3 py-1.5 text-sm font-medium shadow-xs hover:bg-accent hover:text-accent-foreground transition-colors"
+          >
+            Get notified when Pro launches
+          </a>
         </div>
       </CardContent>
     </Card>
@@ -183,13 +183,7 @@ function DangerZoneSection() {
               cannot be undone.
             </p>
           </div>
-          <Button
-            variant="destructive"
-            size="sm"
-            className="shrink-0"
-          >
-            Delete account
-          </Button>
+          <DeleteAccountButton />
         </div>
       </CardContent>
     </Card>
