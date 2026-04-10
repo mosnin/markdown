@@ -10,6 +10,7 @@ import { assignGuideNote, clearGuideNote } from "@/server/services/guide_service
 import { searchNotes, type NoteSearchResult } from "@/server/services/search_service";
 import { applyBoxTemplate } from "@/server/services/template_service";
 import { auditNoteCreatedFromTemplate } from "@/server/services/audit_service";
+import { checkNoteLimit, checkBoxLimit } from "@/server/services/subscription_service";
 
 export type ActionResult<T = void> =
   | { ok: true; data: T }
@@ -34,6 +35,15 @@ export async function createBoxAction(
 ): Promise<ActionResult<{ id: string }>> {
   try {
     const { supabase, userId, workspaceId } = await requireContext();
+
+    const boxLimit = await checkBoxLimit(supabase, workspaceId);
+    if (!boxLimit.allowed) {
+      return {
+        ok: false,
+        error: "Box limit reached. Upgrade to Pro for unlimited boxes.",
+      };
+    }
+
     const box = await createBox(supabase, userId, workspaceId, {
       name: name.trim(),
       description: description?.trim() ?? null,
@@ -108,6 +118,15 @@ export async function createNoteAction(
 ): Promise<ActionResult<{ id: string }>> {
   try {
     const { supabase, userId, workspaceId } = await requireContext();
+
+    const noteLimit = await checkNoteLimit(supabase, workspaceId);
+    if (!noteLimit.allowed) {
+      return {
+        ok: false,
+        error: "Note limit reached. Upgrade to Pro for unlimited notes.",
+      };
+    }
+
     const note = await createNote(supabase, userId, workspaceId, {
       boxId,
       folderId: folderId ?? null,

@@ -11,6 +11,7 @@ import {
   CardTitle,
   CardDescription,
 } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import {
   updateProfileAction,
@@ -22,6 +23,7 @@ import {
   type ChangePasswordState,
   type NotificationPreferences,
 } from "./actions";
+import type { WorkspacePlan } from "@/server/services/subscription_service";
 
 // ─── Profile section ──────────────────────────────────────────────────────────
 
@@ -405,6 +407,209 @@ export function WorkspaceSection({
             </Button>
           </div>
         </form>
+      </CardContent>
+    </Card>
+  );
+}
+
+// ─── Billing section ─────────────────────────────────────────────────────────
+
+function UsageBar({
+  label,
+  current,
+  max,
+}: {
+  label: string;
+  current: number;
+  max: number;
+}) {
+  const pct = Math.min(100, Math.round((current / max) * 100));
+  const isNearLimit = pct >= 80;
+  return (
+    <div className="flex flex-col gap-1">
+      <div className="flex items-center justify-between text-xs text-muted-foreground">
+        <span>{label}</span>
+        <span className={isNearLimit ? "text-amber-600 font-medium" : ""}>
+          {current}&nbsp;/&nbsp;{max}
+        </span>
+      </div>
+      <div className="h-1.5 w-full rounded-full bg-muted overflow-hidden">
+        <div
+          className={`h-full rounded-full transition-all ${isNearLimit ? "bg-amber-500" : "bg-foreground/40"}`}
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+    </div>
+  );
+}
+
+export function BillingSection({
+  plan,
+  subscriptionStatus,
+  noteCount,
+  noteMax,
+  boxCount,
+  boxMax,
+}: {
+  plan: WorkspacePlan;
+  subscriptionStatus: string | null;
+  noteCount: number;
+  noteMax: number;
+  boxCount: number;
+  boxMax: number;
+}) {
+  const [checkoutPending, setCheckoutPending] = useState(false);
+  const [portalPending, setPortalPending] = useState(false);
+  const [billingError, setBillingError] = useState<string>("");
+
+  const isPastDue = subscriptionStatus === "past_due";
+
+  async function handleCheckout() {
+    setCheckoutPending(true);
+    setBillingError("");
+    try {
+      const res = await fetch("/api/billing/checkout", { method: "POST" });
+      const json = await res.json();
+      if (!res.ok) {
+        setBillingError(json.error ?? "Failed to start checkout");
+        return;
+      }
+      if (json.checkoutUrl) {
+        window.location.href = json.checkoutUrl;
+      }
+    } catch {
+      setBillingError("Unexpected error. Please try again.");
+    } finally {
+      setCheckoutPending(false);
+    }
+  }
+
+  async function handlePortal() {
+    setPortalPending(true);
+    setBillingError("");
+    try {
+      const res = await fetch("/api/billing/portal", { method: "POST" });
+      const json = await res.json();
+      if (!res.ok) {
+        setBillingError(json.error ?? "Failed to open billing portal");
+        return;
+      }
+      if (json.portalUrl) {
+        window.location.href = json.portalUrl;
+      }
+    } catch {
+      setBillingError("Unexpected error. Please try again.");
+    } finally {
+      setPortalPending(false);
+    }
+  }
+
+  return (
+    <Card id="settings-billing">
+      <CardHeader className="px-6 pt-6 pb-4">
+        <CardTitle className="text-base font-semibold">Billing &amp; Plans</CardTitle>
+        <CardDescription className="text-sm text-muted-foreground">
+          Manage your subscription and usage.
+        </CardDescription>
+      </CardHeader>
+      <Separator />
+      <CardContent className="px-6 pt-5 pb-6 space-y-5">
+        {/* Past-due warning banner */}
+        {isPastDue && (
+          <div className="flex items-center gap-3 rounded-lg border border-destructive/50 bg-destructive/10 px-4 py-3">
+            <p className="text-sm font-medium text-destructive">
+              Payment failed &mdash; update your payment method to keep Pro access.
+            </p>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="ml-auto shrink-0 border-destructive text-destructive hover:bg-destructive/10"
+              disabled={portalPending}
+              onClick={handlePortal}
+            >
+              {portalPending ? "Loading…" : "Update payment method"}
+            </Button>
+          </div>
+        )}
+
+        {/* Error feedback */}
+        {billingError && (
+          <p className="text-sm text-destructive">{billingError}</p>
+        )}
+
+        {/* Current plan */}
+        {plan === "pro" ? (
+          <div className="flex items-start justify-between gap-4 rounded-lg border border-border bg-muted/30 p-4">
+            <div className="flex flex-col gap-1">
+              <div className="flex items-center gap-2">
+                <p className="text-sm font-semibold text-foreground">Pro plan</p>
+                <Badge variant="secondary" className="text-xs">Active</Badge>
+              </div>
+              <p className="text-sm text-muted-foreground">
+                Unlimited notes and boxes. $12&nbsp;/&nbsp;month.
+              </p>
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="shrink-0"
+              disabled={portalPending}
+              onClick={handlePortal}
+            >
+              {portalPending ? "Loading…" : "Manage billing"}
+            </Button>
+          </div>
+        ) : (
+          <>
+            <div className="flex items-start gap-4 rounded-lg border border-border bg-muted/30 p-4">
+              <div className="flex flex-col gap-1 flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  <p className="text-sm font-semibold text-foreground">Free plan</p>
+                  <Badge variant="secondary" className="text-xs">Current</Badge>
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  $0&nbsp;/&nbsp;month &middot; No credit card required
+                </p>
+                {/* Usage */}
+                <div className="mt-2 flex flex-col gap-1.5">
+                  <UsageBar label="Notes" current={noteCount} max={noteMax} />
+                  <UsageBar label="Boxes" current={boxCount} max={boxMax} />
+                </div>
+              </div>
+            </div>
+
+            {/* Upgrade CTA */}
+            <div className="flex flex-col gap-3 rounded-lg border border-border p-4">
+              <div className="flex flex-col gap-1">
+                <p className="text-sm font-semibold text-foreground">
+                  Upgrade to Pro &mdash; $12&nbsp;/&nbsp;month
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  Unlimited notes, unlimited boxes, and priority support.
+                </p>
+              </div>
+              {/* Form POST for CSRF safety; JS intercepts to handle JSON response */}
+              <form
+                method="POST"
+                action="/api/billing/checkout"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  handleCheckout();
+                }}
+              >
+                <Button
+                  type="submit"
+                  size="sm"
+                  disabled={checkoutPending}
+                >
+                  {checkoutPending ? "Loading…" : "Upgrade to Pro"}
+                </Button>
+              </form>
+            </div>
+          </>
+        )}
       </CardContent>
     </Card>
   );

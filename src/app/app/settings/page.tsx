@@ -6,7 +6,6 @@ import {
   CardTitle,
   CardDescription,
 } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { ConnectionsPanel } from "@/components/product/connections_panel";
@@ -16,11 +15,18 @@ import { listBoxesByWorkspace } from "@/server/repositories/box_repository";
 import { listConnectionsWithScopes } from "@/server/services/connection_service";
 import { getWorkspaceById } from "@/server/repositories/workspace_repository";
 import {
+  getWorkspacePlan,
+  getSubscriptionStatus,
+  checkNoteLimit,
+  checkBoxLimit,
+} from "@/server/services/subscription_service";
+import {
   ProfileSection,
   AppearanceSection,
   SecuritySection,
   NotificationsSection,
   WorkspaceSection,
+  BillingSection,
 } from "./settings_client";
 import type { Theme, NotificationPreferences } from "./actions";
 import { DeleteAccountButton } from "./delete_account_button";
@@ -36,76 +42,6 @@ const settingsNav = [
   { id: "connections", label: "Connections", icon: Key },
   { id: "security", label: "Security", icon: Shield },
 ];
-
-// ─── Billing section ──────────────────────────────────────────────────────────
-
-function BillingSection() {
-  return (
-    <Card id="settings-billing">
-      <CardHeader className="px-6 pt-6 pb-4">
-        <CardTitle className="text-base font-semibold">Billing &amp; Plans</CardTitle>
-        <CardDescription className="text-sm text-muted-foreground">
-          Your current plan and what&apos;s coming next.
-        </CardDescription>
-      </CardHeader>
-      <Separator />
-      <CardContent className="px-6 pt-5 pb-6 space-y-5">
-        {/* Current plan */}
-        <div className="flex items-start gap-4 rounded-lg border border-border bg-muted/30 p-4">
-          <div className="flex flex-col gap-1">
-            <div className="flex items-center gap-2">
-              <p className="text-sm font-semibold text-foreground">Free plan</p>
-              <Badge variant="secondary" className="text-xs">Current</Badge>
-            </div>
-            <p className="text-sm text-muted-foreground">
-              You&apos;re on the free plan during our beta. Paid plans are coming soon.
-            </p>
-            <p className="text-xs text-muted-foreground/70 mt-0.5">
-              $0 / month &middot; No credit card required
-            </p>
-          </div>
-        </div>
-
-        {/* Pro plan teaser */}
-        <div className="flex flex-col gap-2">
-          <div className="flex items-center gap-2">
-            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-              Pro plan
-            </p>
-            <Badge variant="outline" className="text-xs">Coming soon</Badge>
-          </div>
-          <ul className="grid grid-cols-1 gap-1 sm:grid-cols-2">
-            {[
-              "Unlimited boxes",
-              "10 GB storage",
-              "Priority support",
-              "Advanced integrations",
-              "Audit logs",
-              "Custom domains",
-            ].map((feature) => (
-              <li
-                key={feature}
-                className="flex items-center gap-2 text-sm text-muted-foreground"
-              >
-                <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/40 shrink-0" />
-                {feature}
-              </li>
-            ))}
-          </ul>
-        </div>
-
-        <div className="flex items-center gap-3 border-t border-border pt-4">
-          <a
-            href="mailto:hello@contextstore.app?subject=Paid%20plan%20waitlist"
-            className="inline-flex items-center justify-center gap-1.5 rounded-md border border-input bg-background px-3 py-1.5 text-sm font-medium shadow-xs hover:bg-accent hover:text-accent-foreground transition-colors"
-          >
-            Get notified when Pro launches
-          </a>
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
 
 // ─── Danger zone ──────────────────────────────────────────────────────────────
 
@@ -146,11 +82,16 @@ export default async function SettingsPage() {
   const ctx = await requireAuthenticatedUser();
   const supabase = await createClient();
 
-  const [boxes, connections, workspace] = await Promise.all([
-    listBoxesByWorkspace(supabase, ctx.workspace.id),
-    listConnectionsWithScopes(supabase, ctx.workspace.id),
-    getWorkspaceById(supabase, ctx.workspace.id),
-  ]);
+  const [boxes, connections, workspace, plan, subscriptionStatus, noteLimit, boxLimit] =
+    await Promise.all([
+      listBoxesByWorkspace(supabase, ctx.workspace.id),
+      listConnectionsWithScopes(supabase, ctx.workspace.id),
+      getWorkspaceById(supabase, ctx.workspace.id),
+      getWorkspacePlan(supabase, ctx.workspace.id),
+      getSubscriptionStatus(supabase, ctx.workspace.id),
+      checkNoteLimit(supabase, ctx.workspace.id),
+      checkBoxLimit(supabase, ctx.workspace.id),
+    ]);
 
   const savedNotifications = ctx.user.user_metadata?.notifications as
     | NotificationPreferences
@@ -222,7 +163,14 @@ export default async function SettingsPage() {
               initialDescription={workspace?.description ?? null}
             />
 
-            <BillingSection />
+            <BillingSection
+              plan={plan}
+              subscriptionStatus={subscriptionStatus}
+              noteCount={noteLimit.current}
+              noteMax={noteLimit.max}
+              boxCount={boxLimit.current}
+              boxMax={boxLimit.max}
+            />
 
             <AppearanceSection
               currentTheme={
