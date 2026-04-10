@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import { Suspense } from "react";
 import {
   Archive,
   BookOpen,
@@ -26,6 +27,7 @@ import {
 import { listLinksFromNote } from "@/server/repositories/note_link_repository";
 import { getBoxOverview } from "@/server/services/overview_service";
 import { EmptyState } from "@/components/product/empty_state";
+import { Skeleton } from "@/components/ui/skeleton";
 import { BoxContentsTree } from "@/components/product/box_contents_tree";
 import { BoxGuidePanel } from "@/components/product/box_guide_panel";
 import { GraphPanel } from "@/components/product/graph_panel";
@@ -33,7 +35,7 @@ import { BoxSearchPanel } from "@/components/product/box_search_panel";
 import { CreateFolderDialog } from "@/components/product/create_folder_dialog";
 import { CreateNoteDialog } from "@/components/product/create_note_dialog";
 import { GuideNotePicker } from "@/components/product/guide_note_picker";
-import { NoteStub } from "@/components/product/note_stub";
+import { NoteStub, NoteStubSkeleton } from "@/components/product/note_stub";
 import { BoxLifecycleMenu } from "@/components/product/box_lifecycle_menu";
 import { FolderLifecycleMenu } from "@/components/product/folder_lifecycle_menu";
 import { PanelSection } from "@/components/product/panel_section";
@@ -64,6 +66,18 @@ function formatRelativeDate(dateStr: string): string {
   if (diffDays === 1) return "Yesterday";
   if (diffDays < 7) return `${diffDays} days ago`;
   return formatDate(dateStr);
+}
+
+// ─── Note list skeleton ───────────────────────────────────────────────────────
+
+function NoteListSkeleton() {
+  return (
+    <div className="mx-auto flex max-w-3xl flex-col gap-2 px-6 py-4">
+      {[0, 1, 2, 3].map((i) => (
+        <NoteStubSkeleton key={i} />
+      ))}
+    </div>
+  );
 }
 
 // ─── Right panel ──────────────────────────────────────────────────────────────
@@ -327,7 +341,7 @@ export default async function BoxPage({
                   </Badge>
                 )}
               </div>
-              <h1 className="text-xl font-semibold tracking-tight text-foreground truncate">
+              <h1 className="text-2xl font-semibold tracking-tight text-foreground truncate">
                 {box.name}
               </h1>
               {box.description && (
@@ -428,29 +442,35 @@ export default async function BoxPage({
           {/* ── Notes tab ── */}
           <TabsContent value="notes" className="flex-1 overflow-hidden">
             <ScrollArea className="h-full">
-              {sortedNotes.length === 0 ? (
-                <EmptyState
-                  icon={<FileText className="h-5 w-5" />}
-                  title="No notes yet"
-                  description="Create your first note, choose a starter template, or use the Import button above to bring in existing Markdown content."
-                  action={<CreateNoteDialog boxId={box.id} folders={folders} />}
-                  className="h-full"
-                />
-              ) : (
-                <div className="mx-auto flex max-w-3xl flex-col gap-2 px-6 py-4">
-                  {sortedNotes.map((note) => (
-                    <Link key={note.id} href={`/app/notes/${note.id}`} className="block">
-                      <NoteStub
-                        title={note.title}
-                        kind={note.kind as "note" | "guide" | "bundle"}
-                        excerpt={note.summary ?? undefined}
-                        updatedAt={formatRelativeDate(note.updated_at)}
-                        tags={note.tags.slice(0, 3)}
-                      />
-                    </Link>
-                  ))}
-                </div>
-              )}
+              <Suspense fallback={<NoteListSkeleton />}>
+                {sortedNotes.length === 0 ? (
+                  <EmptyState
+                    icon={<FileText className="h-5 w-5" />}
+                    title="No notes yet"
+                    description="Create your first note, choose a starter template, or use the Import button above to bring in existing Markdown content."
+                    action={<CreateNoteDialog boxId={box.id} folders={folders} />}
+                    className="h-full"
+                  />
+                ) : (
+                  <div className="mx-auto flex max-w-3xl flex-col gap-2 px-6 py-4">
+                    {sortedNotes.map((note) => (
+                      <Link
+                        key={note.id}
+                        href={`/app/notes/${note.id}`}
+                        className="block rounded-lg transition-colors hover:bg-accent/30"
+                      >
+                        <NoteStub
+                          title={note.title}
+                          kind={note.kind as "note" | "guide" | "bundle"}
+                          excerpt={note.summary ?? undefined}
+                          updatedAt={formatRelativeDate(note.updated_at)}
+                          tags={note.tags.slice(0, 3)}
+                        />
+                      </Link>
+                    ))}
+                  </div>
+                )}
+              </Suspense>
             </ScrollArea>
           </TabsContent>
 
