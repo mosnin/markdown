@@ -25,12 +25,23 @@ const LABEL_MAP: Record<string, string> = {
   proposals: "Proposals",
   audit: "Audit log",
   settings: "Settings",
+  import_export: "Import / Export",
+  links: "Links",
 };
 
-function segmentLabel(segment: string): string {
-  // UUID-like segments → generic label
-  if (/^[0-9a-f-]{20,}$/i.test(segment)) return "Detail";
-  return LABEL_MAP[segment] ?? segment.charAt(0).toUpperCase() + segment.slice(1);
+/** Labels for UUID segments based on the preceding path segment. */
+const UUID_PARENT_LABELS: Record<string, string> = {
+  boxes: "Box",
+  notes: "Note",
+  folders: "Folder",
+};
+
+function segmentLabel(segment: string, prevSegment?: string): string {
+  // UUID-like segments → use parent-aware label
+  if (/^[0-9a-f-]{20,}$/i.test(segment)) {
+    return prevSegment ? (UUID_PARENT_LABELS[prevSegment] ?? "Detail") : "Detail";
+  }
+  return LABEL_MAP[segment] ?? segment.charAt(0).toUpperCase() + segment.slice(1).replace(/_/g, " ");
 }
 
 export function AppBreadcrumbs() {
@@ -47,9 +58,11 @@ export function AppBreadcrumbs() {
   ];
 
   let href = "/app";
-  for (const seg of segments) {
+  for (let i = 0; i < segments.length; i++) {
+    const seg = segments[i];
+    const prev = i > 0 ? segments[i - 1] : undefined;
     href = `${href}/${seg}`;
-    crumbs.push({ label: segmentLabel(seg), href });
+    crumbs.push({ label: segmentLabel(seg, prev), href });
   }
 
   // If we are at root (/app), show only the app name — no breadcrumb trail needed
