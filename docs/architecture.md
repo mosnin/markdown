@@ -627,6 +627,28 @@ Relationship explanation parity verified: `relationship_note` is propagated thro
 
 Generated folder permission parity verified: four-layer check (permission_mode, box scope, folder policy, workspace ownership) confirmed in both route and service layers.
 
+## Box creation performance
+
+See [docs/box_creation_performance_fix_v1.md](box_creation_performance_fix_v1.md).
+
+**Critical path rule**: box creation should only block on the DB insert + audit.
+Template application is explicitly off the critical path — it runs as a background
+client-side effect (`BoxTemplateSetup`) after navigation so the user lands in the
+new box immediately.
+
+**Revalidation after box creation** (`createBoxAction`):
+- `revalidatePath('/app')` invalidates the home dashboard page and the
+  `_N_T_/app/layout` tag, forcing `listBoxesByWorkspace()` to re-run so the
+  sidebar shows the new box on the next navigation.
+- `revalidatePath('/app/workspaces')` invalidates the workspace box list page.
+- New box pages do not need explicit revalidation (fresh route).
+
+**Guard pattern for background setup**:
+Server components render the `BoxTemplateSetup` client component only when the
+box is empty (`notes.length === 0 && folders.length === 0`). This prevents
+accidental re-application to boxes with existing content (bookmarked URLs,
+shared links, etc.).
+
 ## Future prompts will add
 
 - `src/server/policies/` — authorization checks

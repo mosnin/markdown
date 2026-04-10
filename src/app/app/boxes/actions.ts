@@ -48,7 +48,18 @@ export async function createBoxAction(
       name: name.trim(),
       description: description?.trim() ?? null,
     });
+
+    // Revalidation strategy after box creation:
+    //   /app          — home dashboard (stats tiles) + app layout (sidebar box list).
+    //                   revalidatePath('/app') invalidates the /app page AND the
+    //                   ancestor layout tags (_N_T_/app/layout), which forces
+    //                   listBoxesByWorkspace() to re-run so the new box appears
+    //                   in the sidebar on the next navigation.
+    //   /app/workspaces — box list page (was previously missing; showed stale count).
+    // The new box page itself doesn't need revalidation — it's a fresh route.
     revalidatePath("/app");
+    revalidatePath("/app/workspaces");
+
     return { ok: true, data: { id: box.id } };
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : "Failed to create box" };

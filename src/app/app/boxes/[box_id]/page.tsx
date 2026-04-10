@@ -49,6 +49,7 @@ import { ImportTriggerButton } from "@/components/product/import_dialog";
 import { FolderPolicyToggle } from "@/components/product/folder_policy_toggle";
 import { BoxEditDialog } from "@/components/product/box_edit_dialog";
 import { BoxOverviewPanel } from "@/components/product/box_overview_panel";
+import { BoxTemplateSetup } from "@/components/product/box_template_setup";
 import { type Folder as FolderType } from "@/server/domain/types/folder";
 import { type Note } from "@/server/domain/types/note";
 
@@ -373,6 +374,19 @@ export default async function BoxPage({
                   {box.description}
                 </p>
               )}
+
+              {/* Background template setup — only rendered for new empty boxes.
+                  Guard: notes.length === 0 && folders.length === 0 prevents
+                  re-application to boxes that already have content. */}
+              {typeof resolvedSearch.setup === "string" &&
+                resolvedSearch.setup.length > 0 &&
+                notes.length === 0 &&
+                folders.length === 0 && (
+                  <BoxTemplateSetup
+                    boxId={box.id}
+                    templateId={resolvedSearch.setup}
+                  />
+                )}
 
               {/* Guide note — front door strip */}
               {guideNote ? (
