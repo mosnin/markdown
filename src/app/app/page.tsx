@@ -15,6 +15,7 @@ import { OnboardingCallout } from "@/components/product/onboarding_callout";
 import { QuickStartPanel } from "@/components/product/quick_start_panel";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
+import { cn } from "@/lib/utils";
 import { CONNECTION_STATUS } from "@/server/domain/constants/connection_constants";
 
 function formatRelativeDate(dateStr: string): string {
