@@ -2,7 +2,7 @@ import { Search } from "lucide-react";
 import { requireAuthenticatedUser } from "@/server/auth/require_authenticated_user";
 import { createClient } from "@/lib/supabase/server";
 import { listBoxesByWorkspace } from "@/server/repositories/box_repository";
-import { WorkspaceSearchPanel } from "@/components/product/workspace_search_panel";
+import { WorkspaceSearchPagePanel } from "@/components/product/box_search_panel";
 import { PageHeader } from "@/components/product/page_header";
 import { EmptyState } from "@/components/product/empty_state";
 
@@ -27,7 +27,7 @@ export default async function SearchPage() {
               description="Create a box and add notes before searching."
             />
           ) : (
-            <WorkspaceSearchPanel
+            <WorkspaceSearchPagePanel
               boxes={boxes.map((b) => ({ id: b.id, name: b.name }))}
             />
           )}
