@@ -5,6 +5,12 @@ import { useRouter } from "next/navigation";
 import { Code2, Eye } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { renderMarkdown } from "@/lib/markdown";
 import { type Note } from "@/server/domain/types/note";
@@ -158,9 +164,10 @@ export function NoteEditor({ note, initialMode = "document" }: NoteEditorProps) 
   const renderedHtml = renderMarkdown(content);
 
   return (
+    <TooltipProvider>
     <div className="flex h-full flex-col overflow-hidden">
       {/* ── Title ─────────────────────────────────────────────────────────── */}
-      <div className="border-b border-border px-6 py-4">
+      <div className="px-8 pb-3 pt-6">
         <input
           type="text"
           value={title}
@@ -171,53 +178,97 @@ export function NoteEditor({ note, initialMode = "document" }: NoteEditorProps) 
           onFocus={() => {
             if (mode === "document") setMode("markdown");
           }}
-          placeholder="Note title"
+          placeholder="Untitled note"
           aria-label="Note title"
           className={cn(
-            "w-full bg-transparent text-xl font-semibold tracking-tight text-foreground",
-            "placeholder:text-muted-foreground focus:outline-none"
+            "w-full bg-transparent text-3xl font-bold tracking-tight text-foreground",
+            "border-b-2 border-transparent pb-1",
+            "transition-[border-color] duration-150 ease-standard",
+            "focus:border-border focus:outline-none",
+            "placeholder:text-muted-foreground/40"
           )}
         />
+        {/* Metadata bar — created date, tags — visible below title */}
+        {(note.created_at ?? note.tags.length > 0) && (
+          <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
+            {note.created_at && (
+              <span className="text-xs text-muted-foreground">
+                {new Date(note.created_at).toLocaleDateString(undefined, {
+                  year: "numeric",
+                  month: "short",
+                  day: "numeric",
+                })}
+              </span>
+            )}
+            {note.tags.length > 0 && (
+              <span className="text-xs text-muted-foreground">
+                {note.tags.join(" · ")}
+              </span>
+            )}
+          </div>
+        )}
       </div>
 
       {/* ── Toolbar: mode toggle + save state ─────────────────────────────── */}
-      <div className="flex items-center justify-between border-b border-border px-6 py-2">
+      <div className="flex items-center justify-between border-b border-border px-8 py-1.5">
         {/* Mode toggle */}
         <div
           className="flex items-center gap-1"
           role="tablist"
           aria-label="Note view mode"
         >
-          <ModeButton
-            mode="document"
-            current={mode}
-            icon={<Eye className="h-3 w-3" />}
-            label="Document"
-            onClick={() => setMode("document")}
-          />
-          <ModeButton
-            mode="markdown"
-            current={mode}
-            icon={<Code2 className="h-3 w-3" />}
-            label="Markdown"
-            onClick={() => setMode("markdown")}
-          />
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <ModeButton
+                mode="document"
+                current={mode}
+                icon={<Eye className="h-3.5 w-3.5" />}
+                label="Document"
+                onClick={() => setMode("document")}
+              />
+            </TooltipTrigger>
+            <TooltipContent side="bottom" className="text-xs">
+              Rendered document view
+            </TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <ModeButton
+                mode="markdown"
+                current={mode}
+                icon={<Code2 className="h-3.5 w-3.5" />}
+                label="Markdown"
+                onClick={() => setMode("markdown")}
+              />
+            </TooltipTrigger>
+            <TooltipContent side="bottom" className="text-xs">
+              Edit raw markdown source
+            </TooltipContent>
+          </Tooltip>
         </div>
 
         {/* Save state + retry */}
         <div className="flex items-center gap-2">
-          <AutosaveStatus
-            state={autosaveState}
-            savedAt={savedAt}
-            error={saveError}
-          />
+          <span
+            className={cn(
+              "transition-opacity duration-300 ease-standard",
+              autosaveState === "idle" ? "opacity-0" : "opacity-100"
+            )}
+          >
+            <AutosaveStatus
+              state={autosaveState}
+              savedAt={savedAt}
+              error={saveError}
+              className="text-xs text-muted-foreground"
+            />
+          </span>
           {autosaveState === "error" && (
             <Button
               size="sm"
               variant="outline"
               onClick={() => void performSave()}
               disabled={isSaving}
-              className="h-7 text-xs"
+              className="h-8 text-xs"
             >
               Retry
             </Button>
@@ -241,17 +292,20 @@ export function NoteEditor({ note, initialMode = "document" }: NoteEditorProps) 
           >
             {content ? (
               <div
-                className="prose prose-neutral dark:prose-invert max-w-none px-6 py-6 text-base leading-relaxed"
+                className="prose prose-neutral dark:prose-invert max-w-none px-8 py-6 text-base leading-7"
                 // renderMarkdown output is sanitized — see src/lib/markdown.ts
                 dangerouslySetInnerHTML={{ __html: renderedHtml }}
               />
             ) : (
               <div
-                className="flex h-full items-center justify-center"
+                className="flex h-full flex-col items-center justify-center gap-2 px-8"
                 aria-hidden="true"
               >
-                <p className="text-sm text-muted-foreground">
-                  Click to start writing…
+                <p className="text-sm font-medium text-muted-foreground/60">
+                  This note is empty
+                </p>
+                <p className="text-xs text-muted-foreground/40">
+                  Click anywhere or switch to Markdown to start writing
                 </p>
               </div>
             )}
@@ -266,7 +320,7 @@ export function NoteEditor({ note, initialMode = "document" }: NoteEditorProps) 
             className="flex h-full flex-col"
           >
             {/* Source label — tells the user this is what the AI receives */}
-            <div className="flex items-center gap-2 border-b border-border/40 bg-muted/20 px-6 py-1.5">
+            <div className="flex items-center gap-2 border-b border-border/40 bg-muted/20 px-8 py-1.5">
               <Code2
                 className="h-3.5 w-3.5 shrink-0 text-muted-foreground/60"
                 aria-hidden="true"
@@ -284,9 +338,9 @@ export function NoteEditor({ note, initialMode = "document" }: NoteEditorProps) 
               spellCheck
               aria-label="Markdown content"
               className={cn(
-                "flex-1 resize-none bg-transparent px-6 py-5",
-                "font-mono text-sm leading-relaxed text-foreground",
-                "placeholder:text-muted-foreground focus:outline-none"
+                "flex-1 resize-none bg-transparent px-8 py-6",
+                "font-mono text-sm leading-7 text-foreground",
+                "placeholder:text-muted-foreground/40 focus:outline-none"
               )}
             />
           </div>
@@ -297,16 +351,16 @@ export function NoteEditor({ note, initialMode = "document" }: NoteEditorProps) 
       {mode === "markdown" && (
         <div className="border-t border-border">
           <details className="group">
-            <summary className="flex cursor-pointer items-center justify-between px-6 py-2 text-xs font-medium text-muted-foreground hover:text-foreground">
+            <summary className="flex cursor-pointer items-center justify-between px-8 py-2 text-xs font-medium text-muted-foreground hover:text-foreground">
               Metadata
-              <span className="text-[10px] uppercase tracking-wider group-open:hidden">
+              <span className="text-[10px] uppercase tracking-wider opacity-60 group-open:hidden">
                 expand
               </span>
             </summary>
-            <div className="flex flex-col gap-3 px-6 pb-4 pt-2">
+            <div className="flex flex-col gap-3 px-8 pb-5 pt-2">
               <div className="flex flex-col gap-1.5">
                 <label
-                  className="text-xs font-medium text-foreground/70"
+                  className="text-xs font-medium text-muted-foreground"
                   htmlFor="note-summary"
                 >
                   Summary
@@ -316,15 +370,16 @@ export function NoteEditor({ note, initialMode = "document" }: NoteEditorProps) 
                   value={summary}
                   onChange={(e) => setSummary(e.target.value)}
                   placeholder="One-line summary for context retrieval"
+                  className="h-8 text-xs"
                 />
               </div>
               <div className="flex flex-col gap-1.5">
                 <label
-                  className="text-xs font-medium text-foreground/70"
+                  className="text-xs font-medium text-muted-foreground"
                   htmlFor="note-tags"
                 >
                   Tags{" "}
-                  <span className="font-normal text-muted-foreground">
+                  <span className="font-normal opacity-60">
                     (comma-separated)
                   </span>
                 </label>
@@ -333,15 +388,16 @@ export function NoteEditor({ note, initialMode = "document" }: NoteEditorProps) 
                   value={tagsInput}
                   onChange={(e) => setTagsInput(e.target.value)}
                   placeholder="research, reading, ideas"
+                  className="h-8 text-xs"
                 />
               </div>
               <div className="flex flex-col gap-1.5">
                 <label
-                  className="text-xs font-medium text-foreground/70"
+                  className="text-xs font-medium text-muted-foreground"
                   htmlFor="note-hint"
                 >
                   Read hint{" "}
-                  <span className="font-normal text-muted-foreground">
+                  <span className="font-normal opacity-60">
                     (optional guidance for AI retrieval)
                   </span>
                 </label>
@@ -350,6 +406,7 @@ export function NoteEditor({ note, initialMode = "document" }: NoteEditorProps) 
                   value={readHint}
                   onChange={(e) => setReadHint(e.target.value)}
                   placeholder="e.g. Read this before generating anything in the Research box"
+                  className="h-8 text-xs"
                 />
               </div>
             </div>
@@ -357,6 +414,7 @@ export function NoteEditor({ note, initialMode = "document" }: NoteEditorProps) 
         </div>
       )}
     </div>
+    </TooltipProvider>
   );
 }
 
@@ -383,9 +441,9 @@ function ModeButton({
       aria-selected={isActive}
       onClick={onClick}
       className={cn(
-        "flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs transition-fast",
+        "flex h-8 items-center gap-1.5 rounded-md px-2.5 text-xs transition-fast",
         isActive
-          ? "bg-accent text-foreground font-medium"
+          ? "bg-accent font-medium text-foreground"
           : "text-muted-foreground hover:bg-accent/60 hover:text-foreground"
       )}
     >

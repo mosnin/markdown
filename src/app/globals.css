@@ -65,6 +65,7 @@
   --radius-md: 0.5rem;     /* 8px  — card, panel */
   --radius-lg: 0.75rem;    /* 12px — modal, sheet */
   --radius-xl: 1rem;       /* 16px — large card */
+  --radius-2xl: 1.5rem;    /* 24px — extra large card, hero sections */
   --radius-full: 9999px;   /* pill */
 
   /* Shadow scale */
@@ -80,6 +81,8 @@
   --duration-normal: 200ms;
   --duration-slow: 300ms;
   --duration-deliberate: 500ms;
+  --duration-page: 300ms;
+  --duration-skeleton: 1.5s;
 
   --ease-standard: cubic-bezier(0.2, 0, 0, 1);
   --ease-enter: cubic-bezier(0, 0, 0.2, 1);
@@ -154,6 +157,10 @@
   --border-subtle: oklch(0.94 0 0);
   --border-default: oklch(0.91 0 0);
   --border-strong: oklch(0.75 0 0);
+
+  /* Brand alias tokens */
+  --color-brand: var(--primary);
+  --color-brand-subtle: var(--secondary);
 }
 
 /* ─── Dark mode ─────────────────────────────────────────────────────────── */
@@ -206,6 +213,10 @@
   --border-subtle: oklch(1 0 0 / 6%);
   --border-default: oklch(1 0 0 / 9%);
   --border-strong: oklch(1 0 0 / 20%);
+
+  /* Brand alias tokens */
+  --color-brand: var(--primary);
+  --color-brand-subtle: var(--secondary);
 }
 
 /* ─── Base styles ───────────────────────────────────────────────────────── */
@@ -227,6 +238,25 @@
   /* Smooth scrolling within panels — not globally */
   [data-scroll-area] {
     scroll-behavior: smooth;
+  }
+
+  /* Smooth focus-visible rings on all interactive elements */
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+
+  button:focus-visible,
+  a:focus-visible,
+  input:focus-visible,
+  select:focus-visible,
+  textarea:focus-visible,
+  [role="button"]:focus-visible,
+  [role="link"]:focus-visible,
+  [tabindex]:focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+    border-radius: var(--radius-sm);
   }
 }
 
@@ -264,5 +294,72 @@
   /* Focus ring — consistent across interactive elements */
   .focus-ring {
     @apply outline-none ring-2 ring-ring ring-offset-2 ring-offset-background;
+  }
+
+  /* ── Typography utilities ───────────────────────────────────────────────── */
+  .text-display {
+    font-size: 2.25rem;   /* 36px */
+    font-weight: 700;
+    line-height: 1.15;
+  }
+
+  .text-headline {
+    font-size: 1.5rem;    /* 24px */
+    font-weight: 600;
+    line-height: 1.3;
+  }
+
+  .text-title {
+    font-size: 1.125rem;  /* 18px */
+    font-weight: 600;
+    line-height: 1.4;
+  }
+
+  .text-body-lg {
+    font-size: 1rem;      /* 16px */
+    font-weight: 400;
+    line-height: 1.5;
+  }
+
+  .text-body {
+    font-size: 0.875rem;  /* 14px */
+    font-weight: 400;
+    line-height: 1.5;
+  }
+
+  .text-caption {
+    font-size: 0.75rem;   /* 12px */
+    font-weight: 400;
+    line-height: 1.5;
+  }
+
+  .text-overline {
+    font-size: 0.6875rem; /* 11px */
+    font-weight: 600;
+    line-height: 1.5;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+  }
+
+  /* ── Layout utilities ───────────────────────────────────────────────────── */
+  .page-container {
+    max-width: 1280px;    /* screen-xl */
+    margin-left: auto;
+    margin-right: auto;
+    padding-left: 1.5rem; /* px-6 */
+    padding-right: 1.5rem;
+  }
+
+  .page-content {
+    max-width: 64rem;     /* max-w-5xl = 1024px but keeping closer to 5xl */
+    margin-left: auto;
+    margin-right: auto;
+    padding-left: 1.5rem; /* px-6 */
+    padding-right: 1.5rem;
+  }
+
+  /* ── Skeleton loading state ─────────────────────────────────────────────── */
+  .skeleton {
+    @apply animate-pulse bg-muted rounded;
   }
 }
