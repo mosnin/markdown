@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition, useRef } from "react";
+import { useState, useTransition, useRef, useEffect } from "react";
 import { AlertCircle, BookOpen, Bot, FileText, Search, Package, Package2 } from "lucide-react";
 import Link from "next/link";
 import { Input } from "@/components/ui/input";
@@ -43,7 +43,7 @@ function HighlightedExcerpt({
   return (
     <>
       {parts.map((part, i) =>
-        pattern.test(part) ? (
+        i % 2 === 1 ? (
           <strong key={i} className="font-semibold text-foreground">
             {part}
           </strong>
@@ -125,6 +125,12 @@ export function BoxSearchPanel({ boxId, guideNoteId }: BoxSearchPanelProps) {
   const [searchError, setSearchError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, []);
 
   function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
     const q = e.target.value;
@@ -368,6 +374,12 @@ export function WorkspaceSearchPagePanel({
   const [isPending, startTransition] = useTransition();
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  useEffect(() => {
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, []);
+
   const selectedBox = boxes.find((b) => b.id === selectedBoxId);
   const boxMap = Object.fromEntries(boxes.map((b) => [b.id, b.name]));
 
@@ -386,6 +398,10 @@ export function WorkspaceSearchPagePanel({
         if (res.ok) {
           setResults(res.data);
           setSearched(true);
+        } else {
+          setResults([]);
+          setSearched(true);
+          console.error("Search failed:", res.error);
         }
       });
     }, 300);

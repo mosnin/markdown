@@ -1,5 +1,6 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getRequestContext } from "@/server/auth/get_request_context";
 import { updateWorkspace } from "@/server/repositories/workspace_repository";
@@ -37,6 +38,7 @@ export async function updateProfileAction(
 
     if (error) throw error;
 
+    revalidatePath('/app/settings');
     return { ok: true, data: undefined };
   } catch (err) {
     return {
@@ -128,6 +130,7 @@ export async function updateThemeAction(
 
     if (error) throw error;
 
+    revalidatePath('/app/settings');
     return { ok: true, data: undefined };
   } catch (err) {
     return {
@@ -157,6 +160,7 @@ export async function updateNotificationsAction(
 
     if (error) throw error;
 
+    revalidatePath('/app/settings');
     return { ok: true, data: undefined };
   } catch (err) {
     return {
@@ -182,6 +186,7 @@ export async function updateWorkspaceAction(
     const updated = await updateWorkspace(supabase, workspaceId, { name, description });
     if (!updated) throw new Error("Failed to update workspace");
 
+    revalidatePath('/app', 'layout');
     return { ok: true, data: undefined };
   } catch (err) {
     return {

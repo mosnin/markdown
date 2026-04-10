@@ -60,8 +60,8 @@ export function MobileSidebar({
 
   const boxMatch = pathname.match(/\/app\/boxes\/([^/]+)/);
   const noteMatch = pathname.match(/\/app\/notes\/([^/]+)/);
-  const currentBoxId = boxMatch?.[1];
-  const currentNoteId = noteMatch?.[1];
+  const currentBoxId = boxMatch ? decodeURIComponent(boxMatch[1]) : undefined;
+  const currentNoteId = noteMatch ? decodeURIComponent(noteMatch[1]) : undefined;
 
   function close() {
     setOpen(false);

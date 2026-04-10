@@ -93,8 +93,8 @@ export function AppSidebar({
   // Extract the current box and note IDs from the pathname
   const boxMatch = pathname.match(/\/app\/boxes\/([^/]+)/);
   const noteMatch = pathname.match(/\/app\/notes\/([^/]+)/);
-  const currentBoxId = boxMatch?.[1];
-  const currentNoteId = noteMatch?.[1];
+  const currentBoxId = boxMatch ? decodeURIComponent(boxMatch[1]) : undefined;
+  const currentNoteId = noteMatch ? decodeURIComponent(noteMatch[1]) : undefined;
 
   // Derive initials for the workspace avatar pill
   const workspaceInitial = (workspaceName ?? "W").charAt(0).toUpperCase();

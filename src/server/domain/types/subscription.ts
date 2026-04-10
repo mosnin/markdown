@@ -15,6 +15,7 @@ export interface WorkspaceSubscription {
   plan: SubscriptionPlan;
   status: SubscriptionStatus;
   current_period_end: string | null;
+  manually_overridden: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -27,4 +28,5 @@ export interface UpsertSubscriptionInput {
   plan?: SubscriptionPlan;
   status?: SubscriptionStatus;
   current_period_end?: string | null;
+  manually_overridden?: boolean;
 }

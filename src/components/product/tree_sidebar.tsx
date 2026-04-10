@@ -140,9 +140,14 @@ function CollapsePanel({
       // Snap to measured height first so CSS can animate down to 0
       const measured = ref.current.scrollHeight;
       setHeight(measured);
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => setHeight(0));
+      let raf1: number, raf2: number;
+      raf1 = requestAnimationFrame(() => {
+        raf2 = requestAnimationFrame(() => setHeight(0));
       });
+      return () => {
+        cancelAnimationFrame(raf1);
+        cancelAnimationFrame(raf2);
+      };
     }
   }, [open]);
 
@@ -198,6 +203,13 @@ function NoteRow({
       <span className="truncate">{note.title}</span>
     </Link>
   );
+}
+
+// ─── Check if a folder (recursively) contains a given note ID ────────────────
+
+function folderContainsNote(folder: TreeFolderNode, noteId: string): boolean {
+  if (folder.notes.some((n) => n.id === noteId)) return true;
+  return folder.children.some((child) => folderContainsNote(child, noteId));
 }
 
 // ─── Folder node (collapsible) ────────────────────────────────────────────────
@@ -285,6 +297,7 @@ function FolderNode({
               folder={child}
               depth={depth + 1}
               currentNoteId={currentNoteId}
+              defaultOpen={currentNoteId ? folderContainsNote(child, currentNoteId) : false}
               onNavigate={onNavigate}
             />
           ))}
@@ -456,22 +469,24 @@ export function TreeSidebar({
   const [treeData, setTreeData] = useState<Map<string, BoxTreeData>>(new Map());
   const [loading, setLoading] = useState<Set<string>>(new Set());
 
-  // Auto-expand active box on mount
+  // Auto-expand active box and refresh its tree data when currentBoxId changes
   useEffect(() => {
     const activeBoxId = currentBoxId;
     if (!activeBoxId) return;
+    // Clear cached tree data so stale data is not shown after navigation
+    setTreeData((prev) => {
+      const next = new Map(prev);
+      next.delete(activeBoxId);
+      return next;
+    });
     setExpandedBoxIds((prev) => {
       if (prev.has(activeBoxId)) return prev;
       return new Set([...prev, activeBoxId]);
     });
-    // Fetch tree data if not already loaded
-    setTreeData((prev) => {
-      if (prev.has(activeBoxId)) return prev;
-      fetchTree(activeBoxId);
-      return prev;
-    });
+    // Fetch fresh tree data for the active box
+    fetchTree(activeBoxId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [currentBoxId]);
 
   async function fetchTree(boxId: string) {
     setLoading((prev) => new Set([...prev, boxId]));

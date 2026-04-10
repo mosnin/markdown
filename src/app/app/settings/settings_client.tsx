@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useActionState } from "react";
+import { useState, useActionState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -37,6 +37,13 @@ export function ProfileSection({
   const initials = email.slice(0, 2).toUpperCase();
   const [status, setStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [errorMsg, setErrorMsg] = useState<string>("");
+
+  useEffect(() => {
+    if (status === "saved") {
+      const t = setTimeout(() => setStatus("idle"), 3000);
+      return () => clearTimeout(t);
+    }
+  }, [status]);
 
   async function handleSubmit(formData: FormData) {
     setStatus("saving");
@@ -259,6 +266,13 @@ export function NotificationsSection({
   const [status, setStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [errorMsg, setErrorMsg] = useState<string>("");
 
+  useEffect(() => {
+    if (status === "saved") {
+      const t = setTimeout(() => setStatus("idle"), 3000);
+      return () => clearTimeout(t);
+    }
+  }, [status]);
+
   function toggle(key: keyof NotificationPreferences) {
     setPrefs((p) => ({ ...p, [key]: !p[key] }));
     setStatus("idle");
@@ -338,6 +352,13 @@ export function WorkspaceSection({
 }) {
   const [status, setStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [errorMsg, setErrorMsg] = useState<string>("");
+
+  useEffect(() => {
+    if (status === "saved") {
+      const t = setTimeout(() => setStatus("idle"), 3000);
+      return () => clearTimeout(t);
+    }
+  }, [status]);
 
   async function handleSubmit(formData: FormData) {
     setStatus("saving");
