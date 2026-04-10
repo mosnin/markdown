@@ -3,6 +3,8 @@ import { Check, CheckCircle2, Users, Briefcase, Building2 } from "lucide-react";
 import { HeroSection } from "@/components/marketing/hero";
 import * as PricingCard from "@/components/ui/pricing-card";
 import { Button } from "@/components/ui/button";
+import { NotificationCenterFeed } from "@/components/ui/live-feed";
+import { AnomalyHeatmap } from "@/components/ui/anomaly-heatmap";
 
 // ─── App visuals ──────────────────────────────────────────────────────────────
 
@@ -251,7 +253,7 @@ export default function HomePage() {
               </div>
             </div>
             <div className="flex justify-center lg:justify-end">
-              <BoxesMockup />
+              <NotificationCenterFeed />
             </div>
           </div>
         </div>
@@ -262,7 +264,10 @@ export default function HomePage() {
         <div className="mx-auto max-w-6xl">
           <div className="grid grid-cols-1 items-center gap-16 lg:grid-cols-2">
             <div className="order-2 flex justify-center lg:order-1 lg:justify-start">
-              <BundleMockup />
+              <AnomalyHeatmap
+                cardTitle="Token density"
+                cardDescription="Token distribution across bundled notes — trim to any model's context window."
+              />
             </div>
             <div className="order-1 space-y-8 lg:order-2">
               <div className="space-y-4">
