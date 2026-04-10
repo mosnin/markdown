@@ -1,6 +1,7 @@
 "use client";
 
-import { LogOut } from "lucide-react";
+import { LogOut, Settings } from "lucide-react";
+import Link from "next/link";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -62,6 +63,14 @@ export function UserMenu({ email }: UserMenuProps) {
             {email}
           </p>
         </div>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem
+          className="gap-2 text-muted-foreground"
+          render={<Link href="/app/settings" />}
+        >
+          <Settings className="h-3.5 w-3.5" />
+          Settings
+        </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem
           className="gap-2 text-muted-foreground"
