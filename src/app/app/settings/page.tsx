@@ -22,7 +22,7 @@ const settingsNav = [
   { id: "profile", label: "Profile", icon: User },
   { id: "appearance", label: "Appearance", icon: Palette },
   { id: "notifications", label: "Notifications", icon: Bell },
-  { id: "api", label: "Connections", icon: Key },
+  { id: "connections", label: "Connections", icon: Key },
   { id: "security", label: "Security", icon: Shield },
 ];
 
@@ -155,7 +155,7 @@ export default async function SettingsPage() {
               }
             />
             <AppearanceSection />
-            <div id="settings-api">
+            <div id="settings-connections">
               <ConnectionsPanel
                 initialConnections={connections}
                 boxes={boxes}

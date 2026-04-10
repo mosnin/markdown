@@ -54,15 +54,18 @@ export function BoxLifecycleMenu({ boxId, boxStatus }: BoxLifecycleMenuProps) {
           open && "bg-accent text-foreground"
         )}
         aria-label="Box actions"
+        aria-expanded={open}
+        aria-haspopup="menu"
       >
         <MoreHorizontal className="h-4 w-4" />
       </button>
 
       {open && (
-        <div className="absolute right-0 top-full z-50 mt-1 min-w-52 rounded-md border border-border bg-background shadow-md">
+        <div role="menu" aria-label="Box actions" className="absolute right-0 top-full z-50 mt-1 min-w-52 rounded-md border border-border bg-background shadow-md">
           <div className="p-1">
             {isArchived ? (
               <button
+                role="menuitem"
                 onClick={() => act(() => unarchiveBoxAction(boxId))}
                 disabled={isPending}
                 className={cn(
@@ -75,6 +78,7 @@ export function BoxLifecycleMenu({ boxId, boxStatus }: BoxLifecycleMenuProps) {
               </button>
             ) : !confirmArchive ? (
               <button
+                role="menuitem"
                 onClick={() => setConfirmArchive(true)}
                 disabled={isPending}
                 className={cn(

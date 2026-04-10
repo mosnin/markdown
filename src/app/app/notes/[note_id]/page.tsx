@@ -1,10 +1,12 @@
 import { notFound } from "next/navigation";
 import {
+  Archive,
   BookOpen,
   Bot,
   ChevronRight,
   Clock,
   GitBranch,
+  Trash2,
 } from "lucide-react";
 import Link from "next/link";
 import { requireAuthenticatedUser } from "@/server/auth/require_authenticated_user";
@@ -226,17 +228,22 @@ function NoteContextPanel({
 
             {/* Identity */}
             <InfoSection>
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-[10px] uppercase tracking-wider text-muted-foreground/60">
-                  {kindLabel[note.kind] ?? note.kind}
-                </span>
-                {note.kind !== "note" && (
-                  <Badge variant="secondary" className="text-[10px] font-normal capitalize">
-                    {note.kind}
+              <div className="flex items-center gap-2 flex-wrap mb-1">
+                {note.kind === "guide" ? (
+                  <Badge
+                    variant="secondary"
+                    className="flex items-center gap-1 text-[10px] font-normal border-amber-300/60 bg-amber-50/60 text-amber-700 dark:border-amber-600/40 dark:bg-amber-900/20 dark:text-amber-400"
+                  >
+                    <BookOpen className="h-2.5 w-2.5" aria-hidden="true" />
+                    Guide note
                   </Badge>
-                )}
+                ) : note.kind !== "note" ? (
+                  <Badge variant="secondary" className="text-[10px] font-normal capitalize">
+                    {kindLabel[note.kind] ?? note.kind}
+                  </Badge>
+                ) : null}
               </div>
-              <p className="mt-1 line-clamp-3 text-sm font-medium text-foreground">
+              <p className="line-clamp-3 text-sm font-medium text-foreground">
                 {note.title}
               </p>
             </InfoSection>
@@ -396,7 +403,7 @@ function NoteContextPanel({
         {/* ── Bundle tab ── */}
         <TabsContent value="bundle" className="flex-1 overflow-hidden">
           <ScrollArea className="h-full">
-            <div className="px-3 py-3">
+            <div className="px-4 py-3">
               <ContextBundleViewer
                 initialBundle={initialBundle}
                 noteId={note.id}
@@ -511,6 +518,40 @@ export default async function NotePage({
             <NoteExportMenu noteId={note_id} noteTitle={note.title} />
           </div>
         </div>
+
+        {/* Mobile metadata strip — visible only on small screens where right panel is hidden */}
+        {(note.kind !== "note" || note.status === "archived" || note.status === "trashed" || note.tags.length > 0) && (
+          <div className="flex items-center gap-2 flex-wrap border-b border-border px-6 py-1.5 lg:hidden">
+            {note.kind !== "note" && (
+              <Badge
+                variant="secondary"
+                className={cn(
+                  "text-[10px] font-normal capitalize",
+                  note.kind === "guide" && "border-amber-300/60 bg-amber-50/60 text-amber-700 dark:border-amber-600/40 dark:bg-amber-900/20 dark:text-amber-400"
+                )}
+              >
+                {note.kind}
+              </Badge>
+            )}
+            {note.status === "archived" && (
+              <Badge variant="secondary" className="flex items-center gap-1 text-[10px] font-normal">
+                <Archive className="h-2.5 w-2.5" aria-hidden="true" />
+                Archived
+              </Badge>
+            )}
+            {note.status === "trashed" && (
+              <Badge variant="secondary" className="flex items-center gap-1 text-[10px] font-normal text-destructive">
+                <Trash2 className="h-2.5 w-2.5" aria-hidden="true" />
+                Trash
+              </Badge>
+            )}
+            {note.tags.slice(0, 3).map((tag) => (
+              <Badge key={tag} variant="secondary" className="text-[10px] font-normal">
+                {tag}
+              </Badge>
+            ))}
+          </div>
+        )}
 
         {/* Generated note banner */}
         {note.is_generated && (

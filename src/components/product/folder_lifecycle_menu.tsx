@@ -58,17 +58,20 @@ export function FolderLifecycleMenu({ folderId, folderStatus }: FolderLifecycleM
           open && "bg-accent text-foreground"
         )}
         aria-label="Folder actions"
+        aria-expanded={open}
+        aria-haspopup="menu"
       >
         <MoreHorizontal className="h-3.5 w-3.5" />
       </button>
 
       {open && (
-        <div className="absolute right-0 top-full z-50 mt-1 min-w-52 rounded-md border border-border bg-background shadow-md">
+        <div role="menu" aria-label="Folder actions" className="absolute right-0 top-full z-50 mt-1 min-w-52 rounded-md border border-border bg-background shadow-md">
           <div className="p-1">
             {!isTrashed && (
               <>
                 {isArchived ? (
                   <button
+                    role="menuitem"
                     onClick={() => act(() => unarchiveFolderAction(folderId))}
                     disabled={isPending}
                     className={cn(
@@ -81,6 +84,7 @@ export function FolderLifecycleMenu({ folderId, folderStatus }: FolderLifecycleM
                   </button>
                 ) : (
                   <button
+                    role="menuitem"
                     onClick={() => act(() => archiveFolderAction(folderId))}
                     disabled={isPending}
                     className={cn(
@@ -97,6 +101,7 @@ export function FolderLifecycleMenu({ folderId, folderStatus }: FolderLifecycleM
 
                 {!confirmTrash ? (
                   <button
+                    role="menuitem"
                     onClick={() => setConfirmTrash(true)}
                     disabled={isPending}
                     className={cn(
@@ -136,6 +141,7 @@ export function FolderLifecycleMenu({ folderId, folderStatus }: FolderLifecycleM
 
             {isTrashed && (
               <button
+                role="menuitem"
                 onClick={() => act(() => restoreFolderAction(folderId))}
                 disabled={isPending}
                 className={cn(

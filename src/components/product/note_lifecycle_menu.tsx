@@ -60,17 +60,20 @@ export function NoteLifecycleMenu({ noteId, noteStatus }: NoteLifecycleMenuProps
           open && "bg-accent text-foreground"
         )}
         aria-label="Note actions"
+        aria-expanded={open}
+        aria-haspopup="menu"
       >
         <MoreHorizontal className="h-4 w-4" />
       </button>
 
       {open && (
-        <div className="absolute right-0 top-full z-50 mt-1 min-w-48 rounded-md border border-border bg-background shadow-md">
+        <div role="menu" aria-label="Note actions" className="absolute right-0 top-full z-50 mt-1 min-w-48 rounded-md border border-border bg-background shadow-md">
           <div className="p-1">
             {!isTrashed && (
               <>
                 {isArchived ? (
                   <button
+                    role="menuitem"
                     onClick={() => act(() => unarchiveNoteAction(noteId))}
                     disabled={isPending}
                     className={cn(
@@ -83,6 +86,7 @@ export function NoteLifecycleMenu({ noteId, noteStatus }: NoteLifecycleMenuProps
                   </button>
                 ) : (
                   <button
+                    role="menuitem"
                     onClick={() => act(() => archiveNoteAction(noteId))}
                     disabled={isPending}
                     className={cn(
@@ -99,6 +103,7 @@ export function NoteLifecycleMenu({ noteId, noteStatus }: NoteLifecycleMenuProps
 
                 {!confirmTrash ? (
                   <button
+                    role="menuitem"
                     onClick={() => setConfirmTrash(true)}
                     disabled={isPending}
                     className={cn(
@@ -136,6 +141,7 @@ export function NoteLifecycleMenu({ noteId, noteStatus }: NoteLifecycleMenuProps
 
             {isTrashed && (
               <button
+                role="menuitem"
                 onClick={() => act(() => restoreNoteAction(noteId))}
                 disabled={isPending}
                 className={cn(

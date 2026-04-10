@@ -182,6 +182,13 @@ Installed primitives:
 | `ImportDialog` / `ImportTriggerButton` | Import modal with file upload, collision mode picker, summary panel |
 | `NoteExportMenu` | Note-surface export dropdown: note export + context bundle export |
 | `BoxExportMenu` | Box-surface export dropdown: box export + folder export |
+| `NoteLifecycleMenu` | Note archive/unarchive/trash/restore actions; inline two-step confirm for destructive ops |
+| `BoxLifecycleMenu` | Box archive/unarchive actions; inline confirm |
+| `FolderLifecycleMenu` | Folder subtree archive/unarchive/trash/restore; inline confirm |
+| `BoxContentsTree` | Static hierarchical folder/note tree for box Tree tab (server component) |
+| `GuideNotePicker` | Guide note assignment control: select or clear guide note for a box |
+| `BoxGuidePanel` | Guide tab content: rendered guide note with outgoing links |
+| `FolderPolicyToggle` | Per-folder AI write policy toggle (`accepts_generated_notes`) |
 
 ### Three-pane workspace layout
 
@@ -270,6 +277,64 @@ Do not label them "Linked notes", "Backlinks", or "Related notes".
 - Product components use `snake_case` filenames and `PascalCase` export names
 - This visually separates product components from shadcn primitives in imports and file listings
 - Do not use barrel files — import from the specific module
+
+---
+
+## Badge system
+
+Use `Badge` from `src/components/ui/badge` for all status, kind, and metadata chips. Do not build one-off inline badge layouts.
+
+### Kind badges
+
+| Kind | Variant | Treatment |
+|---|---|---|
+| `note` | No badge | Default — never show a "Note" badge |
+| `guide` | `secondary` | Amber: `border-amber-300/60 bg-amber-50/60 text-amber-700 dark:border-amber-600/40 dark:bg-amber-900/20 dark:text-amber-400` + BookOpen icon |
+| `bundle` | `secondary` | No special color |
+
+### Lifecycle status badges
+
+| Status | Variant | Icon |
+|---|---|---|
+| `active` | No badge | — |
+| `archived` | `secondary` | Archive icon |
+| `trashed` | `secondary` + destructive text | Trash2 icon |
+
+### Generated / machine origin
+
+| State | Variant | Icon |
+|---|---|---|
+| Generated (unpromoted) | `outline` | Bot |
+
+### Proposal type badges
+
+Handled by `ProposalsPanel`; see trust_workspace_surface_v1.md.
+
+### Connection status badges
+
+Handled by `ConnectionsPanel`; see trust_workspace_surface_v1.md.
+
+---
+
+## Mobile metadata strip (note page)
+
+When the right panel is hidden (`< lg` breakpoint), a compact metadata strip
+appears below the note top bar. It surfaces the minimum context needed to orient
+the reader on a small screen:
+
+- **Kind badge** (only for guide/bundle — not for default "note" kind)
+- **Status badge** (only for archived/trashed — not for active)
+- **Tags** (up to 3)
+
+```tsx
+{(note.kind !== "note" || note.status === "archived" || ...) && (
+  <div className="flex items-center gap-2 flex-wrap border-b border-border px-6 py-1.5 lg:hidden">
+    ...
+  </div>
+)}
+```
+
+The strip is hidden when all values are default (kind=note, status=active, no tags).
 
 ---
 

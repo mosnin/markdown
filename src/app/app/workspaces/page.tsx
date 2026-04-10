@@ -27,8 +27,8 @@ export default async function WorkspacesPage() {
   return (
     <div className="flex h-full flex-col overflow-hidden">
       <PageHeader
-        title="Workspace"
-        description={ctx.workspace.name}
+        title="Workspaces"
+        description={`${ctx.workspace.name} — all boxes, folders, and notes in this workspace.`}
         actions={<CreateBoxDialog />}
       />
 

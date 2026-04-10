@@ -4,10 +4,10 @@ import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
-  Archive,
   ClipboardList,
   Home,
   Inbox,
+  LayoutGrid,
   Menu,
   Plus,
   Search,
@@ -39,7 +39,7 @@ import { TreeSidebar } from "@/components/product/tree_sidebar";
 const primaryNav = [
   { label: "Home", href: "/app", icon: Home },
   { label: "Search", href: "/app/search", icon: Search },
-  { label: "Workspace", href: "/app/workspaces", icon: Archive },
+  { label: "Workspaces", href: "/app/workspaces", icon: LayoutGrid },
   { label: "Proposals", href: "/app/proposals", icon: Inbox },
   { label: "Audit log", href: "/app/audit", icon: ClipboardList },
 ];

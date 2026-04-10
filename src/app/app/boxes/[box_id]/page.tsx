@@ -155,7 +155,7 @@ async function BoxContextPanel({
 
         {/* Box identity */}
         <div className="border-b border-border px-4 py-3">
-          <p className="text-[10px] uppercase tracking-wider text-muted-foreground/60">
+          <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground/60">
             Box
           </p>
           <p className="mt-0.5 text-sm font-medium text-foreground">
