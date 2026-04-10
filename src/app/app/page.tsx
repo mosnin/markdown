@@ -93,7 +93,8 @@ export default async function AppHomePage() {
               <StatusTile
                 icon={FileText}
                 label="Notes"
-                value={allNotes.length > 0 ? `${allNotes.length}+` : "0"}
+                value={allNotes.length === 10 ? "10+" : allNotes.length}
+                href="/app/search"
               />
               <StatusTile
                 icon={Zap}
@@ -259,24 +260,23 @@ function StatusTile({
 }) {
   const inner = (
     <div
-      className={`flex flex-col gap-1 rounded-lg border px-4 py-3 ${
-        highlight
-          ? "border-ring/40 bg-card"
-          : "border-border bg-card"
-      }`}
+      className={cn(
+        "flex flex-col gap-1 rounded-lg border px-4 py-3 bg-card",
+        highlight ? "border-warning/40 bg-warning/5" : "border-border"
+      )}
     >
-      <div className="flex items-center gap-1.5 text-muted-foreground">
+      <div className={cn(
+        "flex items-center gap-1.5",
+        highlight ? "text-warning" : "text-muted-foreground"
+      )}>
         <Icon className="h-3.5 w-3.5" aria-hidden="true" />
         <span className="text-xs">{label}</span>
       </div>
       <span
-        className={`text-2xl font-semibold tracking-tight ${
-          highlight
-            ? "text-foreground"
-            : subdued
-            ? "text-muted-foreground"
-            : "text-foreground"
-        }`}
+        className={cn(
+          "text-2xl font-semibold tracking-tight",
+          highlight ? "text-warning" : subdued ? "text-muted-foreground" : "text-foreground"
+        )}
       >
         {value}
       </span>
