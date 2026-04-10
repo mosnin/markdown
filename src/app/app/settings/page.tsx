@@ -114,7 +114,7 @@ export default async function SettingsPage() {
       </div>
 
       {/* Mobile section nav — horizontal scrollable strip */}
-      <SettingsMobileNav items={settingsNav} />
+      <SettingsMobileNav />
 
       <div className="flex flex-1 overflow-hidden">
         {/* Settings sidebar nav — desktop only */}
