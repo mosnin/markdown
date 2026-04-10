@@ -11,6 +11,9 @@ importers:
       '@base-ui/react':
         specifier: ^1.3.0
         version: 1.3.0(@types/react@19.2.14)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
+      '@creem_io/nextjs':
+        specifier: ^0.6.0
+        version: 0.6.0(next@16.2.3(@babel/core@7.29.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(react@19.2.4)
       '@modelcontextprotocol/sdk':
         specifier: ^1.29.0
         version: 1.29.0(zod@4.3.6)
@@ -29,6 +32,9 @@ importers:
       creem:
         specifier: ^1.4.4
         version: 1.4.4
+      creem_io:
+        specifier: ^1.1.0
+        version: 1.1.0
       fflate:
         specifier: ^0.8.2
         version: 0.8.2
@@ -269,6 +275,12 @@ packages:
   '@bcoe/v8-coverage@1.0.2':
     resolution: {integrity: sha512-6zABk/ECA/QYSCQ1NGiVwwbQerUCZ+TQbp64Q3AgmfNvurHH0j8TtXa1qbShXA6qqkpAj4V5W8pP6mLe1mcMqA==}
     engines: {node: '>=18'}
+
+  '@creem_io/nextjs@0.6.0':
+    resolution: {integrity: sha512-ORUn7FBvf9kq2YyS18kexRf7x/kUw3W3vXD7nnWKWmGdT3/RbvMkPHqPoLOjZp30zEnig72y1C0ALe7tmZH6Kw==}
+    peerDependencies:
+      next: '>=13.0.0'
+      react: '>=18.0.0'
 
   '@dotenvx/dotenvx@1.61.0':
     resolution: {integrity: sha512-utL3cpZoFzflyqUkjYbxYujI6STBTmO5LFn4bbin/NZnRWN6wQ7eErhr3/Vpa5h/jicPFC6kTa42r940mQftJQ==}
@@ -1597,6 +1609,11 @@ packages:
   creem@1.4.4:
     resolution: {integrity: sha512-hfnHOIqNERf783FMJOOpbmD701y4t6HuVKR8kIm16X3l5OK6yMM0ifd2zY8CbRqSLeqK/iQV1D8FLgZEVs7Alg==}
     hasBin: true
+
+  creem_io@1.1.0:
+    resolution: {integrity: sha512-wGMdp2HLOMjdohqt7OdxNvWHu+NrcokYz6y44eJgT98sQF1/XXf0EotDxagdo8aidefWhjKQWl/H8gZfr/T4JA==}
+    engines: {node: '>=16.0.0'}
+    deprecated: 'This package is deprecated. Please use the ''creem'' package instead: npm install creem'
 
   cross-spawn@7.0.6:
     resolution: {integrity: sha512-uV2QOWP2nWzsy2aMp8aRibhi9dlzF5Hgh5SHaB9OiTGEyDTiJJyx0uy51QXdyWbtAHNua4XJzUKca3OzKUd3vA==}
@@ -3851,6 +3868,15 @@ snapshots:
 
   '@bcoe/v8-coverage@1.0.2': {}
 
+  '@creem_io/nextjs@0.6.0(next@16.2.3(@babel/core@7.29.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(react@19.2.4)':
+    dependencies:
+      creem: 1.4.4
+      next: 16.2.3(@babel/core@7.29.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
+      react: 19.2.4
+    transitivePeerDependencies:
+      - '@cfworker/json-schema'
+      - supports-color
+
   '@dotenvx/dotenvx@1.61.0':
     dependencies:
       commander: 11.1.0
@@ -5025,6 +5051,8 @@ snapshots:
     transitivePeerDependencies:
       - '@cfworker/json-schema'
       - supports-color
+
+  creem_io@1.1.0: {}
 
   cross-spawn@7.0.6:
     dependencies:

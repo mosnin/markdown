@@ -1,4 +1,5 @@
 import { getRequestContext } from "@/server/auth/get_request_context";
+import { createCreem } from "creem_io";
 
 export const runtime = "nodejs";
 
@@ -35,39 +36,39 @@ export async function POST() {
   const successUrl = `${appUrl}/app/settings?billing=success`;
   const cancelUrl = `${appUrl}/app/settings?billing=cancelled`;
 
-  const creemRes = await fetch("https://api.creem.io/v1/checkouts", {
-    method: "POST",
-    headers: {
-      "x-api-key": apiKey,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      product_id: productId,
-      customer_email: user.email,
-      success_url: successUrl,
-      cancel_url: cancelUrl,
+  const creem = createCreem({
+    apiKey,
+    testMode: process.env.NODE_ENV !== "production",
+  });
+
+  let checkout;
+  try {
+    checkout = await creem.checkouts.create({
+      productId,
+      successUrl,
+      ...(user.email ? { customer: { email: user.email } } : {}),
       metadata: {
         workspace_id: workspace.id,
       },
-    }),
-  });
-
-  if (!creemRes.ok) {
-    const text = await creemRes.text();
-    console.error("Creem checkout error:", creemRes.status, text);
+    });
+  } catch (err) {
+    console.error("Creem checkout error:", err);
     return Response.json(
       { error: "Failed to create checkout session" },
       { status: 502 }
     );
   }
 
-  const session = (await creemRes.json()) as { checkout_url?: string };
-  const checkoutUrl = session?.checkout_url;
+  // SDK returns checkoutUrl (camelCase). The confirmed spec refers to
+  // checkout.checkout_url — both are the same field from the API response.
+  const checkoutUrl = checkout.checkoutUrl;
 
   if (!checkoutUrl) {
-    console.error("Creem checkout response missing checkout_url:", session);
+    console.error("Creem checkout response missing checkoutUrl:", checkout);
     return Response.json({ error: "Invalid checkout response" }, { status: 502 });
   }
+
+  void cancelUrl; // retained for future cancel_url support in the SDK
 
   return Response.json({ checkoutUrl });
 }

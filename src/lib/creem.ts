@@ -1,32 +1,37 @@
 /**
  * Creem.io billing client wrapper.
  *
- * Thin layer around the `creem` SDK. Only exposes what the app needs:
+ * Uses the `creem_io` SDK via `createCreem()`. Only exposes what the app needs:
  *   - createCheckout()      — start a hosted checkout session
- *   - getSubscription()     — retrieve a subscription by Creem subscription ID
  *   - createPortalSession() — generate a customer portal link
+ *   - verifyWebhookSignature() — verify HMAC-SHA256 webhook signature
  *
  * All functions are server-only. Never import this in client components.
  */
 
 import * as crypto from "crypto";
-import { Creem } from "creem";
+import { createCreem } from "creem_io";
 
 // ---------------------------------------------------------------------------
 // Client singleton
 // ---------------------------------------------------------------------------
 
-function getCreemClient(): Creem {
+function getCreemClient() {
   const apiKey = process.env.CREEM_API_KEY;
   if (!apiKey?.trim()) {
     throw new Error("[creem] CREEM_API_KEY environment variable is not set");
   }
-  return new Creem({ apiKey });
+  return createCreem({
+    apiKey,
+    testMode: process.env.NODE_ENV !== "production",
+  });
 }
 
+type CreemClient = ReturnType<typeof createCreem>;
+
 // Lazy singleton — instantiated once per server process.
-let _client: Creem | null = null;
-function client(): Creem {
+let _client: CreemClient | null = null;
+function client(): CreemClient {
   if (!_client) _client = getCreemClient();
   return _client;
 }
@@ -40,10 +45,12 @@ export interface CreateCheckoutOptions {
   productId: string;
   /** URL to redirect to after successful payment. */
   successUrl: string;
+  /** URL to redirect to if the customer cancels. */
+  cancelUrl?: string;
   /** Pre-fill customer email if known. */
   customerEmail?: string;
   /** Arbitrary metadata forwarded to webhook events. */
-  metadata?: Record<string, unknown>;
+  metadata?: Record<string, string | number | null>;
 }
 
 export interface CheckoutResult {
@@ -72,34 +79,24 @@ export async function createCheckout(
 ): Promise<CheckoutResult> {
   const { productId, successUrl, customerEmail, metadata } = options;
 
-  const result = await client().checkouts.create({
+  const checkout = await client().checkouts.create({
     productId,
     successUrl,
     ...(customerEmail ? { customer: { email: customerEmail } } : {}),
     ...(metadata ? { metadata } : {}),
   });
 
-  if (!result.checkoutUrl) {
+  // The SDK returns `checkoutUrl` (camelCase) on the Checkout object.
+  const checkoutUrl = checkout.checkoutUrl;
+
+  if (!checkoutUrl) {
     throw new Error("[creem] Checkout session returned no checkoutUrl");
   }
 
   return {
-    id: result.id,
-    checkoutUrl: result.checkoutUrl,
+    id: checkout.id,
+    checkoutUrl,
   };
-}
-
-// ---------------------------------------------------------------------------
-// getSubscription
-// ---------------------------------------------------------------------------
-
-/**
- * Retrieves a Creem subscription by its subscription ID.
- *
- * Returns the raw SubscriptionEntity from the SDK.
- */
-export async function getSubscription(subscriptionId: string) {
-  return client().subscriptions.get(subscriptionId);
 }
 
 // ---------------------------------------------------------------------------
@@ -115,9 +112,7 @@ export async function getSubscription(subscriptionId: string) {
 export async function createPortalSession(
   customerId: string
 ): Promise<PortalSessionResult> {
-  const result = await client().customers.generateBillingLinks({
-    customerId,
-  });
+  const result = await client().customers.createPortal({ customerId });
 
   return { customerPortalLink: result.customerPortalLink };
 }
@@ -151,8 +146,12 @@ export function verifyWebhookSignature(
     .digest("hex");
 
   // Constant-time comparison to prevent timing attacks.
-  return crypto.timingSafeEqual(
-    Buffer.from(computed, "hex"),
-    Buffer.from(signature, "hex")
-  );
+  try {
+    return crypto.timingSafeEqual(
+      Buffer.from(computed, "hex"),
+      Buffer.from(signature, "hex")
+    );
+  } catch {
+    return false;
+  }
 }
