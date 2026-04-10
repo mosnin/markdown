@@ -129,18 +129,27 @@ export function AppSidebar({
 
       {/* Workspace label + boxes tree */}
       <div className="flex min-h-0 flex-1 flex-col">
-        <div className="flex items-center justify-between px-4 py-2">
-          <span className="text-xs font-medium uppercase tracking-wider text-sidebar-foreground/40">
-            {workspaceName}
-          </span>
+        <div className="flex items-center justify-between px-4 py-1.5">
           <Link
             href="/app/workspaces"
             className={cn(
-              "rounded p-0.5 text-sidebar-foreground/40 transition-fast",
+              "min-w-0 flex-1 text-[11px] font-semibold uppercase tracking-wider",
+              "text-sidebar-foreground/40 transition-fast truncate",
+              "hover:text-sidebar-foreground/70",
+              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:rounded-sm"
+            )}
+            title={`Workspace: ${workspaceName}`}
+          >
+            {workspaceName}
+          </Link>
+          <Link
+            href="/app/workspaces"
+            className={cn(
+              "ml-1 shrink-0 rounded p-0.5 text-sidebar-foreground/30 transition-fast",
               "hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
               "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             )}
-            aria-label="Manage workspace"
+            aria-label="Manage boxes and workspace"
           >
             <Plus className="h-3 w-3" aria-hidden="true" />
           </Link>

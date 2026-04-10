@@ -243,9 +243,9 @@ function FolderNode({
           tabIndex={hasChildren ? 0 : -1}
         >
           {isOpen ? (
-            <ChevronDown className="h-4 w-4 transition-transform duration-150" aria-hidden="true" />
+            <ChevronDown className="h-3.5 w-3.5 transition-transform duration-150" aria-hidden="true" />
           ) : (
-            <ChevronRight className="h-4 w-4 transition-transform duration-150" aria-hidden="true" />
+            <ChevronRight className="h-3.5 w-3.5 transition-transform duration-150" aria-hidden="true" />
           )}
         </button>
 
@@ -254,16 +254,16 @@ function FolderNode({
           type="button"
           onClick={() => hasChildren && setIsOpen((o) => !o)}
           className={cn(
-            "flex flex-1 items-center gap-2 rounded-md px-1 py-1 text-xs min-w-0",
+            "flex flex-1 items-center gap-1.5 rounded-md px-1 py-1 text-xs min-w-0",
             "transition-colors duration-150",
             hasChildren
-              ? "text-muted-foreground hover:bg-accent/50 hover:text-foreground cursor-pointer"
-              : "text-muted-foreground/50 cursor-default",
+              ? "text-sidebar-foreground/70 hover:bg-accent/50 hover:text-foreground cursor-pointer"
+              : "text-muted-foreground/40 cursor-default",
             "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
           )}
         >
-          <Folder className="h-4 w-4 shrink-0 text-muted-foreground/60" aria-hidden="true" />
-          <span className="truncate font-medium">{folder.name}</span>
+          <Folder className="h-3.5 w-3.5 shrink-0 text-muted-foreground/50" aria-hidden="true" />
+          <span className="truncate font-medium tracking-tight">{folder.name}</span>
         </button>
       </div>
 
@@ -381,11 +381,11 @@ function BoxRow({
           aria-expanded={isExpanded}
         >
           {isLoading ? (
-            <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+            <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
           ) : isExpanded ? (
-            <ChevronDown className="h-4 w-4 transition-transform duration-150" aria-hidden="true" />
+            <ChevronDown className="h-3.5 w-3.5 transition-transform duration-150" aria-hidden="true" />
           ) : (
-            <ChevronRight className="h-4 w-4 transition-transform duration-150" aria-hidden="true" />
+            <ChevronRight className="h-3.5 w-3.5 transition-transform duration-150" aria-hidden="true" />
           )}
         </button>
 
@@ -407,20 +407,20 @@ function BoxRow({
           <span className="truncate">{box.name}</span>
         </Link>
 
-        {/* Hover-revealed quick-create link — navigates to box page where dialogs live */}
+        {/* Quick-create link — visible at low opacity, full opacity on hover/focus */}
         <Link
           href={`/app/boxes/${box.id}`}
           onClick={onNavigate}
-          aria-label={`Create in ${box.name}`}
+          aria-label={`Open ${box.name} to create content`}
           className={cn(
             "flex h-5 w-5 shrink-0 items-center justify-center rounded",
-            "opacity-0 transition-all duration-150",
+            "opacity-30 transition-all duration-150",
             "group-hover:opacity-100",
             "text-muted-foreground hover:bg-accent/50 hover:text-foreground",
             "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:opacity-100"
           )}
         >
-          <Plus className="h-4 w-4" aria-hidden="true" />
+          <Plus className="h-3.5 w-3.5" aria-hidden="true" />
         </Link>
       </div>
 
