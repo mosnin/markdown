@@ -1,7 +1,9 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ArrowRight, Check, Minus } from "lucide-react";
+import { ArrowRight, Check, Minus, CheckCircle2, Users, Briefcase, Building2 } from "lucide-react";
 import { PageHeroSection } from "@/components/marketing/hero";
+import * as PricingCard from "@/components/ui/pricing-card";
+import { Button } from "@/components/ui/button";
 
 export const metadata: Metadata = {
   title: "Pricing — Context Store",
@@ -11,13 +13,16 @@ export const metadata: Metadata = {
 
 const PLANS = [
   {
+    icon: <Users />,
     name: "Free",
-    price: { monthly: "$0", annual: "$0" },
-    period: "forever",
+    price: "Free",
+    period: null as string | null,
+    annual: null as string | null,
+    badge: null as string | null,
     description: "For individuals getting started with structured knowledge.",
     cta: "Get started free",
     href: "/sign_in",
-    highlight: false,
+    variant: "outline" as const,
     features: [
       "100 notes",
       "3 boxes",
@@ -28,13 +33,16 @@ const PLANS = [
     ],
   },
   {
+    icon: <Briefcase />,
     name: "Pro",
-    price: { monthly: "$12", annual: "$9" },
-    period: "per month",
+    price: "$12",
+    period: "/month",
+    annual: "$9",
+    badge: "Popular",
     description: "For power users who need unlimited knowledge and AI context.",
     cta: "Start 14-day trial",
     href: "/sign_in",
-    highlight: true,
+    variant: "default" as const,
     features: [
       "Unlimited notes",
       "Unlimited boxes",
@@ -47,13 +55,16 @@ const PLANS = [
     ],
   },
   {
+    icon: <Building2 />,
     name: "Team",
-    price: { monthly: "$39", annual: "$29" },
-    period: "per month",
+    price: "$39",
+    period: "/month",
+    annual: "$29",
+    badge: null as string | null,
     description: "For teams that share context and build on each other's knowledge.",
     cta: "Contact sales",
     href: "/contact",
-    highlight: false,
+    variant: "outline" as const,
     features: [
       "Everything in Pro",
       "Shared workspaces",
@@ -150,66 +161,69 @@ export default function PricingPage() {
       />
 
       {/* Plan cards */}
-      <section className="py-16">
-        <div className="mx-auto max-w-5xl px-6">
-          <div className="grid gap-5 sm:grid-cols-3">
+      <section className="relative overflow-hidden py-16">
+        {/* Subtle dotted grid */}
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0"
+          style={{
+            backgroundImage:
+              'radial-gradient(rgba(255,255,255,0.06) 0.8px, transparent 0.8px)',
+            backgroundSize: '14px 14px',
+            maskImage:
+              'radial-gradient(circle at 50% 0%, rgba(0,0,0,1), rgba(0,0,0,0.2) 60%, rgba(0,0,0,0) 90%)',
+          }}
+        />
+        <div className="relative mx-auto max-w-5xl px-6">
+          <div className="grid grid-cols-1 gap-6 justify-items-center md:grid-cols-3">
             {PLANS.map((plan) => (
-              <div
-                key={plan.name}
-                className={`relative flex flex-col rounded-xl border p-6 ${
-                  plan.highlight
-                    ? "border-violet-500/50 bg-card shadow-lg shadow-violet-500/10"
-                    : "border-border/60 bg-card"
-                }`}
-              >
-                {plan.highlight && (
-                  <div className="absolute -top-3 left-1/2 -translate-x-1/2">
-                    <span className="rounded-full bg-violet-600 px-3 py-1 text-[11px] font-semibold text-white">
-                      Most popular
-                    </span>
-                  </div>
-                )}
-                <p className="font-semibold text-foreground">{plan.name}</p>
-                <p className="mt-3">
-                  <span className="text-4xl font-bold tracking-tight text-foreground">
-                    {plan.price.monthly}
-                  </span>
-                  {plan.price.monthly !== "$0" && (
-                    <span className="ml-1.5 text-sm text-muted-foreground">
-                      {plan.period}
-                    </span>
+              <PricingCard.Card key={plan.name} className="w-full md:min-w-[260px]">
+                <PricingCard.Header>
+                  <PricingCard.Plan>
+                    <PricingCard.PlanName>
+                      {plan.icon}
+                      {plan.name}
+                    </PricingCard.PlanName>
+                    {plan.badge && (
+                      <PricingCard.Badge>{plan.badge}</PricingCard.Badge>
+                    )}
+                  </PricingCard.Plan>
+                  <PricingCard.Price>
+                    <PricingCard.MainPrice>{plan.price}</PricingCard.MainPrice>
+                    {plan.period && (
+                      <PricingCard.Period>{plan.period}</PricingCard.Period>
+                    )}
+                  </PricingCard.Price>
+                  {plan.annual && (
+                    <p className="mb-3 -mt-1 text-xs text-muted-foreground">
+                      or {plan.annual}/mo billed annually
+                    </p>
                   )}
-                </p>
-                {plan.price.monthly !== "$0" && (
-                  <p className="mt-0.5 text-xs text-muted-foreground">
-                    {plan.price.annual}/mo billed annually
-                  </p>
-                )}
-                <p className="mt-3 text-sm text-muted-foreground">
-                  {plan.description}
-                </p>
-                <ul className="mt-5 flex-1 space-y-2.5">
-                  {plan.features.map((f) => (
-                    <li
-                      key={f}
-                      className="flex items-center gap-2 text-sm text-muted-foreground"
-                    >
-                      <Check className="h-3.5 w-3.5 shrink-0 text-violet-400" />
-                      {f}
-                    </li>
-                  ))}
-                </ul>
-                <Link
-                  href={plan.href}
-                  className={`mt-6 block rounded-lg px-4 py-2.5 text-center text-sm font-semibold transition-colors ${
-                    plan.highlight
-                      ? "bg-violet-600 text-white hover:bg-violet-500"
-                      : "border border-border bg-background text-foreground hover:bg-muted"
-                  }`}
-                >
-                  {plan.cta}
-                </Link>
-              </div>
+                  <Button
+                    variant={plan.variant}
+                    className="w-full font-semibold"
+                    render={<Link href={plan.href} />}
+                  >
+                    {plan.cta}
+                  </Button>
+                </PricingCard.Header>
+                <PricingCard.Body>
+                  <PricingCard.Description>
+                    {plan.description}
+                  </PricingCard.Description>
+                  <PricingCard.List>
+                    {plan.features.map((feature) => (
+                      <PricingCard.ListItem key={feature}>
+                        <CheckCircle2
+                          className="size-4 shrink-0 text-violet-400"
+                          aria-hidden="true"
+                        />
+                        <span>{feature}</span>
+                      </PricingCard.ListItem>
+                    ))}
+                  </PricingCard.List>
+                </PricingCard.Body>
+              </PricingCard.Card>
             ))}
           </div>
           <p className="mt-8 text-center text-sm text-muted-foreground">
