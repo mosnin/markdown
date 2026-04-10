@@ -38,7 +38,7 @@ export async function signIn(
     return { status: "error", message };
   }
 
-  redirect("/app");
+  redirect("/welcome");
 }
 
 // ─── Reset password request ───────────────────────────────────────────────────

@@ -171,6 +171,9 @@ export function NoteEditor({ note, initialMode = "document" }: NoteEditorProps) 
         setSaveError(result.error);
         setAutosaveState("error");
       }
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : "Failed to save");
+      setAutosaveState("error");
     } finally {
       isSavingRef.current = false;
       setIsSaving(false);
