@@ -1,5 +1,4 @@
-import { Bell, CreditCard, Key, Palette, Shield, User } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Bell, Building2, CreditCard, Key, Palette, Shield, User } from "lucide-react";
 import {
   Card,
   CardContent,
@@ -15,14 +14,22 @@ import { requireAuthenticatedUser } from "@/server/auth/require_authenticated_us
 import { createClient } from "@/lib/supabase/server";
 import { listBoxesByWorkspace } from "@/server/repositories/box_repository";
 import { listConnectionsWithScopes } from "@/server/services/connection_service";
-import { ProfileSection, AppearanceSection, SecuritySection } from "./settings_client";
-import type { Theme } from "./actions";
+import { getWorkspaceById } from "@/server/repositories/workspace_repository";
+import {
+  ProfileSection,
+  AppearanceSection,
+  SecuritySection,
+  NotificationsSection,
+  WorkspaceSection,
+} from "./settings_client";
+import type { Theme, NotificationPreferences } from "./actions";
 import { DeleteAccountButton } from "./delete_account_button";
 
 // ─── Section nav ─────────────────────────────────────────────────────────────
 
 const settingsNav = [
   { id: "profile", label: "Profile", icon: User },
+  { id: "workspace", label: "Workspace", icon: Building2 },
   { id: "billing", label: "Billing & Plans", icon: CreditCard },
   { id: "appearance", label: "Appearance", icon: Palette },
   { id: "notifications", label: "Notifications", icon: Bell },
@@ -100,63 +107,6 @@ function BillingSection() {
   );
 }
 
-// ─── Notifications section ────────────────────────────────────────────────────
-
-function NotificationsSection() {
-  return (
-    <Card id="settings-notifications">
-      <CardHeader className="px-6 pt-6 pb-4">
-        <CardTitle className="text-base font-semibold">Notifications</CardTitle>
-        <CardDescription className="text-sm text-muted-foreground">
-          Choose when and how you receive notifications.
-        </CardDescription>
-      </CardHeader>
-      <Separator />
-      <CardContent className="px-6 pt-5 pb-6 space-y-4">
-        {[
-          {
-            id: "notif-activity",
-            label: "Activity updates",
-            description: "Get notified when teammates comment or make changes.",
-          },
-          {
-            id: "notif-security",
-            label: "Security alerts",
-            description:
-              "Receive alerts for new sign-ins and sensitive account changes.",
-          },
-          {
-            id: "notif-product",
-            label: "Product announcements",
-            description: "Occasional emails about new features and improvements.",
-          },
-        ].map(({ id, label, description }) => (
-          <label
-            key={id}
-            htmlFor={id}
-            className="flex cursor-pointer items-start justify-between gap-4 rounded-lg border border-border px-4 py-3 hover:bg-muted/30 transition-colors"
-          >
-            <div className="flex flex-col gap-0.5">
-              <p className="text-sm font-medium text-foreground">{label}</p>
-              <p className="text-xs text-muted-foreground">{description}</p>
-            </div>
-            <input
-              id={id}
-              type="checkbox"
-              defaultChecked={id === "notif-security"}
-              className="mt-0.5 shrink-0 accent-foreground"
-            />
-          </label>
-        ))}
-
-        <div className="flex justify-end pt-1">
-          <Button size="sm">Save changes</Button>
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
 // ─── Danger zone ──────────────────────────────────────────────────────────────
 
 function DangerZoneSection() {
@@ -196,10 +146,15 @@ export default async function SettingsPage() {
   const ctx = await requireAuthenticatedUser();
   const supabase = await createClient();
 
-  const [boxes, connections] = await Promise.all([
+  const [boxes, connections, workspace] = await Promise.all([
     listBoxesByWorkspace(supabase, ctx.workspace.id),
     listConnectionsWithScopes(supabase, ctx.workspace.id),
+    getWorkspaceById(supabase, ctx.workspace.id),
   ]);
+
+  const savedNotifications = ctx.user.user_metadata?.notifications as
+    | NotificationPreferences
+    | undefined;
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
@@ -262,6 +217,11 @@ export default async function SettingsPage() {
               }
             />
 
+            <WorkspaceSection
+              initialName={workspace?.name ?? ctx.workspace.name}
+              initialDescription={workspace?.description ?? null}
+            />
+
             <BillingSection />
 
             <AppearanceSection
@@ -270,7 +230,11 @@ export default async function SettingsPage() {
               }
             />
 
-            <NotificationsSection />
+            <NotificationsSection
+              initialActivity={savedNotifications?.activity ?? false}
+              initialSecurity={savedNotifications?.security ?? true}
+              initialAnnouncements={savedNotifications?.announcements ?? false}
+            />
 
             <div id="settings-connections">
               <ConnectionsPanel
