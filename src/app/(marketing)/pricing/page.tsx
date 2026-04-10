@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowRight, Check, Minus } from "lucide-react";
+import { PageHeroSection } from "@/components/marketing/hero";
 
 export const metadata: Metadata = {
   title: "Pricing — Context Store",
@@ -142,19 +143,11 @@ export default function PricingPage() {
   return (
     <div className="min-h-screen bg-background">
       {/* Hero */}
-      <section className="border-b border-border/50 bg-muted/20 py-20 pt-32">
-        <div className="mx-auto max-w-3xl px-6 text-center">
-          <p className="mb-3 text-xs font-semibold uppercase tracking-widest text-violet-400">
-            Pricing
-          </p>
-          <h1 className="text-4xl font-bold tracking-tight text-foreground sm:text-5xl">
-            Simple, transparent pricing
-          </h1>
-          <p className="mt-4 text-lg text-muted-foreground">
-            Start free. Upgrade when you need more. No hidden fees.
-          </p>
-        </div>
-      </section>
+      <PageHeroSection
+        eyebrow="Pricing"
+        title="Simple, transparent pricing"
+        description="Start free. Upgrade when you need more. No hidden fees."
+      />
 
       {/* Plan cards */}
       <section className="py-16">

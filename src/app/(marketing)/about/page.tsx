@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
+import { PageHeroSection } from "@/components/marketing/hero";
 
 export const metadata: Metadata = {
   title: "About — Context Store",
@@ -46,17 +47,10 @@ export default function AboutPage() {
   return (
     <div className="min-h-screen bg-background">
       {/* Hero */}
-      <section className="border-b border-border/50 bg-muted/20 py-20 pt-32">
-        <div className="mx-auto max-w-3xl px-6 text-center">
-          <p className="mb-3 text-xs font-semibold uppercase tracking-widest text-violet-400">
-            About
-          </p>
-          <h1 className="text-4xl font-bold tracking-tight text-foreground sm:text-5xl">
-            Building the context layer
-            <br className="hidden sm:block" /> between knowledge and AI
-          </h1>
-        </div>
-      </section>
+      <PageHeroSection
+        eyebrow="About"
+        title={<>Building the context layer<br className="hidden sm:block" /> between knowledge and AI</>}
+      />
 
       {/* Mission */}
       <section className="py-20">

@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { Check, ArrowRight } from "lucide-react";
+import { Check } from "lucide-react";
+import { HeroSection } from "@/components/marketing/hero";
 
 // ─── App visuals ──────────────────────────────────────────────────────────────
 
@@ -219,45 +220,7 @@ export default function HomePage() {
     <div className="min-h-screen bg-background">
 
       {/* ── Hero ──────────────────────────────────────────────────────────────── */}
-      <section className="border-b border-border/30 px-6 pb-28 pt-36">
-        <div className="mx-auto max-w-6xl">
-          <div className="grid grid-cols-1 items-center gap-16 lg:grid-cols-2">
-            <div>
-              <h1 className="text-5xl font-bold tracking-tight text-foreground sm:text-6xl lg:text-[4.5rem] lg:leading-[1.08]">
-                Sharpen your
-                <br />
-                AI context.
-              </h1>
-              <p className="mt-7 max-w-lg text-lg leading-relaxed text-muted-foreground">
-                The knowledge system built for AI-native work. Organize notes into
-                structured boxes, bundle the right context for any model, and never
-                lose a decision again.
-              </p>
-              <div className="mt-9 flex items-center gap-5">
-                <Link
-                  href="/sign_in"
-                  className="inline-flex items-center gap-2 rounded-lg bg-violet-600 px-6 py-3 text-sm font-semibold text-white transition-colors hover:bg-violet-500"
-                >
-                  Get started free
-                  <ArrowRight className="h-4 w-4" />
-                </Link>
-                <Link
-                  href="/features"
-                  className="text-sm text-muted-foreground transition-colors hover:text-foreground"
-                >
-                  Learn more →
-                </Link>
-              </div>
-              <p className="mt-5 text-xs text-muted-foreground/50">
-                Free forever · No credit card · Import from Obsidian in minutes
-              </p>
-            </div>
-            <div className="flex justify-center lg:justify-end">
-              <AppMockup />
-            </div>
-          </div>
-        </div>
-      </section>
+      <HeroSection />
 
       {/* ── Organize ──────────────────────────────────────────────────────────── */}
       <section className="border-b border-border/30 px-6 py-24">

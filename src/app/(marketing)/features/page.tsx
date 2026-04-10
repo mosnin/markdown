@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowRight, Check } from "lucide-react";
+import { PageHeroSection } from "@/components/marketing/hero";
 
 export const metadata: Metadata = {
   title: "Features — Context Store",
@@ -174,36 +175,13 @@ export default function FeaturesPage() {
   return (
     <div className="min-h-screen bg-background">
       {/* Hero */}
-      <section className="border-b border-border/50 bg-muted/20 py-20 pt-32">
-        <div className="mx-auto max-w-5xl px-6 text-center">
-          <p className="mb-3 text-xs font-semibold uppercase tracking-widest text-violet-400">
-            Features
-          </p>
-          <h1 className="text-4xl font-bold tracking-tight text-foreground sm:text-5xl">
-            Everything you need to build
-            <br className="hidden sm:block" /> perfect AI context
-          </h1>
-          <p className="mx-auto mt-5 max-w-xl text-lg text-muted-foreground">
-            Context Store combines structured note-taking, token-aware AI
-            bundling, and full version history into one focused tool.
-          </p>
-          <div className="mt-8 flex flex-col items-center gap-3 sm:flex-row sm:justify-center">
-            <Link
-              href="/sign_in"
-              className="inline-flex items-center gap-2 rounded-lg bg-violet-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-violet-500"
-            >
-              Start free trial
-              <ArrowRight className="h-4 w-4" />
-            </Link>
-            <Link
-              href="/pricing"
-              className="text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
-            >
-              View pricing →
-            </Link>
-          </div>
-        </div>
-      </section>
+      <PageHeroSection
+        eyebrow="Features"
+        title={<>Everything you need to build<br className="hidden sm:block" /> perfect AI context</>}
+        description="Context Store combines structured note-taking, token-aware AI bundling, and full version history into one focused tool."
+        ctaPrimary={{ label: "Start free trial", href: "/sign_in" }}
+        ctaSecondary={{ label: "View pricing", href: "/pricing" }}
+      />
 
       {/* Anchor nav */}
       <div className="sticky top-[68px] z-30 border-b border-border/50 bg-background/90 backdrop-blur-sm">
