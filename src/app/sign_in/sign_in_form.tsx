@@ -38,12 +38,16 @@ function PasswordInput({
       />
       <button
         type="button"
-        tabIndex={-1}
         aria-label={show ? "Hide password" : "Show password"}
-        className="absolute inset-y-0 right-0 flex items-center px-2.5 text-muted-foreground transition-colors hover:text-foreground"
+        aria-pressed={show}
+        className="absolute inset-y-0 right-0 flex items-center px-2.5 text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:rounded-sm"
         onClick={() => setShow((v) => !v)}
       >
-        {show ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+        {show ? (
+          <EyeOff className="h-3.5 w-3.5" aria-hidden="true" />
+        ) : (
+          <Eye className="h-3.5 w-3.5" aria-hidden="true" />
+        )}
       </button>
     </div>
   );
