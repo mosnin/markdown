@@ -2,11 +2,12 @@ import { requireAuthenticatedUser } from "@/server/auth/require_authenticated_us
 import { createAdminClient } from "@/lib/supabase/admin";
 import { listWriteProposalsByWorkspace } from "@/server/repositories/write_proposal_repository";
 import { buildProposalPreview } from "@/server/services/write_proposal_service";
+import { CircleDashed } from "lucide-react";
 import { PageHeader } from "@/components/product/page_header";
 import { ProposalsPanel } from "@/components/product/proposals_panel";
+import { EmptyState } from "@/components/product/empty_state";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
-import { CircleDashed } from "lucide-react";
 import type { Connection } from "@/server/domain/types/connection";
 import type { WriteProposal } from "@/server/domain/types/write_proposal";
 
@@ -71,19 +72,11 @@ export default async function ProposalsPage() {
       <ScrollArea className="flex-1">
         <div className="mx-auto max-w-2xl px-6 py-6">
           {items.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-16 text-center rounded-lg border border-dashed border-border">
-              <CircleDashed
-                className="mb-4 h-10 w-10 text-muted-foreground/30"
-                aria-hidden="true"
-              />
-              <h3 className="text-base font-semibold text-foreground">
-                No proposals yet
-              </h3>
-              <p className="mt-1.5 max-w-xs text-sm text-muted-foreground">
-                When connected integrations submit write proposals, they will appear
-                here for your review.
-              </p>
-            </div>
+            <EmptyState
+              icon={<CircleDashed className="h-5 w-5" />}
+              title="No proposals yet"
+              description="When connected integrations submit write proposals, they will appear here for your review."
+            />
           ) : (
             <ProposalsPanel initialProposals={items} />
           )}
