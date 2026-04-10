@@ -31,8 +31,10 @@ import {
 } from "@/server/domain/types/connection";
 import {
   CONNECTION_TYPE,
+  CONNECTION_STATUS,
   PERMISSION_MODE,
   type ConnectionType,
+  type ConnectionStatus,
   type PermissionMode,
 } from "@/server/domain/constants/connection_constants";
 import {
@@ -74,6 +76,15 @@ const PERMISSION_DESCRIPTION: Record<PermissionMode, string> = {
     "May submit write proposals for human review. Cannot write directly.",
   generate_in_allowed_folders:
     "May write directly to folders where accepts_generated_notes = true.",
+};
+
+const STATUS_CONFIG: Record<
+  ConnectionStatus,
+  { label: string; className: string }
+> = {
+  active:  { label: "Active",  className: "text-success border-success/30 bg-success/10" },
+  paused:  { label: "Paused",  className: "text-warning border-warning/30 bg-warning/10" },
+  revoked: { label: "Revoked", className: "text-destructive border-destructive/30 bg-destructive/10" },
 };
 
 // ─── Token reveal dialog ──────────────────────────────────────────────────────
@@ -447,6 +458,16 @@ function ConnectionCard({
             >
               {PERMISSION_LABEL[connection.permission_mode]}
             </Badge>
+            {connection.status !== CONNECTION_STATUS.ACTIVE && (
+              <span
+                className={cn(
+                  "inline-flex items-center rounded-full border px-1.5 py-0.5 text-[10px] font-medium shrink-0",
+                  STATUS_CONFIG[connection.status].className
+                )}
+              >
+                {STATUS_CONFIG[connection.status].label}
+              </span>
+            )}
           </div>
           <p className="text-[10px] text-muted-foreground mt-0.5">
             Last used: {lastUsed}
@@ -476,6 +497,33 @@ function ConnectionCard({
           {connection.description && (
             <p className="text-xs text-muted-foreground">{connection.description}</p>
           )}
+
+          {/* Usage stats */}
+          <div className="flex gap-4 text-xs">
+            <div>
+              <p className="text-[10px] uppercase tracking-wider text-muted-foreground/60">Usage</p>
+              <p className="text-foreground/80">
+                {connection.usage_count === 0
+                  ? "Never used"
+                  : `${connection.usage_count} request${connection.usage_count !== 1 ? "s" : ""}`}
+              </p>
+            </div>
+            <div>
+              <p className="text-[10px] uppercase tracking-wider text-muted-foreground/60">Status</p>
+              <p
+                className={cn(
+                  "text-xs",
+                  connection.status === CONNECTION_STATUS.ACTIVE
+                    ? "text-foreground/80"
+                    : connection.status === CONNECTION_STATUS.PAUSED
+                    ? "text-warning"
+                    : "text-destructive"
+                )}
+              >
+                {STATUS_CONFIG[connection.status].label}
+              </p>
+            </div>
+          </div>
 
           {/* Scoped boxes */}
           <div>

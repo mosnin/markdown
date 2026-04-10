@@ -568,6 +568,27 @@ src/components/product/
 └── mobile_sidebar.tsx             Updated: uses TreeSidebar
 ```
 
+## Trust workspace surface layer
+
+See [docs/trust_workspace_surface_v1.md](trust_workspace_surface_v1.md) for the full
+trust surface architecture: proposal review, version history, audit browsing,
+connections, and generated note provenance.
+
+- **Proposal review** (`ProposalsPanel`): type-aware content preview — append proposals show the new portion separately (not the merged result); replace proposals get destructive border + warning; conflicted proposals show stale notice
+- **Version history** (`NoteHistoryPanel`): actor type always shown as "Human" / "Connection" / "System" — not raw values; rollback confirm copy clarifies it creates a new version
+- **Audit panel** (`AuditPanel`): human-readable event type labels (not raw dot-separated strings); actor filter uses `"connection"` not `"agent"` (which is not a valid ActorType); Bot icon for connection/system actors
+- **Connections** (`ConnectionsPanel`): status badge shown when non-active (paused/revoked); usage count visible in expanded detail; permission mode descriptions explain write semantics
+- **Generated note** (`GeneratedNoteBanner`): two-step promotion confirm; all signals disappear on promotion; origin_type preserved for provenance
+
+```
+src/components/product/
+├── proposals_panel.tsx        Updated: type icons, type-aware ProposalContentPreview, replace card border
+├── note_history_panel.tsx     Updated: ACTOR_LABEL map for version detail
+├── audit_panel.tsx            Updated: EVENT_LABEL map, actor type fix (connection not agent), human labels
+├── connections_panel.tsx      Updated: STATUS_CONFIG, status badge, usage_count in detail
+└── generated_note_banner.tsx  Stable: promotion is already deliberate + two-step
+```
+
 ## V1 parity pass
 
 See [docs/v1_parity_report.md](v1_parity_report.md).

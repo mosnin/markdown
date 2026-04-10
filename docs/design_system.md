@@ -172,6 +172,11 @@ Installed primitives:
 | `NoteStubSkeleton` | Loading state for NoteStub |
 | `ThemeProvider` | next-themes wrapper |
 | `ThemeToggle` | Light/dark toggle |
+| `ProposalsPanel` | Write proposal review queue: type-aware content preview, approve/reject flow |
+| `NoteHistoryPanel` | Immutable version timeline with rollback; two-pane list + detail |
+| `AuditPanel` | Append-only workspace activity journal with actor/object filters |
+| `ConnectionsPanel` | Access control surface: connection cards, permission modes, box scopes |
+| `GeneratedNoteBanner` | Provenance banner for generated notes; promote-to-standard action |
 
 ### Three-pane workspace layout
 

@@ -21,6 +21,39 @@ interface AuditPanelProps {
   workspaceId: string;
 }
 
+const ACTOR_LABEL: Record<string, string> = {
+  user: "Human",
+  connection: "Connection",
+  system: "System",
+};
+
+const EVENT_LABEL: Record<string, string> = {
+  "note.created": "Note created",
+  "note.updated": "Note updated",
+  "note.deleted": "Note deleted",
+  "note.archived": "Note archived",
+  "note.restored": "Note restored",
+  "note.promoted": "Note promoted",
+  "note.rolled_back": "Note rolled back",
+  "box.created": "Box created",
+  "box.updated": "Box updated",
+  "box.archived": "Box archived",
+  "folder.created": "Folder created",
+  "folder.updated": "Folder updated",
+  "folder.deleted": "Folder deleted",
+  "write_proposal.submitted": "Proposal submitted",
+  "write_proposal.approved": "Proposal approved",
+  "write_proposal.rejected": "Proposal rejected",
+  "write_proposal.conflicted": "Proposal conflicted",
+  "write_proposal.canceled": "Proposal canceled",
+  "write_proposal.expired": "Proposal expired",
+  "connection.created": "Connection created",
+  "connection.revoked": "Connection revoked",
+  "connection.rotated": "Token rotated",
+  "note_link.created": "Link created",
+  "note_link.deleted": "Link deleted",
+};
+
 function formatTimestamp(dateStr: string): string {
   const d = new Date(dateStr);
   const now = new Date();
@@ -34,13 +67,13 @@ function formatTimestamp(dateStr: string): string {
 }
 
 function actorIcon(actorType: string) {
-  return actorType === "agent"
+  return actorType === "connection" || actorType === "system"
     ? <Bot className="h-3 w-3 shrink-0 text-muted-foreground/60" />
     : <User className="h-3 w-3 shrink-0 text-muted-foreground/60" />;
 }
 
 function eventTypeLabel(eventType: string): string {
-  return eventType.replace(/\./g, " › ").replace(/_/g, " ");
+  return EVENT_LABEL[eventType] ?? eventType.replace(/[._]/g, " ");
 }
 
 function EventRow({ event }: { event: AuditEvent }) {
@@ -63,7 +96,7 @@ function EventRow({ event }: { event: AuditEvent }) {
           </div>
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-xs font-mono text-foreground/80">
+              <span className="text-xs text-foreground/80">
                 {eventTypeLabel(event.event_type)}
               </span>
               <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
@@ -75,7 +108,7 @@ function EventRow({ event }: { event: AuditEvent }) {
               {event.actor_type && (
                 <>
                   <span>·</span>
-                  <span className="capitalize">{event.actor_type}</span>
+                  <span>{ACTOR_LABEL[event.actor_type] ?? event.actor_type}</span>
                 </>
               )}
             </div>
@@ -217,7 +250,7 @@ export function AuditPanel({ initialEvents, workspaceId }: AuditPanelProps) {
             >
               <option value="">All</option>
               <option value="user">Human</option>
-              <option value="agent">Agent</option>
+              <option value="connection">Connection</option>
             </select>
           </div>
 

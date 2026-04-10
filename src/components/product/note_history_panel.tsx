@@ -46,6 +46,12 @@ const ORIGIN_LABEL: Record<string, string> = {
   promotion: "Promoted",
 };
 
+const ACTOR_LABEL: Record<string, string> = {
+  user: "Human",
+  connection: "Connection",
+  system: "System",
+};
+
 const ORIGIN_ICON: Record<string, React.ElementType> = {
   human_edit: User,
   import: FileInput,
@@ -213,7 +219,7 @@ function VersionDetail({
         </div>
         <div>
           <p className="text-[10px] uppercase tracking-wider text-muted-foreground/60">Actor</p>
-          <p className="text-foreground/80">{version.actor_type}</p>
+          <p className="text-foreground/80">{ACTOR_LABEL[version.actor_type] ?? version.actor_type}</p>
         </div>
         <div>
           <p className="text-[10px] uppercase tracking-wider text-muted-foreground/60">Size</p>

@@ -3,28 +3,22 @@
 import { useState, useTransition } from "react";
 import {
   AlertTriangle,
+  ArrowDownToLine,
   Check,
   ChevronDown,
   ChevronUp,
   CircleDashed,
   Clock,
   FilePlus,
-  FileText,
-  RotateCcw,
+  PenLine,
+  RefreshCcw,
   X,
   XCircle,
   Zap,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { ScrollArea } from "@/components/ui/scroll-area";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
 import { type WriteProposal } from "@/server/domain/types/write_proposal";
@@ -48,26 +42,33 @@ interface ProposalsPanelProps {
   initialProposals: ProposalWithContext[];
 }
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
+// ─── Config ───────────────────────────────────────────────────────────────────
 
-const PROPOSAL_TYPE_LABEL: Record<string, string> = {
-  create_note: "Create note",
-  update_note: "Update note",
-  append_note: "Append to note",
-  replace_note: "Replace note",
+const PROPOSAL_TYPE_CONFIG: Record<
+  string,
+  { label: string; icon: React.ElementType; className: string }
+> = {
+  create_note:  { label: "Create note",    icon: FilePlus,        className: "bg-muted text-muted-foreground" },
+  update_note:  { label: "Update note",    icon: PenLine,         className: "bg-muted text-muted-foreground" },
+  append_note:  { label: "Append to note", icon: ArrowDownToLine, className: "bg-muted text-muted-foreground" },
+  replace_note: { label: "Replace note",   icon: RefreshCcw,      className: "bg-destructive/10 text-destructive" },
 };
 
 const STATUS_CONFIG: Record<
   string,
   { label: string; className: string; icon: React.ElementType }
 > = {
-  pending:    { label: "Pending review", className: "bg-warning/15 text-warning border-warning/30",       icon: Clock },
-  approved:   { label: "Approved",       className: "bg-success/15 text-success border-success/30",       icon: Check },
-  rejected:   { label: "Rejected",       className: "bg-muted text-muted-foreground border-border",        icon: X },
-  conflicted: { label: "Conflicted",     className: "bg-destructive/15 text-destructive border-destructive/30", icon: AlertTriangle },
-  canceled:   { label: "Canceled",       className: "bg-muted text-muted-foreground border-border",        icon: XCircle },
-  expired:    { label: "Expired",        className: "bg-muted text-muted-foreground border-border",        icon: Clock },
+  pending:    { label: "Pending review", className: "bg-warning/15 text-warning border-warning/30",                icon: Clock },
+  approved:   { label: "Approved",       className: "bg-success/15 text-success border-success/30",                icon: Check },
+  rejected:   { label: "Rejected",       className: "bg-muted text-muted-foreground border-border",                 icon: X },
+  conflicted: { label: "Conflicted",     className: "bg-destructive/15 text-destructive border-destructive/30",    icon: AlertTriangle },
+  canceled:   { label: "Canceled",       className: "bg-muted text-muted-foreground border-border",                 icon: XCircle },
+  expired:    { label: "Expired",        className: "bg-muted text-muted-foreground border-border",                 icon: Clock },
 };
+
+const STATUS_TABS = ["pending", "approved", "rejected", "conflicted", "all"] as const;
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function formatDate(d: string) {
   return new Date(d).toLocaleDateString("en-US", {
@@ -79,12 +80,12 @@ function formatDate(d: string) {
   });
 }
 
-function truncate(text: string, max = 200) {
+function truncate(text: string, max = 300) {
   if (text.length <= max) return text;
   return text.slice(0, max).trimEnd() + "…";
 }
 
-// ─── Status badge ─────────────────────────────────────────────────────────────
+// ─── StatusBadge ─────────────────────────────────────────────────────────────
 
 function StatusBadge({ status }: { status: string }) {
   const cfg = STATUS_CONFIG[status] ?? STATUS_CONFIG.pending;
@@ -102,35 +103,34 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
-// ─── Type badge ───────────────────────────────────────────────────────────────
+// ─── TypeBadge ───────────────────────────────────────────────────────────────
 
 function TypeBadge({ type }: { type: string }) {
-  const isReplace = type === "replace_note";
+  const cfg = PROPOSAL_TYPE_CONFIG[type] ?? PROPOSAL_TYPE_CONFIG.update_note;
+  const Icon = cfg.icon;
   return (
     <span
       className={cn(
         "inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-xs font-medium",
-        isReplace
-          ? "bg-destructive/10 text-destructive"
-          : "bg-muted text-muted-foreground"
+        cfg.className
       )}
     >
-      {isReplace && <AlertTriangle className="h-3 w-3" />}
-      {PROPOSAL_TYPE_LABEL[type] ?? type}
+      <Icon className="h-3 w-3" />
+      {cfg.label}
     </span>
   );
 }
 
-// ─── Content preview ──────────────────────────────────────────────────────────
+// ─── ContentBlock ─────────────────────────────────────────────────────────────
 
-function ContentPreview({
+function ContentBlock({
   label,
   content,
-  className,
+  labelMuted,
 }: {
   label: string;
   content: string | null;
-  className?: string;
+  labelMuted?: boolean;
 }) {
   const [expanded, setExpanded] = useState(false);
   if (!content) return null;
@@ -138,8 +138,15 @@ function ContentPreview({
   const displayed = expanded || !long ? content : truncate(content, 300);
 
   return (
-    <div className={cn("space-y-1", className)}>
-      <p className="text-xs font-medium text-muted-foreground">{label}</p>
+    <div className="space-y-1">
+      <p
+        className={cn(
+          "text-xs font-medium",
+          labelMuted ? "text-muted-foreground/60" : "text-muted-foreground"
+        )}
+      >
+        {label}
+      </p>
       <pre className="overflow-x-auto rounded-md bg-muted/60 p-3 text-xs leading-relaxed whitespace-pre-wrap font-mono">
         {displayed}
       </pre>
@@ -149,13 +156,9 @@ function ContentPreview({
           className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
         >
           {expanded ? (
-            <>
-              <ChevronUp className="h-3 w-3" /> Show less
-            </>
+            <><ChevronUp className="h-3 w-3" /> Show less</>
           ) : (
-            <>
-              <ChevronDown className="h-3 w-3" /> Show more
-            </>
+            <><ChevronDown className="h-3 w-3" /> Show more</>
           )}
         </button>
       )}
@@ -163,7 +166,86 @@ function ContentPreview({
   );
 }
 
-// ─── Single proposal card ─────────────────────────────────────────────────────
+// ─── ProposalContentPreview ───────────────────────────────────────────────────
+
+/**
+ * Type-aware content preview.
+ *
+ * - create_note: new note content only
+ * - append_note: current note (muted) → visual separator → new portion being appended
+ * - replace_note: current content (muted, labeled "will be replaced") → replacement
+ * - update_note: current → proposed side-by-side (stacked)
+ */
+function ProposalContentPreview({
+  proposal,
+  currentNote,
+  previewContent,
+}: {
+  proposal: WriteProposal;
+  currentNote: Note | null;
+  previewContent: string | null;
+}) {
+  const type = proposal.proposal_type;
+
+  if (type === "create_note") {
+    return <ContentBlock label="New note content" content={previewContent} />;
+  }
+
+  if (type === "append_note") {
+    return (
+      <div className="space-y-2">
+        <ContentBlock
+          label="Current note"
+          content={currentNote?.markdown_content ?? null}
+          labelMuted
+        />
+        <div className="flex items-center gap-2 py-0.5">
+          <div className="h-px flex-1 bg-border/50" />
+          <span className="flex items-center gap-1 text-[10px] text-muted-foreground">
+            <ArrowDownToLine className="h-2.5 w-2.5" />
+            appending below
+          </span>
+          <div className="h-px flex-1 bg-border/50" />
+        </div>
+        <div className="border-l-2 border-primary/40 pl-2">
+          <ContentBlock
+            label="New content to append"
+            content={proposal.proposed_content}
+          />
+        </div>
+      </div>
+    );
+  }
+
+  if (type === "replace_note") {
+    return (
+      <div className="space-y-3">
+        <ContentBlock
+          label="Current content — will be replaced"
+          content={currentNote?.markdown_content ?? null}
+          labelMuted
+        />
+        <div className="border-l-2 border-destructive/50 pl-2">
+          <ContentBlock label="Replacement content" content={previewContent} />
+        </div>
+      </div>
+    );
+  }
+
+  // update_note
+  return (
+    <div className="space-y-3">
+      <ContentBlock
+        label="Current content"
+        content={currentNote?.markdown_content ?? null}
+        labelMuted
+      />
+      <ContentBlock label="Proposed content" content={previewContent} />
+    </div>
+  );
+}
+
+// ─── ProposalCard ─────────────────────────────────────────────────────────────
 
 function ProposalCard({
   item,
@@ -181,6 +263,7 @@ function ProposalCard({
 
   const isPendingProposal = proposal.status === "pending";
   const isConflicted = proposal.status === "conflicted";
+  const isReplace = proposal.proposal_type === "replace_note";
 
   function handleApprove() {
     setError(null);
@@ -211,28 +294,25 @@ function ProposalCard({
     <Card
       className={cn(
         "border transition-colors",
-        isConflicted && "border-destructive/40 bg-destructive/5"
+        isConflicted && "border-destructive/40 bg-destructive/5",
+        isPendingProposal && isReplace && !isConflicted && "border-destructive/30"
       )}
     >
       <CardHeader className="pb-2">
-        <div className="flex items-start justify-between gap-3">
-          <div className="flex flex-col gap-1.5 min-w-0">
-            <div className="flex flex-wrap items-center gap-2">
-              <TypeBadge type={proposal.proposal_type} />
-              <StatusBadge status={proposal.status} />
-            </div>
-
-            {proposal.proposed_title && (
-              <p className="text-sm font-medium truncate">
-                {proposal.proposed_title}
-              </p>
-            )}
-            {!proposal.proposed_title && current_note && (
-              <p className="text-sm font-medium truncate text-muted-foreground">
-                → {current_note.title}
-              </p>
-            )}
+        <div className="flex flex-col gap-1.5">
+          <div className="flex flex-wrap items-center gap-2">
+            <TypeBadge type={proposal.proposal_type} />
+            <StatusBadge status={proposal.status} />
           </div>
+
+          {proposal.proposed_title && (
+            <p className="text-sm font-medium truncate">{proposal.proposed_title}</p>
+          )}
+          {!proposal.proposed_title && current_note && (
+            <p className="text-sm font-medium truncate text-muted-foreground">
+              → {current_note.title}
+            </p>
+          )}
         </div>
 
         <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
@@ -253,9 +333,7 @@ function ProposalCard({
         {/* Rationale */}
         {proposal.rationale && (
           <div className="rounded-md bg-muted/40 px-3 py-2">
-            <p className="text-xs font-medium text-muted-foreground mb-0.5">
-              Rationale
-            </p>
+            <p className="text-xs font-medium text-muted-foreground mb-0.5">Rationale</p>
             <p className="text-sm leading-relaxed">{proposal.rationale}</p>
           </div>
         )}
@@ -272,7 +350,7 @@ function ProposalCard({
         )}
 
         {/* Replace warning */}
-        {proposal.proposal_type === "replace_note" && isPendingProposal && (
+        {isReplace && isPendingProposal && (
           <div className="flex items-start gap-2 rounded-md border border-warning/30 bg-warning/10 px-3 py-2">
             <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-warning" />
             <p className="text-xs text-warning">
@@ -282,7 +360,7 @@ function ProposalCard({
           </div>
         )}
 
-        {/* Details toggle */}
+        {/* Content preview toggle */}
         <button
           onClick={() => setShowDetails(!showDetails)}
           className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
@@ -297,31 +375,15 @@ function ProposalCard({
 
         {showDetails && (
           <div className="space-y-3">
-            {current_note && (
-              <ContentPreview
-                label="Current note"
-                content={current_note.markdown_content}
-              />
-            )}
-            <ContentPreview
-              label={
-                proposal.proposal_type === "append_note"
-                  ? "Merged result (preview)"
-                  : proposal.proposal_type === "create_note"
-                  ? "Proposed content"
-                  : "Proposed content"
-              }
-              content={preview_content}
-              className={
-                proposal.proposal_type === "append_note" ? "border-l-2 border-primary/40 pl-2" : undefined
-              }
+            <ProposalContentPreview
+              proposal={proposal}
+              currentNote={current_note}
+              previewContent={preview_content}
             />
 
             {proposal.proposed_tags && proposal.proposed_tags.length > 0 && (
               <div className="space-y-1">
-                <p className="text-xs font-medium text-muted-foreground">
-                  Proposed tags
-                </p>
+                <p className="text-xs font-medium text-muted-foreground">Proposed tags</p>
                 <div className="flex flex-wrap gap-1">
                   {proposal.proposed_tags.map((tag) => (
                     <Badge key={tag} variant="secondary" className="text-xs">
@@ -362,9 +424,7 @@ function ProposalCard({
               </div>
             )}
 
-            {error && (
-              <p className="text-xs text-destructive">{error}</p>
-            )}
+            {error && <p className="text-xs text-destructive">{error}</p>}
 
             <div className="flex items-center gap-2">
               <Button
@@ -400,7 +460,7 @@ function ProposalCard({
   );
 }
 
-// ─── Proposals panel ──────────────────────────────────────────────────────────
+// ─── ProposalsPanel ───────────────────────────────────────────────────────────
 
 export function ProposalsPanel({ initialProposals }: ProposalsPanelProps) {
   const [proposals, setProposals] =
@@ -448,22 +508,20 @@ export function ProposalsPanel({ initialProposals }: ProposalsPanelProps) {
 
       {/* Filter tabs */}
       <div className="flex flex-wrap gap-1">
-        {(["pending", "approved", "rejected", "conflicted", "all"] as const).map(
-          (s) => (
-            <button
-              key={s}
-              onClick={() => setStatusFilter(s)}
-              className={cn(
-                "rounded-md px-2.5 py-1 text-xs font-medium transition-fast",
-                statusFilter === s
-                  ? "bg-accent text-accent-foreground"
-                  : "text-muted-foreground hover:bg-accent/50 hover:text-foreground"
-              )}
-            >
-              {s.charAt(0).toUpperCase() + s.slice(1)}
-            </button>
-          )
-        )}
+        {STATUS_TABS.map((s) => (
+          <button
+            key={s}
+            onClick={() => setStatusFilter(s)}
+            className={cn(
+              "rounded-md px-2.5 py-1 text-xs font-medium transition-fast",
+              statusFilter === s
+                ? "bg-accent text-accent-foreground"
+                : "text-muted-foreground hover:bg-accent/50 hover:text-foreground"
+            )}
+          >
+            {s.charAt(0).toUpperCase() + s.slice(1)}
+          </button>
+        ))}
       </div>
 
       {/* Proposal list */}
