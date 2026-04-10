@@ -543,7 +543,7 @@ full workspace layout architecture.
 - **Autosave**: 1500ms debounce via `useEffect` + `useRef`; calls `saveNoteAction` (same as manual save); every autosave creates an immutable version via `update_note_and_create_version` RPC; see [docs/note_dual_view_and_autosave_v1.md](note_dual_view_and_autosave_v1.md)
 - **`AutosaveStatus`**: five states — idle/unsaved/saving/saved/error; "unsaved" shows dim dot while timer runs; error shows Retry button and does not auto-dismiss
 - **`SemanticLinksPanel`**: replaces `LinkedNotesSection` in right pane; "Context relationships" framing (not backlinks)
-- **`GraphPanel`**: read-only structured view using `BoxOverview` data; no D3 or force layout
+- **`GraphPanel`** + **`BoxGraphView`**: `GraphPanel` is a thin server component (stats + truncation warning); `BoxGraphView` is the interactive client component; hierarchy shown as spatial folder containers, semantic links as directed edge rows — two visually distinct edge types; guide note highlighted in amber; node selection reveals detail and highlights connected nodes; folder scope filter + hierarchy/links toggles; no D3 or force layout; see [docs/graph_view_v1.md](graph_view_v1.md)
 - **Workspace home (cockpit)**: status tiles + recent notes + boxes grid + connections + proposals
 - **Box page**: guide status always above the fold; "Overview" tab renamed to "Graph" using `GraphPanel`
 - **Note page**: center pane = breadcrumb + NoteEditor; right pane = Info/Links/Bundle/History tabs
@@ -559,7 +559,8 @@ src/components/product/
 ├── autosave_status.tsx            New: autosave state indicator
 ├── note_editor.tsx                Rewritten: three modes + autosave
 ├── semantic_links_panel.tsx       New: context relationships panel
-├── graph_panel.tsx                New: read-only box hierarchy + link edges
+├── graph_panel.tsx                Updated: server wrapper (stats + truncation), delegates to BoxGraphView
+├── box_graph_view.tsx             New: interactive client graph (hierarchy canvas + edge list + node detail)
 ├── dashboard_section.tsx          New: cockpit section wrapper
 ├── dashboard_card.tsx             New: cockpit card (link or static)
 ├── app_sidebar.tsx                Updated: uses TreeSidebar, 240px width

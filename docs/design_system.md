@@ -160,10 +160,11 @@ Installed primitives:
 | `PageHeader` | Per-page title, description, and action slot |
 | `EmptyState` | Consistent empty list/view message |
 | `PanelSection` | Labeled section for panels and detail views |
-| `NoteEditor` | Three-mode note editor: Document / Edit / Source |
-| `AutosaveStatus` | Subtle autosave indicator (idle/saving/saved/error) for note toolbar |
+| `NoteEditor` | Two-mode note editor: Document (rendered) / Markdown (editable raw source) |
+| `AutosaveStatus` | Subtle autosave indicator (idle/unsaved/saving/saved/error) for note toolbar |
 | `SemanticLinksPanel` | Context relationships panel for note right pane |
-| `GraphPanel` | Read-only box hierarchy + link edge visualization |
+| `GraphPanel` | Server wrapper for box graph tab: stats, truncation warning, renders BoxGraphView |
+| `BoxGraphView` | Interactive read-only graph: hierarchy canvas + semantic link rows + node detail |
 | `DashboardSection` | Section wrapper for the workspace cockpit home |
 | `DashboardCard` | Card component (link or static) for the cockpit |
 | `NoteStub` | Note card for list and search views |
