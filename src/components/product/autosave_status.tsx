@@ -1,4 +1,5 @@
-import { Check, CloudOff, Loader2 } from "lucide-react";
+import { Check, CloudOff } from "lucide-react";
+import { Spinner } from "@/components/ui/spinner";
 import { cn } from "@/lib/utils";
 
 /**
@@ -59,7 +60,7 @@ export function AutosaveStatus({
 
       {state === "saving" && (
         <>
-          <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
+          <Spinner size={12} />
           <span className="text-muted-foreground">Saving…</span>
         </>
       )}

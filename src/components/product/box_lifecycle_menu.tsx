@@ -2,7 +2,8 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Archive, ArchiveRestore, Loader2, MoreHorizontal } from "lucide-react";
+import { Archive, ArchiveRestore, MoreHorizontal } from "lucide-react";
+import { Spinner } from "@/components/ui/spinner";
 import { cn } from "@/lib/utils";
 import {
   archiveBoxAction,
@@ -79,7 +80,7 @@ export function BoxLifecycleMenu({ boxId, boxStatus }: BoxLifecycleMenuProps) {
                   "hover:bg-accent disabled:opacity-50"
                 )}
               >
-                {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArchiveRestore className="h-4 w-4" />}
+                {isPending ? <Spinner size={16} /> : <ArchiveRestore className="h-4 w-4" />}
                 Unarchive box
               </button>
             ) : !confirmArchive ? (
@@ -106,7 +107,7 @@ export function BoxLifecycleMenu({ boxId, boxStatus }: BoxLifecycleMenuProps) {
                     disabled={isPending}
                     className="rounded px-2 py-1 text-xs bg-primary text-primary-foreground hover:bg-primary/80 disabled:opacity-50 flex items-center gap-1"
                   >
-                    {isPending && <Loader2 className="h-3 w-3 animate-spin" />}
+                    {isPending && <Spinner size={12} />}
                     Confirm
                   </button>
                   <button

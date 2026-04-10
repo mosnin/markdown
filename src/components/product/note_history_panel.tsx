@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { AlertTriangle, ArrowUpFromLine, CheckCircle2, Clock, GitBranch, Loader2, RotateCcw, User, Bot, FileInput } from "lucide-react";
+import { AlertTriangle, ArrowUpFromLine, CheckCircle2, Clock, GitBranch, RotateCcw, User, Bot, FileInput } from "lucide-react";
+import { Spinner } from "@/components/ui/spinner";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -335,7 +336,7 @@ function VersionDetail({
                   )}
                 >
                   {isPending ? (
-                    <Loader2 className="h-3 w-3 animate-spin" />
+                    <Spinner size={12} />
                   ) : (
                     <RotateCcw className="h-3 w-3" />
                   )}

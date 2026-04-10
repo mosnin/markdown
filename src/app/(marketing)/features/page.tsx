@@ -24,6 +24,7 @@ import {
 } from "lucide-react";
 import { PageHeroSection } from "@/components/marketing/hero";
 import { FeatureCard } from "@/components/ui/grid-feature-cards";
+import { GridCard } from "@/components/ui/grid-card";
 
 export const metadata: Metadata = {
   title: "Features — Context Store",
@@ -208,6 +209,46 @@ export default function FeaturesPage() {
               </a>
             ))}
           </nav>
+        </div>
+      </div>
+
+      {/* Highlights grid */}
+      <div className="mx-auto max-w-5xl px-6 py-12">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          {[
+            {
+              icon: Archive,
+              title: "Semantic Boxes",
+              description:
+                "Group notes into purpose-built containers. Every box ships with a guide so your AI always knows what's inside.",
+            },
+            {
+              icon: Zap,
+              title: "Context Bundles",
+              description:
+                "Assemble token-perfect bundles for any model in one click. Freshness scoring surfaces the most current notes first.",
+            },
+            {
+              icon: History,
+              title: "Full Version History",
+              description:
+                "Every save creates a version. Browse, diff, and restore any prior state of any note — no confirmation ceremony.",
+            },
+            {
+              icon: FileText,
+              title: "Open by Default",
+              description:
+                "Plain markdown files, portable forever. Export your entire vault as a ZIP at any time with no friction.",
+            },
+          ].map(({ icon: Icon, title, description }) => (
+            <GridCard key={title} className="min-h-40">
+              <Icon className="relative size-6 text-foreground/80" strokeWidth={1.5} />
+              <div className="relative">
+                <span className="text-foreground/80 text-sm font-medium">{title}</span>
+                <p className="text-muted-foreground mt-1 text-xs">{description}</p>
+              </div>
+            </GridCard>
+          ))}
         </div>
       </div>
 

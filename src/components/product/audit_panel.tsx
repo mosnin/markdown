@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { RefreshCw, Filter, Loader2, User, Bot, ChevronDown } from "lucide-react";
+import { RefreshCw, Filter, User, Bot, ChevronDown } from "lucide-react";
+import { Spinner } from "@/components/ui/spinner";
 import { cn } from "@/lib/utils";
 import { type AuditEvent } from "@/server/domain/types/audit_event";
 import { type ActorType } from "@/server/domain/constants/audit_constants";
@@ -205,7 +206,7 @@ export function AuditPanel({ initialEvents, workspaceId }: AuditPanelProps) {
             "text-muted-foreground hover:text-foreground hover:bg-accent disabled:opacity-50"
           )}
         >
-          {isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+          {isPending ? <Spinner size={14} /> : <RefreshCw className="h-3.5 w-3.5" />}
           Refresh
         </button>
 
@@ -297,7 +298,7 @@ export function AuditPanel({ initialEvents, workspaceId }: AuditPanelProps) {
                     "border border-border hover:bg-accent disabled:opacity-50"
                   )}
                 >
-                  {isPending && <Loader2 className="h-3 w-3 animate-spin" />}
+                  {isPending && <Spinner size={12} />}
                   Load more
                 </button>
               </div>

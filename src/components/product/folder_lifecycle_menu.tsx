@@ -2,7 +2,8 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Archive, ArchiveRestore, Trash2, RotateCcw, MoreHorizontal, Loader2 } from "lucide-react";
+import { Archive, ArchiveRestore, Trash2, RotateCcw, MoreHorizontal } from "lucide-react";
+import { Spinner } from "@/components/ui/spinner";
 import { cn } from "@/lib/utils";
 import {
   archiveFolderAction,
@@ -85,7 +86,7 @@ export function FolderLifecycleMenu({ folderId, folderStatus }: FolderLifecycleM
                       "hover:bg-accent disabled:opacity-50"
                     )}
                   >
-                    {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArchiveRestore className="h-4 w-4" />}
+                    {isPending ? <Spinner size={16} /> : <ArchiveRestore className="h-4 w-4" />}
                     Unarchive subtree
                   </button>
                 ) : (
@@ -98,7 +99,7 @@ export function FolderLifecycleMenu({ folderId, folderStatus }: FolderLifecycleM
                       "hover:bg-accent disabled:opacity-50"
                     )}
                   >
-                    {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Archive className="h-4 w-4" />}
+                    {isPending ? <Spinner size={16} /> : <Archive className="h-4 w-4" />}
                     Archive subtree
                   </button>
                 )}
@@ -129,7 +130,7 @@ export function FolderLifecycleMenu({ folderId, folderStatus }: FolderLifecycleM
                         disabled={isPending}
                         className="rounded px-2 py-1 text-xs bg-destructive text-destructive-foreground hover:bg-destructive/80 disabled:opacity-50 flex items-center gap-1"
                       >
-                        {isPending && <Loader2 className="h-3 w-3 animate-spin" />}
+                        {isPending && <Spinner size={12} />}
                         Confirm
                       </button>
                       <button
@@ -155,7 +156,7 @@ export function FolderLifecycleMenu({ folderId, folderStatus }: FolderLifecycleM
                   "hover:bg-accent disabled:opacity-50"
                 )}
               >
-                {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <RotateCcw className="h-4 w-4" />}
+                {isPending ? <Spinner size={16} /> : <RotateCcw className="h-4 w-4" />}
                 Restore subtree from trash
               </button>
             )}

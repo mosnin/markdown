@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Bot, Loader2 } from "lucide-react";
+import { Bot } from "lucide-react";
+import { Spinner } from "@/components/ui/spinner";
 import { cn } from "@/lib/utils";
 import { setFolderGeneratedPolicyAction } from "@/app/app/proposals/actions";
 
@@ -61,7 +62,7 @@ export function FolderPolicyToggle({
         aria-label="Toggle generated note policy"
       >
         {isPending ? (
-          <Loader2 className="h-3 w-3 animate-spin" />
+          <Spinner size={12} />
         ) : (
           <Bot className="h-3 w-3" />
         )}

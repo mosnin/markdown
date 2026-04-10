@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Bot, ArrowUpFromLine, Loader2, X } from "lucide-react";
+import { Bot, ArrowUpFromLine, X } from "lucide-react";
+import { Spinner } from "@/components/ui/spinner";
 import { cn } from "@/lib/utils";
 import { promoteGeneratedNoteAction } from "@/app/app/notes/[note_id]/actions";
 import { useRouter } from "next/navigation";
@@ -111,7 +112,7 @@ export function GeneratedNoteBanner({
               )}
             >
               {isPending ? (
-                <Loader2 className="h-3 w-3 animate-spin" />
+                <Spinner size={12} />
               ) : (
                 <ArrowUpFromLine className="h-3 w-3" />
               )}

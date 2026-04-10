@@ -29,7 +29,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Loader2 } from "lucide-react";
+import { Spinner } from "@/components/ui/spinner";
 import { applyBoxTemplateAction } from "@/app/app/boxes/actions";
 
 interface BoxTemplateSetupProps {
@@ -78,7 +78,7 @@ export function BoxTemplateSetup({ boxId, templateId }: BoxTemplateSetupProps) {
       role="status"
       aria-live="polite"
     >
-      <Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" />
+      <Spinner size={12} aria-hidden="true" />
       Applying template…
     </p>
   );

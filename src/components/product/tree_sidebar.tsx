@@ -11,11 +11,11 @@ import {
   FileText,
   Folder,
   FolderPlus,
-  Loader2,
   Package,
   Plus,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { Spinner } from "@/components/ui/spinner";
 import { createClient } from "@/lib/supabase/browser";
 import { getBoxTreeAction, createNoteAction, createFolderAction } from "@/app/app/boxes/actions";
 import { Button } from "@/components/ui/button";
@@ -560,7 +560,7 @@ function BoxRow({
           aria-expanded={isExpanded}
         >
           {isLoading ? (
-            <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+            <Spinner size={14} aria-hidden="true" />
           ) : isExpanded ? (
             <ChevronDown className="h-3.5 w-3.5 transition-transform duration-150" aria-hidden="true" />
           ) : (
