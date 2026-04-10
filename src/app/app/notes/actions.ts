@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getRequestContext } from "@/server/auth/get_request_context";
-import { updateNote } from "@/server/services/note_service";
+import { updateNote, getNoteForWorkspace } from "@/server/services/note_service";
 import {
   assembleContextBundle,
   type AssembleBundleOptions,
@@ -101,6 +101,68 @@ export async function saveNoteAction(
     const reason = err instanceof Error ? err.message : "Unknown error";
     log.error("save_note_failed", { note_id: noteId, reason });
     return { ok: false, error: err instanceof Error ? err.message : "Failed to save note" };
+  }
+}
+
+// ─── Note import action ───────────────────────────────────────────────────────
+
+export type NoteImportMode = "replace" | "append";
+
+/**
+ * Import markdown content into an existing note.
+ *
+ * replace — replaces the entire note body with importedMarkdown.
+ * append  — appends importedMarkdown to the existing body, separated by a
+ *           horizontal rule. When the note is empty, appends with no separator.
+ *
+ * A new version is created atomically via update_note_and_create_version with
+ * change_origin = "import", so the import is distinguishable in version history.
+ * Metadata (title, summary, tags, read_hint) is preserved unchanged.
+ */
+export async function importIntoNoteAction(
+  noteId: string,
+  importedMarkdown: string,
+  mode: NoteImportMode
+): Promise<ActionResult<undefined>> {
+  if (!importedMarkdown.trim()) {
+    return { ok: false, error: "Imported content is empty" };
+  }
+  if (importedMarkdown.length > MAX_CONTENT_LENGTH) {
+    return {
+      ok: false,
+      error: `Imported content must not exceed ${MAX_CONTENT_LENGTH} characters`,
+    };
+  }
+
+  try {
+    const { supabase, userId, workspaceId } = await requireContext();
+    const note = await getNoteForWorkspace(supabase, noteId, workspaceId);
+    if (!note) return { ok: false, error: "Note not found" };
+
+    const existingBody = note.markdown_content.trim();
+    const newContent =
+      mode === "replace"
+        ? importedMarkdown
+        : existingBody
+          ? `${note.markdown_content}\n\n---\n\n${importedMarkdown}`
+          : importedMarkdown;
+
+    await updateNote(supabase, userId, workspaceId, noteId, {
+      title: note.title,
+      markdownContent: newContent,
+      summary: note.summary,
+      tags: note.tags,
+      readHint: note.read_hint,
+      changeOrigin: "import",
+    });
+
+    revalidatePath(`/app/notes/${noteId}`);
+    return { ok: true, data: undefined };
+  } catch (err) {
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : "Failed to import into note",
+    };
   }
 }
 

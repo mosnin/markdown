@@ -26,6 +26,7 @@ import { SemanticLinksPanel } from "@/components/product/semantic_links_panel";
 import { ContextBundleViewer } from "@/components/product/context_bundle_viewer";
 import { NoteHistoryPanel } from "@/components/product/note_history_panel";
 import { NoteExportMenu } from "@/components/product/export_menu";
+import { NoteImportButton } from "@/components/product/note_import_dialog";
 import { NoteLifecycleMenu } from "@/components/product/note_lifecycle_menu";
 import { GeneratedNoteBanner } from "@/components/product/generated_note_banner";
 import { RetrievalHintBadge } from "@/components/product/retrieval_hint_badge";
@@ -550,6 +551,7 @@ export default async function NotePage({
                 note.status as "draft" | "active" | "archived" | "trashed"
               }
             />
+            <NoteImportButton noteId={note_id} noteTitle={note.title} />
             <NoteExportMenu noteId={note_id} noteTitle={note.title} />
           </div>
         </div>

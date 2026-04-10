@@ -111,16 +111,18 @@ function FolderNode({
   folder,
   depth = 0,
   folderLifecycleMenu,
+  folderActions,
 }: {
   folder: TreeFolder;
   depth?: number;
   folderLifecycleMenu?: (folder: TreeFolder) => React.ReactNode;
+  folderActions?: (folder: TreeFolder) => React.ReactNode;
 }) {
   const hasChildren = folder.children.length > 0 || folder.notes.length > 0;
   return (
     <div>
       <div
-        className="flex items-center gap-1.5 rounded-md py-1 pr-2 text-sm text-foreground/70"
+        className="group flex items-center gap-1.5 rounded-md py-1 pr-2 text-sm text-foreground/70"
         style={{ paddingLeft: `${0.5 + depth * 1}rem` }}
       >
         {hasChildren ? (
@@ -130,13 +132,20 @@ function FolderNode({
         )}
         <Folder className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
         <span className="truncate font-medium flex-1">{folder.name}</span>
+        {folderActions?.(folder)}
         {folderLifecycleMenu?.(folder)}
       </div>
       {folder.notes.map((note) => (
         <NoteRow key={note.id} note={note} depth={depth + 1} />
       ))}
       {folder.children.map((child) => (
-        <FolderNode key={child.id} folder={child} depth={depth + 1} folderLifecycleMenu={folderLifecycleMenu} />
+        <FolderNode
+          key={child.id}
+          folder={child}
+          depth={depth + 1}
+          folderLifecycleMenu={folderLifecycleMenu}
+          folderActions={folderActions}
+        />
       ))}
     </div>
   );
@@ -150,13 +159,21 @@ interface BoxContentsTreeProps {
   className?: string;
   /** Optional render prop — renders a lifecycle menu next to each folder row. */
   folderLifecycleMenu?: (folder: TreeFolder) => React.ReactNode;
+  /** Optional render prop — renders action buttons next to each folder row (shown on hover). */
+  folderActions?: (folder: TreeFolder) => React.ReactNode;
 }
 
 /**
  * Hierarchical tree of folders and notes for a box.
  * Server component — renders links, no expand/collapse state needed in V1.
  */
-export function BoxContentsTree({ folders, notes, className, folderLifecycleMenu }: BoxContentsTreeProps) {
+export function BoxContentsTree({
+  folders,
+  notes,
+  className,
+  folderLifecycleMenu,
+  folderActions,
+}: BoxContentsTreeProps) {
   const { rootFolders, rootNotes } = buildBoxTree(folders, notes);
 
   const empty = rootFolders.length === 0 && rootNotes.length === 0;
@@ -171,7 +188,12 @@ export function BoxContentsTree({ folders, notes, className, folderLifecycleMenu
   return (
     <div className={cn("flex flex-col gap-0.5", className)}>
       {rootFolders.map((folder) => (
-        <FolderNode key={folder.id} folder={folder} folderLifecycleMenu={folderLifecycleMenu} />
+        <FolderNode
+          key={folder.id}
+          folder={folder}
+          folderLifecycleMenu={folderLifecycleMenu}
+          folderActions={folderActions}
+        />
       ))}
       {rootNotes.map((note) => (
         <NoteRow key={note.id} note={note} />

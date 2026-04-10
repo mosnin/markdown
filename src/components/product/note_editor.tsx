@@ -101,7 +101,7 @@ export function NoteEditor({ note, initialMode = "document" }: NoteEditorProps) 
       readHint: note.read_hint ?? "",
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [note.id]);
+  }, [note.id, note.current_version_id]);
 
   function parseTags(raw: string): string[] {
     return raw

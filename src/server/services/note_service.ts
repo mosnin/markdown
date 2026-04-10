@@ -181,12 +181,14 @@ export async function updateNote(
     summary,
     tags,
     readHint,
+    changeOrigin = "human_edit",
   }: {
     title: string;
     markdownContent: string;
     summary?: string | null;
     tags?: string[];
     readHint?: string | null;
+    changeOrigin?: "human_edit" | "import" | "rollback";
   }
 ): Promise<Note> {
   // Load current note state to compute diff_summary before overwriting
@@ -221,6 +223,7 @@ export async function updateNote(
     p_read_hint: readHint ?? null,
     p_actor_id: userId,
     p_diff_summary: diffSummary,
+    p_change_origin: changeOrigin,
   });
 
   if (error || !data) {

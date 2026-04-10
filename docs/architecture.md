@@ -312,8 +312,15 @@ src/app/app/import_export/
 
 src/components/product/
 ├── export_menu.tsx            NoteExportMenu, BoxExportMenu (client)
-└── import_dialog.tsx          ImportDialog, ImportTriggerButton (client)
+├── import_dialog.tsx          ImportDialog, ImportTriggerButton, FolderImportButton (client)
+└── note_import_dialog.tsx     NoteImportDialog, NoteImportButton — note-level import
+
+src/app/app/notes/
+└── actions.ts                 importIntoNoteAction, NoteImportMode — note-level import
 ```
+
+**Contextual import** (see [contextual_import_flows_v1.md](contextual_import_flows_v1.md)):
+Import is available at box, folder, and note level. Box/folder paths use `importPackageAction` with all four collision modes. Note-level import uses `importIntoNoteAction` with explicit `replace` / `append` modes; creates a new version with `change_origin = "import"`.
 
 ## External trust boundary (connections + canonical API)
 
@@ -576,7 +583,7 @@ for the full starter and portability architecture.
 - **Onboarding**: `OnboardingCallout` shown when no boxes; teaches 6 concepts (Box, Folder, Note, Guide note, Explicit links, Context bundle); footer has Create Box CTA (with template mention) + import hint
 - **Quick start**: `QuickStartPanel` shown when boxes exist but no notes yet; 3 instructional entries: import, template, guide note — all link to first box page
 - **Templates**: Box template (Project context) available in `CreateBoxDialog`; note templates (Prompt, Agent, System, Guide note) in `CreateNoteDialog`; code-defined, no builder
-- **Import**: `ImportTriggerButton` and `ImportDialog` on box page header; 4 collision modes; import summary panel after completion; always box-scoped
+- **Import**: Available at three levels — box (header button), folder (hover icon in Tree tab), note (top-bar button). Box/folder paths use `ImportDialog` with 4 collision modes. Note path uses `NoteImportDialog` with replace/append modes. See [contextual_import_flows_v1.md](contextual_import_flows_v1.md).
 - **Export**: `NoteExportMenu` on note page; `BoxExportMenu` on box page; all descriptions include "signed link valid 1 hour"; guide note mention in bundle description
 - **Empty states**: `EmptyState` component used consistently; box Notes tab, Tree tab, Search tab, audit, proposals, connections all have appropriate empty state copy
 

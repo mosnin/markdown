@@ -377,5 +377,26 @@ All events are append-only and include useful metadata (counts, collision mode, 
 | `src/server/services/import_service.ts` | `importPackage` — parse + validate + apply |
 | `src/app/app/import_export/actions.ts` | `exportNoteAction`, `exportBoxAction`, `exportBundleAction`, `importPackageAction` — all return `ExportArtifact` |
 | `src/components/product/export_menu.tsx` | `NoteExportMenu`, `BoxExportMenu` client components — download via signed URL |
-| `src/components/product/import_dialog.tsx` | `ImportDialog`, `ImportTriggerButton` client components |
+| `src/components/product/import_dialog.tsx` | `ImportDialog`, `ImportTriggerButton`, `FolderImportButton` client components |
+| `src/components/product/note_import_dialog.tsx` | `NoteImportDialog`, `NoteImportButton` — note-level import only |
+| `src/app/app/notes/actions.ts` | `importIntoNoteAction` — note-level import server action |
 | `supabase/migrations/20260409000010_export_artifacts_bucket.sql` | Creates private `exports` Storage bucket |
+
+---
+
+## Contextual import (box / folder / note)
+
+Import is available at three levels. See [contextual_import_flows_v1.md](contextual_import_flows_v1.md) for the full breakdown.
+
+| Level | Accepts | Entry point |
+|---|---|---|
+| Box | `.md`, `.zip` | Header "Import" button |
+| Folder | `.md`, `.zip` | Inline icon on folder row (Tree tab, hover to reveal) |
+| Note | `.md` only | "Import" button in note top bar |
+
+The box and folder paths go through `importPackageAction` → `importPackage` with all four collision modes and the full `ImportSummaryReport`.
+
+The note path goes through `importIntoNoteAction` → `updateNote` with `changeOrigin: "import"` — no collision mode, no manifest, no new notes created. Two modes:
+
+- **replace** — overwrites the note body atomically; prior body preserved as a version.
+- **append** — appends imported content after the current body, separated by `---`.

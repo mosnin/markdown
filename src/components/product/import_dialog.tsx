@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { Upload, AlertTriangle, CheckCircle, X, ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
@@ -159,14 +160,27 @@ function SummaryPanel({ report }: { report: ImportSummaryReport }) {
 
 interface ImportDialogProps {
   boxId: string;
+  boxName: string;
   folders: Array<{ id: string; name: string; path_cache: string }>;
   onClose: () => void;
+  /** Pre-select a folder when opened from a folder's import button. */
+  initialFolderId?: string;
+  /** Human-readable path for the pre-selected folder. */
+  initialFolderPath?: string;
 }
 
-export function ImportDialog({ boxId, folders, onClose }: ImportDialogProps) {
+export function ImportDialog({
+  boxId,
+  boxName,
+  folders,
+  onClose,
+  initialFolderId,
+  initialFolderPath,
+}: ImportDialogProps) {
+  const router = useRouter();
   const [file, setFile] = useState<File | null>(null);
   const [collisionMode, setCollisionMode] = useState<CollisionMode>("create_copy");
-  const [targetFolderId, setTargetFolderId] = useState<string>("");
+  const [targetFolderId, setTargetFolderId] = useState<string>(initialFolderId ?? "");
   const [error, setError] = useState<string | null>(null);
   const [report, setReport] = useState<ImportSummaryReport | null>(null);
   const [isPending, startTransition] = useTransition();
@@ -202,6 +216,7 @@ export function ImportDialog({ boxId, folders, onClose }: ImportDialogProps) {
       const result = await importPackageAction(formData);
       if (result.ok) {
         setReport(result.data);
+        router.refresh();
       } else {
         setError(result.error);
       }
@@ -219,9 +234,11 @@ export function ImportDialog({ boxId, folders, onClose }: ImportDialogProps) {
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
-            <h2 className="text-base font-semibold text-foreground">Import</h2>
+            <h2 className="text-base font-semibold text-foreground">Import into {boxName}</h2>
             <p className="text-xs text-muted-foreground mt-0.5">
-              Upload a .md file or .zip package
+              {initialFolderPath
+                ? `Target folder: ${initialFolderPath}`
+                : "Upload a .md file or .zip package"}
             </p>
           </div>
           <button
@@ -380,9 +397,11 @@ export function ImportDialog({ boxId, folders, onClose }: ImportDialogProps) {
 
 export function ImportTriggerButton({
   boxId,
+  boxName,
   folders,
 }: {
   boxId: string;
+  boxName: string;
   folders: Array<{ id: string; name: string; path_cache: string }>;
 }) {
   const [open, setOpen] = useState(false);
@@ -402,7 +421,61 @@ export function ImportTriggerButton({
       {open && (
         <ImportDialog
           boxId={boxId}
+          boxName={boxName}
           folders={folders}
+          onClose={() => setOpen(false)}
+        />
+      )}
+    </>
+  );
+}
+
+// ─── Folder import button ─────────────────────────────────────────────────────
+
+/**
+ * Compact inline button rendered next to a folder row in the box tree.
+ * Opens ImportDialog with the folder pre-selected so the user imports
+ * directly into that folder without manually choosing from the dropdown.
+ */
+export function FolderImportButton({
+  boxId,
+  boxName,
+  folderId,
+  folderPath,
+  folders,
+}: {
+  boxId: string;
+  boxName: string;
+  folderId: string;
+  folderPath: string;
+  folders: Array<{ id: string; name: string; path_cache: string }>;
+}) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <>
+      <button
+        onClick={(e) => {
+          e.stopPropagation();
+          setOpen(true);
+        }}
+        title={`Import into ${folderPath}`}
+        aria-label={`Import into folder ${folderPath}`}
+        className={cn(
+          "flex items-center justify-center rounded p-0.5",
+          "text-muted-foreground/40 opacity-0 group-hover:opacity-100 transition-opacity",
+          "hover:text-foreground hover:bg-accent/60"
+        )}
+      >
+        <Upload className="h-3 w-3" />
+      </button>
+      {open && (
+        <ImportDialog
+          boxId={boxId}
+          boxName={boxName}
+          folders={folders}
+          initialFolderId={folderId}
+          initialFolderPath={folderPath}
           onClose={() => setOpen(false)}
         />
       )}

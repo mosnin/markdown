@@ -1,5 +1,6 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getRequestContext } from "@/server/auth/get_request_context";
@@ -238,6 +239,9 @@ export async function importPackageAction(
       created_links: report.created_counts.links,
       warnings: report.warnings.length,
     });
+
+    revalidatePath(`/app/boxes/${boxId}`);
+    revalidatePath("/app");
 
     return { ok: true, data: report };
   } catch (err) {

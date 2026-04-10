@@ -45,7 +45,10 @@ import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { type NoteLink } from "@/server/domain/types/note_link";
 import { BoxExportMenu } from "@/components/product/export_menu";
-import { ImportTriggerButton } from "@/components/product/import_dialog";
+import {
+  ImportTriggerButton,
+  FolderImportButton,
+} from "@/components/product/import_dialog";
 import { FolderPolicyToggle } from "@/components/product/folder_policy_toggle";
 import { BoxEditDialog } from "@/components/product/box_edit_dialog";
 import { BoxOverviewPanel } from "@/components/product/box_overview_panel";
@@ -414,6 +417,7 @@ export default async function BoxPage({
             <div className="flex shrink-0 items-center gap-2">
               <ImportTriggerButton
                 boxId={box.id}
+                boxName={box.name}
                 folders={folders.map((f) => ({
                   id: f.id,
                   name: f.name,
@@ -535,6 +539,19 @@ export default async function BoxPage({
                     <FolderLifecycleMenu
                       folderId={folder.id}
                       folderStatus={folder.status as "active" | "archived" | "trashed"}
+                    />
+                  )}
+                  folderActions={(folder) => (
+                    <FolderImportButton
+                      boxId={box.id}
+                      boxName={box.name}
+                      folderId={folder.id}
+                      folderPath={folder.path_cache}
+                      folders={folders.map((f) => ({
+                        id: f.id,
+                        name: f.name,
+                        path_cache: f.path_cache,
+                      }))}
                     />
                   )}
                 />
