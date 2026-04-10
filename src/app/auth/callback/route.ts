@@ -21,7 +21,8 @@ export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url);
   const code = searchParams.get("code");
   // Allow a `next` override so future flows can deep-link after auth.
-  const next = searchParams.get("next") ?? "/app";
+  // Default to /welcome so the intro animation plays on first sign-in.
+  const next = searchParams.get("next") ?? "/welcome";
 
   if (code) {
     const supabase = await createClient();

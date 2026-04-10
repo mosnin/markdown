@@ -91,17 +91,7 @@ function GlitchTitle({
 export function HeroSection() {
 	return (
 		<section className="mx-auto w-full max-w-5xl overflow-hidden pt-16">
-			{/* Background shades */}
-			<div aria-hidden="true" className="absolute inset-0 size-full overflow-hidden">
-				<div
-					className={cn(
-						"absolute inset-0 isolate -z-10",
-						"bg-[radial-gradient(20%_80%_at_20%_0%,color-mix(in_oklch,var(--color-violet-600)_15%,transparent),transparent)]",
-					)}
-				/>
-			</div>
-
-			{/* Content */}
+				{/* Content */}
 			<div className="relative z-10 flex max-w-2xl flex-col gap-5 px-4">
 				{/* Badge */}
 				<motion.a

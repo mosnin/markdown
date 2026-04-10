@@ -95,7 +95,6 @@ export async function saveNoteAction(
       tags: tags ?? [],
       readHint: readHint?.trim() ?? null,
     });
-    revalidatePath(`/app/notes/${noteId}`);
     return { ok: true, data: {} };
   } catch (err) {
     const reason = err instanceof Error ? err.message : "Unknown error";
