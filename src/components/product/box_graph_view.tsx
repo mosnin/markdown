@@ -98,15 +98,15 @@ function NoteChip({
       aria-pressed={isSelected}
       aria-label={`${isGuide ? "Guide note: " : ""}${node.label}`}
       className={cn(
-        "flex min-w-0 items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-left text-xs transition-fast",
+        "flex min-w-0 items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-left text-xs transition-fast shadow-xs",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
         isSelected
-          ? "border-ring bg-accent font-medium text-foreground shadow-sm"
+          ? "border-violet-400/80 bg-violet-50 font-medium text-violet-900 shadow-sm dark:border-violet-500/60 dark:bg-violet-950/60 dark:text-violet-100"
           : isConnected
-          ? "border-ring/50 bg-accent/40 text-foreground"
+          ? "border-violet-300/60 bg-violet-50/50 text-foreground dark:border-violet-600/40 dark:bg-violet-950/30"
           : isGuide
           ? "border-amber-300/70 bg-amber-50/60 text-foreground dark:border-amber-600/40 dark:bg-amber-900/20"
-          : "border-border bg-card text-foreground/80 hover:border-ring/30 hover:bg-accent/30 hover:text-foreground"
+          : "border-border bg-card text-muted-foreground hover:border-border-strong hover:bg-muted/60 hover:text-foreground"
       )}
     >
       {/* noteIcon() returns a stable module-level icon reference — not a new component */}
@@ -114,7 +114,11 @@ function NoteChip({
       <Icon
         className={cn(
           "h-3 w-3 shrink-0",
-          isGuide
+          isSelected
+            ? "text-violet-600 dark:text-violet-400"
+            : isConnected
+            ? "text-violet-500/70 dark:text-violet-400/70"
+            : isGuide
             ? "text-amber-600 dark:text-amber-500"
             : "text-muted-foreground"
         )}
@@ -165,8 +169,8 @@ function FolderTree({
   return (
     <div
       className={cn(
-        "rounded-lg border border-border bg-muted/20 p-3",
-        depth > 0 && "border-border/60"
+        "rounded-lg border border-border bg-card p-3 shadow-xs",
+        depth > 0 && "border-border/60 bg-muted/20 shadow-none"
       )}
     >
       {/* Folder header — selectable */}
@@ -181,8 +185,8 @@ function FolderTree({
           "mb-2 flex w-full items-center gap-1.5 rounded-md px-1.5 py-1 text-left text-xs font-medium transition-fast",
           "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
           selectedNodeId === folder.id
-            ? "bg-accent text-foreground"
-            : "text-muted-foreground hover:bg-accent/40 hover:text-foreground"
+            ? "bg-violet-50 text-violet-900 dark:bg-violet-950/60 dark:text-violet-100"
+            : "text-muted-foreground hover:bg-muted/60 hover:text-foreground"
         )}
       >
         <Folder className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
@@ -257,7 +261,7 @@ function NodeDetail({
 
   return (
     <div
-      className="rounded-lg border border-ring/40 bg-card px-4 py-3"
+      className="rounded-lg border border-violet-300/60 bg-card px-4 py-3 shadow-sm dark:border-violet-600/40"
       aria-label="Selected node details"
       aria-live="polite"
     >
@@ -446,9 +450,9 @@ function EdgeRow({
     <div
       role="listitem"
       className={cn(
-        "flex flex-col gap-1 rounded-md border px-3 py-2 text-xs transition-fast",
+        "flex flex-col gap-1 rounded-md border px-3 py-2 text-xs transition-fast shadow-xs",
         isHighlighted
-          ? "border-ring/50 bg-accent/20"
+          ? "border-violet-300/60 bg-violet-50/60 dark:border-violet-600/40 dark:bg-violet-950/30"
           : "border-border bg-card"
       )}
     >
@@ -741,7 +745,7 @@ export function BoxGraphView({ overview }: BoxGraphViewProps) {
           Guide note
         </LegendItem>
         <LegendItem>
-          <span className="inline-block h-3 w-3 rounded-sm border border-ring bg-accent" />
+          <span className="inline-block h-3 w-3 rounded-sm border border-violet-400/80 bg-violet-50 dark:border-violet-500/60 dark:bg-violet-950/60" />
           Selected
         </LegendItem>
         <LegendItem>
@@ -812,8 +816,8 @@ export function BoxGraphView({ overview }: BoxGraphViewProps) {
 
             {/* Empty hierarchy */}
             {rootNotes.length === 0 && rootFolders.length === 0 && (
-              <p className="text-sm text-muted-foreground">
-                No content in this view.
+              <p className="rounded-lg border border-dashed border-border px-4 py-6 text-center text-sm text-muted-foreground">
+                No content in this scope.
               </p>
             )}
           </div>
@@ -872,16 +876,28 @@ export function BoxGraphView({ overview }: BoxGraphViewProps) {
 
       {/* No relationships */}
       {showLinks && visibleEdges.length === 0 && !isEmpty && (
-        <p className="text-xs text-muted-foreground/60">
-          No semantic relationships in this view.
+        <p className="rounded-md border border-dashed border-border px-3 py-4 text-center text-xs text-muted-foreground">
+          No semantic relationships yet. Link notes to each other to see connections here.
         </p>
       )}
 
       {/* Empty box */}
       {isEmpty && (
-        <p className="text-sm text-muted-foreground">
-          {scopeFolderId ? "No content in this folder scope." : "No content yet."}
-        </p>
+        <div className="flex flex-col items-center justify-center gap-3 py-16 text-center">
+          <div className="flex h-12 w-12 items-center justify-center rounded-xl border border-border bg-muted text-muted-foreground">
+            <Share2 className="h-5 w-5" aria-hidden="true" />
+          </div>
+          <div className="max-w-xs space-y-1">
+            <p className="text-sm font-medium text-foreground">
+              {scopeFolderId ? "Nothing in this scope" : "No content yet"}
+            </p>
+            <p className="text-sm text-muted-foreground">
+              {scopeFolderId
+                ? "This folder scope has no notes or sub-folders."
+                : "Add notes to this box to see the graph."}
+            </p>
+          </div>
+        </div>
       )}
     </div>
   );

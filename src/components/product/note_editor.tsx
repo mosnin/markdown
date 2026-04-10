@@ -5,12 +5,6 @@ import { useRouter } from "next/navigation";
 import { Code2, Eye } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { renderMarkdown } from "@/lib/markdown";
 import { type Note } from "@/server/domain/types/note";
@@ -164,7 +158,6 @@ export function NoteEditor({ note, initialMode = "document" }: NoteEditorProps) 
   const renderedHtml = renderMarkdown(content);
 
   return (
-    <TooltipProvider>
     <div className="flex h-full flex-col overflow-hidden">
       {/* ── Title ─────────────────────────────────────────────────────────── */}
       <div className="px-8 pb-3 pt-6">
@@ -189,7 +182,7 @@ export function NoteEditor({ note, initialMode = "document" }: NoteEditorProps) 
           )}
         />
         {/* Metadata bar — created date, tags — visible below title */}
-        {(note.created_at ?? note.tags.length > 0) && (
+        {(note.created_at || note.tags.length > 0) && (
           <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
             {note.created_at && (
               <span className="text-xs text-muted-foreground">
@@ -217,34 +210,20 @@ export function NoteEditor({ note, initialMode = "document" }: NoteEditorProps) 
           role="tablist"
           aria-label="Note view mode"
         >
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <ModeButton
-                mode="document"
-                current={mode}
-                icon={<Eye className="h-3.5 w-3.5" />}
-                label="Document"
-                onClick={() => setMode("document")}
-              />
-            </TooltipTrigger>
-            <TooltipContent side="bottom" className="text-xs">
-              Rendered document view
-            </TooltipContent>
-          </Tooltip>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <ModeButton
-                mode="markdown"
-                current={mode}
-                icon={<Code2 className="h-3.5 w-3.5" />}
-                label="Markdown"
-                onClick={() => setMode("markdown")}
-              />
-            </TooltipTrigger>
-            <TooltipContent side="bottom" className="text-xs">
-              Edit raw markdown source
-            </TooltipContent>
-          </Tooltip>
+          <ModeButton
+            mode="document"
+            current={mode}
+            icon={<Eye className="h-3.5 w-3.5" />}
+            label="Document"
+            onClick={() => setMode("document")}
+          />
+          <ModeButton
+            mode="markdown"
+            current={mode}
+            icon={<Code2 className="h-3.5 w-3.5" />}
+            label="Markdown"
+            onClick={() => setMode("markdown")}
+          />
         </div>
 
         {/* Save state + retry */}
@@ -414,7 +393,6 @@ export function NoteEditor({ note, initialMode = "document" }: NoteEditorProps) 
         </div>
       )}
     </div>
-    </TooltipProvider>
   );
 }
 

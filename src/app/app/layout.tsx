@@ -5,7 +5,6 @@ import { listBoxesByWorkspace } from "@/server/repositories/box_repository";
 import { AppSidebar } from "@/components/product/app_sidebar";
 import { MobileSidebar } from "@/components/product/mobile_sidebar";
 import { ThemeToggle } from "@/components/product/theme_toggle";
-import { UserMenu } from "@/components/product/user_menu";
 import { AppBreadcrumbs } from "@/components/product/app_breadcrumbs";
 
 /**
@@ -80,16 +79,13 @@ export default async function AppLayout({
             <AppBreadcrumbs />
           </div>
 
-          {/* Desktop: user actions (right) — theme toggle + user avatar */}
+          {/* Desktop: user actions (right) — theme toggle */}
           <div
             className="hidden md:flex md:items-center md:gap-1 md:ml-auto"
             role="toolbar"
             aria-label="User actions"
           >
             <ThemeToggle />
-            {userEmail && (
-              <UserMenu email={userEmail} />
-            )}
           </div>
         </header>
 

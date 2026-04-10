@@ -17,11 +17,13 @@ export default async function SearchPage() {
       />
 
       <div className="flex-1 overflow-auto">
-        <div className="mx-auto max-w-2xl px-6 py-6">
+        <div className="mx-auto max-w-2xl px-6 py-8">
           {boxes.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              Create a box to start searching notes.
-            </p>
+            <div className="flex flex-col items-center gap-3 py-16 text-center">
+              <p className="text-sm text-muted-foreground">
+                Create a box to start searching notes.
+              </p>
+            </div>
           ) : (
             <WorkspaceSearchPanel
               boxes={boxes.map((b) => ({ id: b.id, name: b.name }))}

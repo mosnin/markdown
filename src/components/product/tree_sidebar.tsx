@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import {
   BookOpen,
@@ -111,6 +111,56 @@ function noteIcon(kind: string) {
   return FileText;
 }
 
+// ─── Collapsible content wrapper ──────────────────────────────────────────────
+
+/**
+ * Animates open/close by measuring the natural height of the content
+ * and transitioning max-height. This avoids layout thrash while still
+ * giving a smooth collapse feel.
+ */
+function CollapsePanel({
+  open,
+  children,
+}: {
+  open: boolean;
+  children: React.ReactNode;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [height, setHeight] = useState<number | undefined>(open ? undefined : 0);
+
+  useEffect(() => {
+    if (!ref.current) return;
+    if (open) {
+      // Measure then let it grow to auto
+      const measured = ref.current.scrollHeight;
+      setHeight(measured);
+      const tid = setTimeout(() => setHeight(undefined), 150);
+      return () => clearTimeout(tid);
+    } else {
+      // Snap to measured height first so CSS can animate down to 0
+      const measured = ref.current.scrollHeight;
+      setHeight(measured);
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => setHeight(0));
+      });
+    }
+  }, [open]);
+
+  return (
+    <div
+      ref={ref}
+      style={{ maxHeight: height === undefined ? undefined : height }}
+      className={cn(
+        "overflow-hidden transition-all duration-150 ease-in-out",
+        !open && "max-h-0"
+      )}
+      aria-hidden={!open}
+    >
+      {children}
+    </div>
+  );
+}
+
 // ─── Note row ─────────────────────────────────────────────────────────────────
 
 function NoteRow({
@@ -125,23 +175,26 @@ function NoteRow({
   onNavigate?: () => void;
 }) {
   const Icon = noteIcon(note.kind);
+  // depth 1 → pl-7, depth 2+ → pl-8 (further indented sub-items)
+  const depthClass = depth <= 1 ? "pl-7" : "pl-8";
   return (
     <Link
       href={`/app/notes/${note.id}`}
       onClick={onNavigate}
       className={cn(
-        "flex items-center gap-1.5 rounded-md py-1 pr-2 text-xs transition-fast",
-        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+        "flex items-center gap-2 rounded-md py-1 pr-2 text-xs",
+        "transition-colors duration-150",
+        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1",
+        depthClass,
         isActive
-          ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium"
-          : "text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+          ? "bg-accent text-foreground font-medium"
+          : "text-muted-foreground hover:text-foreground hover:bg-accent/50"
       )}
-      style={{ paddingLeft: `${0.625 + depth * 0.875}rem` }}
       aria-current={isActive ? "page" : undefined}
     >
       {/* noteIcon() returns a stable module-level icon reference — not a new component */}
       {/* eslint-disable-next-line react-hooks/static-components */}
-      <Icon className="h-3 w-3 shrink-0" aria-hidden="true" />
+      <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
       <span className="truncate">{note.title}</span>
     </Link>
   );
@@ -164,32 +217,36 @@ function FolderNode({
   onNavigate?: () => void;
 }) {
   const [isOpen, setIsOpen] = useState(defaultOpen ?? false);
-  const Chevron = isOpen ? ChevronDown : ChevronRight;
   const hasChildren = folder.children.length > 0 || folder.notes.length > 0;
+
+  // depth 1 → pl-7 for sub-folder header, depth 2+ → pl-8
+  const depthClass = depth <= 1 ? "pl-7" : "pl-8";
 
   return (
     <div>
       {/* Folder header row */}
-      <div
-        className="group flex items-center gap-0.5"
-        style={{ paddingLeft: `${0.625 + depth * 0.875}rem` }}
-      >
+      <div className={cn("group flex items-center gap-1 pr-1", depthClass)}>
         {/* Chevron toggle — always present for alignment; non-interactive if empty */}
         <button
           type="button"
           onClick={() => hasChildren && setIsOpen((o) => !o)}
           className={cn(
-            "flex h-5 w-5 shrink-0 items-center justify-center rounded transition-fast",
+            "flex h-5 w-5 shrink-0 items-center justify-center rounded",
+            "transition-colors duration-150",
             hasChildren
-              ? "text-sidebar-foreground/40 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground cursor-pointer"
-              : "text-sidebar-foreground/20 cursor-default",
-            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              ? "text-muted-foreground hover:bg-accent/50 hover:text-foreground cursor-pointer"
+              : "text-muted-foreground/40 cursor-default",
+            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
           )}
           aria-label={isOpen ? `Collapse ${folder.name}` : `Expand ${folder.name}`}
           aria-expanded={hasChildren ? isOpen : undefined}
           tabIndex={hasChildren ? 0 : -1}
         >
-          <Chevron className="h-2.5 w-2.5" aria-hidden="true" />
+          {isOpen ? (
+            <ChevronDown className="h-4 w-4 transition-transform duration-150" aria-hidden="true" />
+          ) : (
+            <ChevronRight className="h-4 w-4 transition-transform duration-150" aria-hidden="true" />
+          )}
         </button>
 
         {/* Folder name */}
@@ -197,21 +254,22 @@ function FolderNode({
           type="button"
           onClick={() => hasChildren && setIsOpen((o) => !o)}
           className={cn(
-            "flex flex-1 items-center gap-1.5 rounded-md px-1 py-1 text-xs transition-fast min-w-0",
+            "flex flex-1 items-center gap-2 rounded-md px-1 py-1 text-xs min-w-0",
+            "transition-colors duration-150",
             hasChildren
-              ? "text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground cursor-pointer"
-              : "text-sidebar-foreground/50 cursor-default",
-            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              ? "text-muted-foreground hover:bg-accent/50 hover:text-foreground cursor-pointer"
+              : "text-muted-foreground/50 cursor-default",
+            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
           )}
         >
-          <Folder className="h-3 w-3 shrink-0 text-sidebar-foreground/50" aria-hidden="true" />
+          <Folder className="h-4 w-4 shrink-0 text-muted-foreground/60" aria-hidden="true" />
           <span className="truncate font-medium">{folder.name}</span>
         </button>
       </div>
 
-      {/* Children — shown when folder is open */}
-      {isOpen && (
-        <div>
+      {/* Children — animated collapse/expand */}
+      <CollapsePanel open={isOpen}>
+        <div className="py-0.5">
           {folder.notes.map((note) => (
             <NoteRow
               key={note.id}
@@ -231,7 +289,7 @@ function FolderNode({
             />
           ))}
         </div>
-      )}
+      </CollapsePanel>
     </div>
   );
 }
@@ -253,7 +311,7 @@ function BoxTree({
 
   if (empty) {
     return (
-      <p className="px-3 py-1.5 text-xs text-sidebar-foreground/40 italic">
+      <p className="pl-7 py-1.5 text-xs text-muted-foreground/40 italic">
         No content yet
       </p>
     );
@@ -305,8 +363,6 @@ function BoxRow({
   onToggle: () => void;
   onNavigate?: () => void;
 }) {
-  const Chevron = isExpanded ? ChevronDown : ChevronRight;
-
   return (
     <div>
       {/* Box header row */}
@@ -316,17 +372,20 @@ function BoxRow({
           type="button"
           onClick={onToggle}
           className={cn(
-            "flex h-6 w-6 shrink-0 items-center justify-center rounded transition-fast",
-            "text-sidebar-foreground/50 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
-            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            "flex h-6 w-6 shrink-0 items-center justify-center rounded",
+            "transition-colors duration-150",
+            "text-muted-foreground hover:bg-accent/50 hover:text-foreground",
+            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
           )}
           aria-label={isExpanded ? `Collapse ${box.name}` : `Expand ${box.name}`}
           aria-expanded={isExpanded}
         >
           {isLoading ? (
-            <Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" />
+            <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+          ) : isExpanded ? (
+            <ChevronDown className="h-4 w-4 transition-transform duration-150" aria-hidden="true" />
           ) : (
-            <Chevron className="h-3 w-3" aria-hidden="true" />
+            <ChevronRight className="h-4 w-4 transition-transform duration-150" aria-hidden="true" />
           )}
         </button>
 
@@ -336,14 +395,15 @@ function BoxRow({
           onClick={onNavigate}
           aria-current={isBoxActive ? "page" : undefined}
           className={cn(
-            "flex flex-1 min-w-0 items-center gap-1.5 rounded-md px-1.5 py-1 text-sm transition-fast",
-            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+            "flex flex-1 min-w-0 items-center gap-2 rounded-md px-1.5 py-1 text-sm",
+            "transition-colors duration-150",
+            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1",
             isBoxActive
-              ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium"
-              : "text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+              ? "bg-accent text-foreground font-medium"
+              : "text-muted-foreground hover:text-foreground hover:bg-accent/50"
           )}
         >
-          <Box className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+          <Box className="h-4 w-4 shrink-0" aria-hidden="true" />
           <span className="truncate">{box.name}</span>
         </Link>
 
@@ -353,19 +413,20 @@ function BoxRow({
           onClick={onNavigate}
           aria-label={`Create in ${box.name}`}
           className={cn(
-            "flex h-5 w-5 shrink-0 items-center justify-center rounded opacity-0 transition-fast",
+            "flex h-5 w-5 shrink-0 items-center justify-center rounded",
+            "opacity-0 transition-all duration-150",
             "group-hover:opacity-100",
-            "text-sidebar-foreground/40 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
-            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:opacity-100"
+            "text-muted-foreground hover:bg-accent/50 hover:text-foreground",
+            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:opacity-100"
           )}
         >
-          <Plus className="h-3 w-3" aria-hidden="true" />
+          <Plus className="h-4 w-4" aria-hidden="true" />
         </Link>
       </div>
 
-      {/* Expanded tree */}
-      {isExpanded && (
-        <div className="ml-3">
+      {/* Expanded tree — animated */}
+      <CollapsePanel open={isExpanded}>
+        <div className="ml-3 py-0.5">
           {treeData ? (
             <BoxTree
               data={treeData}
@@ -373,12 +434,12 @@ function BoxRow({
               onNavigate={onNavigate}
             />
           ) : isLoading ? null : (
-            <p className="px-3 py-1.5 text-xs text-sidebar-foreground/40 italic">
+            <p className="pl-7 py-1.5 text-xs text-muted-foreground/40 italic">
               No content yet
             </p>
           )}
         </div>
-      )}
+      </CollapsePanel>
     </div>
   );
 }
@@ -447,7 +508,7 @@ export function TreeSidebar({
   return (
     <nav aria-label="Boxes" className="flex flex-col gap-0.5 px-1">
       {boxes.length === 0 ? (
-        <p className="px-2.5 py-2 text-xs text-sidebar-foreground/40">
+        <p className="px-2.5 py-2 text-xs text-muted-foreground/40">
           No boxes yet
         </p>
       ) : (
