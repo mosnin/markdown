@@ -6,6 +6,7 @@ import {
   ChevronRight,
   Clock,
   GitBranch,
+  History,
   Trash2,
 } from "lucide-react";
 import Link from "next/link";
@@ -58,22 +59,25 @@ function Breadcrumb({
   boxId,
   boxName,
   folderName,
+  noteTitle,
 }: {
   workspaceName: string;
   boxId: string;
   boxName: string;
   folderName: string | null;
+  noteTitle: string;
 }) {
   const parts = [
     { label: workspaceName, href: "/app" },
     { label: boxName, href: `/app/boxes/${boxId}` },
-    ...(folderName ? [{ label: folderName, href: null }] : []),
+    ...(folderName ? [{ label: folderName, href: null as string | null }] : []),
+    { label: noteTitle, href: null as string | null },
   ];
 
   return (
     <nav aria-label="Breadcrumb" className="flex items-center gap-1 text-xs text-muted-foreground">
       {parts.map((part, i) => (
-        <span key={part.label} className="flex items-center gap-1">
+        <span key={`${part.label}-${i}`} className="flex items-center gap-1">
           {i > 0 && <ChevronRight className="h-3 w-3 shrink-0" aria-hidden="true" />}
           {part.href ? (
             <Link
@@ -82,6 +86,11 @@ function Breadcrumb({
             >
               {part.label}
             </Link>
+          ) : i === parts.length - 1 ? (
+            /* Current page — note title shown with stronger contrast */
+            <span className="max-w-[180px] truncate text-foreground/80 font-medium" title={part.label}>
+              {part.label}
+            </span>
           ) : (
             <span>{part.label}</span>
           )}
@@ -488,6 +497,7 @@ export default async function NotePage({
               boxId={box.id}
               boxName={box.name}
               folderName={folder?.name ?? null}
+              noteTitle={note.title}
             />
             {isGuideNote && (
               <Badge
@@ -509,6 +519,19 @@ export default async function NotePage({
             )}
           </div>
           <div className="flex shrink-0 items-center gap-1.5">
+            {/* Version history — opens the History tab in the context panel */}
+            <a
+              href="#history"
+              aria-label="Version history"
+              title="Version history"
+              className={cn(
+                "flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs transition-fast",
+                "text-muted-foreground hover:text-foreground hover:bg-accent"
+              )}
+            >
+              <History className="h-3.5 w-3.5" aria-hidden="true" />
+              <span className="hidden sm:inline">History</span>
+            </a>
             <NoteLifecycleMenu
               noteId={note_id}
               noteStatus={

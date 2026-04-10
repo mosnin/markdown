@@ -2,7 +2,7 @@ import { requireAuthenticatedUser } from "@/server/auth/require_authenticated_us
 import { createClient } from "@/lib/supabase/server";
 import { listWorkspaceAuditEvents } from "@/server/services/audit_view_service";
 import { AuditPanel } from "@/components/product/audit_panel";
-import { PageHeader } from "@/components/product/page_header";
+import { Separator } from "@/components/ui/separator";
 
 /**
  * Workspace audit log browser.
@@ -22,10 +22,18 @@ export default async function AuditPage() {
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
-      <PageHeader
-        title="Audit log"
-        description="Immutable record of all workspace events — lifecycle changes, AI writes, proposals, and connections."
-      />
+      {/* Page header */}
+      <div className="bg-background">
+        <div className="px-6 pt-6 pb-4">
+          <h1 className="text-2xl font-semibold tracking-tight text-foreground">
+            Audit Log
+          </h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            All changes and actions in your workspace
+          </p>
+        </div>
+        <Separator />
+      </div>
 
       {/* Panel */}
       <div className="flex-1 overflow-hidden">
