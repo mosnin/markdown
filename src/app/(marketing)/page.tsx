@@ -1,6 +1,8 @@
 import Link from "next/link";
-import { Check } from "lucide-react";
+import { Check, CheckCircle2, Users, Briefcase, Building2 } from "lucide-react";
 import { HeroSection } from "@/components/marketing/hero";
+import * as PricingCard from "@/components/ui/pricing-card";
+import { Button } from "@/components/ui/button";
 
 // ─── App visuals ──────────────────────────────────────────────────────────────
 
@@ -324,7 +326,7 @@ export default function HomePage() {
       {/* ── Pricing ───────────────────────────────────────────────────────────── */}
       <section className="border-b border-border/30 bg-muted/20 px-6 py-24">
         <div className="mx-auto max-w-5xl">
-          <div className="mb-16 max-w-xl">
+          <div className="mb-12 max-w-xl">
             <h2 className="text-4xl font-bold tracking-tight text-foreground sm:text-5xl">
               Simple pricing.
             </h2>
@@ -332,98 +334,103 @@ export default function HomePage() {
               Start free, upgrade when you're ready. No lock-in, no surprises.
             </p>
           </div>
-          <div className="grid gap-4 sm:grid-cols-3">
+          <div className="grid grid-cols-1 gap-6 justify-items-center md:grid-cols-3">
             {[
               {
+                icon: <Users />,
                 name: "Free",
-                price: "$0",
-                period: "forever",
+                price: "Free",
+                period: null as string | null,
+                annual: null as string | null,
+                badge: null as string | null,
                 description: "Start organizing your knowledge.",
-                features: ["100 notes", "3 boxes", "Basic export", "7-day history"],
                 cta: "Get started free",
                 href: "/sign_in",
-                highlight: false,
+                variant: "outline" as const,
+                features: ["100 notes", "3 boxes", "Basic context export", "7-day version history"],
               },
               {
+                icon: <Briefcase />,
                 name: "Pro",
                 price: "$12",
-                period: "/ month",
+                period: "/month",
+                annual: "$9",
+                badge: "Popular",
                 description: "For serious knowledge workers.",
-                features: [
-                  "Unlimited notes",
-                  "Unlimited boxes",
-                  "AI context bundles",
-                  "Full version history",
-                  "API access",
-                ],
                 cta: "Start free trial",
                 href: "/sign_in",
-                highlight: true,
+                variant: "default" as const,
+                features: ["Unlimited notes", "Unlimited boxes", "AI context bundles", "Full version history", "API access"],
               },
               {
+                icon: <Building2 />,
                 name: "Team",
                 price: "$39",
-                period: "/ month",
+                period: "/month",
+                annual: "$29",
+                badge: null as string | null,
                 description: "Shared context for collaborative teams.",
-                features: [
-                  "Everything in Pro",
-                  "Shared workspaces",
-                  "Team audit log",
-                  "SSO / SAML",
-                  "Priority support",
-                ],
                 cta: "Contact sales",
                 href: "/contact",
-                highlight: false,
+                variant: "outline" as const,
+                features: ["Everything in Pro", "Shared workspaces", "Team audit log", "SSO / SAML", "Priority support"],
               },
             ].map((plan) => (
-              <div
-                key={plan.name}
-                className={`relative flex flex-col rounded-xl border p-6 ${
-                  plan.highlight
-                    ? "border-violet-500/40 bg-card shadow-lg shadow-violet-500/8"
-                    : "border-border/50 bg-card"
-                }`}
-              >
-                {plan.highlight && (
-                  <div className="absolute -top-3 left-6">
-                    <span className="rounded-full bg-violet-600 px-3 py-1 text-[11px] font-semibold text-white">
-                      Most popular
-                    </span>
-                  </div>
-                )}
-                <p className="text-sm font-semibold text-foreground">{plan.name}</p>
-                <p className="mt-3">
-                  <span className="text-3xl font-bold tracking-tight text-foreground">
-                    {plan.price}
-                  </span>
-                  <span className="ml-1 text-sm text-muted-foreground">{plan.period}</span>
-                </p>
-                <p className="mt-1 text-sm text-muted-foreground">{plan.description}</p>
-                <ul className="mt-6 flex-1 space-y-2.5">
-                  {plan.features.map((f) => (
-                    <li key={f} className="flex items-center gap-2 text-sm text-muted-foreground">
-                      <Check className="h-3.5 w-3.5 shrink-0 text-violet-400" />
-                      {f}
-                    </li>
-                  ))}
-                </ul>
-                <Link
-                  href={plan.href}
-                  className={`mt-7 block rounded-lg px-4 py-2.5 text-center text-sm font-medium transition-colors ${
-                    plan.highlight
-                      ? "bg-violet-600 text-white hover:bg-violet-500"
-                      : "border border-border/60 bg-background text-foreground hover:bg-muted"
-                  }`}
-                >
-                  {plan.cta}
-                </Link>
-              </div>
+              <PricingCard.Card key={plan.name} className="w-full md:min-w-[260px]">
+                <PricingCard.Header>
+                  <PricingCard.Plan>
+                    <PricingCard.PlanName>
+                      {plan.icon}
+                      {plan.name}
+                    </PricingCard.PlanName>
+                    {plan.badge && (
+                      <PricingCard.Badge>{plan.badge}</PricingCard.Badge>
+                    )}
+                  </PricingCard.Plan>
+                  <PricingCard.Price>
+                    <PricingCard.MainPrice>{plan.price}</PricingCard.MainPrice>
+                    {plan.period && (
+                      <PricingCard.Period>{plan.period}</PricingCard.Period>
+                    )}
+                  </PricingCard.Price>
+                  {plan.annual && (
+                    <p className="mb-3 -mt-1 text-xs text-muted-foreground">
+                      or {plan.annual}/mo billed annually
+                    </p>
+                  )}
+                  <Button
+                    variant={plan.variant}
+                    className="w-full font-semibold"
+                    render={<Link href={plan.href} />}
+                  >
+                    {plan.cta}
+                  </Button>
+                </PricingCard.Header>
+                <PricingCard.Body>
+                  <PricingCard.Description>{plan.description}</PricingCard.Description>
+                  <PricingCard.List>
+                    {plan.features.map((feature) => (
+                      <PricingCard.ListItem key={feature}>
+                        <CheckCircle2 className="size-4 shrink-0 text-violet-400" aria-hidden="true" />
+                        <span>{feature}</span>
+                      </PricingCard.ListItem>
+                    ))}
+                  </PricingCard.List>
+                </PricingCard.Body>
+              </PricingCard.Card>
             ))}
           </div>
-          <p className="mt-8 text-sm text-muted-foreground/60">
-            All plans include a 14-day free trial. No credit card required.
-          </p>
+          <div className="mt-8 flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-sm text-muted-foreground/60">
+              All plans include a 14-day free trial. No credit card required.
+            </p>
+            <Link
+              href="/pricing"
+              className="text-sm text-muted-foreground transition-colors hover:text-foreground"
+            >
+              Full pricing details →
+            </Link>
+          </div>
         </div>
       </section>
 

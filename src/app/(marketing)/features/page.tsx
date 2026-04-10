@@ -1,7 +1,29 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ArrowRight, Check } from "lucide-react";
+import {
+  ArrowRight,
+  Check,
+  Archive,
+  ArrowLeftRight,
+  Layers,
+  Search,
+  FileText,
+  Upload,
+  Zap,
+  Cpu,
+  TrendingUp,
+  Download,
+  Sparkles,
+  Code,
+  History,
+  GitMerge,
+  RotateCcw,
+  ClipboardList,
+  FolderDown,
+  Bell,
+} from "lucide-react";
 import { PageHeroSection } from "@/components/marketing/hero";
+import { FeatureCard } from "@/components/ui/grid-feature-cards";
 
 export const metadata: Metadata = {
   title: "Features — Context Store",
@@ -15,37 +37,37 @@ const CATEGORIES = [
     title: "Knowledge Organization",
     features: [
       {
-        icon: "⬡",
+        icon: Archive,
         title: "Semantic Boxes",
         description:
           "Group notes into topic containers with built-in guides. Every box has a purpose — not just a name.",
       },
       {
-        icon: "⟷",
+        icon: ArrowLeftRight,
         title: "Bidirectional Links",
         description:
           "Link notes to each other. Context Store tracks both directions automatically so nothing gets lost.",
       },
       {
-        icon: "⬓",
+        icon: Layers,
         title: "Nested Structure",
         description:
           "Boxes can contain sub-boxes, mirroring the real hierarchy of your thinking without imposing rigidity.",
       },
       {
-        icon: "◎",
+        icon: Search,
         title: "Full-Text Search",
         description:
           "Instant search across every note, box, and link. Find anything in under 100ms no matter how large your vault grows.",
       },
       {
-        icon: "≡",
+        icon: FileText,
         title: "Markdown Native",
         description:
           "Write in standard markdown. Every note is a plain `.md` file — portable, durable, and renderable anywhere.",
       },
       {
-        icon: "↗",
+        icon: Upload,
         title: "Import & Export",
         description:
           "Import from Obsidian vaults, Notion exports, or any ZIP of markdown files. Export everything at any time.",
@@ -57,37 +79,37 @@ const CATEGORIES = [
     title: "AI Integration",
     features: [
       {
-        icon: "⚡",
+        icon: Zap,
         title: "Context Bundles",
         description:
           "Select notes, set a token budget, export a clean bundle. One click gives your AI exactly the right context.",
       },
       {
-        icon: "◈",
+        icon: Cpu,
         title: "Token-Aware Packing",
         description:
           "Context Store trims, prioritizes, and fits your notes into any model's context window without overflow.",
       },
       {
-        icon: "⟳",
+        icon: TrendingUp,
         title: "Freshness Scoring",
         description:
           "Recently updated notes score higher in bundle assembly. Your AI always works with the most current knowledge.",
       },
       {
-        icon: "⎋",
+        icon: Download,
         title: "Multi-Format Export",
         description:
           "Export bundles as markdown, JSON, or plain text. Pipe directly into any API or paste into any chat interface.",
       },
       {
-        icon: "⬚",
+        icon: Sparkles,
         title: "System Guide Generation",
         description:
           "Auto-generate box-level guides that summarize the purpose and contents of each knowledge container.",
       },
       {
-        icon: "⌘",
+        icon: Code,
         title: "API Access",
         description:
           "Integrate Context Store into your own AI pipelines via REST API. Build custom retrieval and bundling workflows.",
@@ -99,37 +121,37 @@ const CATEGORIES = [
     title: "History & Audit",
     features: [
       {
-        icon: "⊛",
+        icon: History,
         title: "Full Version History",
         description:
           "Every save creates a version. Browse, diff, and restore any prior state of any note.",
       },
       {
-        icon: "⌥",
+        icon: GitMerge,
         title: "Diff Viewer",
         description:
           "Side-by-side diff between any two versions. See exactly what changed, when, and — in team mode — by whom.",
       },
       {
-        icon: "↩",
+        icon: RotateCcw,
         title: "One-Click Rollback",
         description:
           "Restore any note to any prior version instantly. No confirmation ceremony — just undo and continue.",
       },
       {
-        icon: "◉",
+        icon: ClipboardList,
         title: "Audit Log",
         description:
           "Immutable record of every create, edit, delete, and export action. Essential for compliance and team accountability.",
       },
       {
-        icon: "⊡",
+        icon: FolderDown,
         title: "Snapshot Export",
         description:
           "Export a point-in-time snapshot of your entire vault. Archive it, back it up, or hand it off.",
       },
       {
-        icon: "⊞",
+        icon: Bell,
         title: "Change Notifications",
         description:
           "Get notified when a note in a shared box changes — so your team's knowledge stays synchronized.",
@@ -151,20 +173,9 @@ function CategorySection({
         </h2>
         <div className="mt-2 h-0.5 w-12 rounded-full bg-violet-500/50" />
       </div>
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="grid grid-cols-1 divide-x divide-y divide-dashed border border-dashed sm:grid-cols-2 lg:grid-cols-3">
         {category.features.map((f) => (
-          <div
-            key={f.title}
-            className="rounded-xl border border-border/60 bg-card p-5 transition-all duration-200 hover:-translate-y-0.5 hover:border-violet-500/30 hover:shadow-md hover:shadow-violet-500/5"
-          >
-            <div className="mb-3 flex h-9 w-9 items-center justify-center rounded-lg bg-violet-500/10 font-mono text-base text-violet-400">
-              {f.icon}
-            </div>
-            <h3 className="mb-1.5 text-sm font-semibold text-foreground">{f.title}</h3>
-            <p className="text-sm leading-relaxed text-muted-foreground">
-              {f.description}
-            </p>
-          </div>
+          <FeatureCard key={f.title} feature={f} />
         ))}
       </div>
     </section>
