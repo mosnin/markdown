@@ -222,7 +222,7 @@ describe("rollbackNoteToVersion — immutability invariants", () => {
 
     // Mock the RPC call (supabase.rpc)
     mockSupabase.rpc = vi.fn().mockResolvedValue({
-      data: { version_id: "version-003", version_number: 3 },
+      data: { new_version_id: "version-003", version_number: 3 },
       error: null,
     });
 

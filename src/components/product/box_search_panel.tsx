@@ -155,6 +155,8 @@ function SearchResultCard({
     >
       {/* Title row */}
       <div className="flex items-start gap-2">
+        {/* noteIcon() returns a stable module-level icon reference — not a new component */}
+        {/* eslint-disable-next-line react-hooks/static-components */}
         <Icon
           className={cn(
             "mt-0.5 h-3.5 w-3.5 shrink-0",

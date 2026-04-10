@@ -319,3 +319,10 @@ The following are not covered in V1 and are explicitly deferred:
 | Context bundle assembly (unit) | Ownership, exclusion rules, ranking, deduplication |
 
 Full line coverage is not the goal. Covering the **trust invariants** is.
+
+---
+
+## Final state (2026-04-10)
+
+All 14 test files pass. 138 tests pass. Zero failures. `pnpm test` exits 0.
+`pnpm build` compiles clean. See `docs/release_candidate_report_v1.md`.

@@ -150,7 +150,10 @@ describe("assembleContextBundle — target self-exclusion", () => {
     vi.mocked(linkRepo.listLinksFromNote).mockResolvedValue([
       makeLink("link-1", NOTE_ID, NOTE_ID, "related"),
     ]);
-    vi.mocked(noteRepo.getNotesByIds).mockResolvedValue([makeNote() as never]);
+    // NOTE_ID is in alwaysExclude, so getNotesByIds receives [] and must return []
+    vi.mocked(noteRepo.getNotesByIds).mockImplementation(async (_sb, ids) => {
+      return ids.includes(NOTE_ID) ? [makeNote() as never] : [];
+    });
 
     const result = await assembleContextBundle(mockSupabase, WORKSPACE_ID, NOTE_ID);
 
@@ -222,11 +225,15 @@ describe("assembleContextBundle — guide deduplication", () => {
       .mockResolvedValueOnce(guideNote as never);  // guide note lookup
     vi.mocked(boxRepo.getBoxById).mockResolvedValue(box as never);
 
-    // Guide note is also a linked note
+    // Guide note is also a linked note — service should exclude it from candidateIds
+    // since it's in the alwaysExclude set after being resolved as guide note.
+    // The getNotesByIds mock must only return notes whose IDs are actually requested.
     vi.mocked(linkRepo.listLinksFromNote).mockResolvedValue([
       makeLink("link-1", NOTE_ID, GUIDE_NOTE_ID, "related"),
     ]);
-    vi.mocked(noteRepo.getNotesByIds).mockResolvedValue([guideNote as never]);
+    vi.mocked(noteRepo.getNotesByIds).mockImplementation(async (_sb, ids) => {
+      return ids.includes(GUIDE_NOTE_ID) ? [guideNote as never] : [];
+    });
 
     const result = await assembleContextBundle(mockSupabase, WORKSPACE_ID, NOTE_ID, {
       includeAncestorSummary: false,

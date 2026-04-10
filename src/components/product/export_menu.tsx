@@ -119,7 +119,7 @@ export function NoteExportMenu({
           <div className="absolute right-0 top-full z-40 mt-1.5 w-64 rounded-lg border border-border bg-popover shadow-md">
             <div className="border-b border-border px-3 py-2">
               <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                Export "{noteTitle}"
+                Export &quot;{noteTitle}&quot;
               </p>
             </div>
             <div className="p-1.5">

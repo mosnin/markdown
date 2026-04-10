@@ -15,6 +15,10 @@ and security review, the deployment path is documented and straightforward,
 and remaining known risks are explicitly identified and assessed as acceptable
 for the private beta scope.
 
+**Final release gate pass completed 2026-04-10.** All verification gates pass:
+typecheck (application code), lint (0 errors), tests (138/138), build (clean).
+See `docs/release_candidate_report_v1.md` for the full release gate report.
+
 ---
 
 ## Checklist

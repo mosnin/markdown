@@ -18,7 +18,10 @@ import { getRequestContext, type RequestContext } from "./get_request_context";
  * ```
  */
 export async function requireAuthenticatedUser(): Promise<
-  RequestContext & { workspace: NonNullable<RequestContext["workspace"]> }
+  RequestContext & {
+    user: NonNullable<RequestContext["user"]>;
+    workspace: NonNullable<RequestContext["workspace"]>;
+  }
 > {
   const ctx = await getRequestContext();
 
@@ -27,6 +30,7 @@ export async function requireAuthenticatedUser(): Promise<
   }
 
   return ctx as RequestContext & {
+    user: NonNullable<RequestContext["user"]>;
     workspace: NonNullable<RequestContext["workspace"]>;
   };
 }

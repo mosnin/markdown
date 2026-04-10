@@ -139,6 +139,8 @@ function NoteRow({
       style={{ paddingLeft: `${0.625 + depth * 0.875}rem` }}
       aria-current={isActive ? "page" : undefined}
     >
+      {/* noteIcon() returns a stable module-level icon reference — not a new component */}
+      {/* eslint-disable-next-line react-hooks/static-components */}
       <Icon className="h-3 w-3 shrink-0" aria-hidden="true" />
       <span className="truncate">{note.title}</span>
     </Link>

@@ -109,6 +109,8 @@ function NoteChip({
           : "border-border bg-card text-foreground/80 hover:border-ring/30 hover:bg-accent/30 hover:text-foreground"
       )}
     >
+      {/* noteIcon() returns a stable module-level icon reference — not a new component */}
+      {/* eslint-disable-next-line react-hooks/static-components */}
       <Icon
         className={cn(
           "h-3 w-3 shrink-0",
@@ -261,6 +263,8 @@ function NodeDetail({
     >
       {/* Node identity */}
       <div className="flex items-start gap-2 mb-3">
+        {/* noteIcon() returns a stable module-level icon reference — not a new component */}
+        {/* eslint-disable-next-line react-hooks/static-components */}
         <Icon
           className={cn(
             "mt-0.5 h-4 w-4 shrink-0",
