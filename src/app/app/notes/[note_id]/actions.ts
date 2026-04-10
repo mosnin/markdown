@@ -11,6 +11,7 @@ import {
   restoreNote,
 } from "@/server/services/lifecycle_service";
 import { promoteGeneratedNote } from "@/server/services/generated_note_service";
+import { log } from "@/lib/logger";
 
 type ActionResult<T = undefined> =
   | { success: true; data: T }
@@ -45,6 +46,7 @@ export async function rollbackNoteAction(
     };
   } catch (err) {
     const message = err instanceof Error ? err.message : "Rollback failed";
+    log.error("rollback_failed", { note_id: noteId, target_version_id: targetVersionId, reason: message });
     return { success: false, error: message };
   }
 }
@@ -115,6 +117,8 @@ export async function promoteGeneratedNoteAction(
     revalidatePath(`/app/notes/${noteId}`);
     return { success: true, data: undefined };
   } catch (err) {
+    const reason = err instanceof Error ? err.message : "Unknown error";
+    log.error("promote_generated_note_failed", { note_id: noteId, reason });
     return { success: false, error: err instanceof Error ? err.message : "Failed to promote note" };
   }
 }

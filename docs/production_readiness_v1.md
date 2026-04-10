@@ -63,6 +63,9 @@ for the private beta scope.
 | Rate limiter tests | ✅ | Window logic, per-key isolation, expiry |
 | Markdown sanitization tests | ✅ | XSS vectors, safe content preservation |
 | Integration tests (service-level) | ✅ | 4 modules: conflict detection, generated note auth, stable ID, lifecycle protection |
+| Rollback safety unit tests | ✅ | Ownership, version identity, immutability invariants |
+| Note update safety unit tests | ✅ | Content verbatim, diff from prior state, RPC error propagation |
+| Context bundle assembly unit tests | ✅ | Ownership, exclusion rules, deduplication, ranking, linked limit |
 | DB integration tests | ⏳ Deferred | Needs test Supabase instance — post-launch |
 | E2E tests | ⏳ Deferred | No Playwright setup in V1 |
 
@@ -74,6 +77,7 @@ for the private beta scope.
 | Auth failure visibility | ✅ | Token inactive/expired/connection inactive logged |
 | Auth exception visibility | ✅ | Exceptions in auth path logged with reason |
 | Import failure logging | ✅ | Failures logged with workspace_id, box_id, filename, reason |
+| Server action failure logging | ✅ | rollback, promote, approve/reject proposal all log structured errors |
 | Audit log (product events) | ✅ | All workspace events append-only in `audit_events` table |
 | Request correlation | ✅ | Each API response includes unique `request_id` in meta envelope |
 
@@ -88,6 +92,7 @@ for the private beta scope.
 | Pagination bounds | ✅ | `Math.min(limit, MAX_LIMIT)`, `Math.max(page, 1)` |
 | Note schema validation | ✅ | Zod schemas for create/update |
 | Tag array type validation | ✅ | Inline type check on tag arrays |
+| Server action field size guards | ✅ | `saveNoteAction` enforces title/content/summary/tag limits matching API route limits |
 | Env variable validation | ✅ | `src/lib/env.ts` with `validateServerEnv()` |
 
 ### Environment and deployment

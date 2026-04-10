@@ -9,10 +9,19 @@ import {
   type AssembleBundleOptions,
 } from "@/server/services/context_bundle_service";
 import { auditBundleRead } from "@/server/services/audit_service";
+import { log } from "@/lib/logger";
 import { type ContextBundle } from "@/server/domain/types/context_bundle";
 import type { ActionResult } from "@/app/app/boxes/actions";
 
 export type { ActionResult };
+
+// ─── Field size guards — match API route limits ───────────────────────────────
+const MAX_TITLE_LENGTH = 500;
+const MAX_CONTENT_LENGTH = 500_000;
+const MAX_SUMMARY_LENGTH = 2000;
+const MAX_TAG_LENGTH = 100;
+const MAX_TAGS = 50;
+const MAX_READ_HINT_LENGTH = 200;
 
 // ─── Auth helper ──────────────────────────────────────────────────────────────
 
@@ -30,6 +39,10 @@ async function requireContext() {
 /**
  * Save note changes (title, content, metadata) and create a new version.
  * Atomic via the update_note_and_create_version RPC function.
+ *
+ * Input is validated here before reaching the service layer so that
+ * size-limit violations return a clean error to the autosave client
+ * rather than propagating as a DB constraint error.
  */
 export async function saveNoteAction(
   noteId: string,
@@ -47,10 +60,36 @@ export async function saveNoteAction(
     readHint?: string | null;
   }
 ): Promise<ActionResult<{ versionNumber?: number }>> {
+  // Input validation
+  const trimmedTitle = title.trim();
+  if (!trimmedTitle) {
+    return { ok: false, error: "Title is required" };
+  }
+  if (trimmedTitle.length > MAX_TITLE_LENGTH) {
+    return { ok: false, error: `Title must not exceed ${MAX_TITLE_LENGTH} characters` };
+  }
+  if (markdownContent.length > MAX_CONTENT_LENGTH) {
+    return { ok: false, error: `Content must not exceed ${MAX_CONTENT_LENGTH} characters` };
+  }
+  if (summary && summary.trim().length > MAX_SUMMARY_LENGTH) {
+    return { ok: false, error: `Summary must not exceed ${MAX_SUMMARY_LENGTH} characters` };
+  }
+  if (tags) {
+    if (tags.length > MAX_TAGS) {
+      return { ok: false, error: `Tags must not exceed ${MAX_TAGS} items` };
+    }
+    if (tags.some((t) => t.length > MAX_TAG_LENGTH)) {
+      return { ok: false, error: `Each tag must not exceed ${MAX_TAG_LENGTH} characters` };
+    }
+  }
+  if (readHint && readHint.trim().length > MAX_READ_HINT_LENGTH) {
+    return { ok: false, error: `Read hint must not exceed ${MAX_READ_HINT_LENGTH} characters` };
+  }
+
   try {
     const { supabase, userId, workspaceId } = await requireContext();
     await updateNote(supabase, userId, workspaceId, noteId, {
-      title: title.trim(),
+      title: trimmedTitle,
       markdownContent,
       summary: summary?.trim() ?? null,
       tags: tags ?? [],
@@ -59,6 +98,8 @@ export async function saveNoteAction(
     revalidatePath(`/app/notes/${noteId}`);
     return { ok: true, data: {} };
   } catch (err) {
+    const reason = err instanceof Error ? err.message : "Unknown error";
+    log.error("save_note_failed", { note_id: noteId, reason });
     return { ok: false, error: err instanceof Error ? err.message : "Failed to save note" };
   }
 }

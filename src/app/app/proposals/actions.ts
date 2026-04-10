@@ -7,6 +7,7 @@ import {
   rejectProposal,
 } from "@/server/services/write_proposal_service";
 import { setGeneratedFolderPolicy } from "@/server/services/folder_service";
+import { log } from "@/lib/logger";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -34,6 +35,8 @@ export async function approveProposalAction(
 
     return { success: true, data: outcome };
   } catch (err) {
+    const reason = err instanceof Error ? err.message : "Unknown error";
+    log.error("proposal_approve_failed", { proposal_id: proposalId, reason });
     return {
       success: false,
       error: err instanceof Error ? err.message : "Failed to approve proposal",
@@ -61,6 +64,8 @@ export async function rejectProposalAction(
 
     return { success: true, data: proposal };
   } catch (err) {
+    const reason = err instanceof Error ? err.message : "Unknown error";
+    log.error("proposal_reject_failed", { proposal_id: proposalId, reason });
     return {
       success: false,
       error: err instanceof Error ? err.message : "Failed to reject proposal",

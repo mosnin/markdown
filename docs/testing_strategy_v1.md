@@ -134,6 +134,56 @@ imported content.
 
 ---
 
+### `rollback_safety.test.ts`
+
+Covers version history service rollback safety invariants:
+- Ownership: note from wrong workspace → throws "not found"
+- Not-found: missing note → throws "not found"; missing version → "Version not found"
+- Immutability: rollback creates a new version; target version only read, never mutated
+- `is_current` flag: correctly reflects `current_version_id` across both list and get paths
+- Audit event fired on successful rollback
+
+**Why:** Rollback is the only destructive-to-history action a human can take.
+The immutability invariant (history is never rewritten) must never regress.
+
+---
+
+### `note_update_safety.test.ts`
+
+Covers the `updateNote` service for autosave safety:
+- Content stored verbatim: RPC receives exact title and markdownContent strings
+- Optional fields default correctly: null summary, empty tags, null readHint when omitted
+- Diff computed from the *old* note state before overwrite — not from post-update values
+- Null diff when current note is missing (graceful, not thrown)
+- diff_summary value forwarded verbatim to the RPC call
+- RPC error propagated as thrown Error with message
+- Audit event fired after successful update
+
+**Why:** Autosave is the highest-frequency write path. Confirming that content
+is not transformed and that the diff is computed correctly from prior state
+protects against silent data corruption and misleading diff_summary values.
+
+---
+
+### `context_bundle_assembly.test.ts`
+
+Covers the context bundle assembly service inclusion and exclusion rules:
+- Ownership: missing note → "Note not found"; wrong workspace box → "Not found"
+- Target self-exclusion: target note never appears in linked_notes
+- Trashed linked notes always excluded
+- Archived linked notes excluded by default; included with `includeArchived: true`
+- Guide note never duplicated in linked_notes even when also a linked candidate
+- Guide note excluded when it is the same note as the target
+- Linked limit capped at 10; `truncation_reason: "linked_limit_reached"` populated
+- Relationship ranking: `depends_on` (score 1) before `related` (8) before `sibling_of` (9)
+- Cross-box notes excluded from linked_notes
+- Ancestor summary: `truncation_reason: "ancestor_summary_not_found"` for root-level notes
+
+**Why:** The context bundle is the primary retrieval package for external AI
+consumers. Inclusion/exclusion bugs would silently deliver wrong context.
+
+---
+
 ---
 
 ## Integration test modules
@@ -234,8 +284,6 @@ The following are not covered in V1 and are explicitly deferred:
 | Gap | Reason for deferral |
 |---|---|
 | DB-level integration tests | Requires test Supabase instance; deferred to post-launch hardening |
-| Context bundle assembly correctness | Requires DB fixtures; complex to mock correctly |
-| Version history and rollback | Depends on atomic SQL RPCs; needs real DB |
 | Import collision modes end-to-end | Complex DB state; needs DB integration test harness |
 | Canonical API route integration tests | Needs full Next.js test harness or real DB |
 | MCP adapter tool input validation | Covered by TypeScript types + canonical API tests |
@@ -266,5 +314,8 @@ The following are not covered in V1 and are explicitly deferred:
 | Generated note authorization (integration) | All 4 auth checks in sequence |
 | Stable ID resolution (integration) | UUID-as-identity invariant before/after move |
 | Lifecycle guide protection (integration) | Full guard chain + idempotency + restore |
+| Rollback safety (unit) | Ownership, version identity, immutability invariant |
+| Note update safety (unit) | Content verbatim, diff from prior state, error propagation |
+| Context bundle assembly (unit) | Ownership, exclusion rules, ranking, deduplication |
 
 Full line coverage is not the goal. Covering the **trust invariants** is.
