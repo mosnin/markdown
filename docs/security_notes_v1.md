@@ -75,6 +75,22 @@ Code: `src/server/auth/get_connection_context.ts`
 External connections cannot: delete notes, trash content, change lifecycle state,
 approve proposals, modify connection scopes, or access other workspaces.
 
+### Reusable shared object protection
+
+Skills and agents marked `is_reusable = true` are workspace-level shared objects.
+They are accessible from any box but are **proposal-only** for all external
+connections regardless of permission mode:
+
+```
+connectionCanDirectlyWrite("generate_in_allowed_folders", reusableSkillPolicy) === false
+```
+
+This invariant is enforced by `object_trust_policy_service.ts` and covered by
+the `object_trust_policy.test.ts` test suite (all three permission modes, all
+object types). Only the human workspace owner can directly modify reusable objects.
+
+See `docs/expanded_object_trust_model_v1.md` for the full trust model.
+
 ---
 
 ## Import security
@@ -151,9 +167,13 @@ multi-author paths.
 - `E_INTERNAL` responses return `"Internal server error"` only — no stack traces
 - `E_NOT_FOUND` returns the same message regardless of whether the resource
   doesn't exist vs. belongs to a different workspace (prevents enumeration)
+- `E_FORBIDDEN` returns a generic `"Connection does not have access to this resource"` —
+  internal box scope details are not exposed
 - Auth failures return `401 Unauthorized` — no detail about which check failed
 - Service layer errors use legible messages for human debugging but must not
   include database internals (RPC names, column names) in external responses
+- All `E_INTERNAL` fallbacks in API route handlers include `console.error(...)` for
+  server-side observability without leaking details to the client
 
 ---
 
@@ -213,11 +233,14 @@ rendering pipeline. A nonce-based CSP is the V2 target.
 
 In-process sliding window rate limiter at `src/lib/api/rate_limit.ts`.
 
-| Limiter | Limit | Window |
-|---|---|---|
-| `apiReadLimit` | 60 requests | 60 seconds |
-| `apiWriteLimit` | 20 mutations | 60 seconds |
-| `importExportLimit` | 5 initiations | 60 seconds |
+| Limiter | Limit | Window | Applied to |
+|---|---|---|---|
+| `apiReadLimit` | 60 requests | 60 seconds | Available; not yet applied to read routes |
+| `apiWriteLimit` | 20 mutations | 60 seconds | `POST /api/v1/write_proposals`, `POST /api/v1/generated_notes` |
+| `importExportLimit` | 5 initiations | 60 seconds | Available; not yet applied to export routes |
+
+Rate-limited routes return HTTP 429 with a `Retry-After` field in the error body
+when the limit is exceeded.
 
 **V1 known limitation:** The in-process limiter does not share state across
 Vercel serverless function instances. In a multi-instance production deployment,

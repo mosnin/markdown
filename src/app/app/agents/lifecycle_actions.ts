@@ -15,9 +15,16 @@ type ActionResult<T = void> =
   | { ok: true; data: T }
   | { ok: false; error: string };
 
+function assertNonEmptyId(id: string, label: string): ActionResult | null {
+  if (!id || id.trim() === "") return { ok: false, error: `${label} is required` };
+  return null;
+}
+
 // ─── Agent lifecycle ──────────────────────────────────────────────────────────
 
 export async function archiveAgentAction(agentId: string): Promise<ActionResult> {
+  const guard = assertNonEmptyId(agentId, "agentId");
+  if (guard) return guard;
   try {
     const ctx = await requireAuthenticatedUser();
     const supabase = await createClient();
@@ -31,6 +38,8 @@ export async function archiveAgentAction(agentId: string): Promise<ActionResult>
 }
 
 export async function unarchiveAgentAction(agentId: string): Promise<ActionResult> {
+  const guard = assertNonEmptyId(agentId, "agentId");
+  if (guard) return guard;
   try {
     const ctx = await requireAuthenticatedUser();
     const supabase = await createClient();
@@ -44,6 +53,8 @@ export async function unarchiveAgentAction(agentId: string): Promise<ActionResul
 }
 
 export async function trashAgentAction(agentId: string): Promise<ActionResult> {
+  const guard = assertNonEmptyId(agentId, "agentId");
+  if (guard) return guard;
   try {
     const ctx = await requireAuthenticatedUser();
     const supabase = await createClient();
@@ -57,6 +68,8 @@ export async function trashAgentAction(agentId: string): Promise<ActionResult> {
 }
 
 export async function restoreAgentAction(agentId: string): Promise<ActionResult> {
+  const guard = assertNonEmptyId(agentId, "agentId");
+  if (guard) return guard;
   try {
     const ctx = await requireAuthenticatedUser();
     const supabase = await createClient();
@@ -85,6 +98,8 @@ export async function rollbackAgentAction(
   agentId: string,
   targetVersionId: string
 ): Promise<ActionResult<{ new_version_id: string; version_number: number }>> {
+  const guard = assertNonEmptyId(agentId, "agentId") ?? assertNonEmptyId(targetVersionId, "targetVersionId");
+  if (guard) return guard;
   try {
     const ctx = await requireAuthenticatedUser();
     const supabase = await createClient();

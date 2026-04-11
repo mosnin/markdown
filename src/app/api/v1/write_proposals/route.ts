@@ -12,11 +12,30 @@ import {
   E_NOT_FOUND,
   E_BAD_REQUEST,
   E_INTERNAL,
+  E_RATE_LIMITED,
 } from "@/lib/api/response";
 import { PERMISSION_MODE } from "@/server/domain/constants/connection_constants";
 import { type ProposalStatus } from "@/server/domain/constants/audit_constants";
+import { apiWriteLimit } from "@/lib/api/rate_limit";
 
-const VALID_PROPOSAL_TYPES = ["create_note", "update_note", "append_note", "replace_note"];
+// ── Proposal type sets ────────────────────────────────────────────────────────
+const NOTE_PROPOSAL_TYPES = new Set([
+  "create_note",
+  "update_note",
+  "append_note",
+  "replace_note",
+]);
+const OBJECT_PROPOSAL_TYPES = new Set([
+  "update_file",
+  "create_skill",
+  "update_skill",
+  "create_agent",
+  "update_agent",
+]);
+const VALID_PROPOSAL_TYPES = [
+  ...NOTE_PROPOSAL_TYPES,
+  ...OBJECT_PROPOSAL_TYPES,
+];
 const VALID_STATUSES = ["pending", "approved", "rejected", "conflicted", "canceled", "expired"];
 const MAX_LIMIT = 100;
 const DEFAULT_LIMIT = 50;
@@ -30,11 +49,11 @@ const MAX_TAG_LENGTH = 100;
 
 // ─── POST /api/v1/write_proposals ────────────────────────────────────────────
 //
-// Create a write proposal.
+// Create a write proposal for a note or an object (file / skill / agent).
 //
-// Request body:
+// Request body (note proposals):
 //   {
-//     proposal_type: "create_note" | "update_note" | "append_note" | "replace_note",
+//     proposal_type:   "create_note" | "update_note" | "append_note" | "replace_note",
 //     target_note_id?:   string,  // required for update_note / append_note / replace_note
 //     target_folder_id?: string,  // required for create_note
 //     proposed_title?:   string,
@@ -44,12 +63,29 @@ const MAX_TAG_LENGTH = 100;
 //     rationale?:        string,
 //   }
 //
+// Request body (object proposals):
+//   {
+//     proposal_type:  "update_file" | "create_skill" | "update_skill" |
+//                    "create_agent" | "update_agent",
+//     target_object_id?: string,  // required for update_* proposals
+//     proposed_content?: string,
+//     proposed_title?:   string,
+//     proposed_summary?: string,
+//     proposed_tags?:    string[],
+//     rationale?:        string,
+//   }
+//
 // Permission: propose_writes OR generate_in_allowed_folders
+// Rate-limited: 20 requests per minute per connection
 // ---------------------------------------------------------------------------
 
 export async function POST(request: NextRequest) {
   const ctx = await getConnectionContext(request);
   if (!ctx) return E_UNAUTHORIZED();
+
+  // Rate limit per connection (20 writes/min)
+  const rl = apiWriteLimit(ctx.connection.id);
+  if (!rl.allowed) return E_RATE_LIMITED(rl.retryAfter);
 
   if (
     ctx.connection.permission_mode !== PERMISSION_MODE.PROPOSE_WRITES &&
@@ -64,6 +100,7 @@ export async function POST(request: NextRequest) {
     proposal_type?: string;
     target_note_id?: string;
     target_folder_id?: string;
+    target_object_id?: string;
     proposed_title?: string;
     proposed_content?: string;
     proposed_summary?: string;
@@ -110,41 +147,63 @@ export async function POST(request: NextRequest) {
   }
 
   const adminClient = createAdminClient();
+  const sharedFields = {
+    proposed_title: body.proposed_title ?? null,
+    proposed_content: body.proposed_content ?? null,
+    proposed_summary: body.proposed_summary ?? null,
+    proposed_tags: Array.isArray(body.proposed_tags) ? body.proposed_tags : null,
+    rationale: body.rationale ?? null,
+  };
 
   try {
-    const proposal = await createProposal(adminClient, ctx, {
-      proposal_type: proposal_type as
-        | "create_note"
-        | "update_note"
-        | "append_note"
-        | "replace_note",
-      target_note_id: body.target_note_id ?? null,
-      target_folder_id: body.target_folder_id ?? null,
-      proposed_title: body.proposed_title ?? null,
-      proposed_content: body.proposed_content ?? null,
-      proposed_summary: body.proposed_summary ?? null,
-      proposed_tags: Array.isArray(body.proposed_tags) ? body.proposed_tags : null,
-      rationale: body.rationale ?? null,
-    });
+    const proposal = await createProposal(
+      adminClient,
+      ctx,
+      OBJECT_PROPOSAL_TYPES.has(proposal_type)
+        ? {
+            proposal_type: proposal_type as
+              | "update_file"
+              | "create_skill"
+              | "update_skill"
+              | "create_agent"
+              | "update_agent",
+            target_object_id: body.target_object_id ?? null,
+            ...sharedFields,
+          }
+        : {
+            proposal_type: proposal_type as
+              | "create_note"
+              | "update_note"
+              | "append_note"
+              | "replace_note",
+            target_note_id: body.target_note_id ?? null,
+            target_folder_id: body.target_folder_id ?? null,
+            ...sharedFields,
+          }
+    );
 
     return apiOk(proposal, 201);
   } catch (err) {
     const msg = err instanceof Error ? err.message : "";
-    if (msg.includes("not found") || msg === "Target note not found") {
-      return E_NOT_FOUND(msg);
+    if (msg.includes("not found")) {
+      return E_NOT_FOUND("The requested resource was not found");
     }
     if (
       msg.includes("permission") ||
-      msg.includes("not in an allowed box")
+      msg.includes("not in an allowed box") ||
+      msg.includes("allowed")
     ) {
-      return E_FORBIDDEN(msg);
+      return E_FORBIDDEN("Connection does not have access to this resource");
     }
     if (
       msg.includes("required") ||
-      msg.includes("Unknown proposal_type")
+      msg.includes("Unknown proposal_type") ||
+      msg.includes("target_object_id") ||
+      msg.includes("trashed")
     ) {
       return E_BAD_REQUEST(msg);
     }
+    console.error("[write_proposals] Unexpected error:", err);
     return E_INTERNAL();
   }
 }

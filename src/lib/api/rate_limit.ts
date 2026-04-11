@@ -15,12 +15,9 @@
  * stable so the store can be swapped without changing callers.
  *
  * ── Current usage ────────────────────────────────────────────────────────────
- * Applied at trust-sensitive API entry points:
- *   - Connection token auth routes (all /api/v1/ routes via getConnectionContext)
- *   - Import initiation (POST /api/v1/import_package)
- *   - Export initiation (POST /api/v1/export_*)
- *   - Proposal creation (POST /api/v1/write_proposals)
- *   - Generated note creation (POST /api/v1/generated_notes)
+ * Applied at trust-sensitive API mutation entry points:
+ *   - Proposal creation (POST /api/v1/write_proposals)  — apiWriteLimit per connection
+ *   - Generated note creation (POST /api/v1/generated_notes) — apiWriteLimit per connection
  *
  * ── V1 limits ────────────────────────────────────────────────────────────────
  * These are intentionally conservative. Adjust after observing real traffic.

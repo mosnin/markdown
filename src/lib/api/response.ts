@@ -63,3 +63,10 @@ export const E_METHOD_NOT_ALLOWED = () =>
 
 export const E_INTERNAL = (msg = "Internal server error") =>
   apiError("internal_error", msg, 500);
+
+export const E_RATE_LIMITED = (retryAfterSeconds: number) =>
+  apiError(
+    "rate_limited",
+    `Too many requests. Retry after ${retryAfterSeconds} seconds.`,
+    429
+  );

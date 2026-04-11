@@ -17,9 +17,17 @@ type ActionResult<T = void> =
   | { ok: true; data: T }
   | { ok: false; error: string };
 
+// Guard: reject blank / non-string IDs before hitting the service layer.
+function assertNonEmptyId(id: string, label: string): ActionResult | null {
+  if (!id || id.trim() === "") return { ok: false, error: `${label} is required` };
+  return null;
+}
+
 // ─── File lifecycle ───────────────────────────────────────────────────────────
 
 export async function archiveFileAction(fileId: string): Promise<ActionResult> {
+  const guard = assertNonEmptyId(fileId, "fileId");
+  if (guard) return guard;
   try {
     const ctx = await requireAuthenticatedUser();
     const supabase = await createClient();
@@ -32,6 +40,8 @@ export async function archiveFileAction(fileId: string): Promise<ActionResult> {
 }
 
 export async function unarchiveFileAction(fileId: string): Promise<ActionResult> {
+  const guard = assertNonEmptyId(fileId, "fileId");
+  if (guard) return guard;
   try {
     const ctx = await requireAuthenticatedUser();
     const supabase = await createClient();
@@ -44,6 +54,8 @@ export async function unarchiveFileAction(fileId: string): Promise<ActionResult>
 }
 
 export async function trashFileAction(fileId: string): Promise<ActionResult> {
+  const guard = assertNonEmptyId(fileId, "fileId");
+  if (guard) return guard;
   try {
     const ctx = await requireAuthenticatedUser();
     const supabase = await createClient();
@@ -56,6 +68,8 @@ export async function trashFileAction(fileId: string): Promise<ActionResult> {
 }
 
 export async function restoreFileAction(fileId: string): Promise<ActionResult> {
+  const guard = assertNonEmptyId(fileId, "fileId");
+  if (guard) return guard;
   try {
     const ctx = await requireAuthenticatedUser();
     const supabase = await createClient();
@@ -78,6 +92,8 @@ export async function rollbackFileAction(
   fileId: string,
   targetVersionId: string
 ): Promise<ActionResult<{ new_version_id: string; version_number: number }>> {
+  const guard = assertNonEmptyId(fileId, "fileId") ?? assertNonEmptyId(targetVersionId, "targetVersionId");
+  if (guard) return guard;
   try {
     const ctx = await requireAuthenticatedUser();
     const supabase = await createClient();

@@ -15,9 +15,17 @@ and security review, the deployment path is documented and straightforward,
 and remaining known risks are explicitly identified and assessed as acceptable
 for the private beta scope.
 
-**Final release gate pass completed 2026-04-10.** All verification gates pass:
-typecheck (application code), lint (0 errors), tests (138/138), build (clean).
-See `docs/release_candidate_report_v1.md` for the full release gate report.
+**Final release gate pass completed 2026-04-10.** See `docs/release_candidate_report_v1.md`
+for the full report.
+
+**Phase 3 (expanded object model) completed 2026-04-11.** Trust, versioning,
+lifecycle, and machine workflow extended to all object types. 37 files, 4572
+insertions.
+
+**Phase 4 (hardening) completed 2026-04-11.** Rate limiting wired into API write
+routes, object proposals supported in canonical API, input guards added to
+lifecycle server actions, error message sanitization improved, 4 new unit test
+modules added. Tests: 209/209.
 
 ---
 
@@ -45,7 +53,8 @@ See `docs/release_candidate_report_v1.md` for the full release gate report.
 | Token expiry default | ✅ | 90-day default on all new/rotated tokens |
 | Ownership checks on all API routes | ✅ | `allowedBoxIds` + workspace_id checks |
 | Guide note protection | ✅ | Enforced in lifecycle service and tested |
-| Write proposal trust model | ✅ | Proposals require human approval |
+| Write proposal trust model | ✅ | Proposals require human approval; all object types (file/skill/agent) enforced |
+| Reusable object proposal-only | ✅ | `connectionCanDirectlyWrite` returns false for reusable objects in all modes |
 | Import human-session-only | ✅ | External connections cannot initiate import |
 | Markdown sanitization | ✅ | `sanitize-html` applied at shared rendering seam |
 | Content Security Policy | ✅ | Minimal meaningful CSP; unsafe-inline present but object-src/frame-src/base-uri protected |
@@ -61,8 +70,12 @@ See `docs/release_candidate_report_v1.md` for the full release gate report.
 | Test framework set up | ✅ | vitest with @vitest/coverage-v8 |
 | API response envelope tests | ✅ | 100% coverage of response helpers |
 | Token format validation tests | ✅ | All format edge cases covered |
-| Lifecycle guard tests | ✅ | Guide note protection, status transitions, ownership |
-| Write proposal trust tests | ✅ | Permission checks, ownership, required fields, approval guards |
+| Lifecycle guard tests — Notes | ✅ | Guide note protection, status transitions, ownership |
+| Lifecycle guard tests — Objects | ✅ | Files/Skills/Agents: status transitions, ownership, reusable skip box hop |
+| Write proposal trust tests — Notes | ✅ | Permission checks, ownership, required fields, approval guards |
+| Write proposal trust tests — Objects | ✅ | Box-local scope, reusable skip, trashed rejection, required fields |
+| Object trust policy tests | ✅ | `connectionCanDirectlyWrite` invariants for all types and modes |
+| Object rollback safety tests | ✅ | Ownership, version identity, immutability for all object types |
 | Import vocabulary tests | ✅ | Canonical relationship types and read hints |
 | Rate limiter tests | ✅ | Window logic, per-key isolation, expiry |
 | Markdown sanitization tests | ✅ | XSS vectors, safe content preservation |
@@ -92,11 +105,11 @@ See `docs/release_candidate_report_v1.md` for the full release gate report.
 | File size pre-check on import | ✅ | `file.size` checked before `arrayBuffer()` read |
 | Collision mode validation | ✅ | Hard failure on invalid mode |
 | Bearer token structural validation | ✅ | Regex + length + prefix checks |
-| Proposal type validation | ✅ | Allowlist check at API route |
+| Proposal type validation | ✅ | Allowlist check at API route (note + object types) |
 | Pagination bounds | ✅ | `Math.min(limit, MAX_LIMIT)`, `Math.max(page, 1)` |
 | Note schema validation | ✅ | Zod schemas for create/update |
 | Tag array type validation | ✅ | Inline type check on tag arrays |
-| Server action field size guards | ✅ | `saveNoteAction` enforces title/content/summary/tag limits matching API route limits |
+| Server action field size guards | ✅ | `saveNoteAction` enforces title/content/summary/tag limits; lifecycle actions enforce non-empty ID guards |
 | Env variable validation | ✅ | `src/lib/env.ts` with `validateServerEnv()` |
 
 ### Environment and deployment
@@ -144,6 +157,10 @@ documented mitigation path.
 
 ### Rate limiting is per-instance only
 
+- **Status**: Rate limiting is now **wired** into the two highest-risk mutation
+  routes: `POST /api/v1/write_proposals` and `POST /api/v1/generated_notes`.
+  Both enforce `apiWriteLimit` (20 writes/min) per connection ID, returning
+  HTTP 429 with `Retry-After` when exceeded.
 - **Risk**: Vercel serverless has multiple concurrent instances. The in-process
   rate limiter does not share state across instances, so the effective limit
   is `configured_limit × instance_count`.

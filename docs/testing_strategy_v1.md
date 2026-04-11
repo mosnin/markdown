@@ -186,6 +186,77 @@ consumers. Inclusion/exclusion bugs would silently deliver wrong context.
 
 ---
 
+### `object_lifecycle_guards.test.ts`
+
+Covers lifecycle status-transition guards for the expanded object model (Files,
+Skills, Agents) matching the pattern of `lifecycle_guards.test.ts` for Notes:
+
+- Status transitions: cannot archive already-archived; cannot trash already-trashed
+- Trashed → archive blocked; only trashed → restore is allowed
+- Ownership enforcement: wrong `workspace_id` → "not found"
+- Not-found: missing object → throws
+- Box-local two-hop ownership: `getBoxById` mock verifies box belongs to workspace
+- Reusable objects skip box hop (no `box_object_attachments` side-effects on archive/trash)
+
+Uses `vi.mock("@/server/repositories/box_repository")` with explicit
+`vi.mocked(boxRepo.getBoxById).mockResolvedValue(...)` in `beforeEach`.
+
+**Why:** The expanded object model reuses the same lifecycle service. Verifying
+the guard logic across all three object types ensures no type-specific branches
+were missed.
+
+---
+
+### `object_rollback_safety.test.ts`
+
+Covers version history rollback safety for Files, Skills, Agents:
+
+- Ownership: wrong workspace → "not found"; object missing → "not found"
+- Version identity: version not belonging to object → "Version not found"
+- Immutability: rollback calls RPC and returns `new_version_id ≠ target_version_id`
+- All three object types (file/skill/agent) exercise the same RPC path
+- RPC error propagated as thrown Error
+
+**Why:** Objects use the same `rollback_object_to_version` RPC as notes.
+Confirming the immutability invariant and ownership checks hold for all types.
+
+---
+
+### `object_proposal_protection.test.ts`
+
+Covers `createProposal` for object types (file/skill/agent proposals):
+
+- `read_only` connection → throws "permission"
+- `propose_writes` and `generate_in_allowed_folders` → allowed
+- Box-local skill not in allowed box → throws "allowed box"
+- Reusable skill/agent (box_id=null) → allowed regardless of box scope
+- Trashed target → throws "trashed"
+- Missing target_object_id for update proposals → throws "target_object_id"
+- Object proposals do not require note-specific fields
+
+**Why:** The proposal system is the trust boundary for all external writes.
+Verifying it correctly distinguishes object vs note proposals and enforces
+reusable object scoping rules.
+
+---
+
+### `object_trust_policy.test.ts`
+
+Pure logic tests for `connectionCanDirectlyWrite()` and `describeObjectTrustLevel()`:
+
+- `read_only` / `propose_writes`: always `false` regardless of object type
+- `generate_in_allowed_folders`: `true` only for box-local notes; `false` for all
+  files/skills/agents and all reusable objects
+- Reusable skills/agents: `false` across all three permission modes
+- `proposal_only_for_external` invariant: always `true` for all policy objects
+- `describeObjectTrustLevel`: correct labels ("Box file", "Box skill", "Box agent",
+  "Workspace shared") for all object types
+
+**Why:** The trust policy is a pure-logic service. Zero DB mocking needed.
+Confirms the "proposals only" invariant holds at the policy layer.
+
+---
+
 ## Integration test modules
 
 Integration tests live in `src/tests/integration/`. They mock the **repository

@@ -9,8 +9,10 @@ import {
   E_NOT_FOUND,
   E_BAD_REQUEST,
   E_INTERNAL,
+  E_RATE_LIMITED,
 } from "@/lib/api/response";
 import { PERMISSION_MODE } from "@/server/domain/constants/connection_constants";
+import { apiWriteLimit } from "@/lib/api/rate_limit";
 
 /**
  * POST /api/v1/generated_notes
@@ -38,6 +40,10 @@ import { PERMISSION_MODE } from "@/server/domain/constants/connection_constants"
 export async function POST(request: NextRequest) {
   const ctx = await getConnectionContext(request);
   if (!ctx) return E_UNAUTHORIZED();
+
+  // Rate limit per connection (20 writes/min)
+  const rl = apiWriteLimit(ctx.connection.id);
+  if (!rl.allowed) return E_RATE_LIMITED(rl.retryAfter);
 
   if (ctx.connection.permission_mode !== PERMISSION_MODE.GENERATE_IN_ALLOWED_FOLDERS) {
     return E_FORBIDDEN(
@@ -133,19 +139,20 @@ export async function POST(request: NextRequest) {
     );
   } catch (err) {
     const msg = err instanceof Error ? err.message : "";
-    if (msg.includes("not found") || msg === "Folder not found") {
-      return E_NOT_FOUND(msg);
+    if (msg.includes("not found")) {
+      return E_NOT_FOUND("The requested resource was not found");
     }
     if (
       msg.includes("permission") ||
       msg.includes("not in an allowed box") ||
       msg.includes("accepts_generated_notes")
     ) {
-      return E_FORBIDDEN(msg);
+      return E_FORBIDDEN("Connection does not have access to this resource");
     }
     if (msg.includes("required")) {
       return E_BAD_REQUEST(msg);
     }
+    console.error("[generated_notes] Unexpected error:", err);
     return E_INTERNAL();
   }
 }
