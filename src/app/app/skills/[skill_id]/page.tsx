@@ -4,9 +4,14 @@ import { requireAuthenticatedUser } from "@/server/auth/require_authenticated_us
 import { createClient } from "@/lib/supabase/server";
 import { getSkillById } from "@/server/repositories/skill_repository";
 import { getBoxById } from "@/server/repositories/box_repository";
-import { isObjectAttachedToBox } from "@/server/repositories/box_object_attachment_repository";
+import { isObjectAttachedToBox, listAttachmentsForObject } from "@/server/repositories/box_object_attachment_repository";
+import { listObjectVersions } from "@/server/repositories/object_version_repository";
+import { listPendingProposalsForObject } from "@/server/repositories/write_proposal_repository";
 import { ReferenceContextBanner } from "@/components/product/reference_context_banner";
 import { SkillExportMenu } from "@/components/product/export_menu";
+import { ObjectTrustHeader } from "@/components/product/object_trust_header";
+import { MachineProvenancePanel } from "@/components/product/machine_provenance_panel";
+import { SkillHistoryPanel, SkillLifecycleControls } from "@/components/product/skill_trust_panels";
 import { cn } from "@/lib/utils";
 
 // ─── Meta row ─────────────────────────────────────────────────────────────────
@@ -38,6 +43,20 @@ export default async function SkillPage({
   const skill = await getSkillById(supabase, skill_id);
   if (!skill || skill.workspace_id !== ctx.workspace.id) notFound();
 
+  // Fetch version history, pending proposals, and attachment count in parallel
+  const [versions, pendingProposals, attachments] = await Promise.all([
+    listObjectVersions(supabase, "skill", skill_id, { limit: 50 }),
+    listPendingProposalsForObject(supabase, ctx.workspace.id, "skill", skill_id),
+    skill.is_reusable
+      ? listAttachmentsForObject(supabase, ctx.workspace.id, "skill", skill_id)
+      : Promise.resolve([]),
+  ]);
+
+  const versionsWithCurrent = versions.map((v) => ({
+    ...v,
+    is_current: v.id === skill.current_version_id,
+  }));
+
   // Reference context: reusable skill viewed from a specific box via ?box_id=
   let refBox: { id: string; name: string } | null = null;
   if (skill.is_reusable && boxContextId) {
@@ -54,6 +73,8 @@ export default async function SkillPage({
     day: "numeric",
   });
 
+  const rollbackDisabled = skill.status === "archived" || skill.status === "trashed";
+
   return (
     <div className="flex h-full flex-col overflow-hidden">
       {/* Header */}
@@ -69,17 +90,12 @@ export default async function SkillPage({
             )}
           </div>
           <div className="ml-auto flex items-center gap-2 shrink-0">
-            {skill.is_reusable && (
-              <span className="rounded-full bg-muted px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                Reusable
-              </span>
-            )}
             <SkillExportMenu skillId={skill_id} skillName={skill.name} />
           </div>
         </div>
       </div>
 
-      {/* Reference context banner — shown when a reusable skill is viewed from a box */}
+      {/* Reference context banner */}
       {refBox && (
         <div className="border-b border-border px-6 py-3">
           <ReferenceContextBanner
@@ -93,11 +109,33 @@ export default async function SkillPage({
 
       {/* Content */}
       <div className="flex-1 overflow-auto">
-        <div className="mx-auto max-w-3xl px-6 py-6 space-y-6">
+        <div className="mx-auto max-w-3xl px-6 py-6 space-y-4">
+
+          {/* Trust header */}
+          <ObjectTrustHeader
+            objectType="skill"
+            objectName={skill.name}
+            isReusable={skill.is_reusable}
+            attachedBoxCount={attachments.length}
+            pendingProposalCount={pendingProposals.length}
+            lifecycleStatus={skill.status as "draft" | "active" | "archived" | "trashed"}
+            isGenerated={skill.origin_type === "generated"}
+            canonicalFormat={skill.canonical_format}
+          />
+
+          {/* Machine provenance */}
+          <MachineProvenancePanel
+            originType={skill.origin_type as "user_created" | "imported" | "generated"}
+            createdAt={skill.created_at}
+            pendingProposalCount={pendingProposals.length}
+            objectName={skill.name}
+          />
+
           {/* Metadata */}
           <section className="rounded-lg border border-border bg-card p-4 space-y-2.5">
             <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Details</h2>
             <MetaRow label="Format">{skill.canonical_format}</MetaRow>
+            <MetaRow label="Status">{skill.status}</MetaRow>
             <MetaRow label="Created">
               <span className="flex items-center gap-1">
                 <Calendar className="h-3 w-3" aria-hidden="true" />
@@ -132,6 +170,24 @@ export default async function SkillPage({
               </pre>
             </section>
           )}
+
+          {/* Version history */}
+          <SkillHistoryPanel
+            skillId={skill_id}
+            versions={versionsWithCurrent}
+            currentVersionId={skill.current_version_id ?? null}
+            rollbackDisabled={rollbackDisabled}
+          />
+
+          {/* Lifecycle controls */}
+          <section className="rounded-lg border border-border bg-card p-4">
+            <SkillLifecycleControls
+              skillId={skill_id}
+              currentStatus={skill.status as "draft" | "active" | "archived" | "trashed"}
+              skillName={skill.name}
+            />
+          </section>
+
         </div>
       </div>
     </div>

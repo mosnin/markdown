@@ -247,6 +247,36 @@ Promotion is deliberate:
 
 ---
 
+## Heterogeneous proposal review (Phase 3)
+
+The proposals page (`/app/proposals`) now handles proposals for all four object types:
+
+- Note proposals use the existing `ProposalCard` (unchanged)
+- File/Skill/Agent proposals use `HeterogeneousProposalCard`
+- The `ProposalsPanel` dispatches on `proposal.target_object_type` — non-null means object proposal
+
+`HeterogeneousProposalCard` shows:
+- `ProposalTargetSummary` — action label, type icon, target name, format badge, reusable badge
+- Connection name attribution
+- Rationale section
+- Conflict notice (for `conflicted` status)
+- Reusable impact notice — "This targets a workspace-shared [type]. Approving will affect all boxes that reference it."
+- Current source vs proposed source (raw content, no fake structured diffs)
+- Approve/Reject with optional review note
+
+## Object trust surfaces (Phase 3)
+
+New components on object detail pages:
+
+- **Skill page** (`/app/skills/[skill_id]/page.tsx`) — `ObjectTrustHeader`, `MachineProvenancePanel`, `SkillHistoryPanel`, `SkillLifecycleControls`
+- **Agent page** (`/app/agents/[agent_id]/page.tsx`) — `ObjectTrustHeader`, `MachineProvenancePanel`, Trust tab with `AgentHistoryPanel` and `AgentLifecycleControls`
+
+`MachineProvenancePanel` renders only when `origin_type` is `generated` or `imported`, or when there are pending proposals targeting the object. It does not render for user-created objects with no pending proposals.
+
+`ObjectTrustHeader` renders an inline summary: object type badge, workspace-shared badge (if reusable), lifecycle status, pending proposal count, and generated origin hint.
+
+---
+
 ## Rules for future prompts
 
 1. **Append previews show the new portion, not the merged result** — use
@@ -267,3 +297,5 @@ Promotion is deliberate:
    "this will overwrite" or "this is destructive".
 9. **Promotion is human-only and deliberate** — always require a confirm step.
 10. **Machine origin section shows only when `is_generated`** — not for all notes.
+11. **Reusable shared objects always show the reusable impact notice when pending** — the notice must explain that approval affects all attached boxes.
+12. **`MachineProvenancePanel` accepts a `className` prop** — use `rounded-none border-x-0 border-t-0` when rendering as a flush section between bordered header areas.

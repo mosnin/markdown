@@ -196,13 +196,39 @@ The `GET /api/v1/notes/[id]/versions` endpoint exists and could be wrapped as a 
 
 ---
 
+## Object versions — Files, Skills, Agents
+
+Files, Skills, and Agents use a separate shared `object_versions` table (not `note_versions`). The schema and immutability contract are identical:
+
+- Each row is a complete snapshot of `source_content` at one point in time
+- Rows are INSERT-only; no updates or deletes
+- `change_origin` values: `human_edit`, `import`, `generated`, `proposal_approved`, `rollback`
+- `actor_type` / `actor_id` track who made the change
+- Rollback creates a new version row; it never rewrites history
+
+The `version_history_service.ts` module provides:
+
+```
+listVersionsForObject(supabase, workspaceId, objectType, objectId)
+getVersionForObject(supabase, workspaceId, objectType, objectId, versionId)
+rollbackObjectToVersion(supabase, userId, workspaceId, objectType, objectId, targetVersionId)
+```
+
+Ownership for box-local objects uses the two-hop check (object → box → workspace_id). Ownership for reusable workspace objects is checked directly via workspace_id.
+
+**Rollback exception for reusable objects:** A human owner rolling back a reusable shared skill or agent bypasses the "proposal-only" rule for external writes. This is the deliberate exception — the owner is explicitly restoring a known-good state. The rollback is audited with `change_origin = 'rollback'` and `actor_type = 'user'`.
+
+UI: `ObjectHistoryPanel` + `HeterogeneousVersionTimeline` (collapsible, shows version count in header).
+
+---
+
 ## What is NOT available in V1
 
 - Rollback through the canonical API or MCP
-- Version content diff through the API (full markdown_content is available per-version in the human app)
+- Version content diff through the API (full content is available per-version in the human app)
 - Version deletion or amendment
-- Cross-note history comparison
-- Audit browsing UI
+- Cross-note or cross-object history comparison
+- Audit browsing UI with version detail
 
 ---
 

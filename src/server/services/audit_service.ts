@@ -395,6 +395,9 @@ export function auditWriteProposalApproved(
     proposal_type: string;
     connection_id: string;
     note_id?: string | null;
+    object_type?: string | null;
+    object_id?: string | null;
+    version_id?: string | null;
   }
 ): Promise<void> {
   return write(
@@ -652,4 +655,187 @@ export function auditGeneratedNotePromoted(
   }
 ): Promise<void> {
   return write(supabase, workspaceId, userId, "note", noteId, "note.promoted_from_generated", metadata);
+}
+
+// ─── File, Skill, Agent lifecycle events ─────────────────────────────────────
+
+/**
+ * Generic lifecycle events for files, skills, and agents.
+ * object_type: 'file' | 'skill' | 'agent'
+ */
+
+export function auditObjectArchived(
+  supabase: SupabaseClient,
+  workspaceId: string,
+  userId: string,
+  objectType: "file" | "skill" | "agent",
+  objectId: string,
+  metadata: { name: string; box_id: string | null; is_reusable: boolean }
+): Promise<void> {
+  return write(supabase, workspaceId, userId, objectType, objectId, `${objectType}.archived`, metadata);
+}
+
+export function auditObjectUnarchived(
+  supabase: SupabaseClient,
+  workspaceId: string,
+  userId: string,
+  objectType: "file" | "skill" | "agent",
+  objectId: string,
+  metadata: { name: string; box_id: string | null; is_reusable: boolean }
+): Promise<void> {
+  return write(supabase, workspaceId, userId, objectType, objectId, `${objectType}.unarchived`, metadata);
+}
+
+export function auditObjectTrashed(
+  supabase: SupabaseClient,
+  workspaceId: string,
+  userId: string,
+  objectType: "file" | "skill" | "agent",
+  objectId: string,
+  metadata: { name: string; box_id: string | null; is_reusable: boolean }
+): Promise<void> {
+  return write(supabase, workspaceId, userId, objectType, objectId, `${objectType}.trashed`, metadata);
+}
+
+export function auditObjectRestored(
+  supabase: SupabaseClient,
+  workspaceId: string,
+  userId: string,
+  objectType: "file" | "skill" | "agent",
+  objectId: string,
+  metadata: { name: string; box_id: string | null; is_reusable: boolean }
+): Promise<void> {
+  return write(supabase, workspaceId, userId, objectType, objectId, `${objectType}.restored`, metadata);
+}
+
+export function auditObjectCreated(
+  supabase: SupabaseClient,
+  workspaceId: string,
+  userId: string,
+  objectType: "file" | "skill" | "agent",
+  objectId: string,
+  metadata: { name: string; box_id: string | null; is_reusable: boolean; canonical_format: string }
+): Promise<void> {
+  return write(supabase, workspaceId, userId, objectType, objectId, `${objectType}.created`, metadata);
+}
+
+export function auditObjectUpdated(
+  supabase: SupabaseClient,
+  workspaceId: string,
+  userId: string,
+  objectType: "file" | "skill" | "agent",
+  objectId: string,
+  metadata: {
+    name: string;
+    box_id: string | null;
+    is_reusable: boolean;
+    version_id?: string | null;
+    diff_summary?: Record<string, unknown> | null;
+  }
+): Promise<void> {
+  return write(supabase, workspaceId, userId, objectType, objectId, `${objectType}.updated`, metadata);
+}
+
+export function auditObjectExported(
+  supabase: SupabaseClient,
+  workspaceId: string,
+  userId: string,
+  objectType: "file" | "skill" | "agent",
+  objectId: string,
+  metadata: { name: string; export_mode: string }
+): Promise<void> {
+  return write(supabase, workspaceId, userId, objectType, objectId, `${objectType}.exported`, metadata);
+}
+
+export function auditObjectImported(
+  supabase: SupabaseClient,
+  workspaceId: string,
+  userId: string,
+  objectType: "file" | "skill" | "agent",
+  objectId: string,
+  metadata: { name: string; is_reusable: boolean; collision_mode: string }
+): Promise<void> {
+  return write(supabase, workspaceId, userId, objectType, objectId, `${objectType}.imported`, metadata);
+}
+
+// ─── Object version rollback events ──────────────────────────────────────────
+
+export function auditObjectRollback(
+  supabase: SupabaseClient,
+  workspaceId: string,
+  userId: string,
+  objectType: "file" | "skill" | "agent",
+  objectId: string,
+  metadata: {
+    prior_version_id: string | null;
+    restored_from_version_id: string;
+    new_version_id: string;
+    name: string;
+    is_reusable: boolean;
+  }
+): Promise<void> {
+  return write(supabase, workspaceId, userId, objectType, objectId, `${objectType}.rollback`, metadata);
+}
+
+// ─── Box object attachment events (reusable references) ──────────────────────
+
+export function auditReusableObjectAttached(
+  supabase: SupabaseClient,
+  workspaceId: string,
+  userId: string,
+  objectType: "skill" | "agent",
+  objectId: string,
+  metadata: {
+    object_name: string;
+    box_id: string;
+    box_name: string;
+    folder_id: string | null;
+  }
+): Promise<void> {
+  return write(supabase, workspaceId, userId, objectType, objectId, `${objectType}.attached_to_box`, metadata);
+}
+
+export function auditReusableObjectDetached(
+  supabase: SupabaseClient,
+  workspaceId: string,
+  userId: string,
+  objectType: "skill" | "agent",
+  objectId: string,
+  metadata: {
+    object_name: string;
+    box_id: string;
+    box_name: string;
+  }
+): Promise<void> {
+  return write(supabase, workspaceId, userId, objectType, objectId, `${objectType}.detached_from_box`, metadata);
+}
+
+// ─── Extended write proposal events for object targets ───────────────────────
+
+/**
+ * Write proposal approved by the workspace owner, targeting a file/skill/agent.
+ * Extends auditWriteProposalApproved with object metadata.
+ */
+export function auditObjectProposalApproved(
+  supabase: SupabaseClient,
+  workspaceId: string,
+  userId: string,
+  proposalId: string,
+  metadata: {
+    proposal_type: string;
+    connection_id: string;
+    object_type: string | null;
+    object_id: string | null;
+    version_id?: string | null;
+  }
+): Promise<void> {
+  return write(
+    supabase,
+    workspaceId,
+    userId,
+    "write_proposal",
+    proposalId,
+    "write_proposal.approved",
+    metadata
+  );
 }

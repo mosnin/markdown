@@ -194,6 +194,46 @@ Filter options:
 
 ---
 
+## Lifecycle — Files, Skills, Agents
+
+Files, Skills, and Agents support the same `draft → active → archived → trashed` lifecycle as notes.
+
+**New service functions in `lifecycle_service.ts`:**
+
+```
+archiveFile / unarchiveFile / trashFile / restoreFile
+archiveSkill / unarchiveSkill / trashSkill / restoreSkill
+archiveAgent / unarchiveAgent / trashAgent / restoreAgent
+```
+
+Each function:
+1. Resolves object ownership (box-local: two-hop check; reusable: workspace_id direct check)
+2. Updates the `status` column on the object row
+3. Fires an audit event (fire-and-forget)
+
+**Reusable objects and attachments:** When a reusable shared Skill or Agent is archived or trashed, `box_object_attachments` rows are **left intact**. The UI shows `ReusableObjectDegradedBadge` on affected attachment references. This is intentional — silent detach would surprise users. To fully remove the object, the owner must explicitly detach it from each box.
+
+**Server actions:**
+
+```
+src/app/app/files/lifecycle_actions.ts    — archive/unarchive/trash/restore + rollback
+src/app/app/skills/lifecycle_actions.ts   — archive/unarchive/trash/restore + rollback
+src/app/app/agents/lifecycle_actions.ts   — archive/unarchive/trash/restore + rollback
+```
+
+**UI:** `ObjectLifecyclePanel` (client component) — archive/unarchive/trash/restore with confirmation step for destructive actions. Client wrapper components `SkillLifecycleControls` and `AgentLifecycleControls` wire the panel to object-specific server actions.
+
+**Audit events added:**
+
+| Event | When |
+|---|---|
+| `file.archived`, `skill.archived`, `agent.archived` | Lifecycle archive |
+| `file.unarchived`, `skill.unarchived`, `agent.unarchived` | Lifecycle unarchive |
+| `file.trashed`, `skill.trashed`, `agent.trashed` | Lifecycle trash |
+| `file.restored`, `skill.restored`, `agent.restored` | Lifecycle restore |
+
+---
+
 ## No external API surface
 
 Lifecycle mutations are **human-only**. External connections (canonical API, MCP) cannot archive, trash, restore, or unarchive any content. This is intentional: lifecycle state is owner policy.

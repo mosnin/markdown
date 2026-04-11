@@ -24,6 +24,8 @@ import { cn } from "@/lib/utils";
 import { type WriteProposal } from "@/server/domain/types/write_proposal";
 import { type Note } from "@/server/domain/types/note";
 import { type Connection } from "@/server/domain/types/connection";
+import { type CurrentObjectSnapshot } from "@/server/services/write_proposal_service";
+import { HeterogeneousProposalCard } from "@/components/product/heterogeneous_proposal_card";
 import {
   approveProposalAction,
   rejectProposalAction,
@@ -35,6 +37,7 @@ export interface ProposalWithContext {
   proposal: WriteProposal;
   connection: Connection | null;
   current_note: Note | null;
+  current_object: CurrentObjectSnapshot | null;
   preview_content: string | null;
 }
 
@@ -541,13 +544,42 @@ export function ProposalsPanel({ initialProposals }: ProposalsPanelProps) {
         </div>
       ) : (
         <div className="space-y-3">
-          {filtered.map((item) => (
-            <ProposalCard
-              key={item.proposal.id}
-              item={item}
-              onUpdate={handleUpdate}
-            />
-          ))}
+          {filtered.map((item) =>
+            item.proposal.target_object_type != null ? (
+              <HeterogeneousProposalCard
+                key={item.proposal.id}
+                proposal={item.proposal}
+                connectionName={item.connection?.name}
+                currentObjectName={item.current_object?.name}
+                currentObjectSource={item.current_object?.source_content}
+                currentObjectFormat={item.current_object?.canonical_format}
+                targetIsReusable={item.current_object?.is_reusable ?? false}
+                onApprove={async (proposalId, reviewNote) => {
+                  const result = await approveProposalAction(proposalId, reviewNote);
+                  if (result.success) {
+                    const data = result.data as { outcome: string };
+                    handleUpdate(proposalId, data.outcome === "approved" ? "approved" : "conflicted");
+                    return { ok: true, outcome: data.outcome };
+                  }
+                  return { ok: false, error: result.error };
+                }}
+                onReject={async (proposalId, reviewNote) => {
+                  const result = await rejectProposalAction(proposalId, reviewNote);
+                  if (result.success) {
+                    handleUpdate(proposalId, "rejected");
+                    return { ok: true };
+                  }
+                  return { ok: false, error: result.error };
+                }}
+              />
+            ) : (
+              <ProposalCard
+                key={item.proposal.id}
+                item={item}
+                onUpdate={handleUpdate}
+              />
+            )
+          )}
         </div>
       )}
     </div>

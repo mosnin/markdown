@@ -113,6 +113,29 @@ export async function getObjectVersionByNumber(
 }
 
 /**
+ * Fetch a specific version by its id, verifying it belongs to the given object.
+ * Analogous to note_version_repository.getVersionByNoteAndId.
+ * Returns null if not found or if the version belongs to a different object.
+ */
+export async function getObjectVersionByObjectAndId(
+  supabase: SupabaseClient,
+  object_type: "file" | "skill" | "agent",
+  object_id: string,
+  version_id: string
+): Promise<ObjectVersion | null> {
+  const { data, error } = await supabase
+    .from("object_versions")
+    .select("*")
+    .eq("id", version_id)
+    .eq("object_type", object_type)
+    .eq("object_id", object_id)
+    .single();
+
+  if (error || !data) return null;
+  return data as ObjectVersion;
+}
+
+/**
  * Insert a new immutable version snapshot.
  * Throws on database error.
  */

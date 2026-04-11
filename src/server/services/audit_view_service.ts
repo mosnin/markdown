@@ -31,6 +31,9 @@ export interface AuditViewResult {
 /** Well-known object types for UI filter options. */
 export const AUDIT_OBJECT_TYPES = [
   "note",
+  "file",
+  "skill",
+  "agent",
   "folder",
   "box",
   "write_proposal",
@@ -41,7 +44,11 @@ export const AUDIT_OBJECT_TYPES = [
 /** Well-known event type groups for UI filter options. */
 export const AUDIT_EVENT_GROUPS: Array<{ label: string; prefix: string }> = [
   { label: "Note edits", prefix: "note." },
+  { label: "File changes", prefix: "file." },
+  { label: "Skill changes", prefix: "skill." },
+  { label: "Agent changes", prefix: "agent." },
   { label: "Lifecycle", prefix: "note.archived" },
+  { label: "Object lifecycle", prefix: "file.archived" },
   { label: "Proposals", prefix: "write_proposal." },
   { label: "Connections", prefix: "connection." },
   { label: "Imports & exports", prefix: "import." },

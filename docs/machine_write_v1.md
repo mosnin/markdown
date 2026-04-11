@@ -21,12 +21,30 @@ Context Store's machine write layer lets external connections contribute content
 
 ## Proposal types
 
+### Note proposals
+
 | Type | Description | Required fields |
 |---|---|---|
 | `create_note` | Propose creating a new note in a folder | `target_folder_id` |
 | `update_note` | Propose a full content replacement | `target_note_id`, `target_version_id` (captured automatically) |
 | `append_note` | Propose appending markdown to an existing note | `target_note_id`, `target_version_id` (captured automatically) |
 | `replace_note` | Full destructive replacement (stronger warning in review UI) | `target_note_id`, `target_version_id` (captured automatically) |
+
+### Object proposals (files, skills, agents)
+
+| Type | Description | Required fields |
+|---|---|---|
+| `update_file` | Propose replacing a file's source content | `target_object_id`, `target_object_version_id` (captured automatically) |
+| `create_skill` | Propose creating a new skill | `target_object_type = 'skill'`, proposed content |
+| `update_skill` | Propose replacing a skill's source content | `target_object_id`, `target_object_version_id` (captured automatically) |
+| `create_agent` | Propose creating a new agent | `target_object_type = 'agent'`, proposed content |
+| `update_agent` | Propose replacing an agent's source content | `target_object_id`, `target_object_version_id` (captured automatically) |
+
+Object proposals use `target_object_type` + `target_object_id` instead of `target_note_id`. The service uses `NOTE_PROPOSAL_TYPES` and `OBJECT_PROPOSAL_TYPES` constant sets to route proposal handling cleanly without brittle string matching.
+
+### Reusable shared objects
+
+For Skills and Agents marked `is_reusable = true`, external writes via proposal are **always required** — regardless of the connection's permission mode. `connectionCanDirectlyWrite()` returns `false` for any reusable shared object. This rule is enforced in `write_proposal_service.ts` before any write is attempted.
 
 ---
 
@@ -220,11 +238,12 @@ Route: `/app/proposals`
 
 - External approval/rejection through the API or MCP (humans only)
 - External proposal cancellation
-- Rollback of approved changes
-- Version history browsing
+- Rollback of approved changes (human-only; see `expanded_object_trust_model_v1.md`)
+- Version history browsing through external API
 - Expiry enforcement (expires_at field exists but is not actively polled)
 - Cross-box proposals
 - Folder creation through proposals
+- Direct mutation of reusable shared Skills or Agents by external connections (proposals required)
 
 ---
 

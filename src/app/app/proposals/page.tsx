@@ -10,6 +10,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import type { Connection } from "@/server/domain/types/connection";
 import type { WriteProposal } from "@/server/domain/types/write_proposal";
+import type { CurrentObjectSnapshot } from "@/server/services/write_proposal_service";
 
 /**
  * /app/proposals
@@ -49,6 +50,7 @@ export default async function ProposalsPage() {
         proposal: preview.proposal,
         connection: connectionMap.get(proposal.connection_id) ?? null,
         current_note: preview.current_note,
+        current_object: preview.current_object,
         preview_content: preview.preview_content,
       };
     })

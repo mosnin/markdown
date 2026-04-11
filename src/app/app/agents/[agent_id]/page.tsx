@@ -12,6 +12,7 @@ import {
   listAttachmentsForObject,
   isObjectAttachedToBox,
 } from "@/server/repositories/box_object_attachment_repository";
+import { listPendingProposalsForObject } from "@/server/repositories/write_proposal_repository";
 import { listNotesByBox } from "@/server/repositories/note_repository";
 import { listFilesByBox } from "@/server/repositories/file_repository";
 import { listSkillsByBox } from "@/server/repositories/skill_repository";
@@ -28,6 +29,9 @@ import { AgentContextPanel } from "@/components/product/agent_context_panel";
 import { AgentObjectLinksPanel } from "@/components/product/agent_object_links_panel";
 import { AgentLifecycleMenu } from "@/components/product/agent_lifecycle_menu";
 import { ReferenceContextBanner } from "@/components/product/reference_context_banner";
+import { ObjectTrustHeader } from "@/components/product/object_trust_header";
+import { MachineProvenancePanel } from "@/components/product/machine_provenance_panel";
+import { AgentHistoryPanel, AgentLifecycleControls } from "@/components/product/agent_trust_panels";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { AgentTypeBadge } from "@/components/product/agent_type_badge";
 import { AgentReferenceBadge } from "@/components/product/agent_reference_badge";
@@ -134,7 +138,7 @@ function resolveLink(
 
 // ─── Valid tabs ───────────────────────────────────────────────────────────────
 
-const VALID_TABS = ["overview", "source", "exports", "children", "skills", "relationships"] as const;
+const VALID_TABS = ["overview", "source", "exports", "children", "skills", "relationships", "trust"] as const;
 type AgentTab = typeof VALID_TABS[number];
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
@@ -176,13 +180,14 @@ export default async function AgentPage({
   }
 
   // Parallel data fetching
-  const [rawLinks, versions, attachments, boxNotes, boxFiles, boxSkills, boxAgents, reusableAgents] =
+  const [rawLinks, versions, attachments, pendingProposals, boxNotes, boxFiles, boxSkills, boxAgents, reusableAgents] =
     await Promise.all([
       getLinksForObject(supabase, ctx.workspace.id, OBJECT_TYPE.AGENT, agent_id),
       listObjectVersions(supabase, "agent", agent_id, { limit: 50 }),
       agent.is_reusable
         ? listAttachmentsForObject(supabase, ctx.workspace.id, "agent", agent_id)
         : Promise.resolve([]),
+      listPendingProposalsForObject(supabase, ctx.workspace.id, "agent", agent_id),
       agent.box_id ? listNotesByBox(supabase, agent.box_id) : Promise.resolve([]),
       agent.box_id ? listFilesByBox(supabase, agent.box_id) : Promise.resolve([]),
       agent.box_id ? listSkillsByBox(supabase, agent.box_id) : Promise.resolve([]),
@@ -192,6 +197,13 @@ export default async function AgentPage({
         ? listReusableAgents(supabase, ctx.workspace.id)
         : Promise.resolve([]),
     ]);
+
+  const versionsWithCurrent = versions.map((v) => ({
+    ...v,
+    is_current: v.id === agent.current_version_id,
+  }));
+
+  const rollbackDisabled = agent.status === "archived" || agent.status === "trashed";
 
   // Resolution maps
   const noteMap = new Map(boxNotes.map((n) => [n.id, { id: n.id, title: n.title }]));
@@ -278,7 +290,7 @@ export default async function AgentPage({
             <AgentExportMenu agentId={agent_id} agentName={agent.name} />
             {/* History shortcut */}
             <Link
-              href="?tab=history"
+              href="?tab=trust"
               aria-label="Version history"
               title="Version history"
               className={cn(
@@ -314,9 +326,30 @@ export default async function AgentPage({
               {agent.description && (
                 <p className="mt-0.5 text-sm text-muted-foreground">{agent.description}</p>
               )}
+              <div className="mt-2">
+                <ObjectTrustHeader
+                  objectType="agent"
+                  objectName={agent.name}
+                  isReusable={agent.is_reusable}
+                  attachedBoxCount={attachments.length}
+                  pendingProposalCount={pendingProposals.length}
+                  lifecycleStatus={agent.status as "draft" | "active" | "archived" | "trashed"}
+                  isGenerated={agent.origin_type === "generated"}
+                  canonicalFormat={agent.canonical_format}
+                />
+              </div>
             </div>
           </div>
         </div>
+
+        {/* Machine provenance */}
+        <MachineProvenancePanel
+          originType={agent.origin_type as "user_created" | "imported" | "generated"}
+          createdAt={agent.created_at}
+          pendingProposalCount={pendingProposals.length}
+          objectName={agent.name}
+          className="rounded-none border-x-0 border-t-0"
+        />
 
         {/* Reference context banner — shown when a reusable agent is viewed from a box */}
         {refBox && (
@@ -361,6 +394,14 @@ export default async function AgentPage({
                   </span>
                 )}
               </TabsTrigger>
+              <TabsTrigger value="trust" className="pb-2.5 text-xs">
+                Trust
+                {pendingProposals.length > 0 && (
+                  <span className="ml-1 rounded-full bg-amber-500/20 px-1 text-[10px] text-amber-600 dark:text-amber-400">
+                    {pendingProposals.length}
+                  </span>
+                )}
+              </TabsTrigger>
             </TabsList>
           </div>
 
@@ -402,6 +443,26 @@ export default async function AgentPage({
                   incoming={incomingLinks}
                   eligibleTargets={eligibleLinkTargets}
                 />
+              </div>
+            </ScrollArea>
+          </TabsContent>
+
+          <TabsContent value="trust" className="flex-1 overflow-hidden">
+            <ScrollArea className="h-full">
+              <div className="mx-auto max-w-2xl px-6 py-6 space-y-4">
+                <AgentHistoryPanel
+                  agentId={agent_id}
+                  versions={versionsWithCurrent}
+                  currentVersionId={agent.current_version_id ?? null}
+                  rollbackDisabled={rollbackDisabled}
+                />
+                <section className="rounded-lg border border-border bg-card p-4">
+                  <AgentLifecycleControls
+                    agentId={agent_id}
+                    currentStatus={agent.status as "draft" | "active" | "archived" | "trashed"}
+                    agentName={agent.name}
+                  />
+                </section>
               </div>
             </ScrollArea>
           </TabsContent>

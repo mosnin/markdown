@@ -217,6 +217,48 @@ See type-specific documentation:
 
 ---
 
+## Expanded trust model (Phase 3)
+
+Phase 3 extended the trust, permissions, versioning, lifecycle, audit, and machine workflow model from notes to all four object types.
+
+### New services
+
+| Service | Responsibility |
+|---|---|
+| `object_trust_policy_service.ts` | `getObjectTrustPolicy`, `connectionCanDirectlyWrite`, `describeObjectTrustLevel` |
+| `version_history_service.ts` | Extended with `listVersionsForObject`, `rollbackObjectToVersion` for files/skills/agents |
+| `lifecycle_service.ts` | Extended with archive/unarchive/trash/restore for files, skills, agents |
+| `audit_service.ts` | Extended with events for all object types: created, updated, archived, trashed, rollback, attach/detach, proposal_approved |
+
+### New server actions
+
+| File | Actions |
+|---|---|
+| `src/app/app/files/lifecycle_actions.ts` | `archiveFileAction`, `trashFileAction`, `restoreFileAction`, `rollbackFileAction` |
+| `src/app/app/skills/lifecycle_actions.ts` | Same pattern for skills |
+| `src/app/app/agents/lifecycle_actions.ts` | Same pattern for agents |
+
+### New trust UI components (Phase 3)
+
+| Component | Purpose |
+|---|---|
+| `shared_object_trust_badge.tsx` | `SharedObjectTrustBadge`, `ProposalOnlyBadge` |
+| `object_trust_header.tsx` | `ObjectTrustHeader` — combined trust summary |
+| `object_lifecycle_panel.tsx` | `ObjectLifecyclePanel` — archive/trash/restore UI |
+| `heterogeneous_version_timeline.tsx` | `HeterogeneousVersionTimeline` — version list with rollback |
+| `object_history_panel.tsx` | `ObjectHistoryPanel` — collapsible wrapper |
+| `proposal_target_summary.tsx` | `ProposalTargetSummary` — proposal card header |
+| `shared_reference_impact_notice.tsx` | `SharedReferenceImpactNotice`, `ReusableObjectDegradedBadge` |
+| `connection_permission_hint.tsx` | `ConnectionPermissionHint` |
+| `machine_provenance_panel.tsx` | `MachineProvenancePanel` — generated/imported provenance |
+| `heterogeneous_proposal_card.tsx` | `HeterogeneousProposalCard` — proposal review for all object types |
+| `skill_trust_panels.tsx` | `SkillHistoryPanel`, `SkillLifecycleControls` — client wrappers |
+| `agent_trust_panels.tsx` | `AgentHistoryPanel`, `AgentLifecycleControls` — client wrappers |
+
+For the full expanded trust model see [docs/expanded_object_trust_model_v1.md](expanded_object_trust_model_v1.md).
+
+---
+
 ## Data flow
 
 ```

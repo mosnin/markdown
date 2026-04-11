@@ -65,10 +65,14 @@ Revoking a connection:
 | Mode | Description |
 |---|---|
 | `read_only` | May only read notes, folders, and metadata. No writes. |
-| `propose_writes` | May submit write proposals for human review. Cannot write directly. (V1: read-only enforced) |
-| `generate_in_allowed_folders` | May write directly to folders where `accepts_generated_notes = true`. (V1: read-only enforced) |
+| `propose_writes` | May submit write proposals for human review. Cannot write directly. |
+| `generate_in_allowed_folders` | May write directly to folders where `accepts_generated_notes = true`. Also submits write proposals for object changes. |
 
-In V1, only `read_only` is active. `propose_writes` and `generate_in_allowed_folders` are defined for forward compatibility.
+### Reusable shared object restriction
+
+Regardless of permission mode, external connections **cannot directly mutate** workspace-shared (reusable) Skills or Agents. All writes to reusable objects must go through the write proposal system. This is enforced by `connectionCanDirectlyWrite()` in `object_trust_policy_service.ts` before any write is attempted.
+
+Box-scoped connections only see reusable objects that are explicitly attached to their allowed boxes. They cannot discover or propose changes to unattached workspace-shared objects.
 
 ---
 

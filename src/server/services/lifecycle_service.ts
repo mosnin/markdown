@@ -16,24 +16,43 @@ import {
   auditFolderSubtreeRestored,
   auditBoxArchived,
   auditBoxUnarchived,
+  auditObjectArchived,
+  auditObjectUnarchived,
+  auditObjectTrashed,
+  auditObjectRestored,
 } from "@/server/services/audit_service";
 
 /**
  * Lifecycle service.
  *
- * Orchestrates archive, trash, restore, and unarchive for notes, folder
- * subtrees, and boxes. All operations enforce two-hop ownership
- * (resource → box → workspace_id) before mutating state.
+ * Orchestrates archive, trash, restore, and unarchive for all object types:
+ *   - Notes, Folders (subtrees), Boxes
+ *   - Files, Skills, Agents (new in extended object model)
  *
- * Guide note protection:
- *   A note that is currently assigned as a box's guide note (boxes.guide_note_id)
- *   cannot be trashed or archived. The owner must clear or change the guide note
- *   assignment first. This is enforced with explicit, legible error messages.
+ * All operations enforce two-hop ownership (resource → box → workspace_id,
+ * or for reusable objects: resource.workspace_id match).
  *
- *   For folder subtree operations, if the subtree contains the current guide note
- *   the operation is rejected cleanly. guide_note_id is never silently cleared.
+ * Guide note protection (Notes only):
+ *   A note assigned as a box's guide note cannot be trashed or archived.
+ *   guide_note_id is never silently cleared.
  *
- * Box trash: intentionally deferred in V1. See docs/lifecycle_controls_v1.md.
+ * Reusable shared object behavior on archive/trash:
+ *   When a workspace-reusable skill or agent is archived or trashed, any
+ *   existing box_object_attachments remain. The attachment rows are NOT
+ *   silently removed. The UI and tree rendering layer is responsible for
+ *   surfacing the degraded state (e.g. showing a "degraded" badge on
+ *   attached references when the source object is non-active).
+ *   This is an explicit, deliberate design decision documented in
+ *   docs/expanded_object_trust_model_v1.md.
+ *
+ * Lifecycle states and transitions:
+ *   active ←→ archived
+ *   active → trashed → active (restore)
+ *   archived → trashed (allowed)
+ *   trashed → archived (not allowed: restore first)
+ *
+ * Box trash: intentionally deferred in V1. Use archiveBox as the reversible
+ * "hide this box" mechanism.
  */
 
 // ─── Internal helpers ──────────────────────────────────────────────────────────
@@ -82,6 +101,75 @@ async function resolveBoxWithOwnership(
 }
 
 /**
+ * Resolve a file/skill/agent row and verify workspace ownership.
+ *
+ * Reusable objects (is_reusable=true) have box_id=null; ownership is verified
+ * directly by workspace_id.
+ *
+ * Box-local objects use the two-hop check (object → box → workspace_id).
+ */
+async function resolveObjectWithOwnership(
+  supabase: SupabaseClient,
+  objectType: "file" | "skill" | "agent",
+  objectId: string,
+  workspaceId: string
+): Promise<{
+  id: string;
+  name: string;
+  status: string;
+  box_id: string | null;
+  is_reusable: boolean;
+}> {
+  const table = objectType === "file" ? "files" : objectType === "skill" ? "skills" : "agents";
+
+  const { data, error } = await supabase
+    .from(table)
+    .select("id, name, status, box_id, is_reusable, workspace_id")
+    .eq("id", objectId)
+    .single();
+
+  if (error || !data) throw new Error(`${objectType} not found`);
+
+  const row = data as {
+    id: string;
+    name: string;
+    status: string;
+    box_id: string | null;
+    is_reusable: boolean;
+    workspace_id: string;
+  };
+
+  if (row.workspace_id !== workspaceId) throw new Error(`${objectType} not found`);
+
+  if (!row.is_reusable && row.box_id) {
+    const box = await getBoxById(supabase, row.box_id);
+    if (!box || box.workspace_id !== workspaceId) throw new Error(`${objectType} not found`);
+  }
+
+  return {
+    id: row.id,
+    name: row.name,
+    status: row.status,
+    box_id: row.box_id,
+    is_reusable: row.is_reusable,
+  };
+}
+
+async function updateObjectStatus(
+  supabase: SupabaseClient,
+  objectType: "file" | "skill" | "agent",
+  objectId: string,
+  status: string
+): Promise<void> {
+  const table = objectType === "file" ? "files" : objectType === "skill" ? "skills" : "agents";
+  const { error } = await supabase
+    .from(table)
+    .update({ status, updated_at: new Date().toISOString() })
+    .eq("id", objectId);
+  if (error) throw new Error(error.message);
+}
+
+/**
  * Check whether a note is currently assigned as the guide note of any box.
  * Returns the box id if assigned, null otherwise.
  */
@@ -100,7 +188,6 @@ async function findGuideNoteAssignment(
 
 /**
  * Check whether any note in the folder subtree is the current guide note of the box.
- * Returns the guide note id if found, null otherwise.
  */
 async function findGuideNoteInSubtree(
   supabase: SupabaseClient,
@@ -110,7 +197,6 @@ async function findGuideNoteInSubtree(
 ): Promise<string | null> {
   if (!guideNoteId) return null;
 
-  // Check if guide note lives in this subtree
   const { data } = await supabase
     .from("notes")
     .select("id, folder_id")
@@ -120,17 +206,6 @@ async function findGuideNoteInSubtree(
 
   if (!data || !data.folder_id) return null;
 
-  // Walk up from guide note's folder to see if folderId is an ancestor
-  // We do this by fetching all folder ids in the subtree
-  const { data: subtreeFolders } = await supabase.rpc(
-    "get_folder_subtree_ids",
-    { p_folder_id: folderId, p_box_id: boxId }
-  );
-
-  // Fallback: just check if the guide note is in a folder that could be in the subtree
-  // We do a simpler approach: check direct folder_id match in subtree
-  // Since we don't have a dedicated RPC for just ids, we use the service layer SQL approach
-  // by checking if the guide note is inside any folder whose path_cache starts with the subtree root
   const rootFolder = await getFolderById(supabase, folderId);
   if (!rootFolder) return null;
 
@@ -142,7 +217,6 @@ async function findGuideNoteInSubtree(
 
   if (!guideFolder) return null;
 
-  // Guide note is in the subtree if its folder path starts with the root folder path
   if (
     guideFolder.path_cache === rootFolder.path_cache ||
     guideFolder.path_cache.startsWith(rootFolder.path_cache + "/")
@@ -150,7 +224,6 @@ async function findGuideNoteInSubtree(
     return guideNoteId;
   }
 
-  // Also check if the guide note is directly in the root folder
   const { data: guideInRoot } = await supabase
     .from("notes")
     .select("id")
@@ -274,7 +347,6 @@ export async function archiveFolder(
 
   if (folder.status === "trashed") throw new Error("Cannot archive a trashed folder");
 
-  // Guide note protection
   const guideNoteId = await findGuideNoteInSubtree(supabase, folderId, box.id, box.guide_note_id);
   if (guideNoteId) {
     throw new Error(
@@ -338,7 +410,6 @@ export async function trashFolder(
 
   if (folder.status === "trashed") throw new Error("Folder is already trashed");
 
-  // Guide note protection
   const guideNoteId = await findGuideNoteInSubtree(supabase, folderId, box.id, box.guide_note_id);
   if (guideNoteId) {
     throw new Error(
@@ -447,16 +518,249 @@ export async function unarchiveBox(
   return result;
 }
 
+// ─── File lifecycle ───────────────────────────────────────────────────────────
+
+export async function archiveFile(
+  supabase: SupabaseClient,
+  userId: string,
+  workspaceId: string,
+  fileId: string
+): Promise<void> {
+  const obj = await resolveObjectWithOwnership(supabase, "file", fileId, workspaceId);
+
+  if (obj.status === "archived") throw new Error("File is already archived");
+  if (obj.status === "trashed") throw new Error("Cannot archive a trashed file");
+
+  await updateObjectStatus(supabase, "file", fileId, "archived");
+
+  await auditObjectArchived(supabase, workspaceId, userId, "file", fileId, {
+    name: obj.name,
+    box_id: obj.box_id,
+    is_reusable: false,
+  });
+}
+
+export async function unarchiveFile(
+  supabase: SupabaseClient,
+  userId: string,
+  workspaceId: string,
+  fileId: string
+): Promise<void> {
+  const obj = await resolveObjectWithOwnership(supabase, "file", fileId, workspaceId);
+
+  if (obj.status !== "archived") throw new Error("File is not archived");
+
+  await updateObjectStatus(supabase, "file", fileId, "active");
+
+  await auditObjectUnarchived(supabase, workspaceId, userId, "file", fileId, {
+    name: obj.name,
+    box_id: obj.box_id,
+    is_reusable: false,
+  });
+}
+
+export async function trashFile(
+  supabase: SupabaseClient,
+  userId: string,
+  workspaceId: string,
+  fileId: string
+): Promise<void> {
+  const obj = await resolveObjectWithOwnership(supabase, "file", fileId, workspaceId);
+
+  if (obj.status === "trashed") throw new Error("File is already trashed");
+
+  await updateObjectStatus(supabase, "file", fileId, "trashed");
+
+  await auditObjectTrashed(supabase, workspaceId, userId, "file", fileId, {
+    name: obj.name,
+    box_id: obj.box_id,
+    is_reusable: false,
+  });
+}
+
+export async function restoreFile(
+  supabase: SupabaseClient,
+  userId: string,
+  workspaceId: string,
+  fileId: string
+): Promise<void> {
+  const obj = await resolveObjectWithOwnership(supabase, "file", fileId, workspaceId);
+
+  if (obj.status !== "trashed") throw new Error("File is not trashed");
+
+  await updateObjectStatus(supabase, "file", fileId, "active");
+
+  await auditObjectRestored(supabase, workspaceId, userId, "file", fileId, {
+    name: obj.name,
+    box_id: obj.box_id,
+    is_reusable: false,
+  });
+}
+
+// ─── Skill lifecycle ──────────────────────────────────────────────────────────
+//
+// Note: when a reusable skill is archived or trashed, box_object_attachments
+// are NOT automatically removed. The attachment rows remain. The UI renders
+// a degraded state indicator on any attached reference whose source object
+// is non-active. The human owner must explicitly detach or restore.
+
+export async function archiveSkill(
+  supabase: SupabaseClient,
+  userId: string,
+  workspaceId: string,
+  skillId: string
+): Promise<void> {
+  const obj = await resolveObjectWithOwnership(supabase, "skill", skillId, workspaceId);
+
+  if (obj.status === "archived") throw new Error("Skill is already archived");
+  if (obj.status === "trashed") throw new Error("Cannot archive a trashed skill");
+
+  await updateObjectStatus(supabase, "skill", skillId, "archived");
+
+  await auditObjectArchived(supabase, workspaceId, userId, "skill", skillId, {
+    name: obj.name,
+    box_id: obj.box_id,
+    is_reusable: obj.is_reusable,
+  });
+}
+
+export async function unarchiveSkill(
+  supabase: SupabaseClient,
+  userId: string,
+  workspaceId: string,
+  skillId: string
+): Promise<void> {
+  const obj = await resolveObjectWithOwnership(supabase, "skill", skillId, workspaceId);
+
+  if (obj.status !== "archived") throw new Error("Skill is not archived");
+
+  await updateObjectStatus(supabase, "skill", skillId, "active");
+
+  await auditObjectUnarchived(supabase, workspaceId, userId, "skill", skillId, {
+    name: obj.name,
+    box_id: obj.box_id,
+    is_reusable: obj.is_reusable,
+  });
+}
+
+export async function trashSkill(
+  supabase: SupabaseClient,
+  userId: string,
+  workspaceId: string,
+  skillId: string
+): Promise<void> {
+  const obj = await resolveObjectWithOwnership(supabase, "skill", skillId, workspaceId);
+
+  if (obj.status === "trashed") throw new Error("Skill is already trashed");
+
+  await updateObjectStatus(supabase, "skill", skillId, "trashed");
+
+  await auditObjectTrashed(supabase, workspaceId, userId, "skill", skillId, {
+    name: obj.name,
+    box_id: obj.box_id,
+    is_reusable: obj.is_reusable,
+  });
+}
+
+export async function restoreSkill(
+  supabase: SupabaseClient,
+  userId: string,
+  workspaceId: string,
+  skillId: string
+): Promise<void> {
+  const obj = await resolveObjectWithOwnership(supabase, "skill", skillId, workspaceId);
+
+  if (obj.status !== "trashed") throw new Error("Skill is not trashed");
+
+  await updateObjectStatus(supabase, "skill", skillId, "active");
+
+  await auditObjectRestored(supabase, workspaceId, userId, "skill", skillId, {
+    name: obj.name,
+    box_id: obj.box_id,
+    is_reusable: obj.is_reusable,
+  });
+}
+
+// ─── Agent lifecycle ──────────────────────────────────────────────────────────
+
+export async function archiveAgent(
+  supabase: SupabaseClient,
+  userId: string,
+  workspaceId: string,
+  agentId: string
+): Promise<void> {
+  const obj = await resolveObjectWithOwnership(supabase, "agent", agentId, workspaceId);
+
+  if (obj.status === "archived") throw new Error("Agent is already archived");
+  if (obj.status === "trashed") throw new Error("Cannot archive a trashed agent");
+
+  await updateObjectStatus(supabase, "agent", agentId, "archived");
+
+  await auditObjectArchived(supabase, workspaceId, userId, "agent", agentId, {
+    name: obj.name,
+    box_id: obj.box_id,
+    is_reusable: obj.is_reusable,
+  });
+}
+
+export async function unarchiveAgent(
+  supabase: SupabaseClient,
+  userId: string,
+  workspaceId: string,
+  agentId: string
+): Promise<void> {
+  const obj = await resolveObjectWithOwnership(supabase, "agent", agentId, workspaceId);
+
+  if (obj.status !== "archived") throw new Error("Agent is not archived");
+
+  await updateObjectStatus(supabase, "agent", agentId, "active");
+
+  await auditObjectUnarchived(supabase, workspaceId, userId, "agent", agentId, {
+    name: obj.name,
+    box_id: obj.box_id,
+    is_reusable: obj.is_reusable,
+  });
+}
+
+export async function trashAgent(
+  supabase: SupabaseClient,
+  userId: string,
+  workspaceId: string,
+  agentId: string
+): Promise<void> {
+  const obj = await resolveObjectWithOwnership(supabase, "agent", agentId, workspaceId);
+
+  if (obj.status === "trashed") throw new Error("Agent is already trashed");
+
+  await updateObjectStatus(supabase, "agent", agentId, "trashed");
+
+  await auditObjectTrashed(supabase, workspaceId, userId, "agent", agentId, {
+    name: obj.name,
+    box_id: obj.box_id,
+    is_reusable: obj.is_reusable,
+  });
+}
+
+export async function restoreAgent(
+  supabase: SupabaseClient,
+  userId: string,
+  workspaceId: string,
+  agentId: string
+): Promise<void> {
+  const obj = await resolveObjectWithOwnership(supabase, "agent", agentId, workspaceId);
+
+  if (obj.status !== "trashed") throw new Error("Agent is not trashed");
+
+  await updateObjectStatus(supabase, "agent", agentId, "active");
+
+  await auditObjectRestored(supabase, workspaceId, userId, "agent", agentId, {
+    name: obj.name,
+    box_id: obj.box_id,
+    is_reusable: obj.is_reusable,
+  });
+}
+
 // ─── Box trash: deferred ──────────────────────────────────────────────────────
 //
-// Box trash is intentionally not implemented in V1. A box trash operation
-// would need to:
-//   1. Verify no guide note conflict (the box has its own guide_note_id)
-//   2. Cascade trash to all non-trashed folders and notes
-//   3. Handle unarchive/restore in a coherent way
-//
-// This is feasible but adds complexity that is better tackled after archive
-// and note/folder trash are well-established. A trashed box would also
-// disappear from the sidebar, which requires explicit discovery UI.
-//
-// Use archiveBox as the reversible "hide this box" mechanism in V1.
+// Box trash is intentionally not implemented in V1. Use archiveBox as the
+// reversible "hide this box" mechanism in V1.
