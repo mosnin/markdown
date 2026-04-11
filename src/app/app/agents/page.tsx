@@ -8,6 +8,7 @@ import { AgentTypeBadge } from "@/components/product/agent_type_badge";
 import { AgentCreateDialog } from "@/components/product/agent_create_dialog";
 import { AttachToBoxTrigger } from "@/components/product/attach_to_box_trigger";
 import { AgentImportTrigger } from "@/components/product/agent_import_dialog";
+import { WorkspaceLiveRefresh } from "@/components/product/workspace_live_refresh";
 import { cn } from "@/lib/utils";
 
 // ─── Empty state ──────────────────────────────────────────────────────────────
@@ -105,6 +106,7 @@ export default async function AgentsPage() {
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
+      <WorkspaceLiveRefresh workspaceId={ctx.workspace.id} scope="library" />
       {/* Header */}
       <div className="border-b border-border bg-background px-6 pt-6 pb-4">
         <div className="flex items-center justify-between gap-3">

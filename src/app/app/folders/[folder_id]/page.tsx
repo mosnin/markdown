@@ -3,17 +3,14 @@ import { notFound } from "next/navigation";
 import { Folder } from "lucide-react";
 import { requireAuthenticatedUser } from "@/server/auth/require_authenticated_user";
 import { createClient } from "@/lib/supabase/server";
-import { getFolderById, listFoldersByBox } from "@/server/repositories/folder_repository";
+import { getFolderById } from "@/server/repositories/folder_repository";
 import { getBoxById } from "@/server/repositories/box_repository";
-import { listNotesByBox } from "@/server/repositories/note_repository";
-import { listFilesByBox } from "@/server/repositories/file_repository";
-import { listSkillsByBox } from "@/server/repositories/skill_repository";
-import { listAgentsByBox } from "@/server/repositories/agent_repository";
 import { CreateFolderDialog } from "@/components/product/create_folder_dialog";
 import { FileCreateDialog } from "@/components/product/file_create_dialog";
 import { SkillCreateDialog } from "@/components/product/skill_create_dialog";
 import { AgentCreateDialog } from "@/components/product/agent_create_dialog";
 import { FolderWorkspaceActions } from "@/components/product/folder_workspace_actions";
+import { WorkspaceLiveRefresh } from "@/components/product/workspace_live_refresh";
 
 export default async function FolderPage({
   params,
@@ -30,22 +27,52 @@ export default async function FolderPage({
   const box = await getBoxById(supabase, folder.box_id);
   if (!box || box.workspace_id !== ctx.workspace.id) notFound();
 
-  const [folders, notes, files, skills, agents] = await Promise.all([
-    listFoldersByBox(supabase, folder.box_id, { includeArchived: true }),
-    listNotesByBox(supabase, folder.box_id, { includeArchived: true }),
-    listFilesByBox(supabase, folder.box_id, { includeArchived: true }),
-    listSkillsByBox(supabase, folder.box_id, { includeArchived: true }),
-    listAgentsByBox(supabase, folder.box_id, { includeArchived: true }),
+  const [childFolders, childNotes, childFiles, childSkills, childAgents] = await Promise.all([
+    supabase
+      .from("folders")
+      .select("id, name")
+      .eq("box_id", folder.box_id)
+      .eq("parent_folder_id", folder.id)
+      .neq("status", "trashed")
+      .order("name", { ascending: true })
+      .then((r) => r.data ?? []),
+    supabase
+      .from("notes")
+      .select("id, title")
+      .eq("box_id", folder.box_id)
+      .eq("folder_id", folder.id)
+      .neq("status", "trashed")
+      .order("title", { ascending: true })
+      .then((r) => r.data ?? []),
+    supabase
+      .from("files")
+      .select("id, name")
+      .eq("box_id", folder.box_id)
+      .eq("folder_id", folder.id)
+      .neq("status", "trashed")
+      .order("name", { ascending: true })
+      .then((r) => r.data ?? []),
+    supabase
+      .from("skills")
+      .select("id, name")
+      .eq("box_id", folder.box_id)
+      .eq("folder_id", folder.id)
+      .neq("status", "trashed")
+      .order("name", { ascending: true })
+      .then((r) => r.data ?? []),
+    supabase
+      .from("agents")
+      .select("id, name")
+      .eq("box_id", folder.box_id)
+      .eq("folder_id", folder.id)
+      .neq("status", "trashed")
+      .order("name", { ascending: true })
+      .then((r) => r.data ?? []),
   ]);
-
-  const childFolders = folders.filter((f) => f.parent_folder_id === folder.id);
-  const childNotes = notes.filter((n) => n.folder_id === folder.id);
-  const childFiles = files.filter((f) => f.folder_id === folder.id);
-  const childSkills = skills.filter((s) => s.folder_id === folder.id);
-  const childAgents = agents.filter((a) => a.folder_id === folder.id);
 
   return (
     <div className="mx-auto max-w-5xl px-6 py-6 space-y-4">
+      <WorkspaceLiveRefresh workspaceId={ctx.workspace.id} scope="folder" boxId={box.id} folderId={folder.id} />
       <div className="flex items-center justify-between gap-3">
         <div className="min-w-0">
           <div className="text-xs text-muted-foreground">
@@ -103,4 +130,3 @@ function Panel({
     </div>
   );
 }
-
