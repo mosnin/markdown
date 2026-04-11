@@ -1,19 +1,19 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
+import { ChevronDown, LayoutGrid, Plus } from "lucide-react";
 import {
-  Bot,
-  ChevronDown,
-  ClipboardList,
-  Home,
-  Inbox,
-  LayoutGrid,
-  Plus,
-  Search,
-  Settings,
-  Zap,
-} from "lucide-react";
+  AccountSetting01Icon,
+  Alert01Icon,
+  DashboardSpeed02Icon,
+  Home01Icon,
+  LaborIcon,
+  Satellite01Icon,
+  SearchAreaIcon,
+  ToolsIcon,
+} from "hugeicons-react";
 import { cn } from "@/lib/utils";
 import { type Box as BoxType } from "@/server/domain/types/box";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -38,13 +38,13 @@ import { TreeSidebar } from "@/components/product/tree_sidebar";
 // ─── Nav items ────────────────────────────────────────────────────────────────
 
 const primaryNav = [
-  { label: "Home", href: "/app", icon: Home },
-  { label: "Search", href: "/app/search", icon: Search },
-  { label: "Workspaces", href: "/app/workspaces", icon: LayoutGrid },
-  { label: "Agents", href: "/app/agents", icon: Bot },
-  { label: "Skills", href: "/app/skills", icon: Zap },
-  { label: "Proposals", href: "/app/proposals", icon: Inbox },
-  { label: "Audit log", href: "/app/audit", icon: ClipboardList },
+  { label: "Home", href: "/app", icon: Home01Icon },
+  { label: "Search", href: "/app/search", icon: SearchAreaIcon },
+  { label: "Workspaces", href: "/app/workspaces", icon: Satellite01Icon },
+  { label: "Agents", href: "/app/agents", icon: LaborIcon },
+  { label: "Skills", href: "/app/skills", icon: ToolsIcon },
+  { label: "Proposals", href: "/app/proposals", icon: Alert01Icon },
+  { label: "Audit log", href: "/app/audit", icon: DashboardSpeed02Icon },
 ];
 
 // ─── Nav item ─────────────────────────────────────────────────────────────────
@@ -110,9 +110,6 @@ export function AppSidebar({
   const currentBoxId = boxMatch ? decodeURIComponent(boxMatch[1]) : undefined;
   const currentNoteId = noteMatch ? decodeURIComponent(noteMatch[1]) : undefined;
 
-  // Derive initials for the workspace avatar pill
-  const workspaceInitial = (workspaceName ?? "W").charAt(0).toUpperCase();
-
   return (
     <aside
       aria-label="Sidebar navigation"
@@ -131,9 +128,24 @@ export function AppSidebar({
             )}
             aria-label={`Workspace: ${workspaceName}`}
           >
-            {/* Avatar initial */}
-            <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-foreground text-[11px] font-semibold text-background">
-              {workspaceInitial}
+            {/* Poggle logo mark */}
+            <div className="flex h-6 w-6 shrink-0 items-center justify-center">
+              <Image
+                src="/logo-symbol-dark.png"
+                alt="Poggle"
+                width={24}
+                height={24}
+                className="rounded dark:hidden"
+                priority
+              />
+              <Image
+                src="/logo-symbol-light.png"
+                alt="Poggle"
+                width={24}
+                height={24}
+                className="rounded hidden dark:block"
+                priority
+              />
             </div>
             {/* Workspace name */}
             <span className="min-w-0 flex-1 truncate text-sm font-semibold tracking-tight text-foreground text-left">
@@ -151,7 +163,7 @@ export function AppSidebar({
               Manage boxes
             </DropdownMenuItem>
             <DropdownMenuItem render={<Link href="/app/settings" />}>
-              <Settings className="h-3.5 w-3.5" aria-hidden="true" />
+              <AccountSetting01Icon className="h-3.5 w-3.5" aria-hidden="true" />
               Workspace settings
             </DropdownMenuItem>
           </DropdownMenuContent>
@@ -250,7 +262,7 @@ export function AppSidebar({
               pathname === "/app/settings" && "text-foreground"
             )}
           >
-            <Settings className="h-4 w-4" aria-hidden="true" />
+            <AccountSetting01Icon className="h-4 w-4" aria-hidden="true" />
           </Link>
           <ThemeToggle />
         </div>

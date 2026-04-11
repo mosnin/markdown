@@ -9,6 +9,11 @@ export const metadata: Metadata = {
   title: "Poggle",
   description:
     "A structured, markdown-native context operating system for humans and AI.",
+  icons: {
+    icon: "/logo-symbol-light.png",
+    shortcut: "/logo-symbol-light.png",
+    apple: "/logo-symbol-light.png",
+  },
 };
 
 export default function RootLayout({

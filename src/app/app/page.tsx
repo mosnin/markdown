@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { BookOpen, Box, FileText, Inbox, Network, Plus, Zap } from "lucide-react";
+import { BookOpen, Box, FileText, Inbox, Network } from "lucide-react";
 import { requireAuthenticatedUser } from "@/server/auth/require_authenticated_user";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -98,7 +98,7 @@ export default async function AppHomePage() {
                 href="/app/search"
               />
               <StatusTile
-                icon={Zap}
+                icon={Network}
                 label="Connections"
                 value={activeConnections.length}
                 href="/app/settings"

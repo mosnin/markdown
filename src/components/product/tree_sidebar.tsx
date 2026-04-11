@@ -6,12 +6,10 @@ import { useRouter } from "next/navigation";
 import {
   BookOpen,
   Bot,
-  Box,
   ChevronDown,
   ChevronRight,
   File,
   FileText,
-  Folder,
   FolderPlus,
   Link2,
   Package,
@@ -19,6 +17,12 @@ import {
   Trash2,
   Zap,
 } from "lucide-react";
+import {
+  Folder01Icon,
+  Folder02Icon,
+  PackageIcon,
+  PackageOpenIcon,
+} from "hugeicons-react";
 import { cn } from "@/lib/utils";
 import { Spinner } from "@/components/ui/spinner";
 import { createClient } from "@/lib/supabase/browser";
@@ -583,7 +587,10 @@ function FolderNode({
             "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
           )}
         >
-          <Folder className="h-3.5 w-3.5 shrink-0 text-muted-foreground/50" aria-hidden="true" />
+          {isOpen
+            ? <Folder02Icon className="h-3.5 w-3.5 shrink-0 text-muted-foreground/50" aria-hidden="true" />
+            : <Folder01Icon className="h-3.5 w-3.5 shrink-0 text-muted-foreground/50" aria-hidden="true" />
+          }
           <span className="truncate font-medium tracking-tight">{folder.name}</span>
         </button>
       </div>
@@ -986,7 +993,10 @@ function BoxRow({
               : "text-muted-foreground hover:text-foreground hover:bg-accent/50"
           )}
         >
-          <Box className="h-4 w-4 shrink-0" aria-hidden="true" />
+          {isExpanded
+            ? <PackageOpenIcon className="h-4 w-4 shrink-0" aria-hidden="true" />
+            : <PackageIcon className="h-4 w-4 shrink-0" aria-hidden="true" />
+          }
           <span className="truncate">{box.name}</span>
         </Link>
 
