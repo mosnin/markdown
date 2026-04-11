@@ -3,20 +3,24 @@ import { type Box } from "@/server/domain/types/box";
 import { type Folder } from "@/server/domain/types/folder";
 import { type Note } from "@/server/domain/types/note";
 import { type NoteLink } from "@/server/domain/types/note_link";
+import { type ObjectLink } from "@/server/domain/types/object_link";
 import { listFoldersByBox } from "@/server/repositories/folder_repository";
 import { listNotesByBox } from "@/server/repositories/note_repository";
+import { listFilesByBox } from "@/server/repositories/file_repository";
+import { listSkillsByBox } from "@/server/repositories/skill_repository";
+import { listAgentsByBox } from "@/server/repositories/agent_repository";
 import {
   listLinksFromNote,
 } from "@/server/repositories/note_link_repository";
 
 /**
- * Overview service — box hierarchy + note link graph.
+ * Overview service — box hierarchy + full object graph.
  *
  * Hard limits: 1000 nodes, 2000 edges.
  * When truncated, the `truncated` flag is set and the caller should show a notice.
  *
- * Nodes represent folders and notes (non-trashed only).
- * Edges represent note_links within the box.
+ * Nodes represent folders, notes, files, skills, and agents (non-trashed only).
+ * Edges represent note_links within the box and object_links between box objects.
  *
  * This is intentionally a flat-list + edge representation rather than a
  * tree structure — callers can build a tree themselves if needed. The overview
@@ -25,20 +29,24 @@ import {
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-export type OverviewNodeKind = "folder" | "note";
+export type OverviewNodeKind = "folder" | "note" | "file" | "skill" | "agent";
 
 export interface OverviewNode {
   id: string;
   kind: OverviewNodeKind;
   label: string;
-  /** For notes: path_cache within box */
+  /** path_cache within box */
   path: string;
   /** For notes: kind field (note | guide | bundle) */
   noteKind?: string;
-  /** For notes: null means root level */
+  /** Parent folder id — null means root level */
   parentFolderId: string | null;
-  /** For folders: id of parent folder */
+  /** For folders: id of parent folder. For other types: folder_id. */
   parentId: string | null;
+  /** Whether this is a reusable attachment (skills/agents) */
+  isReusable?: boolean;
+  /** Whether this is attached by reference */
+  isAttachment?: boolean;
 }
 
 export interface OverviewEdge {
@@ -47,6 +55,11 @@ export interface OverviewEdge {
   targetNoteId: string;
   relationshipType: string;
   relationshipNote: string | null;
+  /** Edge kind: "note_link" for note-to-note, "object_link" for cross-type */
+  edgeKind?: "note_link" | "object_link";
+  /** For object_links: source and target types */
+  sourceType?: string;
+  targetType?: string;
 }
 
 export interface BoxOverview {
@@ -55,6 +68,9 @@ export interface BoxOverview {
   edges: OverviewEdge[];
   folderCount: number;
   noteCount: number;
+  fileCount: number;
+  skillCount: number;
+  agentCount: number;
   edgeCount: number;
   truncated: boolean;
 }
@@ -68,9 +84,12 @@ export async function getBoxOverview(
   supabase: SupabaseClient,
   box: Box
 ): Promise<BoxOverview> {
-  const [folders, notes] = await Promise.all([
+  const [folders, notes, files, skills, agents] = await Promise.all([
     listFoldersByBox(supabase, box.id),
     listNotesByBox(supabase, box.id),
+    listFilesByBox(supabase, box.id),
+    listSkillsByBox(supabase, box.id),
+    listAgentsByBox(supabase, box.id),
   ]);
 
   // Build note id set for edge filtering (only include intra-box edges)
@@ -81,14 +100,38 @@ export async function getBoxOverview(
     notes.map((n) => listLinksFromNote(supabase, n.id))
   );
   const allLinks: NoteLink[] = linkArrays.flat();
-  // Deduplicate by id (shouldn't be needed but be safe)
   const uniqueLinks = [...new Map(allLinks.map((l) => [l.id, l])).values()];
-  // Keep only intra-box edges
   const boxLinks = uniqueLinks.filter(
     (l) => noteIdSet.has(l.source_note_id) && noteIdSet.has(l.target_note_id)
   );
 
-  // Build nodes: folders first, then notes
+  // Collect object_links for cross-type relationships within the box
+  const allObjectIds = new Set<string>([
+    ...folders.map((f) => f.id),
+    ...notes.map((n) => n.id),
+    ...files.map((f) => f.id),
+    ...skills.map((s) => s.id),
+    ...agents.map((a) => a.id),
+  ]);
+
+  // Query object_links where either source or target is in this box's objects
+  let objectLinks: ObjectLink[] = [];
+  if (allObjectIds.size > 0 && box.workspace_id) {
+    const { data: olData } = await supabase
+      .from("object_links")
+      .select("*")
+      .eq("workspace_id", box.workspace_id)
+      .order("created_at", { ascending: true })
+      .limit(EDGE_LIMIT);
+    if (olData) {
+      // Filter to intra-box links only
+      objectLinks = (olData as ObjectLink[]).filter(
+        (l) => allObjectIds.has(l.source_object_id) && allObjectIds.has(l.target_object_id)
+      );
+    }
+  }
+
+  // Build nodes: folders, notes, files, skills, agents
   const folderNodes: OverviewNode[] = folders.map((f: Folder) => ({
     id: f.id,
     kind: "folder" as const,
@@ -108,12 +151,43 @@ export async function getBoxOverview(
     parentId: n.folder_id,
   }));
 
-  const allNodes = [...folderNodes, ...noteNodes];
+  const fileNodes: OverviewNode[] = files.map((f) => ({
+    id: f.id,
+    kind: "file" as const,
+    label: f.name,
+    path: f.path_cache ?? "",
+    parentFolderId: f.folder_id,
+    parentId: f.folder_id,
+  }));
+
+  const skillNodes: OverviewNode[] = skills.map((s) => ({
+    id: s.id,
+    kind: "skill" as const,
+    label: s.name,
+    path: s.path_cache ?? "",
+    parentFolderId: s.folder_id,
+    parentId: s.folder_id,
+    isReusable: s.is_reusable,
+  }));
+
+  const agentNodes: OverviewNode[] = agents.map((a) => ({
+    id: a.id,
+    kind: "agent" as const,
+    label: a.name,
+    path: a.path_cache ?? "",
+    parentFolderId: a.folder_id,
+    parentId: a.folder_id,
+    isReusable: a.is_reusable,
+  }));
+
+  const allNodes = [...folderNodes, ...noteNodes, ...fileNodes, ...skillNodes, ...agentNodes];
   const truncatedNodes = allNodes.length > NODE_LIMIT;
-  const truncatedEdges = boxLinks.length > EDGE_LIMIT;
+  const totalEdgeCount = boxLinks.length + objectLinks.length;
+  const truncatedEdges = totalEdgeCount > EDGE_LIMIT;
   const truncated = truncatedNodes || truncatedEdges;
 
-  const edges: OverviewEdge[] = boxLinks
+  // Build unified edge list from both note_links and object_links
+  const noteLinkEdges: OverviewEdge[] = boxLinks
     .slice(0, EDGE_LIMIT)
     .map((l: NoteLink) => ({
       id: l.id,
@@ -121,7 +195,26 @@ export async function getBoxOverview(
       targetNoteId: l.target_note_id,
       relationshipType: l.relationship_type,
       relationshipNote: l.relationship_note,
+      edgeKind: "note_link" as const,
+      sourceType: "note",
+      targetType: "note",
     }));
+
+  const remainingEdgeSlots = Math.max(0, EDGE_LIMIT - noteLinkEdges.length);
+  const objectLinkEdges: OverviewEdge[] = objectLinks
+    .slice(0, remainingEdgeSlots)
+    .map((l: ObjectLink) => ({
+      id: l.id,
+      sourceNoteId: l.source_object_id,
+      targetNoteId: l.target_object_id,
+      relationshipType: l.relationship_type,
+      relationshipNote: l.relationship_note,
+      edgeKind: "object_link" as const,
+      sourceType: l.source_object_type,
+      targetType: l.target_object_type,
+    }));
+
+  const edges = [...noteLinkEdges, ...objectLinkEdges];
 
   return {
     box,
@@ -129,7 +222,10 @@ export async function getBoxOverview(
     edges,
     folderCount: folders.length,
     noteCount: notes.length,
-    edgeCount: boxLinks.length,
+    fileCount: files.length,
+    skillCount: skills.length,
+    agentCount: agents.length,
+    edgeCount: totalEdgeCount,
     truncated,
   };
 }

@@ -1,7 +1,7 @@
-import { FileText, Folder, AlertTriangle, ArrowRight } from "lucide-react";
+import { Bot, File, FileText, Folder, AlertTriangle, ArrowRight, Zap } from "lucide-react";
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
-import { type BoxOverview } from "@/server/services/overview_service";
+import { type BoxOverview, type OverviewNode } from "@/server/services/overview_service";
 
 interface BoxOverviewPanelProps {
   overview: BoxOverview;
@@ -120,14 +120,25 @@ export function BoxOverviewPanel({ overview }: BoxOverviewPanelProps) {
 
 // ─── TreeNode ─────────────────────────────────────────────────────────────────
 
-interface OverviewNodeShape {
-  id: string;
-  kind: "folder" | "note";
-  label: string;
-  path: string;
-  noteKind?: string;
-  parentFolderId: string | null;
-  parentId: string | null;
+function getOverviewNodeIcon(kind: string) {
+  switch (kind) {
+    case "folder": return Folder;
+    case "file": return File;
+    case "skill": return Zap;
+    case "agent": return Bot;
+    default: return FileText;
+  }
+}
+
+function getOverviewNodeHref(kind: string, id: string): string | null {
+  switch (kind) {
+    case "note": return `/app/notes/${id}`;
+    case "file": return `/app/files/${id}`;
+    case "skill": return `/app/skills/${id}`;
+    case "agent": return `/app/agents/${id}`;
+    case "folder": return `/app/folders/${id}`;
+    default: return null;
+  }
 }
 
 function TreeNode({
@@ -135,12 +146,14 @@ function TreeNode({
   childMap,
   depth,
 }: {
-  item: OverviewNodeShape;
-  childMap: Map<string, OverviewNodeShape[]>;
+  item: OverviewNode;
+  childMap: Map<string, OverviewNode[]>;
   depth: number;
 }) {
   const children = childMap.get(item.id) ?? [];
   const indent = depth * 16;
+  const Icon = getOverviewNodeIcon(item.kind);
+  const href = getOverviewNodeHref(item.kind, item.id);
 
   return (
     <>
@@ -148,14 +161,11 @@ function TreeNode({
         className="flex items-center gap-1.5 rounded px-2 py-1 text-sm hover:bg-muted/50"
         style={{ paddingLeft: `${8 + indent}px` }}
       >
-        {item.kind === "folder" ? (
-          <Folder className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-        ) : (
-          <FileText className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-        )}
-        {item.kind === "note" ? (
+        {/* eslint-disable-next-line react-hooks/static-components */}
+        <Icon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+        {href ? (
           <Link
-            href={`/app/notes/${item.id}`}
+            href={href}
             className="flex-1 truncate text-foreground/80 hover:text-foreground hover:underline underline-offset-2"
           >
             {item.label}
@@ -163,12 +173,12 @@ function TreeNode({
         ) : (
           <span className="flex-1 truncate text-foreground/80">{item.label}</span>
         )}
-        {item.kind === "note" && item.noteKind && item.noteKind !== "note" && (
+        {item.kind !== "folder" && (
           <Badge
             variant="secondary"
             className="shrink-0 text-[10px] font-normal capitalize"
           >
-            {item.noteKind}
+            {item.noteKind && item.noteKind !== "note" ? item.noteKind : item.kind}
           </Badge>
         )}
       </div>

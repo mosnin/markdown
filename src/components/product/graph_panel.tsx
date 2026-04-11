@@ -1,4 +1,4 @@
-import { AlertTriangle, FileText, Folder, Share2 } from "lucide-react";
+import { AlertTriangle, Bot, File, FileText, Folder, Share2, Zap } from "lucide-react";
 import { type BoxOverview } from "@/server/services/overview_service";
 import { BoxGraphView } from "./box_graph_view";
 
@@ -8,10 +8,10 @@ import { BoxGraphView } from "./box_graph_view";
  * GraphPanel — server component wrapper for the box graph tab.
  *
  * Renders summary stats and the truncation warning (static), then
- * delegates the interactive hierarchy + link visualization to BoxGraphView.
+ * delegates the interactive graph visualization to BoxGraphView.
  */
 export function GraphPanel({ overview }: { overview: BoxOverview }) {
-  const { truncated, folderCount, noteCount, edgeCount } = overview;
+  const { truncated, folderCount, noteCount, fileCount, skillCount, agentCount, edgeCount } = overview;
 
   return (
     <div className="flex flex-col gap-6">
@@ -25,6 +25,24 @@ export function GraphPanel({ overview }: { overview: BoxOverview }) {
           <FileText className="h-3.5 w-3.5" aria-hidden="true" />
           {noteCount} note{noteCount !== 1 ? "s" : ""}
         </span>
+        {(fileCount ?? 0) > 0 && (
+          <span className="flex items-center gap-1.5">
+            <File className="h-3.5 w-3.5" aria-hidden="true" />
+            {fileCount} file{fileCount !== 1 ? "s" : ""}
+          </span>
+        )}
+        {(skillCount ?? 0) > 0 && (
+          <span className="flex items-center gap-1.5">
+            <Zap className="h-3.5 w-3.5" aria-hidden="true" />
+            {skillCount} skill{skillCount !== 1 ? "s" : ""}
+          </span>
+        )}
+        {(agentCount ?? 0) > 0 && (
+          <span className="flex items-center gap-1.5">
+            <Bot className="h-3.5 w-3.5" aria-hidden="true" />
+            {agentCount} agent{agentCount !== 1 ? "s" : ""}
+          </span>
+        )}
         <span className="flex items-center gap-1.5">
           <Share2 className="h-3.5 w-3.5" aria-hidden="true" />
           {edgeCount} link{edgeCount !== 1 ? "s" : ""}

@@ -1,8 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, useTransition } from "react";
+import { useCallback, useEffect, useRef, useState, useTransition, useMemo } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import {
   BookOpen,
   Bot,
@@ -23,6 +23,7 @@ import {
   PackageIcon,
   PackageOpenIcon,
 } from "hugeicons-react";
+import { Tree, type NodeRendererProps, type NodeApi } from "react-arborist";
 import { cn } from "@/lib/utils";
 import { Spinner } from "@/components/ui/spinner";
 import { createClient } from "@/lib/supabase/browser";
@@ -62,180 +63,159 @@ type BoxTreeData = {
   agents: Array<{ id: string; name: string; folder_id: string | null; status: string; is_reusable: boolean; is_attachment: boolean; sort_order: number }>;
 };
 
-type TreeNoteNode = {
-  id: string;
-  title: string;
-  kind: string;
-  status: string;
-  sort_order: number;
-};
-
-type TreeFileNode = {
+/** Unified node shape for react-arborist. */
+export type TreeNodeData = {
   id: string;
   name: string;
-  file_extension: string | null;
-  status: string;
-  sort_order: number;
-};
-
-type TreeSkillNode = {
-  id: string;
-  name: string;
-  status: string;
-  is_reusable: boolean;
-  is_attachment: boolean;
-  sort_order: number;
-};
-
-type TreeAgentNode = {
-  id: string;
-  name: string;
-  status: string;
-  is_reusable: boolean;
-  is_attachment: boolean;
-  sort_order: number;
-};
-
-type TreeFolderNode = {
-  id: string;
-  name: string;
-  status: string;
-  sort_order: number;
-  children: TreeFolderNode[];
-  notes: TreeNoteNode[];
-  files: TreeFileNode[];
-  skills: TreeSkillNode[];
-  agents: TreeAgentNode[];
-};
-
-type DragNode = {
-  type: "folder" | "note" | "file" | "skill" | "agent";
-  id: string;
-  is_attachment?: boolean;
-  folder_id?: string | null;
+  nodeType: "folder" | "note" | "file" | "skill" | "agent";
+  objectId: string;
+  children?: TreeNodeData[];
+  kind?: string;
+  fileExtension?: string | null;
+  isReusable?: boolean;
+  isAttachment?: boolean;
+  status?: string;
+  sortOrder: number;
 };
 
 export interface TreeSidebarProps {
   boxes: Array<{ id: string; name: string; guide_note_id: string | null }>;
   workspaceName?: string;
-  /** Workspace ID — used to scope Supabase Realtime subscriptions */
   workspaceId?: string;
-  /** Current note ID extracted from URL, if on a note page */
   currentNoteId?: string;
-  /** Current box ID extracted from URL, if on a box page */
   currentBoxId?: string;
   onNavigate?: () => void;
 }
 
-// ─── Build tree from flat data ────────────────────────────────────────────────
+// ─── Build react-arborist tree from flat data ────────────────────────────────
 
-type BuiltTree = {
-  rootFolders: TreeFolderNode[];
-  rootNotes: TreeNoteNode[];
-  rootFiles: TreeFileNode[];
-  rootSkills: TreeSkillNode[];
-  rootAgents: TreeAgentNode[];
-};
-
-function buildTree(data: BoxTreeData): BuiltTree {
-  const folderMap = new Map<string, TreeFolderNode>();
+function buildArboristTree(data: BoxTreeData): TreeNodeData[] {
+  // Create folder nodes with children arrays
+  const folderMap = new Map<string, TreeNodeData>();
   for (const f of data.folders) {
-    folderMap.set(f.id, { id: f.id, name: f.name, status: f.status, sort_order: f.sort_order, children: [], notes: [], files: [], skills: [], agents: [] });
+    folderMap.set(f.id, {
+      id: `folder:${f.id}`,
+      name: f.name,
+      nodeType: "folder",
+      objectId: f.id,
+      children: [],
+      status: f.status,
+      sortOrder: f.sort_order,
+    });
   }
 
-  const rootFolders: TreeFolderNode[] = [];
+  // Build folder hierarchy
+  const rootNodes: TreeNodeData[] = [];
   for (const f of data.folders) {
     const node = folderMap.get(f.id)!;
     if (f.parent_folder_id && folderMap.has(f.parent_folder_id)) {
-      folderMap.get(f.parent_folder_id)!.children.push(node);
+      folderMap.get(f.parent_folder_id)!.children!.push(node);
     } else {
-      rootFolders.push(node);
+      rootNodes.push(node);
     }
   }
 
-  const rootNotes: TreeNoteNode[] = [];
-  for (const n of data.notes) {
-    const item: TreeNoteNode = { id: n.id, title: n.title, kind: n.kind, status: n.status, sort_order: n.sort_order };
-    if (n.folder_id && folderMap.has(n.folder_id)) {
-      folderMap.get(n.folder_id)!.notes.push(item);
-    } else {
-      rootNotes.push(item);
+  // Helper to add leaf items to folder or root
+  function addLeafItems<T extends { folder_id: string | null; sort_order: number }>(
+    items: T[],
+    makeNode: (item: T) => TreeNodeData
+  ) {
+    for (const item of items) {
+      const node = makeNode(item);
+      if (item.folder_id && folderMap.has(item.folder_id)) {
+        folderMap.get(item.folder_id)!.children!.push(node);
+      } else {
+        rootNodes.push(node);
+      }
     }
   }
 
-  const rootFiles: TreeFileNode[] = [];
-  for (const f of (data.files ?? [])) {
-    const item: TreeFileNode = { id: f.id, name: f.name, file_extension: f.file_extension, status: f.status, sort_order: f.sort_order };
-    if (f.folder_id && folderMap.has(f.folder_id)) {
-      folderMap.get(f.folder_id)!.files.push(item);
-    } else {
-      rootFiles.push(item);
+  // Notes
+  addLeafItems(data.notes, (n) => ({
+    id: `note:${n.id}`,
+    name: n.title,
+    nodeType: "note",
+    objectId: n.id,
+    kind: n.kind,
+    status: n.status,
+    sortOrder: n.sort_order,
+  }));
+
+  // Files
+  addLeafItems(data.files ?? [], (f) => ({
+    id: `file:${f.id}`,
+    name: f.name,
+    nodeType: "file",
+    objectId: f.id,
+    fileExtension: (f as BoxTreeData["files"][0]).file_extension,
+    status: f.status,
+    sortOrder: f.sort_order,
+  }));
+
+  // Skills
+  addLeafItems(data.skills ?? [], (s) => ({
+    id: `skill:${s.id}`,
+    name: s.name,
+    nodeType: "skill",
+    objectId: s.id,
+    isReusable: (s as BoxTreeData["skills"][0]).is_reusable,
+    isAttachment: (s as BoxTreeData["skills"][0]).is_attachment,
+    status: s.status,
+    sortOrder: s.sort_order,
+  }));
+
+  // Agents
+  addLeafItems(data.agents ?? [], (a) => ({
+    id: `agent:${a.id}`,
+    name: a.name,
+    nodeType: "agent",
+    objectId: a.id,
+    isReusable: (a as BoxTreeData["agents"][0]).is_reusable,
+    isAttachment: (a as BoxTreeData["agents"][0]).is_attachment,
+    status: a.status,
+    sortOrder: a.sort_order,
+  }));
+
+  // Sort all children recursively
+  function sortChildren(nodes: TreeNodeData[]) {
+    nodes.sort((a, b) => {
+      // Folders first, then by sort_order, then alphabetically
+      const aIsFolder = a.nodeType === "folder" ? 0 : 1;
+      const bIsFolder = b.nodeType === "folder" ? 0 : 1;
+      if (aIsFolder !== bIsFolder) return aIsFolder - bIsFolder;
+      if (a.sortOrder !== b.sortOrder) return a.sortOrder - b.sortOrder;
+      return a.name.localeCompare(b.name);
+    });
+    for (const node of nodes) {
+      if (node.children) sortChildren(node.children);
     }
   }
+  sortChildren(rootNodes);
 
-  const rootSkills: TreeSkillNode[] = [];
-  for (const s of (data.skills ?? [])) {
-    const item: TreeSkillNode = { id: s.id, name: s.name, status: s.status, is_reusable: s.is_reusable, is_attachment: s.is_attachment, sort_order: s.sort_order };
-    if (s.folder_id && folderMap.has(s.folder_id)) {
-      folderMap.get(s.folder_id)!.skills.push(item);
-    } else {
-      rootSkills.push(item);
-    }
-  }
-
-  const rootAgents: TreeAgentNode[] = [];
-  for (const a of (data.agents ?? [])) {
-    const item: TreeAgentNode = { id: a.id, name: a.name, status: a.status, is_reusable: a.is_reusable, is_attachment: a.is_attachment, sort_order: a.sort_order };
-    if (a.folder_id && folderMap.has(a.folder_id)) {
-      folderMap.get(a.folder_id)!.agents.push(item);
-    } else {
-      rootAgents.push(item);
-    }
-  }
-
-  rootFolders.sort((a, b) => a.sort_order - b.sort_order || a.name.localeCompare(b.name));
-  rootNotes.sort((a, b) => a.sort_order - b.sort_order || a.title.localeCompare(b.title));
-  rootFiles.sort((a, b) => a.sort_order - b.sort_order || a.name.localeCompare(b.name));
-  rootSkills.sort((a, b) => a.sort_order - b.sort_order || a.name.localeCompare(b.name));
-  rootAgents.sort((a, b) => a.sort_order - b.sort_order || a.name.localeCompare(b.name));
-
-  function sortFolder(node: TreeFolderNode) {
-    node.children.sort((a, b) => a.sort_order - b.sort_order || a.name.localeCompare(b.name));
-    node.notes.sort((a, b) => a.sort_order - b.sort_order || a.title.localeCompare(b.title));
-    node.files.sort((a, b) => a.sort_order - b.sort_order || a.name.localeCompare(b.name));
-    node.skills.sort((a, b) => a.sort_order - b.sort_order || a.name.localeCompare(b.name));
-    node.agents.sort((a, b) => a.sort_order - b.sort_order || a.name.localeCompare(b.name));
-    for (const child of node.children) sortFolder(child);
-  }
-  for (const root of rootFolders) sortFolder(root);
-
-  return { rootFolders, rootNotes, rootFiles, rootSkills, rootAgents };
+  return rootNodes;
 }
 
-// ─── Collect all folder IDs that are ancestors of a note ─────────────────────
+// ─── Find initial open state for ancestor folders of active note ─────────────
 
-function collectAncestorFolderIds(
-  data: BoxTreeData,
-  noteId: string
-): Set<string> {
-  const note = data.notes.find((n) => n.id === noteId);
-  if (!note?.folder_id) return new Set();
+function computeOpenState(data: BoxTreeData, currentNoteId?: string): Record<string, boolean> {
+  const openState: Record<string, boolean> = {};
+  if (!currentNoteId) return openState;
+
+  const note = data.notes.find((n) => n.id === currentNoteId);
+  if (!note?.folder_id) return openState;
 
   const parentMap = new Map<string, string | null>();
-  for (const f of data.folders) {
-    parentMap.set(f.id, f.parent_folder_id);
-  }
+  for (const f of data.folders) parentMap.set(f.id, f.parent_folder_id);
 
-  const ancestors = new Set<string>();
   let current: string | null = note.folder_id;
   while (current) {
-    ancestors.add(current);
+    openState[`folder:${current}`] = true;
     current = parentMap.get(current) ?? null;
   }
-  return ancestors;
+  return openState;
 }
 
-// ─── Note icon ────────────────────────────────────────────────────────────────
+// ─── Note icon helper ────────────────────────────────────────────────────────
 
 function noteIcon(kind: string) {
   if (kind === "guide") return BookOpen;
@@ -243,508 +223,157 @@ function noteIcon(kind: string) {
   return FileText;
 }
 
-// ─── Collapsible content wrapper ──────────────────────────────────────────────
+// ─── Custom node renderer for react-arborist ─────────────────────────────────
 
-/**
- * Animates open/close by measuring the natural height of the content
- * and transitioning max-height. This avoids layout thrash while still
- * giving a smooth collapse feel.
- */
-function CollapsePanel({
-  open,
-  children,
-}: {
-  open: boolean;
-  children: React.ReactNode;
-}) {
-  const ref = useRef<HTMLDivElement>(null);
-  const [height, setHeight] = useState<number | undefined>(open ? undefined : 0);
+function TreeNode({
+  node,
+  style,
+  dragHandle,
+  tree,
+}: NodeRendererProps<TreeNodeData>) {
+  const data = node.data;
+  const pathname = usePathname();
+  const [isPendingDetach, startDetach] = useTransition();
 
-  useEffect(() => {
-    if (!ref.current) return;
-    if (open) {
-      // Measure then let it grow to auto
-      const measured = ref.current.scrollHeight;
-      setHeight(measured);
-      const tid = setTimeout(() => setHeight(undefined), 150);
-      return () => clearTimeout(tid);
-    } else {
-      // Snap to measured height first so CSS can animate down to 0
-      const measured = ref.current.scrollHeight;
-      setHeight(measured);
-      let raf2: number = 0;
-      const raf1 = requestAnimationFrame(() => {
-        raf2 = requestAnimationFrame(() => setHeight(0));
-      });
-      return () => {
-        cancelAnimationFrame(raf1);
-        cancelAnimationFrame(raf2);
-      };
+  // Determine active state
+  const isActive = (() => {
+    switch (data.nodeType) {
+      case "note": return pathname === `/app/notes/${data.objectId}`;
+      case "file": return pathname === `/app/files/${data.objectId}`;
+      case "skill": return pathname === `/app/skills/${data.objectId}`;
+      case "agent": return pathname === `/app/agents/${data.objectId}`;
+      case "folder": return pathname === `/app/folders/${data.objectId}`;
+      default: return false;
     }
-  }, [open]);
+  })();
+
+  // Build href based on node type
+  const href = (() => {
+    switch (data.nodeType) {
+      case "note": return `/app/notes/${data.objectId}`;
+      case "file": return `/app/files/${data.objectId}`;
+      case "skill": return `/app/skills/${data.objectId}`;
+      case "agent": return `/app/agents/${data.objectId}`;
+      case "folder": return `/app/folders/${data.objectId}`;
+    }
+  })();
+
+  // Get the box ID from the tree context (stored in tree props)
+  const boxId = (tree.props as { boxId?: string }).boxId;
+
+  // For attached reusable items, append box context
+  const finalHref = data.isAttachment && boxId && (data.nodeType === "skill" || data.nodeType === "agent")
+    ? `${href}?box_id=${boxId}`
+    : href;
+
+  const isArchived = data.status === "archived";
+
+  function handleDetach(e: React.MouseEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!boxId || !data.isAttachment) return;
+    startDetach(async () => {
+      await detachFromBoxAction(boxId, data.nodeType as "skill" | "agent", data.objectId);
+    });
+  }
+
+  // File extension display
+  const ext = data.nodeType === "file" && data.fileExtension
+    ? (data.fileExtension.startsWith(".") ? data.fileExtension : `.${data.fileExtension}`)
+    : data.nodeType === "note" ? ".md" : null;
+
+  // Icon
+  const Icon = (() => {
+    switch (data.nodeType) {
+      case "folder": return node.isOpen ? Folder02Icon : Folder01Icon;
+      case "note": return noteIcon(data.kind ?? "note");
+      case "file": return File;
+      case "skill": return Zap;
+      case "agent": return Bot;
+    }
+  })();
 
   return (
     <div
-      ref={ref}
-      style={{ maxHeight: height === undefined ? undefined : height }}
+      style={style}
+      ref={dragHandle}
       className={cn(
-        "overflow-hidden transition-all duration-150 ease-in-out",
-        !open && "max-h-0"
+        "group/tree-node flex items-center gap-0 pr-1",
+        isArchived && "opacity-50"
       )}
-      aria-hidden={!open}
     >
-      {children}
-    </div>
-  );
-}
-
-// ─── Note row ─────────────────────────────────────────────────────────────────
-
-function NoteRow({
-  note,
-  depth,
-  isActive,
-  onNavigate,
-  onDropNode,
-  onDragStartNode,
-  parentFolderId,
-}: {
-  note: TreeNoteNode;
-  depth: number;
-  isActive: boolean;
-  onNavigate?: () => void;
-  onDropNode?: (target: DragNode, position: "before" | "inside" | "root", targetFolderId?: string | null) => void;
-  onDragStartNode?: (node: DragNode) => void;
-  parentFolderId?: string | null;
-}) {
-  const Icon = noteIcon(note.kind);
-  // depth 1 → pl-7, depth 2+ → pl-8 (further indented sub-items)
-  const depthClass = depth <= 1 ? "pl-7" : "pl-8";
-  return (
-    <Link
-      href={`/app/notes/${note.id}`}
-      draggable
-      onDragStart={() => onDragStartNode?.({ type: "note", id: note.id, folder_id: parentFolderId ?? null })}
-      onDragOver={(e) => e.preventDefault()}
-      onDrop={(e) => { e.preventDefault(); e.stopPropagation(); onDropNode?.({ type: "note", id: note.id, folder_id: parentFolderId ?? null }, "before", parentFolderId ?? null); }}
-      onClick={onNavigate}
-      className={cn(
-        "flex items-center gap-2 rounded-md py-1 pr-2 text-xs",
-        "transition-colors duration-150",
-        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1",
-        depthClass,
-        isActive
-          ? "bg-accent text-foreground font-medium"
-          : "text-muted-foreground hover:text-foreground hover:bg-accent/50"
-      )}
-      aria-current={isActive ? "page" : undefined}
-    >
-      {/* noteIcon() returns a stable module-level icon reference — not a new component */}
-      {/* eslint-disable-next-line react-hooks/static-components */}
-      <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
-      <span className="truncate">{note.title}</span>
-      <span className="shrink-0 text-[10px] text-muted-foreground/40">.md</span>
-    </Link>
-  );
-}
-
-// ─── File row ─────────────────────────────────────────────────────────────────
-
-function FileRow({
-  file,
-  depth,
-  isActive,
-  onNavigate,
-  onDropNode,
-  onDragStartNode,
-  parentFolderId,
-}: {
-  file: TreeFileNode;
-  depth: number;
-  isActive: boolean;
-  onNavigate?: () => void;
-  onDropNode?: (target: DragNode, position: "before" | "inside" | "root", targetFolderId?: string | null) => void;
-  onDragStartNode?: (node: DragNode) => void;
-  parentFolderId?: string | null;
-}) {
-  const depthClass = depth <= 1 ? "pl-7" : "pl-8";
-  const ext = file.file_extension ? (file.file_extension.startsWith(".") ? file.file_extension : `.${file.file_extension}`) : null;
-  return (
-    <Link
-      href={`/app/files/${file.id}`}
-      draggable
-      onDragStart={() => onDragStartNode?.({ type: "file", id: file.id, folder_id: parentFolderId ?? null })}
-      onDragOver={(e) => e.preventDefault()}
-      onDrop={(e) => { e.preventDefault(); e.stopPropagation(); onDropNode?.({ type: "file", id: file.id, folder_id: parentFolderId ?? null }, "before", parentFolderId ?? null); }}
-      onClick={onNavigate}
-      className={cn(
-        "flex items-center gap-2 rounded-md py-1 pr-2 text-xs",
-        "transition-colors duration-150",
-        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1",
-        depthClass,
-        isActive
-          ? "bg-accent text-foreground font-medium"
-          : "text-muted-foreground hover:text-foreground hover:bg-accent/50"
-      )}
-      aria-current={isActive ? "page" : undefined}
-    >
-      <File className="h-4 w-4 shrink-0" aria-hidden="true" />
-      <span className="truncate">{file.name}</span>
-      {ext && <span className="shrink-0 text-[10px] text-muted-foreground/40">{ext}</span>}
-    </Link>
-  );
-}
-
-// ─── Skill row ────────────────────────────────────────────────────────────────
-
-function SkillRow({
-  skill,
-  depth,
-  boxId,
-  isActive,
-  onNavigate,
-  onDetached,
-  onDropNode,
-  onDragStartNode,
-  parentFolderId,
-}: {
-  skill: TreeSkillNode;
-  depth: number;
-  /** Current box context — used to set ?box_id= on attached reusable links and for detach. */
-  boxId?: string;
-  isActive: boolean;
-  onNavigate?: () => void;
-  onDetached?: () => void;
-  onDropNode?: (target: DragNode, position: "before" | "inside" | "root", targetFolderId?: string | null) => void;
-  onDragStartNode?: (node: DragNode) => void;
-  parentFolderId?: string | null;
-}) {
-  const [isPendingDetach, startDetach] = useTransition();
-  const depthClass = depth <= 1 ? "pl-7" : "pl-8";
-  const isArchived = skill.status === "archived";
-
-  // Attached reusables link with box context so the page can show the reference banner
-  const href = skill.is_attachment && boxId
-    ? `/app/skills/${skill.id}?box_id=${boxId}`
-    : `/app/skills/${skill.id}`;
-
-  function handleDetach(e: React.MouseEvent) {
-    e.preventDefault();
-    e.stopPropagation();
-    if (!boxId) return;
-    startDetach(async () => {
-      await detachFromBoxAction(boxId, "skill", skill.id);
-      onDetached?.();
-    });
-  }
-
-  return (
-    <div className={cn("group/skill-row flex items-center gap-0 rounded-md", depthClass)}>
-      <Link
-        href={href}
-        draggable
-        onDragStart={() => onDragStartNode?.({ type: "skill", id: skill.id, is_attachment: skill.is_attachment, folder_id: parentFolderId ?? null })}
-        onDragOver={(e) => e.preventDefault()}
-        onDrop={(e) => { e.preventDefault(); e.stopPropagation(); onDropNode?.({ type: "skill", id: skill.id, is_attachment: skill.is_attachment, folder_id: parentFolderId ?? null }, "before", parentFolderId ?? null); }}
-        onClick={onNavigate}
-        className={cn(
-          "flex flex-1 items-center gap-2 rounded-md py-1 pr-1 text-xs min-w-0",
-          "transition-colors duration-150",
-          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1",
-          isArchived && "opacity-50",
-          isActive
-            ? "bg-accent text-foreground font-medium"
-            : "text-muted-foreground hover:text-foreground hover:bg-accent/50"
-        )}
-        aria-current={isActive ? "page" : undefined}
-      >
-        <Zap className="h-4 w-4 shrink-0" aria-hidden="true" />
-        <span className="truncate">{skill.name}</span>
-        {skill.is_attachment && (
-          <span className="shrink-0 text-[10px] text-muted-foreground/30" title="Attached from workspace library">↗</span>
-        )}
-      </Link>
-      {/* Detach button — only for attachments, shown on hover */}
-      {skill.is_attachment && boxId && (
+      {/* Folder expand/collapse toggle */}
+      {data.nodeType === "folder" ? (
         <button
           type="button"
-          onClick={handleDetach}
-          disabled={isPendingDetach}
-          title="Detach from this box"
-          className={cn(
-            "flex h-5 w-5 shrink-0 items-center justify-center rounded",
-            "opacity-0 group-hover/skill-row:opacity-100 transition-opacity duration-150",
-            "text-muted-foreground/50 hover:text-destructive hover:bg-destructive/10",
-            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:opacity-100"
-          )}
-        >
-          <Trash2 className="h-3 w-3" aria-hidden="true" />
-        </button>
-      )}
-    </div>
-  );
-}
-
-// ─── Agent row ────────────────────────────────────────────────────────────────
-
-function AgentRow({
-  agent,
-  depth,
-  boxId,
-  isActive,
-  onNavigate,
-  onDetached,
-  onDropNode,
-  onDragStartNode,
-  parentFolderId,
-}: {
-  agent: TreeAgentNode;
-  depth: number;
-  /** Current box context — used to set ?box_id= on attached reusable links and for detach. */
-  boxId?: string;
-  isActive: boolean;
-  onNavigate?: () => void;
-  onDetached?: () => void;
-  onDropNode?: (target: DragNode, position: "before" | "inside" | "root", targetFolderId?: string | null) => void;
-  onDragStartNode?: (node: DragNode) => void;
-  parentFolderId?: string | null;
-}) {
-  const [isPendingDetach, startDetach] = useTransition();
-  const depthClass = depth <= 1 ? "pl-7" : "pl-8";
-  const isArchived = agent.status === "archived";
-
-  const href = agent.is_attachment && boxId
-    ? `/app/agents/${agent.id}?box_id=${boxId}`
-    : `/app/agents/${agent.id}`;
-
-  function handleDetach(e: React.MouseEvent) {
-    e.preventDefault();
-    e.stopPropagation();
-    if (!boxId) return;
-    startDetach(async () => {
-      await detachFromBoxAction(boxId, "agent", agent.id);
-      onDetached?.();
-    });
-  }
-
-  return (
-    <div className={cn("group/agent-row flex items-center gap-0 rounded-md", depthClass)}>
-      <Link
-        href={href}
-        draggable
-        onDragStart={() => onDragStartNode?.({ type: "agent", id: agent.id, is_attachment: agent.is_attachment, folder_id: parentFolderId ?? null })}
-        onDragOver={(e) => e.preventDefault()}
-        onDrop={(e) => { e.preventDefault(); e.stopPropagation(); onDropNode?.({ type: "agent", id: agent.id, is_attachment: agent.is_attachment, folder_id: parentFolderId ?? null }, "before", parentFolderId ?? null); }}
-        onClick={onNavigate}
-        className={cn(
-          "flex flex-1 items-center gap-2 rounded-md py-1 pr-1 text-xs min-w-0",
-          "transition-colors duration-150",
-          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1",
-          isArchived && "opacity-50",
-          isActive
-            ? "bg-accent text-foreground font-medium"
-            : "text-muted-foreground hover:text-foreground hover:bg-accent/50"
-        )}
-        aria-current={isActive ? "page" : undefined}
-      >
-        <Bot className="h-4 w-4 shrink-0" aria-hidden="true" />
-        <span className="truncate">{agent.name}</span>
-        {agent.is_attachment && (
-          <span className="shrink-0 text-[10px] text-muted-foreground/30" title="Attached from workspace library">↗</span>
-        )}
-      </Link>
-      {/* Detach button — only for attachments, shown on hover */}
-      {agent.is_attachment && boxId && (
-        <button
-          type="button"
-          onClick={handleDetach}
-          disabled={isPendingDetach}
-          title="Detach from this box"
-          className={cn(
-            "flex h-5 w-5 shrink-0 items-center justify-center rounded",
-            "opacity-0 group-hover/agent-row:opacity-100 transition-opacity duration-150",
-            "text-muted-foreground/50 hover:text-destructive hover:bg-destructive/10",
-            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:opacity-100"
-          )}
-        >
-          <Trash2 className="h-3 w-3" aria-hidden="true" />
-        </button>
-      )}
-    </div>
-  );
-}
-
-// ─── Check if a folder (recursively) contains a given note ID ────────────────
-
-function folderContainsNote(folder: TreeFolderNode, noteId: string): boolean {
-  if (folder.notes.some((n) => n.id === noteId)) return true;
-  return folder.children.some((child) => folderContainsNote(child, noteId));
-}
-
-// ─── Folder node (collapsible) ────────────────────────────────────────────────
-
-function FolderNode({
-  folder,
-  depth,
-  boxId,
-  currentNoteId,
-  defaultOpen,
-  onNavigate,
-  onTreeRefresh,
-  onDropNode,
-  onDragStartNode,
-}: {
-  folder: TreeFolderNode;
-  depth: number;
-  /** Box context — passed to SkillRow/AgentRow for ?box_id= links and detach. */
-  boxId?: string;
-  currentNoteId?: string;
-  /** Whether this folder should be open by default (e.g., it's an ancestor of the active note) */
-  defaultOpen?: boolean;
-  onNavigate?: () => void;
-  onTreeRefresh?: () => void;
-  onDropNode?: (target: DragNode, position: "before" | "inside" | "root", targetFolderId?: string | null) => void;
-  onDragStartNode?: (node: DragNode) => void;
-}) {
-  const [isOpen, setIsOpen] = useState(defaultOpen ?? false);
-  const isEmpty =
-    folder.children.length === 0 &&
-    folder.notes.length === 0 &&
-    folder.files.length === 0 &&
-    folder.skills.length === 0 &&
-    folder.agents.length === 0;
-
-  // depth 1 → pl-7 for sub-folder header, depth 2+ → pl-8
-  const depthClass = depth <= 1 ? "pl-7" : "pl-8";
-
-  return (
-    <div>
-      {/* Folder header row */}
-      <div className={cn("group flex items-center gap-1 pr-1", depthClass)}>
-        {/* Chevron toggle */}
-        <button
-          type="button"
-          draggable
-          onDragStart={() => onDragStartNode?.({ type: "folder", id: folder.id })}
-          onDragOver={(e) => e.preventDefault()}
-          onDrop={(e) => { e.preventDefault(); e.stopPropagation(); onDropNode?.({ type: "folder", id: folder.id, folder_id: null }, "inside", folder.id); }}
-          onClick={() => setIsOpen((o) => !o)}
+          onClick={(e) => { e.stopPropagation(); node.toggle(); }}
           className={cn(
             "flex h-5 w-5 shrink-0 items-center justify-center rounded",
             "transition-colors duration-150",
             "text-muted-foreground hover:bg-accent/50 hover:text-foreground cursor-pointer",
-            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
+            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           )}
-          aria-label={isOpen ? `Collapse ${folder.name}` : `Expand ${folder.name}`}
-          aria-expanded={isOpen}
+          aria-label={node.isOpen ? `Collapse ${data.name}` : `Expand ${data.name}`}
+          aria-expanded={node.isOpen}
         >
-          {isOpen ? (
-            <ChevronDown className="h-3.5 w-3.5 transition-transform duration-150" aria-hidden="true" />
+          {node.isOpen ? (
+            <ChevronDown className="h-3.5 w-3.5" aria-hidden="true" />
           ) : (
-            <ChevronRight className="h-3.5 w-3.5 transition-transform duration-150" aria-hidden="true" />
+            <ChevronRight className="h-3.5 w-3.5" aria-hidden="true" />
           )}
         </button>
+      ) : (
+        <span className="w-5 shrink-0" />
+      )}
 
-        {/* Folder name */}
-        <Link
-          href={`/app/folders/${folder.id}`}
-          onClick={onNavigate}
+      {/* Clickable link to object */}
+      <Link
+        href={finalHref}
+        onClick={(e) => e.stopPropagation()}
+        className={cn(
+          "flex flex-1 min-w-0 items-center gap-1.5 rounded-md px-1 py-0.5 text-xs",
+          "transition-colors duration-150",
+          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+          isActive
+            ? "bg-accent text-foreground font-medium"
+            : "text-muted-foreground hover:text-foreground hover:bg-accent/50"
+        )}
+        aria-current={isActive ? "page" : undefined}
+      >
+        {/* Icon is a stable module-level reference from lucide/hugeicons, not a new component */}
+        {/* eslint-disable-next-line react-hooks/static-components */}
+        <Icon className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+        <span className="truncate">{data.name}</span>
+        {data.isAttachment && (
+          <span className="shrink-0 text-[10px] text-muted-foreground/30" title="Attached from workspace library">↗</span>
+        )}
+        {ext && (
+          <span className="shrink-0 text-[10px] text-muted-foreground/40">{ext}</span>
+        )}
+      </Link>
+
+      {/* Detach button for attached reusable items */}
+      {data.isAttachment && boxId && (
+        <button
+          type="button"
+          onClick={handleDetach}
+          disabled={isPendingDetach}
+          title="Detach from this box"
           className={cn(
-            "flex flex-1 items-center gap-1.5 rounded-md px-1 py-1 text-xs min-w-0",
-            "transition-colors duration-150",
-            "text-foreground/60 hover:bg-accent/50 hover:text-foreground cursor-pointer",
-            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
+            "flex h-5 w-5 shrink-0 items-center justify-center rounded",
+            "opacity-0 group-hover/tree-node:opacity-100 transition-opacity duration-150",
+            "text-muted-foreground/50 hover:text-destructive hover:bg-destructive/10",
+            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:opacity-100"
           )}
         >
-          {isOpen
-            ? <Folder02Icon className="h-3.5 w-3.5 shrink-0 text-muted-foreground/50" aria-hidden="true" />
-            : <Folder01Icon className="h-3.5 w-3.5 shrink-0 text-muted-foreground/50" aria-hidden="true" />
-          }
-          <span className="truncate font-medium tracking-tight">{folder.name}</span>
-        </Link>
-      </div>
-
-      {/* Children — animated collapse/expand */}
-      <CollapsePanel open={isOpen}>
-        <div className="py-0.5">
-          {isEmpty && (
-            <p className="pl-8 py-1 text-[10px] text-muted-foreground/40 italic">
-              Empty
-            </p>
-          )}
-          {folder.notes.map((note) => (
-            <NoteRow
-              key={note.id}
-              note={note}
-              depth={depth + 1}
-              isActive={note.id === currentNoteId}
-              onNavigate={onNavigate}
-              onDropNode={onDropNode}
-              onDragStartNode={onDragStartNode}
-              parentFolderId={folder.id}
-            />
-          ))}
-          {folder.files.map((file) => (
-            <FileRow
-              key={file.id}
-              file={file}
-              depth={depth + 1}
-              isActive={false}
-              onNavigate={onNavigate}
-              onDropNode={onDropNode}
-              onDragStartNode={onDragStartNode}
-              parentFolderId={folder.id}
-            />
-          ))}
-          {folder.skills.map((skill) => (
-            <SkillRow
-              key={skill.id}
-              skill={skill}
-              depth={depth + 1}
-              boxId={boxId}
-              isActive={false}
-              onNavigate={onNavigate}
-              onDetached={onTreeRefresh}
-              onDropNode={onDropNode}
-              onDragStartNode={onDragStartNode}
-              parentFolderId={folder.id}
-            />
-          ))}
-          {folder.agents.map((agent) => (
-            <AgentRow
-              key={agent.id}
-              agent={agent}
-              depth={depth + 1}
-              boxId={boxId}
-              isActive={false}
-              onNavigate={onNavigate}
-              onDetached={onTreeRefresh}
-              onDropNode={onDropNode}
-              onDragStartNode={onDragStartNode}
-              parentFolderId={folder.id}
-            />
-          ))}
-          {folder.children.map((child) => (
-            <FolderNode
-              key={child.id}
-              folder={child}
-              depth={depth + 1}
-              boxId={boxId}
-              currentNoteId={currentNoteId}
-              defaultOpen={currentNoteId ? folderContainsNote(child, currentNoteId) : false}
-              onNavigate={onNavigate}
-              onTreeRefresh={onTreeRefresh}
-              onDropNode={onDropNode}
-              onDragStartNode={onDragStartNode}
-            />
-          ))}
-        </div>
-      </CollapsePanel>
+          <Trash2 className="h-3 w-3" aria-hidden="true" />
+        </button>
+      )}
     </div>
   );
 }
 
-// ─── Box tree ─────────────────────────────────────────────────────────────────
+// ─── Box tree (react-arborist wrapper) ───────────────────────────────────────
 
 function BoxTree({
   data,
@@ -759,18 +388,13 @@ function BoxTree({
   onNavigate?: () => void;
   onTreeRefresh?: () => void;
 }) {
-  const [draggedNode, setDraggedNode] = useState<DragNode | null>(null);
   const [isMovePending, startMove] = useTransition();
-  const { rootFolders, rootNotes, rootFiles, rootSkills, rootAgents } = buildTree(data);
-  const empty =
-    rootFolders.length === 0 &&
-    rootNotes.length === 0 &&
-    rootFiles.length === 0 &&
-    rootSkills.length === 0 &&
-    rootAgents.length === 0;
-  const ancestorIds = currentNoteId ? collectAncestorFolderIds(data, currentNoteId) : new Set<string>();
 
-  if (empty) {
+  const treeData = useMemo(() => buildArboristTree(data), [data]);
+  const initialOpenState = useMemo(() => computeOpenState(data, currentNoteId), [data, currentNoteId]);
+
+  const isEmpty = treeData.length === 0;
+  if (isEmpty) {
     return (
       <p className="pl-7 py-1.5 text-xs text-muted-foreground/40 italic">
         No content yet
@@ -778,123 +402,84 @@ function BoxTree({
     );
   }
 
-  function handleDrop(target: DragNode, position: "before" | "inside" | "root", targetFolderId?: string | null) {
-    if (!draggedNode || isMovePending) return;
-    if (draggedNode.id === target.id && draggedNode.type === target.type) return;
+  // Handle drag-and-drop moves via react-arborist
+  const handleMove = async (args: {
+    dragIds: string[];
+    dragNodes: NodeApi<TreeNodeData>[];
+    parentId: string | null;
+    parentNode: NodeApi<TreeNodeData> | null;
+    index: number;
+  }) => {
+    if (isMovePending) return;
+
+    const dragNode = args.dragNodes[0];
+    if (!dragNode) return;
+
+    const dragData = dragNode.data;
+    const targetFolderId = args.parentNode
+      ? args.parentNode.data.nodeType === "folder" ? args.parentNode.data.objectId : null
+      : null;
+
     startMove(async () => {
       await moveTreeNodeAction({
         boxId,
-        draggedType: draggedNode.type,
-        draggedId: draggedNode.id,
-        targetType: target.type,
-        targetId: target.id,
-        targetFolderId: targetFolderId ?? null,
-        position,
-        isAttachment: draggedNode.is_attachment,
+        draggedType: dragData.nodeType,
+        draggedId: dragData.objectId,
+        position: targetFolderId ? "inside" : "root",
+        targetFolderId,
+        isAttachment: dragData.isAttachment,
       });
-      setDraggedNode(null);
       onTreeRefresh?.();
     });
-  }
+  };
+
+  // Disable drop onto non-folder nodes (only folders and root can receive children)
+  const disableDrop = (args: {
+    parentNode: NodeApi<TreeNodeData>;
+    dragNodes: NodeApi<TreeNodeData>[];
+    index: number;
+  }) => {
+    const parent = args.parentNode;
+    // Root is always a valid target
+    if (parent.isRoot) return false;
+    // Only folders can receive children
+    if (parent.data.nodeType !== "folder") return true;
+    // Prevent dropping a folder into itself or its descendants
+    const dragNode = args.dragNodes[0];
+    if (dragNode && parent.data.nodeType === "folder" && dragNode.data.nodeType === "folder") {
+      if (parent.isAncestorOf(dragNode) || parent.id === dragNode.id) return true;
+    }
+    return false;
+  };
+
+  // Calculate height based on number of visible nodes (up to max)
+  const estimatedHeight = Math.min(treeData.length * 120, 600);
 
   return (
-    <div
-      className="flex flex-col gap-0.5 pb-1"
-      onDragOver={(e) => e.preventDefault()}
-      onDrop={(e) => {
-        e.preventDefault();
-        if (!draggedNode) return;
-        startMove(async () => {
-          await moveTreeNodeAction({
-            boxId,
-            draggedType: draggedNode.type,
-            draggedId: draggedNode.id,
-            position: "root",
-            targetFolderId: null,
-            isAttachment: draggedNode.is_attachment,
-          });
-          setDraggedNode(null);
-          onTreeRefresh?.();
-        });
-      }}
+    <Tree<TreeNodeData>
+      data={treeData}
+      onMove={handleMove}
+      disableDrop={disableDrop}
+      disableEdit={true}
+      disableMultiSelection={true}
+      openByDefault={false}
+      initialOpenState={initialOpenState}
+      rowHeight={28}
+      indent={16}
+      width="100%"
+      height={estimatedHeight}
+      className="arborist-tree"
+      // Pass boxId through props so TreeNode can access it
+      // @ts-expect-error -- custom prop forwarded to TreeNode via tree.props
+      boxId={boxId}
     >
-      {rootFolders.map((folder) => (
-        <FolderNode
-          key={folder.id}
-          folder={folder}
-          depth={1}
-          boxId={boxId}
-          currentNoteId={currentNoteId}
-          defaultOpen={ancestorIds.has(folder.id)}
-          onNavigate={onNavigate}
-          onTreeRefresh={onTreeRefresh}
-          onDropNode={handleDrop}
-          onDragStartNode={setDraggedNode}
-        />
-      ))}
-      {rootNotes.map((note) => (
-        <NoteRow
-          key={note.id}
-          note={note}
-          depth={1}
-          isActive={note.id === currentNoteId}
-          onNavigate={onNavigate}
-          onDropNode={handleDrop}
-          onDragStartNode={setDraggedNode}
-          parentFolderId={null}
-        />
-      ))}
-      {rootFiles.map((file) => (
-        <FileRow
-          key={file.id}
-          file={file}
-          depth={1}
-          isActive={false}
-          onNavigate={onNavigate}
-          onDropNode={handleDrop}
-          onDragStartNode={setDraggedNode}
-          parentFolderId={null}
-        />
-      ))}
-      {rootSkills.map((skill) => (
-        <SkillRow
-          key={skill.id}
-          skill={skill}
-          depth={1}
-          boxId={boxId}
-          isActive={false}
-          onNavigate={onNavigate}
-          onDetached={onTreeRefresh}
-          onDropNode={handleDrop}
-          onDragStartNode={setDraggedNode}
-          parentFolderId={null}
-        />
-      ))}
-      {rootAgents.map((agent) => (
-        <AgentRow
-          key={agent.id}
-          agent={agent}
-          depth={1}
-          boxId={boxId}
-          isActive={false}
-          onNavigate={onNavigate}
-          onDetached={onTreeRefresh}
-          onDropNode={handleDrop}
-          onDragStartNode={setDraggedNode}
-          parentFolderId={null}
-        />
-      ))}
-    </div>
+      {TreeNode}
+    </Tree>
   );
 }
 
 // ─── Box quick-create menu ────────────────────────────────────────────────────
 
-/**
- * Plus button attached to each BoxRow in the sidebar.
- * Opens a dropdown with two options (new note, new folder) each backed
- * by a minimal dialog — no folder list needed since both items land at root.
- */
 function BoxQuickCreateMenu({
   box,
   onNavigate,
@@ -902,7 +487,6 @@ function BoxQuickCreateMenu({
 }: {
   box: { id: string; name: string };
   onNavigate?: () => void;
-  /** Called immediately after a note or folder is created so the tree refreshes without waiting for realtime */
   onTreeRefresh?: () => void;
 }) {
   const [noteOpen, setNoteOpen] = useState(false);
@@ -927,7 +511,7 @@ function BoxQuickCreateMenu({
         setNoteOpen(false);
         setNoteTitle("");
         onNavigate?.();
-        onTreeRefresh?.(); // Refresh tree immediately; realtime will also fire shortly after
+        onTreeRefresh?.();
         router.push(`/app/notes/${result.data.id}`);
       } else {
         setNoteError(result.error);
@@ -944,7 +528,7 @@ function BoxQuickCreateMenu({
       if (result.ok) {
         setFolderOpen(false);
         setFolderName("");
-        onTreeRefresh?.(); // Refresh tree immediately instead of full page refresh
+        onTreeRefresh?.();
       } else {
         setFolderError(result.error);
       }
@@ -975,7 +559,6 @@ function BoxQuickCreateMenu({
             <FolderPlus className="h-3.5 w-3.5" aria-hidden="true" />
             New folder
           </DropdownMenuItem>
-          {/* File creation is handled by its own dialog via FileCreateDialog */}
           <DropdownMenuItem onClick={() => setFileCreateOpen(true)}>
             <File className="h-3.5 w-3.5" aria-hidden="true" />
             New file
@@ -1045,7 +628,7 @@ function BoxQuickCreateMenu({
         </DialogContent>
       </Dialog>
 
-      {/* File creation dialog — controlled from dropdown "New file" item */}
+      {/* File creation dialog */}
       <FileCreateDialog
         boxId={box.id}
         open={fileCreateOpen}
@@ -1053,7 +636,7 @@ function BoxQuickCreateMenu({
         onCreated={() => { setFileCreateOpen(false); onTreeRefresh?.(); }}
       />
 
-      {/* Agent creation dialog — controlled from dropdown "New agent" item */}
+      {/* Agent creation dialog */}
       <AgentCreateDialog
         boxId={box.id}
         open={agentCreateOpen}
@@ -1061,7 +644,7 @@ function BoxQuickCreateMenu({
         onCreated={() => { setAgentCreateOpen(false); onTreeRefresh?.(); }}
       />
 
-      {/* Attach reusable dialog — browse workspace skills/agents and attach by reference */}
+      {/* Attach reusable dialog */}
       <AttachReusableDialog
         boxId={box.id}
         open={attachOpen}
@@ -1072,7 +655,7 @@ function BoxQuickCreateMenu({
   );
 }
 
-// ─── Box row ──────────────────────────────────────────────────────────────────
+// ─── Box row ─────────────────────────────────────────────────────────────────
 
 function BoxRow({
   box,
@@ -1099,7 +682,6 @@ function BoxRow({
     <div>
       {/* Box header row */}
       <div className="group flex items-center gap-0.5 pr-1">
-        {/* Chevron toggle */}
         <button
           type="button"
           onClick={onToggle}
@@ -1121,7 +703,6 @@ function BoxRow({
           )}
         </button>
 
-        {/* Box name link */}
         <Link
           href={`/app/boxes/${box.id}`}
           onClick={onNavigate}
@@ -1142,12 +723,11 @@ function BoxRow({
           <span className="truncate">{box.name}</span>
         </Link>
 
-        {/* Quick-create menu — note or folder, visible on hover */}
         <BoxQuickCreateMenu box={box} onNavigate={onNavigate} onTreeRefresh={onTreeRefresh} />
       </div>
 
-      {/* Expanded tree — animated */}
-      <CollapsePanel open={isExpanded}>
+      {/* Expanded tree */}
+      {isExpanded && (
         <div className="ml-3 py-0.5">
           {treeData ? (
             <BoxTree
@@ -1163,12 +743,12 @@ function BoxRow({
             </p>
           )}
         </div>
-      </CollapsePanel>
+      )}
     </div>
   );
 }
 
-// ─── Tree sidebar ─────────────────────────────────────────────────────────────
+// ─── Tree sidebar ────────────────────────────────────────────────────────────
 
 export function TreeSidebar({
   boxes,
@@ -1182,16 +762,13 @@ export function TreeSidebar({
   const [treeData, setTreeData] = useState<Map<string, BoxTreeData>>(new Map());
   const [loading, setLoading] = useState<Set<string>>(new Set());
 
-  // Refs for stable access inside realtime event handlers (avoids stale closures)
   const treeDataRef = useRef<Map<string, BoxTreeData>>(new Map());
   const boxIdsRef = useRef<Set<string>>(new Set(boxes.map((b) => b.id)));
   const realtimeDebounceRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
 
-  // Keep refs in sync with state/props
   useEffect(() => { treeDataRef.current = treeData; }, [treeData]);
   useEffect(() => { boxIdsRef.current = new Set(boxes.map((b) => b.id)); }, [boxes]);
 
-  // Stable fetch function — state setters from useState are already stable
   const fetchTree = useCallback(async (boxId: string) => {
     setLoading((prev) => new Set([...prev, boxId]));
     try {
@@ -1208,7 +785,6 @@ export function TreeSidebar({
     }
   }, []);
 
-  // Debounced refetch — coalesces rapid realtime events (e.g. template applying multiple notes)
   const scheduleTreeRefetch = useCallback((boxId: string) => {
     const debounceMap = realtimeDebounceRef.current;
     const existing = debounceMap.get(boxId);
@@ -1220,10 +796,9 @@ export function TreeSidebar({
     debounceMap.set(boxId, timer);
   }, [fetchTree]);
 
-  // Supabase Realtime subscription — keeps the sidebar tree up to date without refresh
+  // Supabase Realtime subscription
   useEffect(() => {
     if (!workspaceId) return;
-
     const supabase = createClient();
 
     const handleContentChange = (
@@ -1232,7 +807,6 @@ export function TreeSidebar({
     ) => {
       const boxId = (newRecord.box_id ?? oldRecord.box_id) as string | undefined;
       if (!boxId) return;
-      // Only refresh if this box belongs to the workspace and its tree is loaded
       if (!boxIdsRef.current.has(boxId)) return;
       if (!treeDataRef.current.has(boxId)) return;
       scheduleTreeRefetch(boxId);
@@ -1246,62 +820,28 @@ export function TreeSidebar({
 
     const channel = supabase
       .channel(`workspace-tree:${workspaceId}`)
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "notes", filter: `workspace_id=eq.${workspaceId}` },
-        makeHandler
-      )
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "folders", filter: `workspace_id=eq.${workspaceId}` },
-        makeHandler
-      )
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "files", filter: `workspace_id=eq.${workspaceId}` },
-        makeHandler
-      )
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "skills", filter: `workspace_id=eq.${workspaceId}` },
-        makeHandler
-      )
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "agents", filter: `workspace_id=eq.${workspaceId}` },
-        makeHandler
-      )
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "boxes", filter: `workspace_id=eq.${workspaceId}` },
-        () => router.refresh()
-      )
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "box_object_attachments", filter: `workspace_id=eq.${workspaceId}` },
-        makeHandler
-      )
+      .on("postgres_changes", { event: "*", schema: "public", table: "notes", filter: `workspace_id=eq.${workspaceId}` }, makeHandler)
+      .on("postgres_changes", { event: "*", schema: "public", table: "folders", filter: `workspace_id=eq.${workspaceId}` }, makeHandler)
+      .on("postgres_changes", { event: "*", schema: "public", table: "files", filter: `workspace_id=eq.${workspaceId}` }, makeHandler)
+      .on("postgres_changes", { event: "*", schema: "public", table: "skills", filter: `workspace_id=eq.${workspaceId}` }, makeHandler)
+      .on("postgres_changes", { event: "*", schema: "public", table: "agents", filter: `workspace_id=eq.${workspaceId}` }, makeHandler)
+      .on("postgres_changes", { event: "*", schema: "public", table: "boxes", filter: `workspace_id=eq.${workspaceId}` }, () => router.refresh())
+      .on("postgres_changes", { event: "*", schema: "public", table: "box_object_attachments", filter: `workspace_id=eq.${workspaceId}` }, makeHandler)
       .subscribe();
 
-    return () => {
-      void supabase.removeChannel(channel);
-    };
+    return () => { void supabase.removeChannel(channel); };
   }, [workspaceId, scheduleTreeRefetch, router]);
 
-  // Cleanup pending debounce timers on unmount
   useEffect(() => {
     return () => {
-      for (const timer of realtimeDebounceRef.current.values()) {
-        clearTimeout(timer);
-      }
+      for (const timer of realtimeDebounceRef.current.values()) clearTimeout(timer);
     };
   }, []);
 
-  // Auto-expand active box and refresh its tree data when currentBoxId changes
+  // Auto-expand active box
   useEffect(() => {
     const activeBoxId = currentBoxId;
     if (!activeBoxId) return;
-    // Clear cached tree data so stale data is not shown after navigation
     setTreeData((prev) => {
       const next = new Map(prev);
       next.delete(activeBoxId);
@@ -1311,7 +851,6 @@ export function TreeSidebar({
       if (prev.has(activeBoxId)) return prev;
       return new Set([...prev, activeBoxId]);
     });
-    // Fetch fresh tree data for the active box
     void fetchTree(activeBoxId);
   }, [currentBoxId, fetchTree]);
 
@@ -1319,11 +858,8 @@ export function TreeSidebar({
     const willExpand = !expandedBoxIds.has(boxId);
     setExpandedBoxIds((prev) => {
       const next = new Set(prev);
-      if (next.has(boxId)) {
-        next.delete(boxId);
-      } else {
-        next.add(boxId);
-      }
+      if (next.has(boxId)) next.delete(boxId);
+      else next.add(boxId);
       return next;
     });
     if (willExpand && !treeData.has(boxId) && !loading.has(boxId)) {

@@ -1,11 +1,25 @@
-import React from "react";
+"use client";
+
+import { useMemo } from "react";
 import Link from "next/link";
-import { BookOpen, ChevronRight, FileText, Folder, Package } from "lucide-react";
+import { usePathname } from "next/navigation";
+import {
+  BookOpen,
+  Bot,
+  ChevronDown,
+  ChevronRight,
+  File,
+  FileText,
+  Folder,
+  Package,
+  Zap,
+} from "lucide-react";
+import { Tree, type NodeRendererProps } from "react-arborist";
 import { cn } from "@/lib/utils";
 import { type Folder as FolderType } from "@/server/domain/types/folder";
 import { type Note } from "@/server/domain/types/note";
 
-// ─── Tree data types ──────────────────────────────────────────────────────────
+// ─── Tree data types ─────────────────────────────────────────────────────────
 
 export interface TreeNote {
   id: string;
@@ -24,62 +38,78 @@ export interface TreeFolder {
   notes: TreeNote[];
 }
 
-// ─── Build tree from flat lists ───────────────────────────────────────────────
+// ─── Arborist node type ──────────────────────────────────────────────────────
 
-export function buildBoxTree(
-  folders: FolderType[],
-  notes: Note[]
-): { rootFolders: TreeFolder[]; rootNotes: TreeNote[] } {
-  // Map folder id → TreeFolder
-  const folderMap = new Map<string, TreeFolder>();
+type ContentsTreeNode = {
+  id: string;
+  name: string;
+  nodeType: "folder" | "note";
+  objectId: string;
+  kind?: string;
+  pathCache?: string;
+  status?: string;
+  children?: ContentsTreeNode[];
+};
+
+// ─── Build arborist tree from flat lists ─────────────────────────────────────
+
+function buildContentsTree(folders: FolderType[], notes: Note[]): ContentsTreeNode[] {
+  const folderMap = new Map<string, ContentsTreeNode>();
   for (const f of folders) {
     folderMap.set(f.id, {
-      id: f.id,
+      id: `folder:${f.id}`,
       name: f.name,
-      slug: f.slug,
-      path_cache: f.path_cache,
+      nodeType: "folder",
+      objectId: f.id,
+      pathCache: f.path_cache,
       status: f.status,
       children: [],
-      notes: [],
     });
   }
 
-  const rootFolders: TreeFolder[] = [];
-
-  // Link children to parents
+  const rootNodes: ContentsTreeNode[] = [];
   for (const f of folders) {
     const node = folderMap.get(f.id)!;
     if (f.parent_folder_id && folderMap.has(f.parent_folder_id)) {
-      folderMap.get(f.parent_folder_id)!.children.push(node);
+      folderMap.get(f.parent_folder_id)!.children!.push(node);
     } else {
-      rootFolders.push(node);
+      rootNodes.push(node);
     }
   }
 
-  // Attach notes to their folder or to root
-  const rootNotes: TreeNote[] = [];
-  for (const note of notes) {
-    const item: TreeNote = {
-      id: note.id,
-      title: note.title,
-      kind: note.kind as "note" | "guide" | "bundle",
-      slug: note.slug,
+  for (const n of notes) {
+    const node: ContentsTreeNode = {
+      id: `note:${n.id}`,
+      name: n.title,
+      nodeType: "note",
+      objectId: n.id,
+      kind: n.kind,
     };
-    if (note.folder_id && folderMap.has(note.folder_id)) {
-      folderMap.get(note.folder_id)!.notes.push(item);
+    if (n.folder_id && folderMap.has(n.folder_id)) {
+      folderMap.get(n.folder_id)!.children!.push(node);
     } else {
-      rootNotes.push(item);
+      rootNodes.push(node);
     }
   }
 
-  // Sort
-  rootFolders.sort((a, b) => a.name.localeCompare(b.name));
-  rootNotes.sort((a, b) => a.title.localeCompare(b.title));
+  // Sort: folders first, then alphabetically
+  function sortChildren(nodes: ContentsTreeNode[]) {
+    nodes.sort((a, b) => {
+      const aFolder = a.nodeType === "folder" ? 0 : 1;
+      const bFolder = b.nodeType === "folder" ? 0 : 1;
+      if (aFolder !== bFolder) return aFolder - bFolder;
+      return a.name.localeCompare(b.name);
+    });
+    for (const n of nodes) {
+      if (n.children) sortChildren(n.children);
+    }
+  }
+  sortChildren(rootNodes);
 
-  return { rootFolders, rootNotes };
+  return rootNodes;
 }
 
-// ─── Note icons ───────────────────────────────────────────────────────────────
+// ─── Note icon ───────────────────────────────────────────────────────────────
 
 const kindIcon = {
   note: FileText,
@@ -87,97 +117,83 @@ const kindIcon = {
   bundle: Package,
 } as const;
 
-// ─── Tree node components ─────────────────────────────────────────────────────
+// ─── Custom node renderer ────────────────────────────────────────────────────
 
-function NoteRow({ note, depth = 0 }: { note: TreeNote; depth?: number }) {
-  const Icon = kindIcon[note.kind];
+function ContentsNode({
+  node,
+  style,
+  dragHandle,
+}: NodeRendererProps<ContentsTreeNode>) {
+  const data = node.data;
+  const pathname = usePathname();
+
+  const href = data.nodeType === "folder"
+    ? `/app/folders/${data.objectId}`
+    : `/app/notes/${data.objectId}`;
+
+  const isActive = pathname === href;
+
+  const Icon = data.nodeType === "folder"
+    ? Folder
+    : kindIcon[(data.kind as keyof typeof kindIcon) ?? "note"] ?? FileText;
+
   return (
-    <Link
-      href={`/app/notes/${note.id}`}
-      className={cn(
-        "flex items-center gap-1.5 rounded-md py-1 pr-2 text-sm",
-        "text-foreground/70 transition-fast hover:bg-accent hover:text-foreground"
+    <div style={style} ref={dragHandle} className="flex items-center gap-0">
+      {data.nodeType === "folder" ? (
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); node.toggle(); }}
+          className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-muted-foreground hover:bg-accent/50 hover:text-foreground"
+          aria-expanded={node.isOpen}
+        >
+          {node.isOpen ? (
+            <ChevronDown className="h-3 w-3" aria-hidden="true" />
+          ) : (
+            <ChevronRight className="h-3 w-3" aria-hidden="true" />
+          )}
+        </button>
+      ) : (
+        <span className="w-5 shrink-0" />
       )}
-      style={{ paddingLeft: `${0.5 + depth * 1}rem` }}
-    >
-      <span className="h-3 w-3 shrink-0" /> {/* align with folder chevron */}
-      <Icon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-      <span className="truncate">{note.title}</span>
-    </Link>
-  );
-}
 
-function FolderNode({
-  folder,
-  depth = 0,
-  folderLifecycleMenu,
-  folderActions,
-}: {
-  folder: TreeFolder;
-  depth?: number;
-  folderLifecycleMenu?: (folder: TreeFolder) => React.ReactNode;
-  folderActions?: (folder: TreeFolder) => React.ReactNode;
-}) {
-  const hasChildren = folder.children.length > 0 || folder.notes.length > 0;
-  return (
-    <div>
-      <div
-        className="group flex items-center gap-1.5 rounded-md py-1 pr-2 text-sm text-foreground/70"
-        style={{ paddingLeft: `${0.5 + depth * 1}rem` }}
-      >
-        {hasChildren ? (
-          <ChevronRight className="h-3 w-3 shrink-0 text-muted-foreground" />
-        ) : (
-          <span className="h-3 w-3 shrink-0" />
+      <Link
+        href={href}
+        onClick={(e) => e.stopPropagation()}
+        className={cn(
+          "flex flex-1 min-w-0 items-center gap-1.5 rounded-md px-1 py-0.5 text-sm",
+          "transition-fast hover:bg-accent hover:text-foreground",
+          isActive
+            ? "bg-accent text-foreground font-medium"
+            : "text-foreground/70",
+          data.nodeType === "folder" && "font-medium"
         )}
-        <Folder className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-        <span className="truncate font-medium flex-1">{folder.name}</span>
-        {folderActions?.(folder)}
-        {folderLifecycleMenu?.(folder)}
-      </div>
-      {folder.notes.map((note) => (
-        <NoteRow key={note.id} note={note} depth={depth + 1} />
-      ))}
-      {folder.children.map((child) => (
-        <FolderNode
-          key={child.id}
-          folder={child}
-          depth={depth + 1}
-          folderLifecycleMenu={folderLifecycleMenu}
-          folderActions={folderActions}
-        />
-      ))}
+        aria-current={isActive ? "page" : undefined}
+      >
+        <Icon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+        <span className="truncate">{data.name}</span>
+      </Link>
     </div>
   );
 }
 
-// ─── Public component ─────────────────────────────────────────────────────────
+// ─── Public component ────────────────────────────────────────────────────────
 
 interface BoxContentsTreeProps {
   folders: FolderType[];
   notes: Note[];
   className?: string;
-  /** Optional render prop — renders a lifecycle menu next to each folder row. */
   folderLifecycleMenu?: (folder: TreeFolder) => React.ReactNode;
-  /** Optional render prop — renders action buttons next to each folder row (shown on hover). */
   folderActions?: (folder: TreeFolder) => React.ReactNode;
 }
 
-/**
- * Hierarchical tree of folders and notes for a box.
- * Server component — renders links, no expand/collapse state needed in V1.
- */
 export function BoxContentsTree({
   folders,
   notes,
   className,
-  folderLifecycleMenu,
-  folderActions,
 }: BoxContentsTreeProps) {
-  const { rootFolders, rootNotes } = buildBoxTree(folders, notes);
+  const treeData = useMemo(() => buildContentsTree(folders, notes), [folders, notes]);
 
-  const empty = rootFolders.length === 0 && rootNotes.length === 0;
-  if (empty) {
+  if (treeData.length === 0) {
     return (
       <p className={cn("px-4 py-3 text-sm text-muted-foreground", className)}>
         No content yet. Use New folder or New note above, or Import to bring in existing Markdown files.
@@ -185,19 +201,28 @@ export function BoxContentsTree({
     );
   }
 
+  const estimatedHeight = Math.min((folders.length + notes.length) * 32 + 20, 800);
+
   return (
-    <div className={cn("flex flex-col gap-0.5", className)}>
-      {rootFolders.map((folder) => (
-        <FolderNode
-          key={folder.id}
-          folder={folder}
-          folderLifecycleMenu={folderLifecycleMenu}
-          folderActions={folderActions}
-        />
-      ))}
-      {rootNotes.map((note) => (
-        <NoteRow key={note.id} note={note} />
-      ))}
+    <div className={cn("flex flex-col", className)}>
+      <Tree<ContentsTreeNode>
+        data={treeData}
+        openByDefault={true}
+        disableDrag={true}
+        disableDrop={true}
+        disableEdit={true}
+        disableMultiSelection={true}
+        rowHeight={32}
+        indent={20}
+        width="100%"
+        height={estimatedHeight}
+        className="arborist-contents-tree"
+      >
+        {ContentsNode}
+      </Tree>
     </div>
   );
 }
+
+// Re-export for backwards compatibility
+export { buildContentsTree as buildBoxTree };

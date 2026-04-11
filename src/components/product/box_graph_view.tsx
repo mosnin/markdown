@@ -1,24 +1,40 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import Link from "next/link";
 import {
-  ArrowRight,
+  ReactFlow,
+  Background,
+  Controls,
+  useNodesState,
+  useEdgesState,
+  type Node,
+  type Edge,
+  type NodeProps,
+  Handle,
+  Position,
+  ReactFlowProvider,
+  useReactFlow,
+} from "@xyflow/react";
+import dagre from "@dagrejs/dagre";
+import {
   BookOpen,
-  ChevronRight,
+  Bot,
+  File,
   FileText,
   Folder,
   Package,
   Share2,
-  X,
+  Zap,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import {
   type BoxOverview,
   type OverviewEdge,
-  type OverviewNode,
 } from "@/server/services/overview_service";
+
+import "@xyflow/react/dist/style.css";
 
 // ─── Relationship labels ──────────────────────────────────────────────────────
 
@@ -39,659 +55,355 @@ function relLabel(type: string): string {
   return REL_LABEL[type] ?? type.replace(/_/g, " ");
 }
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
+// ─── Node data types ──────────────────────────────────────────────────────────
 
-/**
- * Returns all node IDs in the subtree rooted at folderId, inclusive.
- * Used for folder-scope filtering.
- */
-function subtreeIds(nodes: OverviewNode[], folderId: string): Set<string> {
-  const childMap = new Map<string, string[]>();
-  for (const n of nodes) {
-    if (n.parentId) {
-      const arr = childMap.get(n.parentId) ?? [];
-      arr.push(n.id);
-      childMap.set(n.parentId, arr);
-    }
-  }
-  const result = new Set<string>();
-  const queue = [folderId];
-  while (queue.length > 0) {
-    const id = queue.shift()!;
-    result.add(id);
-    for (const child of childMap.get(id) ?? []) {
-      queue.push(child);
-    }
-  }
-  return result;
-}
-
-function noteIcon(noteKind: string | undefined) {
-  if (noteKind === "guide") return BookOpen;
-  if (noteKind === "bundle") return Package;
-  return FileText;
-}
-
-// ─── Note chip ────────────────────────────────────────────────────────────────
-
-function NoteChip({
-  node,
-  isGuide,
-  isSelected,
-  isConnected,
-  linkCount,
-  onClick,
-}: {
-  node: OverviewNode;
+type GraphNodeData = {
+  label: string;
+  nodeKind: string; // folder | note | file | skill | agent
+  noteKind?: string; // note | guide | bundle
+  objectId: string;
   isGuide: boolean;
-  isSelected: boolean;
-  isConnected: boolean;
-  linkCount: number;
-  onClick: () => void;
-}) {
-  const Icon = noteIcon(node.noteKind);
+  path: string;
+  isReusable?: boolean;
+  isAttachment?: boolean;
+};
+
+type GraphEdgeData = {
+  relationshipType: string;
+  relationshipNote?: string | null;
+  edgeKind?: string;
+  sourceType?: string;
+  targetType?: string;
+};
+
+// ─── Dagre layout ─────────────────────────────────────────────────────────────
+
+const NODE_WIDTH = 180;
+const NODE_HEIGHT = 48;
+const FOLDER_WIDTH = 200;
+const FOLDER_HEIGHT = 52;
+
+function applyDagreLayout(
+  nodes: Node<GraphNodeData>[],
+  edges: Edge<GraphEdgeData>[],
+  direction: "TB" | "LR" = "TB"
+): Node<GraphNodeData>[] {
+  const g = new dagre.graphlib.Graph();
+  g.setDefaultEdgeLabel(() => ({}));
+  g.setGraph({
+    rankdir: direction,
+    nodesep: 40,
+    ranksep: 60,
+    marginx: 20,
+    marginy: 20,
+  });
+
+  for (const node of nodes) {
+    const isFolder = node.data?.nodeKind === "folder";
+    g.setNode(node.id, {
+      width: isFolder ? FOLDER_WIDTH : NODE_WIDTH,
+      height: isFolder ? FOLDER_HEIGHT : NODE_HEIGHT,
+    });
+  }
+
+  for (const edge of edges) {
+    g.setEdge(edge.source, edge.target);
+  }
+
+  dagre.layout(g);
+
+  return nodes.map((node) => {
+    const pos = g.node(node.id);
+    const isFolder = node.data?.nodeKind === "folder";
+    const w = isFolder ? FOLDER_WIDTH : NODE_WIDTH;
+    const h = isFolder ? FOLDER_HEIGHT : NODE_HEIGHT;
+    return {
+      ...node,
+      position: {
+        x: pos.x - w / 2,
+        y: pos.y - h / 2,
+      },
+    };
+  });
+}
+
+// ─── Icon helpers ─────────────────────────────────────────────────────────────
+
+function getNodeIcon(nodeKind: string, noteKind?: string) {
+  switch (nodeKind) {
+    case "folder": return Folder;
+    case "note":
+      if (noteKind === "guide") return BookOpen;
+      if (noteKind === "bundle") return Package;
+      return FileText;
+    case "file": return File;
+    case "skill": return Zap;
+    case "agent": return Bot;
+    default: return FileText;
+  }
+}
+
+function getNodeHref(nodeKind: string, objectId: string): string {
+  switch (nodeKind) {
+    case "folder": return `/app/folders/${objectId}`;
+    case "note": return `/app/notes/${objectId}`;
+    case "file": return `/app/files/${objectId}`;
+    case "skill": return `/app/skills/${objectId}`;
+    case "agent": return `/app/agents/${objectId}`;
+    default: return "#";
+  }
+}
+
+// ─── Custom node components ───────────────────────────────────────────────────
+
+function GraphNode({ data, selected }: NodeProps<Node<GraphNodeData>>) {
+  const Icon = getNodeIcon(data.nodeKind, data.noteKind);
+  const href = getNodeHref(data.nodeKind, data.objectId);
+  const isFolder = data.nodeKind === "folder";
+  const isGuide = data.isGuide;
+
   return (
-    <button
-      type="button"
-      role="treeitem"
-      onClick={onClick}
-      aria-pressed={isSelected}
-      aria-label={`${isGuide ? "Guide note: " : ""}${node.label}`}
+    <div
       className={cn(
-        "flex min-w-0 items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-left text-xs transition-fast shadow-xs",
-        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-        isSelected
-          ? "border-violet-400/80 bg-violet-50 font-medium text-violet-900 shadow-sm dark:border-violet-500/60 dark:bg-violet-950/60 dark:text-violet-100"
-          : isConnected
-          ? "border-violet-300/60 bg-violet-50/50 text-foreground dark:border-violet-600/40 dark:bg-violet-950/30"
+        "rounded-lg border px-3 py-2 shadow-xs transition-fast",
+        "min-w-[140px] max-w-[200px]",
+        isFolder
+          ? selected
+            ? "border-violet-400/80 bg-violet-50 dark:border-violet-500/60 dark:bg-violet-950/60"
+            : "border-border bg-muted/30 dark:bg-muted/20"
           : isGuide
-          ? "border-amber-300/70 bg-amber-50/60 text-foreground dark:border-amber-600/40 dark:bg-amber-900/20"
-          : "border-border bg-card text-muted-foreground hover:border-border-strong hover:bg-muted/60 hover:text-foreground"
+          ? selected
+            ? "border-violet-400/80 bg-violet-50 dark:border-violet-500/60 dark:bg-violet-950/60"
+            : "border-amber-300/70 bg-amber-50/60 dark:border-amber-600/40 dark:bg-amber-900/20"
+          : selected
+          ? "border-violet-400/80 bg-violet-50 dark:border-violet-500/60 dark:bg-violet-950/60"
+          : "border-border bg-card hover:border-border-strong hover:shadow-sm"
       )}
     >
-      {/* noteIcon() returns a stable module-level icon reference — not a new component */}
-      {/* eslint-disable-next-line react-hooks/static-components */}
-      <Icon
-        className={cn(
-          "h-3 w-3 shrink-0",
-          isSelected
-            ? "text-violet-600 dark:text-violet-400"
-            : isConnected
-            ? "text-violet-500/70 dark:text-violet-400/70"
-            : isGuide
-            ? "text-amber-600 dark:text-amber-500"
-            : "text-muted-foreground"
-        )}
-        aria-hidden="true"
-      />
-      <span className="max-w-[160px] truncate">{node.label}</span>
-      {isGuide && (
-        <span className="ml-0.5 shrink-0 text-[9px] font-semibold uppercase tracking-wide text-amber-600 dark:text-amber-500">
-          guide
-        </span>
-      )}
-      {linkCount > 0 && !isSelected && !isConnected && (
-        <span className="ml-auto shrink-0 rounded-full bg-muted px-1 text-[10px] text-muted-foreground">
-          {linkCount}
-        </span>
-      )}
-    </button>
-  );
-}
+      <Handle type="target" position={Position.Top} className="!w-2 !h-2 !bg-muted-foreground/30 !border-none" />
 
-// ─── Folder tree (recursive) ──────────────────────────────────────────────────
-
-function FolderTree({
-  folder,
-  depth,
-  childFolderMap,
-  childNoteMap,
-  guideNoteId,
-  selectedNodeId,
-  connectedNoteIds,
-  noteLinkCounts,
-  onSelectNode,
-}: {
-  folder: OverviewNode;
-  depth: number;
-  childFolderMap: Map<string, OverviewNode[]>;
-  childNoteMap: Map<string | null, OverviewNode[]>;
-  guideNoteId: string | null;
-  selectedNodeId: string | null;
-  connectedNoteIds: Set<string>;
-  noteLinkCounts: Map<string, number>;
-  onSelectNode: (id: string) => void;
-}) {
-  const notes = childNoteMap.get(folder.id) ?? [];
-  const subFolders = childFolderMap.get(folder.id) ?? [];
-  const isEmpty = notes.length === 0 && subFolders.length === 0;
-
-  return (
-    <div
-      className={cn(
-        "rounded-lg border border-border bg-card p-3 shadow-xs",
-        depth > 0 && "border-border/60 bg-muted/20 shadow-none"
-      )}
-    >
-      {/* Folder header — selectable */}
-      <button
-        type="button"
-        role="treeitem"
-        onClick={() => onSelectNode(folder.id)}
-        aria-pressed={selectedNodeId === folder.id}
-        aria-label={`Folder: ${folder.label}`}
-        aria-expanded={!isEmpty}
-        className={cn(
-          "mb-2 flex w-full items-center gap-1.5 rounded-md px-1.5 py-1 text-left text-xs font-medium transition-fast",
-          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-          selectedNodeId === folder.id
-            ? "bg-violet-50 text-violet-900 dark:bg-violet-950/60 dark:text-violet-100"
-            : "text-muted-foreground hover:bg-muted/60 hover:text-foreground"
-        )}
+      <Link
+        href={href}
+        className="flex items-center gap-2 text-xs no-underline"
+        onClick={(e) => e.stopPropagation()}
       >
-        <Folder className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-        <span className="truncate">{folder.label}</span>
-      </button>
-
-      {/* Notes inside this folder */}
-      {notes.length > 0 && (
-        <div className="flex flex-wrap gap-1.5" role="group" aria-label={`Notes in ${folder.label}`}>
-          {notes.map((note) => (
-            <NoteChip
-              key={note.id}
-              node={note}
-              isGuide={note.id === guideNoteId}
-              isSelected={note.id === selectedNodeId}
-              isConnected={connectedNoteIds.has(note.id)}
-              linkCount={noteLinkCounts.get(note.id) ?? 0}
-              onClick={() => onSelectNode(note.id)}
-            />
-          ))}
-        </div>
-      )}
-
-      {isEmpty && (
-        <p className="pl-1 text-[11px] italic text-muted-foreground/50">
-          Empty folder
-        </p>
-      )}
-
-      {/* Nested sub-folders */}
-      {subFolders.length > 0 && (
-        <div className="mt-2 flex flex-col gap-2">
-          {subFolders.map((sub) => (
-            <FolderTree
-              key={sub.id}
-              folder={sub}
-              depth={depth + 1}
-              childFolderMap={childFolderMap}
-              childNoteMap={childNoteMap}
-              guideNoteId={guideNoteId}
-              selectedNodeId={selectedNodeId}
-              connectedNoteIds={connectedNoteIds}
-              noteLinkCounts={noteLinkCounts}
-              onSelectNode={onSelectNode}
-            />
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ─── Node detail panel ────────────────────────────────────────────────────────
-
-function NodeDetail({
-  node,
-  isGuide,
-  outgoing,
-  incoming,
-  nodeMap,
-  scopedIds,
-}: {
-  node: OverviewNode;
-  isGuide: boolean;
-  outgoing: OverviewEdge[];
-  incoming: OverviewEdge[];
-  nodeMap: Map<string, OverviewNode>;
-  scopedIds: Set<string> | null;
-}) {
-  const Icon = node.kind === "folder" ? Folder : noteIcon(node.noteKind);
-  const hasLinks = outgoing.length > 0 || incoming.length > 0;
-
-  return (
-    <div
-      className="rounded-lg border border-violet-300/60 bg-card px-4 py-3 shadow-sm dark:border-violet-600/40"
-      aria-label="Selected node details"
-      aria-live="polite"
-    >
-      {/* Node identity */}
-      <div className="flex items-start gap-2 mb-3">
-        {/* noteIcon() returns a stable module-level icon reference — not a new component */}
+        {/* getNodeIcon() returns a stable module-level icon reference — not a new component */}
         {/* eslint-disable-next-line react-hooks/static-components */}
         <Icon
           className={cn(
-            "mt-0.5 h-4 w-4 shrink-0",
+            "h-3.5 w-3.5 shrink-0",
             isGuide
               ? "text-amber-600 dark:text-amber-500"
+              : data.nodeKind === "skill"
+              ? "text-yellow-600 dark:text-yellow-500"
+              : data.nodeKind === "agent"
+              ? "text-blue-600 dark:text-blue-500"
+              : data.nodeKind === "file"
+              ? "text-green-600 dark:text-green-500"
               : "text-muted-foreground"
           )}
           aria-hidden="true"
         />
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-1.5">
-            {node.kind === "note" ? (
-              <Link
-                href={`/app/notes/${node.id}`}
-                className="text-sm font-medium text-foreground hover:underline underline-offset-2 transition-fast"
-              >
-                {node.label}
-              </Link>
-            ) : (
-              <span className="text-sm font-medium text-foreground">
-                {node.label}
-              </span>
-            )}
-            {isGuide && (
-              <Badge
-                variant="secondary"
-                className="flex items-center gap-1 text-[10px] font-normal"
-              >
-                <BookOpen className="h-3 w-3" aria-hidden="true" />
-                Guide note
-              </Badge>
-            )}
-            {node.noteKind && node.noteKind !== "note" && !isGuide && (
-              <Badge variant="secondary" className="text-[10px] font-normal capitalize">
-                {node.noteKind}
-              </Badge>
-            )}
-          </div>
-          <p className="mt-0.5 font-mono text-[11px] text-muted-foreground/70">
-            {node.path}
-          </p>
-        </div>
-        {node.kind === "note" && (
-          <Link
-            href={`/app/notes/${node.id}`}
-            className="shrink-0 text-xs text-muted-foreground hover:text-foreground transition-fast"
-            aria-label={`Open note: ${node.label}`}
-          >
-            Open →
-          </Link>
-        )}
-      </div>
-
-      {/* Semantic connections */}
-      {hasLinks ? (
-        <div className="space-y-2 border-t border-border/50 pt-3">
-          {outgoing.length > 0 && (
-            <div>
-              <p className="mb-1.5 text-[10px] font-medium uppercase tracking-wider text-muted-foreground/60">
-                This note →
-              </p>
-              <div className="flex flex-col gap-1">
-                {outgoing.map((edge) => {
-                  const target = nodeMap.get(edge.targetNoteId);
-                  const isExt = scopedIds && !scopedIds.has(edge.targetNoteId);
-                  return (
-                    <EdgeDetail
-                      key={edge.id}
-                      edge={edge}
-                      counterpartId={edge.targetNoteId}
-                      counterpartLabel={target?.label ?? "Note"}
-                      direction="outgoing"
-                      isExternal={!!isExt}
-                    />
-                  );
-                })}
-              </div>
-            </div>
+        <span
+          className={cn(
+            "truncate",
+            selected ? "font-medium text-violet-900 dark:text-violet-100" : "text-foreground",
+            isFolder && "font-medium"
           )}
-          {incoming.length > 0 && (
-            <div>
-              <p className="mb-1.5 text-[10px] font-medium uppercase tracking-wider text-muted-foreground/60">
-                → Referred by
-              </p>
-              <div className="flex flex-col gap-1">
-                {incoming.map((edge) => {
-                  const source = nodeMap.get(edge.sourceNoteId);
-                  const isExt = scopedIds && !scopedIds.has(edge.sourceNoteId);
-                  return (
-                    <EdgeDetail
-                      key={edge.id}
-                      edge={edge}
-                      counterpartId={edge.sourceNoteId}
-                      counterpartLabel={source?.label ?? "Note"}
-                      direction="incoming"
-                      isExternal={!!isExt}
-                    />
-                  );
-                })}
-              </div>
-            </div>
-          )}
-        </div>
-      ) : (
-        node.kind === "note" && (
-          <p className="border-t border-border/50 pt-3 text-xs text-muted-foreground/60">
-            No semantic relationships in this view.
-          </p>
-        )
-      )}
-    </div>
-  );
-}
-
-// ─── Edge detail (inside node detail panel) ───────────────────────────────────
-
-function EdgeDetail({
-  edge,
-  counterpartId,
-  counterpartLabel,
-  direction,
-  isExternal,
-}: {
-  edge: OverviewEdge;
-  counterpartId: string;
-  counterpartLabel: string;
-  direction: "outgoing" | "incoming";
-  isExternal: boolean;
-}) {
-  return (
-    <div className="flex flex-col gap-0.5 rounded-md bg-muted/30 px-2.5 py-1.5 text-xs">
-      <div className="flex items-center gap-1.5 flex-wrap">
-        <Badge
-          variant="secondary"
-          className="text-[10px] font-normal capitalize"
         >
-          {relLabel(edge.relationshipType)}
-        </Badge>
-        <Link
-          href={`/app/notes/${counterpartId}`}
-          className="text-foreground/80 hover:text-foreground hover:underline underline-offset-2 transition-fast"
-        >
-          {counterpartLabel}
-        </Link>
-        {isExternal && (
-          <span className="text-[10px] text-muted-foreground/60">
-            [outside scope]
+          {data.label}
+        </span>
+        {isGuide && (
+          <span className="shrink-0 text-[9px] font-semibold uppercase tracking-wide text-amber-600 dark:text-amber-500">
+            guide
           </span>
         )}
-      </div>
-      {edge.relationshipNote && (
-        <p className="text-muted-foreground italic">{edge.relationshipNote}</p>
-      )}
-    </div>
-  );
-}
-
-// ─── Edge row (in edge list) ──────────────────────────────────────────────────
-
-function EdgeRow({
-  edge,
-  nodeMap,
-  isHighlighted,
-  isExternal,
-  onSelectSource,
-  onSelectTarget,
-}: {
-  edge: OverviewEdge;
-  nodeMap: Map<string, OverviewNode>;
-  isHighlighted: boolean;
-  isExternal: boolean;
-  onSelectSource: () => void;
-  onSelectTarget: () => void;
-}) {
-  const sourceLabel = nodeMap.get(edge.sourceNoteId)?.label ?? "Note";
-  const targetLabel = nodeMap.get(edge.targetNoteId)?.label ?? "Note";
-
-  return (
-    <div
-      role="listitem"
-      className={cn(
-        "flex flex-col gap-1 rounded-md border px-3 py-2 text-xs transition-fast shadow-xs",
-        isHighlighted
-          ? "border-violet-300/60 bg-violet-50/60 dark:border-violet-600/40 dark:bg-violet-950/30"
-          : "border-border bg-card"
-      )}
-    >
-      <div className="flex items-center gap-2 flex-wrap">
-        <button
-          type="button"
-          onClick={onSelectSource}
-          className="min-w-0 truncate text-foreground/80 hover:text-foreground hover:underline underline-offset-2 transition-fast focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded"
-        >
-          {sourceLabel}
-        </button>
-
-        <div className="flex shrink-0 items-center gap-1 text-muted-foreground/60">
-          <span className="h-px w-4 bg-current" aria-hidden="true" />
-          <Badge
-            variant="secondary"
-            className="text-[10px] font-normal capitalize"
-          >
-            {relLabel(edge.relationshipType)}
-          </Badge>
-          <ArrowRight className="h-3 w-3" aria-hidden="true" />
-        </div>
-
-        <button
-          type="button"
-          onClick={onSelectTarget}
-          className="min-w-0 truncate text-foreground/80 hover:text-foreground hover:underline underline-offset-2 transition-fast focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded"
-        >
-          {targetLabel}
-        </button>
-
-        {isExternal && (
-          <span className="ml-auto shrink-0 text-[10px] text-muted-foreground/50">
-            cross-scope
-          </span>
+        {data.isReusable && (
+          <span className="shrink-0 text-[9px] text-muted-foreground/40" title="Workspace reusable">↗</span>
         )}
-      </div>
+      </Link>
 
-      {edge.relationshipNote && (
-        <p className="pl-0.5 italic text-muted-foreground">
-          {edge.relationshipNote}
-        </p>
-      )}
+      <Handle type="source" position={Position.Bottom} className="!w-2 !h-2 !bg-muted-foreground/30 !border-none" />
     </div>
   );
 }
 
-// ─── Filter toggle ────────────────────────────────────────────────────────────
+const nodeTypes = {
+  graphNode: GraphNode,
+};
 
-function FilterToggle({
-  label,
-  checked,
-  onChange,
-}: {
-  label: string;
-  checked: boolean;
-  onChange: (v: boolean) => void;
-}) {
-  return (
-    <label className="flex cursor-pointer items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-fast select-none">
-      <input
-        type="checkbox"
-        checked={checked}
-        onChange={(e) => onChange(e.target.checked)}
-        className="h-3.5 w-3.5 rounded border-border accent-foreground"
-      />
-      {label}
-    </label>
-  );
-}
+// ─── Build flow data from overview ────────────────────────────────────────────
 
-// ─── Legend item ──────────────────────────────────────────────────────────────
-
-function LegendItem({ children }: { children: React.ReactNode }) {
-  return (
-    <span className="flex items-center gap-1.5 text-[11px] text-muted-foreground/70">
-      {children}
-    </span>
-  );
-}
-
-// ─── Main component ───────────────────────────────────────────────────────────
-
-interface BoxGraphViewProps {
-  overview: BoxOverview;
-}
-
-/**
- * BoxGraphView — interactive read-only graph visualization for a box.
- *
- * Data sources (both from BoxOverview):
- *   - Hierarchy: parent-child folder/note containment (spatial grouping in the canvas)
- *   - Semantic links: explicit note-to-note context relationships (edge rows + node highlighting)
- *
- * Hierarchy is shown as folder group containers with note chips inside.
- * Semantic links are shown in the edge list and highlighted on node selection.
- * The two edge types are visually distinct: spatial containment vs. directed relationship rows.
- *
- * Guide note is highlighted with amber styling throughout.
- * Archived content is excluded (by BoxOverview — listNotesByBox only returns active).
- * Trashed content is excluded (by BoxOverview — same reason).
- */
-export function BoxGraphView({ overview }: BoxGraphViewProps) {
-  const { nodes, edges, truncated, box } = overview;
+function buildFlowData(
+  overview: BoxOverview,
+  scopeFolderId: string | null
+): {
+  nodes: Node<GraphNodeData>[];
+  edges: Edge<GraphEdgeData>[];
+} {
+  const { nodes: overviewNodes, edges: overviewEdges, box } = overview;
   const guideNoteId = box.guide_note_id;
 
-  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
-  const [showHierarchy, setShowHierarchy] = useState(true);
-  const [showLinks, setShowLinks] = useState(true);
-  const [scopeFolderId, setScopeFolderId] = useState<string | null>(null);
+  // Scope filtering
+  let visibleNodes = overviewNodes;
+  let visibleEdges = overviewEdges;
 
-  // Node lookup map
-  const nodeMap = useMemo(
-    () => new Map(nodes.map((n) => [n.id, n])),
-    [nodes]
-  );
-
-  // Scoped node IDs (null = all)
-  const scopedIds = useMemo(
-    () => (scopeFolderId ? subtreeIds(nodes, scopeFolderId) : null),
-    [nodes, scopeFolderId]
-  );
-
-  // Visible nodes after scope filter
-  const visibleNodes = useMemo(
-    () => (scopedIds ? nodes.filter((n) => scopedIds.has(n.id)) : nodes),
-    [nodes, scopedIds]
-  );
-
-  // Visible edges: in scope + cross-scope edges touching scoped notes
-  const visibleEdges = useMemo(() => {
-    if (!scopedIds) return edges;
-    return edges.filter(
-      (e) => scopedIds.has(e.sourceNoteId) || scopedIds.has(e.targetNoteId)
-    );
-  }, [edges, scopedIds]);
-
-  // Per-note link count (for chip badges)
-  const noteLinkCounts = useMemo(() => {
-    const counts = new Map<string, number>();
-    for (const edge of visibleEdges) {
-      counts.set(edge.sourceNoteId, (counts.get(edge.sourceNoteId) ?? 0) + 1);
-      counts.set(edge.targetNoteId, (counts.get(edge.targetNoteId) ?? 0) + 1);
+  if (scopeFolderId) {
+    // BFS to find all nodes in subtree
+    const childMap = new Map<string, string[]>();
+    for (const n of overviewNodes) {
+      if (n.parentId) {
+        const arr = childMap.get(n.parentId) ?? [];
+        arr.push(n.id);
+        childMap.set(n.parentId, arr);
+      }
     }
-    return counts;
-  }, [visibleEdges]);
+    const scopedIds = new Set<string>();
+    const queue = [scopeFolderId];
+    while (queue.length > 0) {
+      const id = queue.shift()!;
+      scopedIds.add(id);
+      for (const child of childMap.get(id) ?? []) queue.push(child);
+    }
+    visibleNodes = overviewNodes.filter((n) => scopedIds.has(n.id));
+    const visibleSet = new Set(visibleNodes.map((n) => n.id));
+    visibleEdges = overviewEdges.filter(
+      (e) => visibleSet.has(e.sourceNoteId) || visibleSet.has(e.targetNoteId)
+    );
+  }
 
-  // Notes semantically connected to selected node (for chip highlighting)
-  const connectedNoteIds = useMemo(() => {
-    if (!selectedNodeId) return new Set<string>();
-    return new Set<string>([
-      ...visibleEdges
-        .filter((e) => e.sourceNoteId === selectedNodeId)
-        .map((e) => e.targetNoteId),
-      ...visibleEdges
-        .filter((e) => e.targetNoteId === selectedNodeId)
-        .map((e) => e.sourceNoteId),
-    ]);
-  }, [selectedNodeId, visibleEdges]);
+  // Convert to ReactFlow nodes
+  const flowNodes: Node<GraphNodeData>[] = visibleNodes.map((n) => ({
+    id: n.id,
+    type: "graphNode",
+    position: { x: 0, y: 0 }, // will be set by dagre
+    data: {
+      label: n.label,
+      nodeKind: n.kind,
+      noteKind: n.noteKind,
+      objectId: n.id,
+      isGuide: n.id === guideNoteId,
+      path: n.path,
+      isReusable: n.isReusable,
+      isAttachment: n.isAttachment,
+    },
+  }));
 
-  // Edges touching selected node
+  // Convert to ReactFlow edges
+  // Hierarchy edges (parent-child containment)
+  const hierarchyEdges: Edge<GraphEdgeData>[] = visibleNodes
+    .filter((n) => n.parentId)
+    .map((n) => ({
+      id: `h:${n.parentId}:${n.id}`,
+      source: n.parentId!,
+      target: n.id,
+      type: "smoothstep",
+      animated: false,
+      style: { stroke: "var(--color-border)", strokeWidth: 1, opacity: 0.5 },
+      data: {
+        relationshipType: "contains",
+        edgeKind: "hierarchy",
+      },
+    }));
+
+  // Semantic edges (note_links and object_links)
+  const semanticEdges: Edge<GraphEdgeData>[] = visibleEdges.map((e) => ({
+    id: `s:${e.id}`,
+    source: e.sourceNoteId,
+    target: e.targetNoteId,
+    type: "default",
+    animated: true,
+    label: relLabel(e.relationshipType),
+    labelStyle: { fontSize: 10, fill: "var(--color-muted-foreground)" },
+    labelBgStyle: { fill: "var(--color-background)", fillOpacity: 0.8 },
+    labelBgPadding: [4, 2] as [number, number],
+    labelBgBorderRadius: 4,
+    style: {
+      stroke: e.edgeKind === "object_link"
+        ? "var(--color-info)"
+        : "var(--color-violet-400)",
+      strokeWidth: 1.5,
+    },
+    data: {
+      relationshipType: e.relationshipType,
+      relationshipNote: e.relationshipNote,
+      edgeKind: e.edgeKind,
+      sourceType: e.sourceType,
+      targetType: e.targetType,
+    },
+  }));
+
+  const allEdges = [...hierarchyEdges, ...semanticEdges];
+
+  // Apply dagre layout
+  const layoutedNodes = applyDagreLayout(flowNodes, allEdges);
+
+  return { nodes: layoutedNodes, edges: allEdges };
+}
+
+// ─── Inner graph component (needs ReactFlowProvider) ──────────────────────────
+
+function BoxGraphViewInner({ overview }: { overview: BoxOverview }) {
+  const { nodes: overviewNodes } = overview;
+  const [scopeFolderId, setScopeFolderId] = useState<string | null>(null);
+  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+
+  const { nodes: initialNodes, edges: initialEdges } = useMemo(
+    () => buildFlowData(overview, scopeFolderId),
+    [overview, scopeFolderId]
+  );
+
+  const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
+  const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
+  const reactFlow = useReactFlow();
+
+  // Rebuild layout when scope changes
+  const prevScopeRef = useMemo(() => ({ scope: scopeFolderId }), [scopeFolderId]);
+  useMemo(() => {
+    setNodes(initialNodes);
+    setEdges(initialEdges);
+    setTimeout(() => reactFlow.fitView({ padding: 0.15, duration: 200 }), 50);
+  }, [prevScopeRef]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleNodeClick = useCallback((_: React.MouseEvent, node: Node) => {
+    setSelectedNodeId((prev) => (prev === node.id ? null : node.id));
+  }, []);
+
+  // Folder options for scope dropdown
+  const folderOptions = overviewNodes.filter((n) => n.kind === "folder");
+
+  // Selected node details
+  const selectedNode = selectedNodeId ? overviewNodes.find((n) => n.id === selectedNodeId) : null;
   const selectedEdges = useMemo(() => {
     if (!selectedNodeId) return { outgoing: [] as OverviewEdge[], incoming: [] as OverviewEdge[] };
     return {
-      outgoing: visibleEdges.filter((e) => e.sourceNoteId === selectedNodeId),
-      incoming: visibleEdges.filter((e) => e.targetNoteId === selectedNodeId),
+      outgoing: overview.edges.filter((e) => e.sourceNoteId === selectedNodeId),
+      incoming: overview.edges.filter((e) => e.targetNoteId === selectedNodeId),
     };
-  }, [selectedNodeId, visibleEdges]);
+  }, [selectedNodeId, overview.edges]);
 
-  // Build hierarchy maps for rendering
-  const { rootFolders, rootNotes, childFolderMap, childNoteMap } =
-    useMemo(() => {
-      const folderNodes = visibleNodes.filter((n) => n.kind === "folder");
-      const noteNodes = visibleNodes.filter((n) => n.kind === "note");
+  const isEmpty = overviewNodes.length === 0;
 
-      const childFolderMap = new Map<string, OverviewNode[]>();
-      const childNoteMap = new Map<string | null, OverviewNode[]>();
-
-      for (const f of folderNodes) {
-        // Only make it a child if its parent is visible in this scope
-        if (f.parentId && nodeMap.has(f.parentId) && (!scopedIds || scopedIds.has(f.parentId))) {
-          const arr = childFolderMap.get(f.parentId) ?? [];
-          arr.push(f);
-          childFolderMap.set(f.parentId, arr);
-        }
-      }
-
-      for (const n of noteNodes) {
-        const key =
-          n.parentId && nodeMap.has(n.parentId) && (!scopedIds || scopedIds.has(n.parentId))
-            ? n.parentId
-            : null;
-        const arr = childNoteMap.get(key) ?? [];
-        arr.push(n);
-        childNoteMap.set(key, arr);
-      }
-
-      // Root folders: visible folders whose parent is not a visible folder
-      const rootFolders = folderNodes.filter(
-        (f) =>
-          !f.parentId ||
-          !nodeMap.has(f.parentId) ||
-          (scopedIds && !scopedIds.has(f.parentId))
-      );
-
-      const rootNotes = childNoteMap.get(null) ?? [];
-      return { rootFolders, rootNotes, childFolderMap, childNoteMap };
-    }, [visibleNodes, nodeMap, scopedIds]);
-
-  // Folder options for scope dropdown (all folders, not scoped)
-  const folderOptions = nodes.filter((n) => n.kind === "folder");
-
-  const selectedNode = selectedNodeId ? nodeMap.get(selectedNodeId) : null;
-
-  function handleSelectNode(id: string) {
-    setSelectedNodeId((prev) => (prev === id ? null : id));
+  if (isEmpty) {
+    return (
+      <div className="flex flex-col items-center justify-center gap-3 py-16 text-center">
+        <div className="flex h-12 w-12 items-center justify-center rounded-xl border border-border bg-muted text-muted-foreground">
+          <Share2 className="h-5 w-5" aria-hidden="true" />
+        </div>
+        <div className="max-w-xs space-y-1">
+          <p className="text-sm font-medium text-foreground">No content yet</p>
+          <p className="text-sm text-muted-foreground">
+            Add notes to this box to see the graph.
+          </p>
+        </div>
+      </div>
+    );
   }
 
-  const isEmpty = visibleNodes.length === 0;
-
   return (
-    <div className="flex flex-col gap-5">
-      {/* ── Controls ────────────────────────────────────────────────────────── */}
+    <div className="flex flex-col gap-4">
+      {/* Controls bar */}
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-        {/* Visibility toggles */}
-        <div className="flex items-center gap-3">
-          <FilterToggle
-            label="Hierarchy"
-            checked={showHierarchy}
-            onChange={setShowHierarchy}
-          />
-          <FilterToggle
-            label="Relationships"
-            checked={showLinks}
-            onChange={setShowLinks}
-          />
-        </div>
-
-        {/* Folder scope selector */}
         {folderOptions.length > 0 && (
           <div className="flex items-center gap-1.5">
             <span className="text-xs text-muted-foreground">Scope:</span>
@@ -709,196 +421,186 @@ export function BoxGraphView({ overview }: BoxGraphViewProps) {
             >
               <option value="">All</option>
               {folderOptions.map((f) => (
-                <option key={f.id} value={f.id}>
-                  {f.label}
-                </option>
+                <option key={f.id} value={f.id}>{f.label}</option>
               ))}
             </select>
           </div>
         )}
 
-        {/* Clear selection */}
-        {selectedNodeId && (
-          <button
-            type="button"
-            onClick={() => setSelectedNodeId(null)}
-            aria-label="Clear node selection"
-            className="ml-auto flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-fast focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded"
-          >
-            <X className="h-3 w-3" aria-hidden="true" />
-            Clear selection
-          </button>
-        )}
-      </div>
-
-      {/* ── Legend ──────────────────────────────────────────────────────────── */}
-      <div
-        className="flex flex-wrap items-center gap-x-4 gap-y-1.5"
-        aria-label="Graph legend"
-      >
-        <LegendItem>
-          <span className="inline-block h-3 w-3 rounded-sm border border-border bg-card" />
-          Note
-        </LegendItem>
-        <LegendItem>
-          <span className="inline-block h-3 w-3 rounded-sm border border-amber-300/70 bg-amber-50/60 dark:border-amber-600/40 dark:bg-amber-900/20" />
-          Guide note
-        </LegendItem>
-        <LegendItem>
-          <span className="inline-block h-3 w-3 rounded-sm border border-violet-400/80 bg-violet-50 dark:border-violet-500/60 dark:bg-violet-950/60" />
-          Selected
-        </LegendItem>
-        <LegendItem>
-          <span className="inline-block h-3 w-3 rounded-sm border border-border bg-muted/20" />
-          Folder (hierarchy)
-        </LegendItem>
-        <LegendItem>
-          <span className="inline-flex items-center gap-0.5 text-muted-foreground/60">
-            <span className="h-px w-3 bg-current" aria-hidden="true" />
-            <ChevronRight className="h-2.5 w-2.5" aria-hidden="true" />
+        {/* Legend */}
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted-foreground/70">
+          <span className="flex items-center gap-1">
+            <span className="inline-block h-2.5 w-2.5 rounded-sm border border-border bg-card" /> Note
           </span>
-          Semantic link
-        </LegendItem>
+          <span className="flex items-center gap-1">
+            <span className="inline-block h-2.5 w-2.5 rounded-sm border border-amber-300/70 bg-amber-50/60 dark:border-amber-600/40 dark:bg-amber-900/20" /> Guide
+          </span>
+          <span className="flex items-center gap-1">
+            <span className="inline-block h-2.5 w-2.5 rounded-sm border border-border bg-muted/30" /> Folder
+          </span>
+          <span className="flex items-center gap-1">
+            <File className="h-2.5 w-2.5 text-green-600" /> File
+          </span>
+          <span className="flex items-center gap-1">
+            <Zap className="h-2.5 w-2.5 text-yellow-600" /> Skill
+          </span>
+          <span className="flex items-center gap-1">
+            <Bot className="h-2.5 w-2.5 text-blue-600" /> Agent
+          </span>
+        </div>
       </div>
 
-      {/* ── Hierarchy canvas ─────────────────────────────────────────────────── */}
-      {showHierarchy && !isEmpty && (
-        <section aria-labelledby="graph-hierarchy-heading">
-          <h3
-            id="graph-hierarchy-heading"
-            className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground"
-          >
-            Structure
-          </h3>
+      {/* Graph canvas */}
+      <div className="h-[500px] w-full rounded-lg border border-border bg-background overflow-hidden">
+        <ReactFlow
+          nodes={nodes}
+          edges={edges}
+          onNodesChange={onNodesChange}
+          onEdgesChange={onEdgesChange}
+          onNodeClick={handleNodeClick}
+          nodeTypes={nodeTypes}
+          fitView
+          fitViewOptions={{ padding: 0.15 }}
+          nodesDraggable={true}
+          nodesConnectable={false}
+          edgesFocusable={false}
+          elementsSelectable={true}
+          selectNodesOnDrag={false}
+          panOnDrag={true}
+          zoomOnScroll={true}
+          minZoom={0.2}
+          maxZoom={3}
+          proOptions={{ hideAttribution: true }}
+          colorMode="system"
+        >
+          <Background gap={16} size={1} />
+          <Controls showInteractive={false} />
+        </ReactFlow>
+      </div>
 
-          <div className="flex flex-col gap-2 overflow-x-auto" role="tree" aria-label="Box structure">
-            {/* Root-level notes (not in any folder) */}
-            {rootNotes.length > 0 && (
-              <div className="rounded-lg border border-dashed border-border/60 p-3">
-                <p className="mb-2 text-[10px] font-medium uppercase tracking-wider text-muted-foreground/60">
-                  Root notes
-                </p>
-                <div
-                  className="flex flex-wrap gap-1.5"
-                  role="group"
-                  aria-label="Notes at root level"
-                >
-                  {rootNotes.map((note) => (
-                    <NoteChip
-                      key={note.id}
-                      node={note}
-                      isGuide={note.id === guideNoteId}
-                      isSelected={note.id === selectedNodeId}
-                      isConnected={connectedNoteIds.has(note.id)}
-                      linkCount={noteLinkCounts.get(note.id) ?? 0}
-                      onClick={() => handleSelectNode(note.id)}
-                    />
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Folder groups */}
-            {rootFolders.map((folder) => (
-              <FolderTree
-                key={folder.id}
-                folder={folder}
-                depth={0}
-                childFolderMap={childFolderMap}
-                childNoteMap={childNoteMap}
-                guideNoteId={guideNoteId}
-                selectedNodeId={selectedNodeId}
-                connectedNoteIds={connectedNoteIds}
-                noteLinkCounts={noteLinkCounts}
-                onSelectNode={handleSelectNode}
-              />
-            ))}
-
-            {/* Empty hierarchy */}
-            {rootNotes.length === 0 && rootFolders.length === 0 && (
-              <p className="rounded-lg border border-dashed border-border px-4 py-6 text-center text-sm text-muted-foreground">
-                No content in this scope.
-              </p>
-            )}
-          </div>
-        </section>
-      )}
-
-      {/* ── Selected node detail ─────────────────────────────────────────────── */}
+      {/* Selected node detail panel */}
       {selectedNode && (
-        <NodeDetail
-          node={selectedNode}
-          isGuide={selectedNode.id === guideNoteId}
-          outgoing={selectedEdges.outgoing}
-          incoming={selectedEdges.incoming}
-          nodeMap={nodeMap}
-          scopedIds={scopedIds}
-        />
-      )}
-
-      {/* ── Context relationships ────────────────────────────────────────────── */}
-      {showLinks && visibleEdges.length > 0 && (
-        <section aria-labelledby="graph-links-heading">
-          <h3
-            id="graph-links-heading"
-            className="mb-3 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground"
-          >
-            <Share2 className="h-3.5 w-3.5" aria-hidden="true" />
-            Context relationships
-            <span className="font-normal text-muted-foreground/60">
-              ({visibleEdges.length})
-            </span>
-          </h3>
-          <div className="flex flex-col gap-1.5" role="list" aria-label="Semantic note relationships">
-            {visibleEdges.map((edge) => {
-              const isExt =
-                scopedIds !== null &&
-                (!scopedIds.has(edge.sourceNoteId) ||
-                  !scopedIds.has(edge.targetNoteId));
-              const isHighlighted =
-                selectedNodeId === edge.sourceNoteId ||
-                selectedNodeId === edge.targetNoteId;
+        <div
+          className="rounded-lg border border-violet-300/60 bg-card px-4 py-3 shadow-sm dark:border-violet-600/40"
+          aria-label="Selected node details"
+          aria-live="polite"
+        >
+          <div className="flex items-start gap-2 mb-2">
+            {(() => {
+              const Icon = getNodeIcon(selectedNode.kind, selectedNode.noteKind);
               return (
-                <EdgeRow
-                  key={edge.id}
-                  edge={edge}
-                  nodeMap={nodeMap}
-                  isHighlighted={isHighlighted}
-                  isExternal={isExt}
-                  onSelectSource={() => handleSelectNode(edge.sourceNoteId)}
-                  onSelectTarget={() => handleSelectNode(edge.targetNoteId)}
+                <Icon
+                  className={cn(
+                    "mt-0.5 h-4 w-4 shrink-0",
+                    selectedNode.id === overview.box.guide_note_id
+                      ? "text-amber-600 dark:text-amber-500"
+                      : "text-muted-foreground"
+                  )}
+                  aria-hidden="true"
                 />
               );
-            })}
+            })()}
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center gap-1.5">
+                <Link
+                  href={getNodeHref(selectedNode.kind, selectedNode.id)}
+                  className="text-sm font-medium text-foreground hover:underline underline-offset-2"
+                >
+                  {selectedNode.label}
+                </Link>
+                <Badge variant="secondary" className="text-[10px] font-normal capitalize">
+                  {selectedNode.kind}
+                </Badge>
+                {selectedNode.id === overview.box.guide_note_id && (
+                  <Badge variant="secondary" className="flex items-center gap-1 text-[10px] font-normal">
+                    <BookOpen className="h-3 w-3" aria-hidden="true" />
+                    Guide note
+                  </Badge>
+                )}
+              </div>
+              <p className="mt-0.5 font-mono text-[11px] text-muted-foreground/70">
+                {selectedNode.path}
+              </p>
+            </div>
+            <Link
+              href={getNodeHref(selectedNode.kind, selectedNode.id)}
+              className="shrink-0 text-xs text-muted-foreground hover:text-foreground transition-fast"
+            >
+              Open →
+            </Link>
           </div>
-        </section>
-      )}
 
-      {/* No relationships */}
-      {showLinks && visibleEdges.length === 0 && !isEmpty && (
-        <p className="rounded-md border border-dashed border-border px-3 py-4 text-center text-xs text-muted-foreground">
-          No semantic relationships yet. Link notes to each other to see connections here.
-        </p>
-      )}
-
-      {/* Empty box */}
-      {isEmpty && (
-        <div className="flex flex-col items-center justify-center gap-3 py-16 text-center">
-          <div className="flex h-12 w-12 items-center justify-center rounded-xl border border-border bg-muted text-muted-foreground">
-            <Share2 className="h-5 w-5" aria-hidden="true" />
-          </div>
-          <div className="max-w-xs space-y-1">
-            <p className="text-sm font-medium text-foreground">
-              {scopeFolderId ? "Nothing in this scope" : "No content yet"}
-            </p>
-            <p className="text-sm text-muted-foreground">
-              {scopeFolderId
-                ? "This folder scope has no notes or sub-folders."
-                : "Add notes to this box to see the graph."}
-            </p>
-          </div>
+          {/* Semantic connections */}
+          {(selectedEdges.outgoing.length > 0 || selectedEdges.incoming.length > 0) && (
+            <div className="space-y-2 border-t border-border/50 pt-2">
+              {selectedEdges.outgoing.length > 0 && (
+                <div>
+                  <p className="mb-1 text-[10px] font-medium uppercase tracking-wider text-muted-foreground/60">
+                    Outgoing →
+                  </p>
+                  <div className="flex flex-col gap-1">
+                    {selectedEdges.outgoing.map((edge) => {
+                      const target = overviewNodes.find((n) => n.id === edge.targetNoteId);
+                      return (
+                        <div key={edge.id} className="flex items-center gap-1.5 text-xs">
+                          <Badge variant="secondary" className="text-[10px] font-normal capitalize">
+                            {relLabel(edge.relationshipType)}
+                          </Badge>
+                          <Link
+                            href={getNodeHref(target?.kind ?? "note", edge.targetNoteId)}
+                            className="text-foreground/80 hover:text-foreground hover:underline underline-offset-2"
+                          >
+                            {target?.label ?? "Object"}
+                          </Link>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+              {selectedEdges.incoming.length > 0 && (
+                <div>
+                  <p className="mb-1 text-[10px] font-medium uppercase tracking-wider text-muted-foreground/60">
+                    → Incoming
+                  </p>
+                  <div className="flex flex-col gap-1">
+                    {selectedEdges.incoming.map((edge) => {
+                      const source = overviewNodes.find((n) => n.id === edge.sourceNoteId);
+                      return (
+                        <div key={edge.id} className="flex items-center gap-1.5 text-xs">
+                          <Badge variant="secondary" className="text-[10px] font-normal capitalize">
+                            {relLabel(edge.relationshipType)}
+                          </Badge>
+                          <Link
+                            href={getNodeHref(source?.kind ?? "note", edge.sourceNoteId)}
+                            className="text-foreground/80 hover:text-foreground hover:underline underline-offset-2"
+                          >
+                            {source?.label ?? "Object"}
+                          </Link>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
     </div>
+  );
+}
+
+// ─── Main component (wraps in ReactFlowProvider) ──────────────────────────────
+
+interface BoxGraphViewProps {
+  overview: BoxOverview;
+}
+
+export function BoxGraphView({ overview }: BoxGraphViewProps) {
+  return (
+    <ReactFlowProvider>
+      <BoxGraphViewInner overview={overview} />
+    </ReactFlowProvider>
   );
 }
