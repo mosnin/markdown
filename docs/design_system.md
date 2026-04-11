@@ -189,6 +189,12 @@ Installed primitives:
 | `GuideNotePicker` | Guide note assignment control: select or clear guide note for a box |
 | `BoxGuidePanel` | Guide tab content: rendered guide note with outgoing links |
 | `FolderPolicyToggle` | Per-folder AI write policy toggle (`accepts_generated_notes`) |
+| `FileEditor` | Code-only file editor: monospace textarea, autosave, FileLanguageBadge in toolbar |
+| `FileContextPanel` | File right-pane: Info / Links / History tabs (no Bundle tab) |
+| `FileLanguageBadge` | Compact inline badge showing canonical format label; monospace, muted border |
+| `FileLifecycleMenu` | File archive/unarchive/trash/restore; inline confirm for destructive ops |
+| `FileCreateDialog` | File creation dialog: filename + format select + optional initial content |
+| `FileObjectLinksPanel` | Semantic object links panel for files: outgoing/incoming, create/delete |
 
 ### Three-pane workspace layout
 
@@ -221,6 +227,16 @@ to make the current note or box feel situated in a structured knowledge system.
 
 **Info tab section order:** guide callout → identity → summary → retrieval signals → tags → location → machine origin → version. Empty sections are hidden.
 
+**File right pane tabs:**
+
+| Tab | Contents |
+|---|---|
+| Info | Status banner (archived/trashed only), identity, format badge + extension + mime, size, tags, summary, location, version |
+| Links | `FileObjectLinksPanel` — object links to notes, files, skills, agents |
+| History | Immutable version list (no rollback in this version) |
+
+Files do not have a Bundle tab. Files are not context documents; they are code and data artifacts.
+
 **Box right pane:**
 
 Guide note is always the first section (front door). Sections: guide note card + picker → box identity → contents stats → folder policies → details.
@@ -230,6 +246,40 @@ Guide note is always the first section (front door). Sections: guide note card +
 **Retrieval signals (`RetrievalHintBadge`):** `retrieval_priority` shown as `p1`, `p2`, … in a monospace pill. `read_hint` shown as italic text (known values normalized). Renders nothing when both are unset.
 
 See [docs/context_intelligence_surface_v1.md](context_intelligence_surface_v1.md) for the full specification.
+
+### Notes vs Files: a critical distinction
+
+Notes and Files are distinct object types. Do not conflate them.
+
+| Dimension | Note | File |
+|---|---|---|
+| Format | Always markdown | Typed: `json`, `python`, `typescript`, `yaml`, etc. |
+| Editor surface | Document mode (rendered) + Markdown mode (raw) | Code textarea only — no mode toggle |
+| Purpose | Human prose, documentation, AI context | Code and data artifacts |
+| Rich text | Yes (rendered markdown) | No |
+| Right pane | Info / Links / Bundle / History | Info / Links / History (no Bundle) |
+| Semantic links | `note_links` + `object_links` | `object_links` only |
+
+Do not add a document view or rendering surface to Files. Do not add code editor behavior to Notes.
+
+### File editor
+
+`FileEditor` is a code-only textarea editor. It never renders or previews the content.
+
+Textarea attributes:
+```
+spellCheck={false}
+autoCorrect="off"
+autoCapitalize="off"
+data-gramm="false"
+className="font-mono text-sm leading-6 ..."
+```
+
+Autosave uses `AUTOSAVE_DEBOUNCE_MS = 2000` (vs 1500 for Notes). The longer debounce accommodates rapid multi-keystroke code editing patterns.
+
+Toolbar layout:
+- Left: `FileLanguageBadge` + line count
+- Right: `AutosaveStatus` + Retry button on error
 
 ### Note editor modes
 

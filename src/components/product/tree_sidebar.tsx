@@ -20,6 +20,7 @@ import {
 import { cn } from "@/lib/utils";
 import { Spinner } from "@/components/ui/spinner";
 import { createClient } from "@/lib/supabase/browser";
+import { FileCreateDialog } from "@/components/product/file_create_dialog";
 import { getBoxTreeAction, createNoteAction, createFolderAction } from "@/app/app/boxes/actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -642,6 +643,7 @@ function BoxQuickCreateMenu({
 }) {
   const [noteOpen, setNoteOpen] = useState(false);
   const [folderOpen, setFolderOpen] = useState(false);
+  const [fileCreateOpen, setFileCreateOpen] = useState(false);
   const [noteTitle, setNoteTitle] = useState("");
   const [folderName, setFolderName] = useState("");
   const [noteError, setNoteError] = useState<string | null>(null);
@@ -707,6 +709,13 @@ function BoxQuickCreateMenu({
             <FolderPlus className="h-3.5 w-3.5" aria-hidden="true" />
             New folder
           </DropdownMenuItem>
+          {/* File creation is handled by its own dialog via FileCreateDialog */}
+          <DropdownMenuItem
+            onClick={() => setFileCreateOpen(true)}
+          >
+            <File className="h-3.5 w-3.5" aria-hidden="true" />
+            New file
+          </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
 
@@ -763,6 +772,14 @@ function BoxQuickCreateMenu({
           </form>
         </DialogContent>
       </Dialog>
+
+      {/* File creation dialog — controlled from dropdown "New file" item */}
+      <FileCreateDialog
+        boxId={box.id}
+        open={fileCreateOpen}
+        onOpenChange={setFileCreateOpen}
+        onCreated={() => { setFileCreateOpen(false); onTreeRefresh?.(); }}
+      />
     </>
   );
 }
