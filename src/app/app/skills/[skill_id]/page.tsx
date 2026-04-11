@@ -64,6 +64,17 @@ export default async function SkillPage({
       .filter((l) => l.relationship_type === "parent_of")
       .map((l) => `${l.target_object_type}:${l.target_object_id}`)
   );
+  const linkedFileIds = links.outgoing
+    .filter((l) => l.relationship_type === "parent_of" && l.target_object_type === OBJECT_TYPE.FILE)
+    .map((l) => l.target_object_id);
+  const reusableLinkedFiles = (!skill.box_id && linkedFileIds.length > 0)
+    ? await supabase
+        .from("files")
+        .select("id, name")
+        .in("id", linkedFileIds)
+        .eq("workspace_id", ctx.workspace.id)
+        .then((res) => res.data ?? [])
+    : [];
   const childrenItems = [
     ...boxFolders.filter((f) => childLinkIds.has(`folder:${f.id}`)).map((f) => ({
       id: f.id,
@@ -72,6 +83,12 @@ export default async function SkillPage({
       href: "#",
     })),
     ...boxFiles.filter((f) => childLinkIds.has(`file:${f.id}`)).map((f) => ({
+      id: f.id,
+      type: "file" as const,
+      name: f.name,
+      href: `/app/files/${f.id}`,
+    })),
+    ...reusableLinkedFiles.map((f) => ({
       id: f.id,
       type: "file" as const,
       name: f.name,

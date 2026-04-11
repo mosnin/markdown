@@ -105,6 +105,27 @@ export async function createReusableSkillAction(
       isReusable: true,
     });
 
+    const readme = await createFile(supabase, ctx.user.id, ctx.workspace.id, {
+      boxId: null,
+      folderId: null,
+      name: "README",
+      sourceContent: params.description?.trim()
+        ? `# ${trimmedName}\n\n${params.description.trim()}\n`
+        : `# ${trimmedName}\n`,
+      canonicalFormat: "markdown",
+      sourceLanguage: null,
+      fileExtension: ".md",
+      mimeType: "text/markdown",
+    });
+    await createLink(supabase, ctx.workspace.id, {
+      sourceObjectType: OBJECT_TYPE.SKILL,
+      sourceObjectId: skill.id,
+      targetObjectType: OBJECT_TYPE.FILE,
+      targetObjectId: readme.id,
+      relationshipType: RELATIONSHIP_TYPE.PARENT_OF,
+      relationshipNote: "Skill README",
+    });
+
     revalidatePath("/app/skills");
     return { ok: true, data: { id: skill.id } };
   } catch (err) {
@@ -262,10 +283,10 @@ export async function createSkillChildFileAction(
     const ctx = await requireAuthenticatedUser();
     const supabase = await createClient();
     const skill = await getSkillForWorkspace(supabase, skillId, ctx.workspace.id);
-    if (!skill || !skill.box_id) return { ok: false, error: "Skill does not support children in this scope" };
+    if (!skill) return { ok: false, error: "Skill not found" };
     const file = await createFile(supabase, ctx.user.id, ctx.workspace.id, {
-      boxId: skill.box_id,
-      folderId: skill.folder_id ?? null,
+      boxId: skill.box_id ?? null,
+      folderId: skill.box_id ? (skill.folder_id ?? null) : null,
       name: params.filename.trim(),
       sourceContent: params.initialContent ?? "",
       canonicalFormat: params.canonicalFormat,
@@ -282,7 +303,8 @@ export async function createSkillChildFileAction(
       relationshipNote: "Skill child file",
     });
     revalidatePath(`/app/skills/${skillId}`);
-    revalidatePath(`/app/boxes/${skill.box_id}`);
+    if (skill.box_id) revalidatePath(`/app/boxes/${skill.box_id}`);
+    else revalidatePath("/app/skills");
     return { ok: true, data: { id: file.id } };
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : "Failed to create child file" };

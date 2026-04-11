@@ -211,12 +211,26 @@ export default async function AgentPage({
     is_current: v.id === agent.current_version_id,
   }));
 
+  const linkedFileIds = rawLinks.outgoing
+    .filter((l) => l.relationship_type === "parent_of" && l.target_object_type === OBJECT_TYPE.FILE)
+    .map((l) => l.target_object_id);
+  const reusableLinkedFiles = (!agent.box_id && linkedFileIds.length > 0)
+    ? await supabase
+        .from("files")
+        .select("id, name, file_extension")
+        .in("id", linkedFileIds)
+        .eq("workspace_id", ctx.workspace.id)
+        .then((res) => res.data ?? [])
+    : [];
+
   const rollbackDisabled = agent.status === "archived" || agent.status === "trashed";
 
   // Resolution maps
   const noteMap = new Map(boxNotes.map((n) => [n.id, { id: n.id, title: n.title }]));
   const fileMap = new Map(
-    boxFiles.filter((f) => f.id !== agent_id).map((f) => [f.id, { id: f.id, name: f.name, file_extension: f.file_extension }])
+    [...boxFiles, ...reusableLinkedFiles]
+      .filter((f) => f.id !== agent_id)
+      .map((f) => [f.id, { id: f.id, name: f.name, file_extension: f.file_extension }])
   );
   const skillMap = new Map(boxSkills.map((s) => [s.id, { id: s.id, name: s.name }]));
   const agentMap = new Map(

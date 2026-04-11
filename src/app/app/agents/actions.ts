@@ -194,6 +194,50 @@ export async function createReusableAgentAction(
       isReusable: true,
     });
 
+    // Reusable agents are workspace-level source objects but still support
+    // concrete package structure via child files.
+    const readme = await createFile(supabase, ctx.user.id, ctx.workspace.id, {
+      boxId: null,
+      folderId: null,
+      name: "README",
+      sourceContent: params.description?.trim()
+        ? `# ${trimmedName}\n\n${params.description.trim()}\n`
+        : `# ${trimmedName}\n`,
+      canonicalFormat: "markdown",
+      sourceLanguage: null,
+      fileExtension: ".md",
+      mimeType: "text/markdown",
+    });
+    await createLink(supabase, ctx.workspace.id, {
+      sourceObjectType: OBJECT_TYPE.AGENT,
+      sourceObjectId: agent.id,
+      targetObjectType: OBJECT_TYPE.FILE,
+      targetObjectId: readme.id,
+      relationshipType: RELATIONSHIP_TYPE.PARENT_OF,
+      relationshipNote: "Agent README",
+    });
+
+    if (params.systemPrompt?.trim()) {
+      const systemPromptFile = await createFile(supabase, ctx.user.id, ctx.workspace.id, {
+        boxId: null,
+        folderId: null,
+        name: "SYSTEM_PROMPT",
+        sourceContent: `${params.systemPrompt.trim()}\n`,
+        canonicalFormat: "markdown",
+        sourceLanguage: null,
+        fileExtension: ".md",
+        mimeType: "text/markdown",
+      });
+      await createLink(supabase, ctx.workspace.id, {
+        sourceObjectType: OBJECT_TYPE.AGENT,
+        sourceObjectId: agent.id,
+        targetObjectType: OBJECT_TYPE.FILE,
+        targetObjectId: systemPromptFile.id,
+        relationshipType: RELATIONSHIP_TYPE.PARENT_OF,
+        relationshipNote: "Agent system prompt",
+      });
+    }
+
     revalidatePath("/app/agents");
     return { ok: true, data: { id: agent.id } };
   } catch (err) {
@@ -313,10 +357,10 @@ export async function createAgentChildFileAction(
     const ctx = await requireAuthenticatedUser();
     const supabase = await createClient();
     const agent = await getAgentForWorkspace(supabase, agentId, ctx.workspace.id);
-    if (!agent || !agent.box_id) return { ok: false, error: "Agent does not support children in this scope" };
+    if (!agent) return { ok: false, error: "Agent not found" };
     const file = await createFile(supabase, ctx.user.id, ctx.workspace.id, {
-      boxId: agent.box_id,
-      folderId: agent.folder_id ?? null,
+      boxId: agent.box_id ?? null,
+      folderId: agent.box_id ? (agent.folder_id ?? null) : null,
       name: params.filename.trim(),
       sourceContent: params.initialContent ?? "",
       canonicalFormat: params.canonicalFormat,
@@ -333,7 +377,8 @@ export async function createAgentChildFileAction(
       relationshipNote: "Agent child file",
     });
     revalidatePath(`/app/agents/${agentId}`);
-    revalidatePath(`/app/boxes/${agent.box_id}`);
+    if (agent.box_id) revalidatePath(`/app/boxes/${agent.box_id}`);
+    else revalidatePath("/app/agents");
     return { ok: true, data: { id: file.id } };
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : "Failed to create child file" };
