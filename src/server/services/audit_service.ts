@@ -371,6 +371,8 @@ export function auditWriteProposalCreated(
     proposal_type: string;
     target_note_id?: string | null;
     target_folder_id?: string | null;
+    target_object_type?: string | null;
+    target_object_id?: string | null;
     box_id?: string | null;
   }
 ): Promise<void> {

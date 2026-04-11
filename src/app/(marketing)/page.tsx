@@ -236,7 +236,7 @@ export default function HomePage() {
                   Organize deliberately.
                 </h2>
                 <p className="text-base leading-relaxed text-muted-foreground">
-                  Boxes aren't just folders. They're semantic containers with a built-in
+                  Boxes aren&apos;t just folders. They&apos;re semantic containers with a built-in
                   guide that defines their purpose — so your notes always fit their context.
                 </p>
               </div>
@@ -336,7 +336,7 @@ export default function HomePage() {
               Simple pricing.
             </h2>
             <p className="mt-4 text-base leading-relaxed text-muted-foreground">
-              Start free, upgrade when you're ready. No lock-in, no surprises.
+              Start free, upgrade when you&apos;re ready. No lock-in, no surprises.
             </p>
           </div>
           <div className="grid grid-cols-1 gap-6 justify-items-center md:grid-cols-3">
@@ -443,7 +443,7 @@ export default function HomePage() {
       <section className="px-6 py-36 text-center">
         <div className="mx-auto max-w-2xl">
           <h2 className="text-4xl font-bold tracking-tight text-foreground sm:text-5xl lg:text-6xl">
-            It's your time to focus.
+            It&apos;s your time to focus.
           </h2>
           <p className="mt-6 text-lg text-muted-foreground">
             Free to start. Import your existing notes in minutes.

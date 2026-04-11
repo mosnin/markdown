@@ -200,7 +200,7 @@ export async function exportNote(
     links: [],
     bundle: null,
     files: [filePath],
-    counts: { folders: 0, notes: 1, links: 0, files: 1 },
+    counts: { folders: 0, notes: 1, links: 0, files: 1, skills: 0, agents: 0 },
   };
 
   const files: Record<string, string> = {
@@ -276,6 +276,8 @@ export async function exportFolder(
       notes: manifestNotes.length,
       links: manifestLinks.length,
       files: noteFilePaths.length,
+      skills: 0,
+      agents: 0,
     },
   };
 
@@ -342,6 +344,8 @@ export async function exportBox(
       notes: manifestNotes.length,
       links: manifestLinks.length,
       files: noteFilePaths.length,
+      skills: 0,
+      agents: 0,
     },
   };
 
@@ -533,6 +537,8 @@ export async function exportBundle(
       notes: manifestNotes.length,
       links: manifestLinks.length,
       files: noteFilePaths.length,
+      skills: 0,
+      agents: 0,
     },
   };
 

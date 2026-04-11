@@ -95,27 +95,5 @@ export const PROPOSAL_STATUS = {
 export type ProposalStatus =
   (typeof PROPOSAL_STATUS)[keyof typeof PROPOSAL_STATUS];
 
-/**
- * Canonical object types used across audit events and proposals.
- */
-export const OBJECT_TYPE = {
-  NOTE: "note",
-  FILE: "file",
-  SKILL: "skill",
-  AGENT: "agent",
-  FOLDER: "folder",
-  BOX: "box",
-  WRITE_PROPOSAL: "write_proposal",
-  CONNECTION: "connection",
-  NOTE_LINK: "note_link",
-  OBJECT_LINK: "object_link",
-} as const;
-
-export type ObjectType = (typeof OBJECT_TYPE)[keyof typeof OBJECT_TYPE];
-
-/** Object types that carry versioned source content. */
-export const VERSIONED_OBJECT_TYPES = new Set([
-  OBJECT_TYPE.FILE,
-  OBJECT_TYPE.SKILL,
-  OBJECT_TYPE.AGENT,
-] as const);
+// Note: OBJECT_TYPE, ObjectType, and VERSIONED_OBJECT_TYPES are exported
+// from object_constants.ts — import from there for structural object types.

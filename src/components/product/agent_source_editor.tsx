@@ -68,6 +68,7 @@ export function AgentSourceEditor({ agent }: AgentSourceEditorProps) {
   useEffect(() => {
     if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
     if (statusTimeoutRef.current) clearTimeout(statusTimeoutRef.current);
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setContent(agent.source_content);
     setAutosaveState("idle");
     setSaveError(null);

@@ -27,14 +27,14 @@ import { createGeneratedNote } from "@/server/services/generated_note_service";
 import * as folderRepo from "@/server/repositories/folder_repository";
 import * as boxRepo from "@/server/repositories/box_repository";
 import * as auditService from "@/server/services/audit_service";
-import { PERMISSION_MODE } from "@/server/domain/constants/connection_constants";
+import { PERMISSION_MODE, type PermissionMode } from "@/server/domain/constants/connection_constants";
 
 const WORKSPACE_ID = "ws-integration-002";
 const BOX_ID = "box-002";
 const FOLDER_ID = "folder-002";
 const CONN_ID = "conn-002";
 
-function makeCtx(permissionMode = PERMISSION_MODE.GENERATE_IN_ALLOWED_FOLDERS) {
+function makeCtx(permissionMode: PermissionMode = PERMISSION_MODE.GENERATE_IN_ALLOWED_FOLDERS) {
   return {
     connection: {
       id: CONN_ID,

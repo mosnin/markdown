@@ -21,14 +21,15 @@ import * as noteRepo from "@/server/repositories/note_repository";
 import * as boxRepo from "@/server/repositories/box_repository";
 import * as auditService from "@/server/services/audit_service";
 
-// Minimal stubs
-const mockSupabase = {
+// Minimal stubs — use a plain object so maybeSingle can be reassigned per-test
+const mockSupabaseBase = {
   from: vi.fn().mockReturnThis(),
   select: vi.fn().mockReturnThis(),
   eq: vi.fn().mockReturnThis(),
   limit: vi.fn().mockReturnThis(),
   maybeSingle: vi.fn().mockResolvedValue({ data: null }),
-} as unknown as Parameters<typeof archiveNote>[0];
+};
+const mockSupabase = mockSupabaseBase as unknown as Parameters<typeof archiveNote>[0];
 
 const WORKSPACE_ID = "ws-001";
 const BOX_ID = "box-001";
@@ -49,11 +50,17 @@ function makeNote(overrides: Partial<{
   };
 }
 
-function makeBox(overrides: Partial<{ guide_note_id: string | null }> = {}) {
+function makeBox(overrides: Partial<{ guide_note_id: string | null; workspace_id: string }> = {}) {
   return {
     id: BOX_ID,
     workspace_id: WORKSPACE_ID,
     guide_note_id: null,
+    name: "Test Box",
+    slug: "test-box",
+    description: null,
+    status: "active" as const,
+    created_at: "2026-01-01T00:00:00Z",
+    updated_at: "2026-01-01T00:00:00Z",
     ...overrides,
   };
 }
@@ -75,7 +82,7 @@ describe("archiveNote", () => {
       makeNote({ status: "archived" }) as never
     );
     // No guide assignment
-    mockSupabase.maybeSingle = vi.fn().mockResolvedValue({ data: null });
+    mockSupabaseBase.maybeSingle = vi.fn().mockResolvedValue({ data: null });
 
     const result = await archiveNote(mockSupabase, "user-1", WORKSPACE_ID, NOTE_ID);
     expect(result.status).toBe("archived");
@@ -109,7 +116,7 @@ describe("archiveNote", () => {
       makeBox({ guide_note_id: NOTE_ID }) as never
     );
     // Simulate guide assignment found
-    mockSupabase.maybeSingle = vi.fn().mockResolvedValue({ data: { id: BOX_ID } });
+    mockSupabaseBase.maybeSingle = vi.fn().mockResolvedValue({ data: { id: BOX_ID } });
 
     await expect(
       archiveNote(mockSupabase, "user-1", WORKSPACE_ID, NOTE_ID)
@@ -148,7 +155,7 @@ describe("trashNote", () => {
     vi.mocked(noteRepo.updateNote).mockResolvedValue(
       makeNote({ status: "trashed" }) as never
     );
-    mockSupabase.maybeSingle = vi.fn().mockResolvedValue({ data: null });
+    mockSupabaseBase.maybeSingle = vi.fn().mockResolvedValue({ data: null });
 
     const result = await trashNote(mockSupabase, "user-1", WORKSPACE_ID, NOTE_ID);
     expect(result.status).toBe("trashed");
@@ -169,7 +176,7 @@ describe("trashNote", () => {
     vi.mocked(noteRepo.getNoteById).mockResolvedValue(makeNote() as never);
     vi.mocked(boxRepo.getBoxById).mockResolvedValue(makeBox() as never);
     // Simulate guide found in DB query
-    mockSupabase.maybeSingle = vi.fn().mockResolvedValue({ data: { id: BOX_ID } });
+    mockSupabaseBase.maybeSingle = vi.fn().mockResolvedValue({ data: { id: BOX_ID } });
 
     await expect(
       trashNote(mockSupabase, "user-1", WORKSPACE_ID, NOTE_ID)

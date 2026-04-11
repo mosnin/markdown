@@ -242,8 +242,8 @@ function CollapsePanel({
       // Snap to measured height first so CSS can animate down to 0
       const measured = ref.current.scrollHeight;
       setHeight(measured);
-      let raf1: number, raf2: number;
-      raf1 = requestAnimationFrame(() => {
+      let raf2: number = 0;
+      const raf1 = requestAnimationFrame(() => {
         raf2 = requestAnimationFrame(() => setHeight(0));
       });
       return () => {

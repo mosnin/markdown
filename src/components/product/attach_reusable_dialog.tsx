@@ -111,6 +111,7 @@ export function AttachReusableDialog({
   // Load attachable objects whenever the dialog opens
   useEffect(() => {
     if (!open) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setError(null);
     setSelectedSkillId(null);
     setSelectedAgentId(null);

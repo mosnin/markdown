@@ -25,7 +25,7 @@ import * as noteRepo from "@/server/repositories/note_repository";
 import * as folderRepo from "@/server/repositories/folder_repository";
 import * as proposalRepo from "@/server/repositories/write_proposal_repository";
 import * as auditService from "@/server/services/audit_service";
-import { PERMISSION_MODE } from "@/server/domain/constants/connection_constants";
+import { PERMISSION_MODE, type PermissionMode } from "@/server/domain/constants/connection_constants";
 
 const mockSupabase = {} as Parameters<typeof createProposal>[0];
 const WORKSPACE_ID = "ws-001";
@@ -34,7 +34,7 @@ const FOLDER_ID = "folder-001";
 const NOTE_ID = "note-001";
 const CONN_ID = "conn-001";
 
-function makeCtx(permissionMode = PERMISSION_MODE.PROPOSE_WRITES) {
+function makeCtx(permissionMode: PermissionMode = PERMISSION_MODE.PROPOSE_WRITES) {
   return {
     connection: {
       id: CONN_ID,

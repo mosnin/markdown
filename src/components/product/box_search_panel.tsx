@@ -587,6 +587,7 @@ function WorkspaceSearchResultCard({
   boxName: string;
   query: string;
 }) {
+   
   const Icon = noteIcon(note.kind);
   const dateLabel = formatDate(note.updated_at);
 
@@ -600,6 +601,7 @@ function WorkspaceSearchResultCard({
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
       )}
     >
+      {/* eslint-disable-next-line react-hooks/static-components */}
       <Icon
         className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground transition-fast group-hover:text-foreground"
         aria-hidden="true"

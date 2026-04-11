@@ -15,7 +15,7 @@ type ActionResult<T = void> =
   | { ok: true; data: T }
   | { ok: false; error: string };
 
-function assertNonEmptyId(id: string, label: string): ActionResult | null {
+function assertNonEmptyId(id: string, label: string): { ok: false; error: string } | null {
   if (!id || id.trim() === "") return { ok: false, error: `${label} is required` };
   return null;
 }

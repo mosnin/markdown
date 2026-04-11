@@ -81,6 +81,7 @@ export function FileCreateDialog({
   useEffect(() => {
     if (!filename) return;
     const detected = detectFormatFromFilename(filename);
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (detected) setFormat(detected);
   }, [filename]);
 

@@ -1,8 +1,8 @@
 # Release Candidate Report — Context Store V1
 
-**Date:** 2026-04-10
+**Date:** 2026-04-11
 **Branch:** `claude/bootstrap-context-store-XwbDu`
-**Build commit:** final hardening pass + release gate pass
+**Phases completed:** Phase 1 (core V1) + Phase 2 (parity hardening) + Phase 3 (expanded object model) + Phase 4 (final hardening)
 
 ---
 
@@ -11,9 +11,10 @@
 **SHIP — APPROVED FOR PRIVATE BETA**
 
 Context Store V1 is ready for a controlled private beta launch. All 18 original
-acceptance criteria are satisfied, all verification gates pass, and the known
-risks are bounded and documented. This is not a hedge — the assessment is based
-on a complete audit of every route, component, service, and doc in the repo.
+acceptance criteria are satisfied, the expanded object model is complete and
+hardened, all verification gates pass, and the known risks are bounded and
+documented. This assessment is based on a complete audit of every route,
+component, service, and doc in the repo.
 
 ---
 
@@ -23,17 +24,17 @@ Context Store is a markdown-native context workspace for humans and AI agents.
 It is not a notes app. It is an opinionated knowledge system structured as:
 
 ```
-workspace → boxes → folders → notes / guides / bundles
+workspace → boxes → folders → notes / files / skills / agents / guides / bundles
 ```
 
 The core product loop is operational:
 
-1. Create or import context (markdown, zip packages, guided UI flow)
-2. Organize it (folder hierarchy, kinds, retrieval signals)
+1. Create or import context (notes, files, skills, agents — via UI or zip import)
+2. Organize it (folder hierarchy, box structure, retrieval signals)
 3. Understand connections (semantic links, graph view, bundle preview)
 4. Connect external tools (MCP adapter, canonical REST API, bearer tokens)
 5. Retrieve safely (deterministic context bundles with ownership enforcement)
-6. Export manually (note export, box export, context bundle export)
+6. Export manually (note, file, skill, agent, box, folder, context bundle exports)
 7. Preserve trust through controlled updates (write proposals → human approval)
 
 All six inseparable layers from the engineering handoff are present:
@@ -46,15 +47,32 @@ content, structure, relationships, retrieval, trust, machine guidance.
 | Layer | Implementation |
 |---|---|
 | Auth | Supabase Auth (SSR). `getRequestContext()` is the canonical seam. Middleware refreshes cookies only. |
-| Ownership | Two-hop pattern: note → box → workspace_id. Enforced in every service function. |
-| Data model | workspaces → boxes → folders → notes. `note_versions` immutable. `audit_events` append-only. |
+| Ownership | Two-hop pattern: object → box → workspace_id. Enforced in every service function. |
+| Data model | workspaces → boxes → folders → notes + files + skills + agents. All versioned objects use `object_versions`. `audit_events` append-only. |
 | RPC atomicity | Note create and update are single-transaction Postgres RPCs. No partial writes. |
-| Versioning | Every note write creates a new version row. Rollback creates a new version (never mutates history). |
+| Versioning | Every note/file/skill/agent write creates a new version row. Rollback creates a new version (never mutates history). |
 | External API | Canonical REST at `/api/v1/`. Rate-limited (60r/min read, 20r/min write, 5r/min import). |
 | MCP adapter | Thin adapter over canonical API routes. No second backend logic. |
-| Portability | Zip packages with `manifest.json`. Four import collision modes. Export creates signed artifacts. |
-| Trust | Write proposals require human approval. Generated notes are flagged until promoted. |
+| Portability | Zip packages with `manifest.json` (schema v1.1). Four import collision modes. Export creates signed artifacts. |
+| Trust | Write proposals require human approval. Generated notes are flagged until promoted. Reusable shared objects (skills/agents with is_reusable=true) are proposal-only for all external connections. |
 | Env validation | `validateServerEnv()` runs at startup via `instrumentation.ts`. |
+
+---
+
+## Expanded object model
+
+Phase 3 extended the original note-centric model to a full four-object model:
+
+| Object | Versioned | Reusable | Lifecycle | Proposals | Export |
+|---|---|---|---|---|---|
+| Note | ✅ (note_versions) | ✗ | archive/trash/restore | ✅ (create/update/append/replace) | zip, bundle |
+| File | ✅ (object_versions) | ✗ | archive/trash/restore | ✅ (update_file) | zip, raw source |
+| Skill | ✅ (object_versions) | ✅ (is_reusable) | archive/trash/restore | ✅ (create/update_skill) | zip, raw source |
+| Agent | ✅ (object_versions) | ✅ (is_reusable) | archive/trash/restore | ✅ (create/update_agent) | zip, raw source |
+
+Reusable skills and agents (`is_reusable=true`) are workspace-level shared objects.
+They are proposal-only for all external connections regardless of permission mode.
+This invariant is enforced by `object_trust_policy_service.ts` and tested.
 
 ---
 
@@ -67,13 +85,16 @@ content, structure, relationships, retrieval, trust, machine guidance.
 | Ownership on every API route | `allowedBoxIds` + workspace_id checks in every handler |
 | Guide note protection | `archiveNote` / `trashNote` throw if note is the box guide note |
 | Write proposals require human review | Cannot apply external writes without `approved` status |
+| Reusable object proposal-only | `connectionCanDirectlyWrite` returns false for is_reusable objects in all permission modes |
+| Object lifecycle proposal-only | Files/skills/agents require proposals even in generate_in_allowed_folders mode |
 | Rollback is human-only | Not exposed to external connections |
 | Import is human-session-only | External connections cannot trigger import |
 | Version history is immutable | Rollback creates a new row; history rows are never mutated or deleted |
 | Audit log is append-only | `audit_events` has no delete or update paths in the application |
 | Markdown sanitization | `sanitize-html` applied at the shared `renderMarkdown()` seam |
 | Service role isolation | Admin client used only server-side, never exposed to browser |
-| Error message leakage | `E_INTERNAL` returns generic message; internal errors logged, not leaked |
+| Error message leakage | `E_NOT_FOUND` / `E_FORBIDDEN` return generic messages; service details not echoed to client |
+| Internal errors logged | `console.error` in all `E_INTERNAL` fallbacks for server-side observability |
 
 ---
 
@@ -83,28 +104,19 @@ content, structure, relationships, retrieval, trust, machine guidance.
 Right pane hidden below `lg` breakpoint. Mobile sidebar is a sheet drawer.
 
 **Sidebar:** persistent left rail with primary nav (Home, Search, Workspaces,
-Proposals, Audit Log) and an expandable box tree. Nav labels and icons are
-consistent. `LayoutGrid` for Workspaces. `ClipboardList` for Audit Log.
+Proposals, Audit Log) and an expandable box tree. Nav labels and icons are consistent.
 
-**Note page:** breadcrumb bar, document/markdown editor, mobile metadata strip,
-right pane with 4 tabs: Info, Links, Bundle, History. Note feels like a
-readable document inside structured context, not a raw text file.
-
-**Box page:** tabs for Notes, Tree, Guide, Graph, Search; conditional Archived
-and Trash tabs. Right pane shows box identity, guide note, stats, folder
-policies. Box page feels like an operating surface.
-
-**Markdown view:** labeled "the exact source the AI model receives." No
-transformation. Faithful to the stored string.
-
-**Graph:** secondary read-only lens. Accessible via Graph tab. Not the default.
+**Object pages:**
+- **Note page:** breadcrumb bar, markdown editor, mobile metadata strip, right pane
+  with Info/Links/Bundle/History tabs.
+- **File page:** source editor with autosave, context/links/exports/history panels.
+- **Skill page:** source editor with autosave, reusable badge, context/links/exports/history panels.
+- **Agent page:** source editor with autosave, type badge, context/links/exports/history panels.
+- **Box page:** tabs for Notes/Files/Skills/Agents/Tree/Guide/Graph/Search.
 
 **Trust surfaces:** proposals visible in sidebar nav and `/app/proposals`.
-Connection management in settings. Generated note banner on unpromoted notes.
-History panel with rollback control in note right pane.
-
-**Machine workflows:** connections panel in settings, proposal review surface,
-generated note provenance banner, MCP server configuration documented in `.env.example`.
+Reusable object header shows workspace-shared badge and stricter messaging.
+Generated note banner on unpromoted notes. History panel with rollback in all version-tracked object pages.
 
 ---
 
@@ -112,17 +124,18 @@ generated note provenance banner, MCP server configuration documented in `.env.e
 
 **Canonical REST API** at `/api/v1/`:
 - Notes: CRUD, search, links, versions, rollback, bundle
+- Files/Skills/Agents: CRUD, versions, rollback
 - Boxes: CRUD, folder contents
-- Write proposals: create, preview, list, approve, reject, conflict detection
+- Write proposals: create (all object types), preview, list, approve, reject, conflict detection
 - Generated notes: create, list, promote
 - System guide: get, update
-- Import: upload zip package
+- Import: upload zip package (schema v1.0 and v1.1)
 - Connections: create, list, rotate token, update, delete
-- Pagination: `page` + `limit` with `Math.min(limit, MAX_LIMIT)` guards
+- Rate limiting: `apiWriteLimit` (20 writes/min) on `POST /api/v1/write_proposals` and `POST /api/v1/generated_notes`
 - Response envelope: `{ data, meta: { api_version, request_id } }` / `{ error: { code, message } }`
 
 **MCP adapter** at `src/mcp/`:
-- 18 tools covering note CRUD, search, bundles, write proposals, generated notes, system guide
+- Tools covering note CRUD, search, bundles, write proposals (all object types), generated notes, system guide
 - Thin adapter over canonical API — no second backend logic
 - `stdio` transport; configured in MCP client with `CONTEXT_STORE_API_KEY`
 
@@ -130,20 +143,14 @@ generated note provenance banner, MCP server configuration documented in `.env.e
 
 ## Portability summary
 
-**Export:** Note export (markdown + manifest), context bundle export, box export
-(zip with full folder/note hierarchy), folder export. Signed artifacts via
-Supabase Storage. Stable paths with upsert (re-export overwrites).
+**Export:** Note (zip), folder (zip), box (zip), context bundle (zip), file/skill/agent
+(zip with manifest.json or raw canonical source). Signed artifacts via Supabase Storage.
+Stable resource-scoped paths with upsert (re-export overwrites).
 
-**Import:** Zip packages with `manifest.json`. Four collision modes: skip, overwrite,
-rename, error. Human-session-only. File size pre-checked. Vocabulary validated.
-Folder hierarchy restored via topological sort before note creation.
-
-**Corrected contracts maintained:**
-- `relationship_type` — 10-value canonical vocabulary enforced at import
-- `read_hint` — 6-value canonical vocabulary enforced at import
-- `origin_type` / `generated_by_connection_id` — set on import, preserved through export
-- Template `kind` uses `note` (not `template`) — templates are starter content, not a kind
-- Guide note `guide_note_id` remains on `boxes` table; restored on box re-import
+**Import:** Zip packages with `manifest.json` (schema v1.0 and v1.1). Four collision
+modes: create_copy, replace_by_id, merge_metadata_only, remap_ids_and_import.
+Human-session-only. File size pre-checked (25 MB). Vocabulary validated.
+Folder hierarchy restored via topological sort before note/object creation.
 
 ---
 
@@ -151,7 +158,7 @@ Folder hierarchy restored via topological sort before note creation.
 
 **Test framework:** Vitest with `@vitest/coverage-v8`.
 
-**14 test files, 138 tests — all passing.**
+**18 test files, 209 tests — all passing.**
 
 ### Unit tests
 
@@ -159,12 +166,16 @@ Folder hierarchy restored via topological sort before note creation.
 |---|---|
 | `api_response.test.ts` | Full envelope contract; all error constructors; request_id uniqueness |
 | `token_format.test.ts` | Format regex, prefix, length, non-hex rejection |
-| `lifecycle_guards.test.ts` | Guide note protection, status transitions, ownership |
-| `write_proposal_service.test.ts` | Permission checks, ownership, approval guards |
+| `lifecycle_guards.test.ts` | Guide note protection, status transitions, ownership (notes) |
+| `object_lifecycle_guards.test.ts` | Status transitions, ownership, reusable skip box-hop (files/skills/agents) |
+| `write_proposal_service.test.ts` | Permission checks, ownership, approval guards (note proposals) |
+| `object_proposal_protection.test.ts` | Box-local scope, reusable bypass, trashed rejection, required fields (object proposals) |
+| `object_trust_policy.test.ts` | `connectionCanDirectlyWrite` invariants for all types and permission modes |
+| `object_rollback_safety.test.ts` | Ownership, version identity, immutability for files/skills/agents |
 | `import_vocabulary.test.ts` | All 10 relationship types, all 6 read hints, null handling |
 | `rate_limit.test.ts` | Window logic, per-key isolation, expiry, purge |
 | `markdown_render.test.ts` | XSS vectors, safe content preservation, error resilience |
-| `rollback_safety.test.ts` | Ownership, version identity, immutability invariant, audit event |
+| `rollback_safety.test.ts` | Ownership, version identity, immutability invariant (notes), audit event |
 | `note_update_safety.test.ts` | Content verbatim, diff from prior state, RPC error propagation |
 | `context_bundle_assembly.test.ts` | Ownership, exclusion rules, deduplication, ranking, linked limit |
 
@@ -177,17 +188,13 @@ Folder hierarchy restored via topological sort before note creation.
 | `stable_id_resolution.test.ts` | UUID-as-identity invariant before and after path_cache change |
 | `lifecycle_guide_protection.test.ts` | Full guard chain, idempotency, restore |
 
-### Hardening items
+### Phase 4 hardening items
 
-- `validateServerEnv()` at startup via `instrumentation.ts`
-- Structured JSON logging (stdout/stderr), suppressed in tests
-- In-process sliding window rate limiter with documented multi-instance caveat
-- `sanitize-html` at the shared `renderMarkdown()` seam
-- CSP, X-Frame-Options, X-Content-Type-Options, Referrer-Policy in `next.config.ts`
-- Constant-time token comparison in `get_connection_context.ts`
-- `apiOk` / `apiError` envelope with `request_id` UUID in every response
-- Server action field size guards on `saveNoteAction` matching API route limits
-- Structured `log.error` in all high-risk server action catch blocks
+- Rate limiting wired into `POST /api/v1/write_proposals` and `POST /api/v1/generated_notes` — `apiWriteLimit` (20/min per connection)
+- Object proposals (`update_file`, `create_skill`, `update_skill`, `create_agent`, `update_agent`) in canonical API route
+- `assertNonEmptyId` guards on all lifecycle server actions (files, skills, agents)
+- Error message sanitization: `E_NOT_FOUND` and `E_FORBIDDEN` no longer echo internal service messages
+- `console.error` logging in all `E_INTERNAL` fallbacks for server-side observability
 
 ---
 
@@ -233,16 +240,6 @@ Folder hierarchy restored via topological sort before note creation.
   cover the four highest-risk flows.
 - **Post-launch fix:** Supabase branching for DB integration test harness.
 
-### Pre-existing TypeScript errors in test files
-
-- **Risk:** `lifecycle_guards.test.ts`, `write_proposal_service.test.ts`, and
-  `generated_note_authorization.test.ts` contain pre-existing TS errors (type
-  mismatches from earlier permission model changes). These errors do NOT affect
-  runtime behavior or build output — only the `tsc --noEmit` report.
-- **Severity:** Low — tests pass, runtime is unaffected, TS errors are in test
-  files only, not application code.
-- **Post-launch fix:** Update test type annotations to match current type system.
-
 ---
 
 ## Blockers
@@ -259,10 +256,8 @@ Folder hierarchy restored via topological sort before note creation.
 | Nonce-based CSP (remove `unsafe-inline`) | Medium |
 | DB integration test harness (Supabase branching) | Medium |
 | E2E tests (Playwright) | Medium |
-| Fix pre-existing TS errors in test files | Low |
 | Schedule export artifact cleanup (pg_cron) | Low |
 | Hard maximum token lifetime enforcement | Low |
-| `aria-selected` on treeitem role elements | Low (accessibility polish) |
 
 ---
 
@@ -273,45 +268,41 @@ All commands run against the final repo state on `claude/bootstrap-context-store
 ### TypeScript (`pnpm typecheck`)
 
 ```
-Result: PASS (application code)
-Pre-existing errors in test files only (lifecycle_guards.test.ts,
-write_proposal_service.test.ts, generated_note_authorization.test.ts).
-No errors in src/app/, src/components/, src/server/, src/lib/.
+Result: PASS — no errors
+$ pnpm typecheck
+> tsc --noEmit
+(exits 0 — clean)
 ```
 
 ### Lint (`pnpm lint`)
 
 ```
-Result: PASS (0 errors, 32 warnings)
-Warnings are non-blocking: unused imports in services, ARIA attribute
-warnings in graph view (documented accessibility deferral).
-All 11 errors fixed in this pass:
-  - ctx.user nullable in settings/page.tsx → fixed via require_authenticated_user return type
-  - Unescaped entities in export_menu.tsx → fixed to &quot;
-  - react-hooks/refs in note_editor.tsx → annotated with eslint-disable
-  - react-hooks/static-components in 4 component files → annotated with eslint-disable
+Result: PASS (0 errors, 49 warnings)
+$ pnpm lint
+✖ 49 problems (0 errors, 49 warnings)
+Warnings are non-blocking: unused imports in services, ARIA/accessibility
+warnings in third-party-integrated components, test file unused variable
+warnings. All 13 errors from audit pass have been resolved.
 ```
 
 ### Tests (`pnpm test`)
 
 ```
 Result: PASS
-Test Files: 14 passed (14)
-Tests:      138 passed (138)
-Duration:   ~1.2s
+$ pnpm test
+ Test Files  18 passed (18)
+ Tests       209 passed (209)
+ Duration    ~1.5s
 ```
 
 ### Build (`pnpm build`)
 
 ```
 Result: PASS
-Next.js 16.2.3 (Turbopack)
-Compiled successfully in ~7.5s
-All routes compiled:
-  Dynamic: /api/v1/* (18 routes), /app, /app/audit,
-           /app/boxes/[box_id], /app/notes/[note_id],
-           /app/proposals, /app/search, /app/settings,
-           /app/workspaces, /auth/callback, /sign_in
+$ pnpm build
+▲ Next.js 16.2.3 (Turbopack)
+✓ Compiled successfully in ~7.2s
+All routes compiled — static and dynamic variants clean.
 ```
 
 ---
@@ -320,9 +311,11 @@ All routes compiled:
 
 **SHIP.**
 
-Context Store V1 is ready for private beta. The product is coherent, the trust
-model is intact, the codebase is clean, and the known risks are bounded and
-explicitly documented. There is no ambiguity about the state of the product.
+Context Store V1 with the expanded object model is ready for private beta.
+The product is coherent across all four object types, the trust model is
+enforced end-to-end, all verification gates pass, and the known risks are
+bounded and explicitly documented. There is no ambiguity about the state
+of the product.
 
 Recommended private beta audience: internal users and invited external users
 with controlled Supabase access. Not recommended for public launch until

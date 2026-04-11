@@ -62,7 +62,7 @@ export default async function ProposalsPage() {
     <div className="flex h-full flex-col overflow-hidden">
       <PageHeader
         title="AI Proposals"
-        description="Review machine-proposed note changes before they are applied to your workspace."
+        description="Review machine-proposed changes to your workspace content before they are applied."
         actions={
           pendingCount > 0 ? (
             <Badge className="bg-amber-100 text-amber-800 border-amber-200 dark:bg-amber-900/30 dark:text-amber-400 dark:border-amber-800 text-xs font-medium">

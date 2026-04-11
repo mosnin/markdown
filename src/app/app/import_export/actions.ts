@@ -83,6 +83,9 @@ export async function exportNoteAction(
           note_count: pkg.manifest.counts.notes,
           folder_count: pkg.manifest.counts.folders,
           link_count: pkg.manifest.counts.links,
+          file_count: pkg.manifest.counts.files,
+          skill_count: pkg.manifest.counts.skills,
+          agent_count: pkg.manifest.counts.agents,
         },
       },
     };
@@ -119,6 +122,9 @@ export async function exportFolderAction(
           note_count: pkg.manifest.counts.notes,
           folder_count: pkg.manifest.counts.folders,
           link_count: pkg.manifest.counts.links,
+          file_count: pkg.manifest.counts.files,
+          skill_count: pkg.manifest.counts.skills,
+          agent_count: pkg.manifest.counts.agents,
         },
       },
     };
@@ -156,6 +162,9 @@ export async function exportBoxAction(
           note_count: pkg.manifest.counts.notes,
           folder_count: pkg.manifest.counts.folders,
           link_count: pkg.manifest.counts.links,
+          file_count: pkg.manifest.counts.files,
+          skill_count: pkg.manifest.counts.skills,
+          agent_count: pkg.manifest.counts.agents,
         },
       },
     };
@@ -194,6 +203,9 @@ export async function exportBundleAction(
           note_count: pkg.manifest.counts.notes,
           folder_count: pkg.manifest.counts.folders,
           link_count: pkg.manifest.counts.links,
+          file_count: pkg.manifest.counts.files,
+          skill_count: pkg.manifest.counts.skills,
+          agent_count: pkg.manifest.counts.agents,
         },
       },
     };
@@ -322,7 +334,7 @@ export async function exportSkillAction(
     const result = await exportSkill(supabase, workspaceId, skillId, mode);
 
     let delivery;
-    let exportType: "skill" = "skill";
+    let exportType = "skill" as const;
 
     if (mode === "canonical_source") {
       delivery = await deliverRawContent(adminClient, workspaceId, result as RawExportContent);
@@ -375,7 +387,7 @@ export async function exportAgentAction(
     const result = await exportAgent(supabase, workspaceId, agentId, mode);
 
     let delivery;
-    let exportType: "agent" = "agent";
+    let exportType = "agent" as const;
 
     if (mode === "canonical_source") {
       delivery = await deliverRawContent(adminClient, workspaceId, result as RawExportContent);

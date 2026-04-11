@@ -144,7 +144,7 @@ export function AgentExportsPanel({ agent }: AgentExportsPanelProps) {
         {/* Banner */}
         <div className="rounded-md border border-border/50 bg-muted/20 px-3 py-2.5">
           <p className="text-[11px] text-muted-foreground leading-relaxed">
-            These views are generated from the agent's structured metadata and are{" "}
+            These views are generated from the agent&apos;s structured metadata and are{" "}
             <strong className="font-medium">read only</strong>. To change the canonical
             source, use the <span className="font-medium">Source</span> tab.
           </p>

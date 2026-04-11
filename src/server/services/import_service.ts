@@ -394,6 +394,10 @@ async function applyManifest(
   });
 
   for (const mf of sortedFolders) {
+    if (!boxId) {
+      warnings.push({ code: "folder_requires_box", message: `Folder "${mf.name}" skipped — workspace-level imports do not support folders.`, subject: mf.id });
+      continue;
+    }
     await applyFolder(
       supabase,
       boxId,
@@ -407,9 +411,14 @@ async function applyManifest(
   }
 
   // Step 2: Create/update notes
+  // Notes require a box — workspace-level imports (skills/agents only) skip this step.
   const noteIdMap = new Map<string, string>();
 
   for (const mn of manifest.notes) {
+    if (!boxId) {
+      warnings.push({ code: "note_requires_box", message: `Note "${mn.title}" skipped — workspace-level imports do not support notes.`, subject: mn.id });
+      continue;
+    }
     await applyNote(
       supabase,
       boxId,
@@ -563,7 +572,7 @@ async function applyManifest(
   // as the box's guide note. This preserves round-trip fidelity for full
   // box exports. Fire-and-forget: a failure here is non-fatal.
   const manifestGuideNote = manifest.notes.find((n) => n.is_guide_note);
-  if (manifestGuideNote) {
+  if (manifestGuideNote && boxId) {
     const finalGuideId = noteIdMap.get(manifestGuideNote.id);
     if (finalGuideId) {
       try {

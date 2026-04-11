@@ -11,15 +11,20 @@ agents — through a clear information hierarchy:
 
 ## What it is
 
+- **Four object types** — Notes, Files, Skills, and Agents are first-class
+  objects. All four support versioning, lifecycle controls (archive/trash/restore),
+  write proposals, and export. Skills and Agents can be marked `is_reusable`
+  to become workspace-level shared objects.
 - **Deterministic retrieval** — context bundles assemble bounded, ranked note
   sets based on stable retrieval priorities and link structure. Same inputs,
   same output, every time.
 - **Trust layer** — external AI connections propose writes; humans review and
-  approve before anything changes in the knowledge base.
-- **Version history** — every note mutation creates an immutable version
-  snapshot. Rollback is a first-class operation.
-- **Portability** — notes, folders, boxes, and context bundles can be exported
-  as structured zip packages and re-imported with explicit collision behavior.
+  approve before anything changes. Reusable shared objects are proposal-only
+  for all external connections regardless of permission mode.
+- **Version history** — every mutation to any versioned object creates an
+  immutable version snapshot. Rollback is a first-class operation.
+- **Portability** — all object types can be exported as structured zip packages
+  (manifest schema v1.1) and re-imported with explicit collision behavior.
 - **Audit log** — all workspace events are append-only with full actor and
   operation metadata.
 
@@ -114,6 +119,9 @@ See `docs/deployment_v1.md` for production MCP configuration.
 | `docs/version_history_v1.md` | Version history and rollback |
 | `docs/lifecycle_controls_v1.md` | Archive / trash / restore |
 | `docs/v1_parity_report.md` | V1 acceptance criteria status |
+| `docs/expanded_object_trust_model_v1.md` | Trust model for Files, Skills, and Agents |
+| `docs/hardening_v1.md` | Phase 4 hardening changes |
+| `docs/release_candidate_report_v1.md` | Release candidate assessment |
 
 ---
 

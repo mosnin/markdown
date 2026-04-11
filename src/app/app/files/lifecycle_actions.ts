@@ -18,7 +18,7 @@ type ActionResult<T = void> =
   | { ok: false; error: string };
 
 // Guard: reject blank / non-string IDs before hitting the service layer.
-function assertNonEmptyId(id: string, label: string): ActionResult | null {
+function assertNonEmptyId(id: string, label: string): { ok: false; error: string } | null {
   if (!id || id.trim() === "") return { ok: false, error: `${label} is required` };
   return null;
 }

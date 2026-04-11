@@ -104,7 +104,7 @@ export async function getObjectTrustPolicy(
 
   if (error || !data) return null;
 
-  const row = data as {
+  const row = data as unknown as {
     id: string;
     status: string;
     box_id: string | null;
