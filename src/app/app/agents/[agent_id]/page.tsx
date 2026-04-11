@@ -18,6 +18,8 @@ import { listFilesByBox } from "@/server/repositories/file_repository";
 import { listSkillsByBox } from "@/server/repositories/skill_repository";
 import { listAgentsByBox } from "@/server/repositories/agent_repository";
 import { listReusableAgents } from "@/server/services/agent_service";
+import { listReusableSkills } from "@/server/services/skill_service";
+import { listFoldersByBox } from "@/server/repositories/folder_repository";
 import { OBJECT_TYPE } from "@/server/domain/constants/object_constants";
 import { type ObjectLink } from "@/server/domain/types/object_link";
 import { AgentSourceEditor } from "@/components/product/agent_source_editor";
@@ -35,6 +37,7 @@ import { AgentHistoryPanel, AgentLifecycleControls } from "@/components/product/
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { AgentTypeBadge } from "@/components/product/agent_type_badge";
 import { AgentReferenceBadge } from "@/components/product/agent_reference_badge";
+import { WorkspaceLiveRefresh } from "@/components/product/workspace_live_refresh";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -102,7 +105,8 @@ function resolveLink(
   noteMap: Map<string, { id: string; title: string }>,
   fileMap: Map<string, { id: string; name: string; file_extension: string | null }>,
   skillMap: Map<string, { id: string; name: string }>,
-  agentMap: Map<string, { id: string; name: string }>
+  agentMap: Map<string, { id: string; name: string }>,
+  folderMap: Map<string, { id: string; name: string; href: string }>
 ): ResolvedAgentLink | null {
   const isOutgoing = link.source_object_type === OBJECT_TYPE.AGENT;
   const linkedType = (isOutgoing ? link.target_object_type : link.source_object_type) as ObjectType;
@@ -123,6 +127,9 @@ function resolveLink(
   } else if (linkedType === OBJECT_TYPE.AGENT) {
     const agent = agentMap.get(linkedId);
     if (agent) { linkedName = agent.name; linkedHref = `/app/agents/${linkedId}`; }
+  } else if (linkedType === OBJECT_TYPE.FOLDER) {
+      const folder = folderMap.get(linkedId);
+      if (folder) { linkedName = folder.name; linkedHref = folder.href; }
   }
 
   return {
@@ -180,7 +187,7 @@ export default async function AgentPage({
   }
 
   // Parallel data fetching
-  const [rawLinks, versions, attachments, pendingProposals, boxNotes, boxFiles, boxSkills, boxAgents, reusableAgents] =
+  const [rawLinks, versions, attachments, pendingProposals, boxNotes, boxFiles, boxSkills, boxAgents, reusableAgents, reusableSkills, boxFolders] =
     await Promise.all([
       getLinksForObject(supabase, ctx.workspace.id, OBJECT_TYPE.AGENT, agent_id),
       listObjectVersions(supabase, "agent", agent_id, { limit: 50 }),
@@ -196,6 +203,8 @@ export default async function AgentPage({
       !agent.box_id
         ? listReusableAgents(supabase, ctx.workspace.id)
         : Promise.resolve([]),
+      listReusableSkills(supabase, ctx.workspace.id),
+      agent.box_id ? listFoldersByBox(supabase, agent.box_id, { includeArchived: true }) : Promise.resolve([]),
     ]);
 
   const versionsWithCurrent = versions.map((v) => ({
@@ -203,12 +212,26 @@ export default async function AgentPage({
     is_current: v.id === agent.current_version_id,
   }));
 
+  const linkedFileIds = rawLinks.outgoing
+    .filter((l) => l.relationship_type === "parent_of" && l.target_object_type === OBJECT_TYPE.FILE)
+    .map((l) => l.target_object_id);
+  const reusableLinkedFiles = (!agent.box_id && linkedFileIds.length > 0)
+    ? await supabase
+        .from("files")
+        .select("id, name, file_extension")
+        .in("id", linkedFileIds)
+        .eq("workspace_id", ctx.workspace.id)
+        .then((res) => res.data ?? [])
+    : [];
+
   const rollbackDisabled = agent.status === "archived" || agent.status === "trashed";
 
   // Resolution maps
   const noteMap = new Map(boxNotes.map((n) => [n.id, { id: n.id, title: n.title }]));
   const fileMap = new Map(
-    boxFiles.filter((f) => f.id !== agent_id).map((f) => [f.id, { id: f.id, name: f.name, file_extension: f.file_extension }])
+    [...boxFiles, ...reusableLinkedFiles]
+      .filter((f) => f.id !== agent_id)
+      .map((f) => [f.id, { id: f.id, name: f.name, file_extension: f.file_extension }])
   );
   const skillMap = new Map(boxSkills.map((s) => [s.id, { id: s.id, name: s.name }]));
   const agentMap = new Map(
@@ -216,13 +239,14 @@ export default async function AgentPage({
       .filter((a) => a.id !== agent_id)
       .map((a) => [a.id, { id: a.id, name: a.name }])
   );
+  const folderMap = new Map(boxFolders.map((f) => [f.id, { id: f.id, name: f.name, href: agent.box_id ? `/app/boxes/${agent.box_id}` : "#" }]));
 
   // Resolve links
   const outgoingLinks: ResolvedAgentLink[] = rawLinks.outgoing
-    .map((l) => resolveLink(l, noteMap, fileMap, skillMap, agentMap))
+    .map((l) => resolveLink(l, noteMap, fileMap, skillMap, agentMap, folderMap))
     .filter((l): l is ResolvedAgentLink => l !== null);
   const incomingLinks: ResolvedAgentLink[] = rawLinks.incoming
-    .map((l) => resolveLink(l, noteMap, fileMap, skillMap, agentMap))
+    .map((l) => resolveLink(l, noteMap, fileMap, skillMap, agentMap, folderMap))
     .filter((l): l is ResolvedAgentLink => l !== null);
 
   // Build eligible link targets for the add-link dialog
@@ -254,11 +278,18 @@ export default async function AgentPage({
 
   // Children panel data: all outgoing links to file/note objects
   const structuralLinks = outgoingLinks.filter(
-    (l) => l.linkedObjectType === OBJECT_TYPE.FILE || l.linkedObjectType === OBJECT_TYPE.NOTE
+    (l) => l.linkedObjectType === OBJECT_TYPE.FILE || l.linkedObjectType === OBJECT_TYPE.NOTE || l.linkedObjectType === OBJECT_TYPE.FOLDER
   );
 
   return (
     <div className="flex h-full overflow-hidden">
+      <WorkspaceLiveRefresh
+        workspaceId={ctx.workspace.id}
+        scope="object"
+        objectType="agent"
+        objectId={agent_id}
+        protectWhileEditing
+      />
       {/* Center — main workspace */}
       <div className="flex flex-1 flex-col overflow-hidden min-w-0">
         {/* Top bar */}
@@ -427,12 +458,18 @@ export default async function AgentPage({
           </TabsContent>
 
           <TabsContent value="children" className="flex-1 overflow-hidden">
-            <AgentChildrenPanel structuralLinks={structuralLinks} agentId={agent_id} />
+                <AgentChildrenPanel structuralLinks={structuralLinks} agentId={agent_id} />
           </TabsContent>
 
           <TabsContent value="skills" className="flex-1 overflow-hidden">
-            <AgentSkillsPanel outgoingLinks={outgoingLinks} />
-          </TabsContent>
+                <AgentSkillsPanel
+                  outgoingLinks={outgoingLinks}
+                  agentId={agent_id}
+                  availableSkills={[...boxSkills, ...reusableSkills]
+                    .filter((s, idx, arr) => arr.findIndex((x) => x.id === s.id) === idx)
+                    .map((s) => ({ id: s.id, name: s.name }))}
+                />
+              </TabsContent>
 
           <TabsContent value="relationships" className="flex-1 overflow-hidden">
             <ScrollArea className="h-full">

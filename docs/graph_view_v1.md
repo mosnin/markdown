@@ -7,6 +7,17 @@ Later prompts must preserve all rules described here.
 
 ---
 
+## Current scope status (April 2026)
+
+- Implemented graph scope is still the BoxOverview model documented below:
+  - folders
+  - notes
+  - note links
+- Full cross-object graphing for files/skills/agents is **not yet implemented**.
+- Any roadmap claim that the graph already includes files/skills/agents should be treated as incorrect until this doc is revised with concrete schema + rendering changes.
+
+---
+
 ## Purpose and role
 
 Graph views are **secondary** to the tree. They exist so humans can spatially understand

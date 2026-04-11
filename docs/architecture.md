@@ -217,6 +217,26 @@ See type-specific documentation:
 
 ---
 
+## Current implementation status and remaining work (April 2026)
+
+The following items are intentionally called out so architecture docs stay aligned with product reality:
+
+1. **Tree implementation**
+   - Current: `TreeSidebar` is custom and uses server actions + Supabase realtime + local drag/drop handling.
+   - Remaining: migration to a library-backed interactive tree (target: `react-arborist`) has **not** been completed yet.
+
+2. **Graph surface scope**
+   - Current: graph reflects the existing BoxOverview model (folders + notes + note links).
+   - Remaining: graph does **not yet** include full files/skills/agents topology.
+
+3. **Docs coverage**
+   - Current: architecture and design docs describe established boundaries and current object model expansion.
+   - Remaining: deeper parity updates across all requested docs and examples are still in progress and should be tracked as follow-up documentation work, not inferred as complete.
+
+For the active checklist, see [docs/remaining_scope_tracker.md](remaining_scope_tracker.md).
+
+---
+
 ## Expanded trust model (Phase 3)
 
 Phase 3 extended the trust, permissions, versioning, lifecycle, audit, and machine workflow model from notes to all four object types.

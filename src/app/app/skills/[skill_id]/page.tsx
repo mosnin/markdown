@@ -7,12 +7,18 @@ import { getBoxById } from "@/server/repositories/box_repository";
 import { isObjectAttachedToBox, listAttachmentsForObject } from "@/server/repositories/box_object_attachment_repository";
 import { listObjectVersions } from "@/server/repositories/object_version_repository";
 import { listPendingProposalsForObject } from "@/server/repositories/write_proposal_repository";
+import { getLinksForObject } from "@/server/services/object_link_service";
+import { listFilesByBox } from "@/server/repositories/file_repository";
+import { listFoldersByBox } from "@/server/repositories/folder_repository";
 import { ReferenceContextBanner } from "@/components/product/reference_context_banner";
 import { SkillExportMenu } from "@/components/product/export_menu";
 import { ObjectTrustHeader } from "@/components/product/object_trust_header";
 import { MachineProvenancePanel } from "@/components/product/machine_provenance_panel";
 import { SkillHistoryPanel, SkillLifecycleControls } from "@/components/product/skill_trust_panels";
-import { cn } from "@/lib/utils";
+import { SkillSourceEditor } from "@/components/product/skill_source_editor";
+import { SkillChildrenPanel } from "@/components/product/skill_children_panel";
+import { OBJECT_TYPE } from "@/server/domain/constants/object_constants";
+import { WorkspaceLiveRefresh } from "@/components/product/workspace_live_refresh";
 
 // ─── Meta row ─────────────────────────────────────────────────────────────────
 
@@ -44,13 +50,52 @@ export default async function SkillPage({
   if (!skill || skill.workspace_id !== ctx.workspace.id) notFound();
 
   // Fetch version history, pending proposals, and attachment count in parallel
-  const [versions, pendingProposals, attachments] = await Promise.all([
+  const [versions, pendingProposals, attachments, links, boxFiles, boxFolders] = await Promise.all([
     listObjectVersions(supabase, "skill", skill_id, { limit: 50 }),
     listPendingProposalsForObject(supabase, ctx.workspace.id, "skill", skill_id),
     skill.is_reusable
       ? listAttachmentsForObject(supabase, ctx.workspace.id, "skill", skill_id)
       : Promise.resolve([]),
+    getLinksForObject(supabase, ctx.workspace.id, OBJECT_TYPE.SKILL, skill_id),
+    skill.box_id ? listFilesByBox(supabase, skill.box_id, { includeArchived: true }) : Promise.resolve([]),
+    skill.box_id ? listFoldersByBox(supabase, skill.box_id, { includeArchived: true }) : Promise.resolve([]),
   ]);
+  const childLinkIds = new Set(
+    links.outgoing
+      .filter((l) => l.relationship_type === "parent_of")
+      .map((l) => `${l.target_object_type}:${l.target_object_id}`)
+  );
+  const linkedFileIds = links.outgoing
+    .filter((l) => l.relationship_type === "parent_of" && l.target_object_type === OBJECT_TYPE.FILE)
+    .map((l) => l.target_object_id);
+  const reusableLinkedFiles = (!skill.box_id && linkedFileIds.length > 0)
+    ? await supabase
+        .from("files")
+        .select("id, name")
+        .in("id", linkedFileIds)
+        .eq("workspace_id", ctx.workspace.id)
+        .then((res) => res.data ?? [])
+    : [];
+  const childrenItems = [
+    ...boxFolders.filter((f) => childLinkIds.has(`folder:${f.id}`)).map((f) => ({
+      id: f.id,
+      type: "folder" as const,
+      name: f.name,
+      href: "#",
+    })),
+    ...boxFiles.filter((f) => childLinkIds.has(`file:${f.id}`)).map((f) => ({
+      id: f.id,
+      type: "file" as const,
+      name: f.name,
+      href: `/app/files/${f.id}`,
+    })),
+    ...reusableLinkedFiles.map((f) => ({
+      id: f.id,
+      type: "file" as const,
+      name: f.name,
+      href: `/app/files/${f.id}`,
+    })),
+  ];
 
   const versionsWithCurrent = versions.map((v) => ({
     ...v,
@@ -77,6 +122,13 @@ export default async function SkillPage({
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
+      <WorkspaceLiveRefresh
+        workspaceId={ctx.workspace.id}
+        scope="object"
+        objectType="skill"
+        objectId={skill_id}
+        protectWhileEditing
+      />
       {/* Header */}
       <div className="border-b border-border bg-background px-6 pt-6 pb-4">
         <div className="flex items-start gap-3">
@@ -156,19 +208,17 @@ export default async function SkillPage({
             )}
           </section>
 
-          {/* Source content */}
-          {skill.source_content && (
-            <section className="rounded-lg border border-border bg-card p-4 space-y-2">
-              <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                Source <span className="font-normal normal-case text-muted-foreground/60">({skill.canonical_format})</span>
-              </h2>
-              <pre className={cn(
-                "whitespace-pre-wrap break-words text-xs text-foreground/80",
-                "font-mono leading-6 max-h-96 overflow-auto"
-              )}>
-                {skill.source_content}
-              </pre>
-            </section>
+          {/* Canonical source */}
+          <section className="space-y-2">
+            <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              Canonical source <span className="font-normal normal-case text-muted-foreground/60">({skill.canonical_format})</span>
+            </h2>
+            <SkillSourceEditor skill={skill} />
+          </section>
+
+          {/* Child structure */}
+          {!skill.is_reusable && skill.box_id && (
+            <SkillChildrenPanel skillId={skill_id} childrenItems={childrenItems} />
           )}
 
           {/* Version history */}

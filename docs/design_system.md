@@ -207,6 +207,12 @@ Installed primitives:
 | `AgentLifecycleMenu` | Agent archive/unarchive/trash/restore; inline confirm |
 | `AgentCreateDialog` | Agent creation: name, scope, format, type, model hint, system prompt, content |
 
+### Known UI platform gaps (April 2026)
+
+- The sidebar tree currently uses the in-repo custom implementation (`TreeSidebar`).
+- Planned move to a library-based tree interaction surface (target: `react-arborist`) is not complete yet.
+- Graph visualization still follows the current BoxOverview scope (folders/notes/link relationships) and is not yet generalized to full files/skills/agents topology.
+
 ### Three-pane workspace layout
 
 Desktop layout uses a fixed three-pane model:
