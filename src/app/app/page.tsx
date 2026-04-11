@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 import { BookOpen, Box, FileText, Inbox, Network } from "lucide-react";
 import { requireAuthenticatedUser } from "@/server/auth/require_authenticated_user";
 import { createClient } from "@/lib/supabase/server";
@@ -60,11 +61,20 @@ export default async function AppHomePage() {
     <div className="flex h-full flex-col overflow-hidden">
       {/* Workspace header */}
       <div className="flex items-center justify-between border-b border-border px-6 py-4">
-        <div>
-          <p className="text-xs text-muted-foreground">Workspace</p>
-          <h1 className="text-lg font-semibold tracking-tight text-foreground">
-            {ctx.workspace.name}
-          </h1>
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2">
+            <Image src="/logo-symbol-dark.png" alt="Poggle" width={28} height={28} className="rounded dark:hidden" />
+            <Image src="/logo-symbol-light.png" alt="Poggle" width={28} height={28} className="rounded hidden dark:block" />
+            <Image src="/logo-text-black.png" alt="Poggle" width={70} height={24} className="dark:hidden" />
+            <Image src="/logo-text-white.png" alt="Poggle" width={70} height={24} className="hidden dark:block" />
+          </div>
+          <div className="h-6 w-px bg-border" />
+          <div>
+            <p className="text-xs text-muted-foreground">Workspace</p>
+            <h1 className="text-lg font-semibold tracking-tight text-foreground">
+              {ctx.workspace.name}
+            </h1>
+          </div>
         </div>
         <div className="flex items-center gap-2">
           {hasBoxes && <CreateBoxDialog />}

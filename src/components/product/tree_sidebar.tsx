@@ -537,12 +537,12 @@ function FolderNode({
   onTreeRefresh?: () => void;
 }) {
   const [isOpen, setIsOpen] = useState(defaultOpen ?? false);
-  const hasChildren =
-    folder.children.length > 0 ||
-    folder.notes.length > 0 ||
-    folder.files.length > 0 ||
-    folder.skills.length > 0 ||
-    folder.agents.length > 0;
+  const isEmpty =
+    folder.children.length === 0 &&
+    folder.notes.length === 0 &&
+    folder.files.length === 0 &&
+    folder.skills.length === 0 &&
+    folder.agents.length === 0;
 
   // depth 1 → pl-7 for sub-folder header, depth 2+ → pl-8
   const depthClass = depth <= 1 ? "pl-7" : "pl-8";
@@ -551,21 +551,18 @@ function FolderNode({
     <div>
       {/* Folder header row */}
       <div className={cn("group flex items-center gap-1 pr-1", depthClass)}>
-        {/* Chevron toggle — always present for alignment; non-interactive if empty */}
+        {/* Chevron toggle */}
         <button
           type="button"
-          onClick={() => hasChildren && setIsOpen((o) => !o)}
+          onClick={() => setIsOpen((o) => !o)}
           className={cn(
             "flex h-5 w-5 shrink-0 items-center justify-center rounded",
             "transition-colors duration-150",
-            hasChildren
-              ? "text-muted-foreground hover:bg-accent/50 hover:text-foreground cursor-pointer"
-              : "text-muted-foreground/40 cursor-default",
+            "text-muted-foreground hover:bg-accent/50 hover:text-foreground cursor-pointer",
             "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
           )}
           aria-label={isOpen ? `Collapse ${folder.name}` : `Expand ${folder.name}`}
-          aria-expanded={hasChildren ? isOpen : undefined}
-          tabIndex={hasChildren ? 0 : -1}
+          aria-expanded={isOpen}
         >
           {isOpen ? (
             <ChevronDown className="h-3.5 w-3.5 transition-transform duration-150" aria-hidden="true" />
@@ -577,13 +574,11 @@ function FolderNode({
         {/* Folder name */}
         <button
           type="button"
-          onClick={() => hasChildren && setIsOpen((o) => !o)}
+          onClick={() => setIsOpen((o) => !o)}
           className={cn(
             "flex flex-1 items-center gap-1.5 rounded-md px-1 py-1 text-xs min-w-0",
             "transition-colors duration-150",
-            hasChildren
-              ? "text-foreground/60 hover:bg-accent/50 hover:text-foreground cursor-pointer"
-              : "text-muted-foreground/40 cursor-default",
+            "text-foreground/60 hover:bg-accent/50 hover:text-foreground cursor-pointer",
             "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
           )}
         >
@@ -598,6 +593,11 @@ function FolderNode({
       {/* Children — animated collapse/expand */}
       <CollapsePanel open={isOpen}>
         <div className="py-0.5">
+          {isEmpty && (
+            <p className="pl-8 py-1 text-[10px] text-muted-foreground/40 italic">
+              Empty
+            </p>
+          )}
           {folder.notes.map((note) => (
             <NoteRow
               key={note.id}

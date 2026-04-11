@@ -1,6 +1,7 @@
 'use client';
 import React from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { MenuToggleIcon } from '@/components/ui/menu-toggle-icon';
@@ -341,12 +342,10 @@ function useScroll(threshold: number) {
 function WordmarkLogo() {
 	return (
 		<>
-			<div className="flex h-5 w-5 items-center justify-center rounded-md bg-violet-600">
-				<div className="h-1.5 w-1.5 rounded-sm bg-white" />
-			</div>
-			<span className="text-sm font-semibold tracking-tight text-foreground">
-				Poggle
-			</span>
+			<Image src="/logo-symbol-dark.png" alt="Poggle" width={20} height={20} className="rounded dark:hidden" />
+			<Image src="/logo-symbol-light.png" alt="Poggle" width={20} height={20} className="rounded hidden dark:block" />
+			<Image src="/logo-text-black.png" alt="Poggle" width={60} height={20} className="dark:hidden" />
+			<Image src="/logo-text-white.png" alt="Poggle" width={60} height={20} className="hidden dark:block" />
 		</>
 	);
 }

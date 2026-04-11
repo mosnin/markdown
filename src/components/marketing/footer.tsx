@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 
 const LINKS = {
   Product: [
@@ -29,10 +30,10 @@ export function MarketingFooter() {
           {/* Brand column */}
           <div className="col-span-2 sm:col-span-3 md:col-span-1">
             <div className="flex items-center gap-2.5">
-              <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-violet-600">
-                <div className="h-2.5 w-2.5 rounded-sm bg-white" />
-              </div>
-              <span className="text-sm font-semibold tracking-tight">Poggle</span>
+              <Image src="/logo-symbol-dark.png" alt="Poggle" width={28} height={28} className="rounded dark:hidden" />
+              <Image src="/logo-symbol-light.png" alt="Poggle" width={28} height={28} className="rounded hidden dark:block" />
+              <Image src="/logo-text-black.png" alt="Poggle" width={64} height={22} className="dark:hidden" />
+              <Image src="/logo-text-white.png" alt="Poggle" width={64} height={22} className="hidden dark:block" />
             </div>
             <p className="mt-4 max-w-[200px] text-xs leading-relaxed text-muted-foreground">
               A markdown-native context operating system for humans and AI.

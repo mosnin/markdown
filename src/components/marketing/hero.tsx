@@ -2,6 +2,7 @@
 
 import React, { useEffect } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { motion, useAnimationControls } from "motion/react";
 import { ArrowRightIcon, SparklesIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -187,8 +188,14 @@ export function HeroSection() {
 					)}
 				>
 					<div className="relative mx-auto max-w-5xl overflow-hidden rounded-lg border bg-background p-2 shadow-xl ring-1 ring-border/40">
-						{/* Blank placeholder — replace src with your screenshot */}
-						<div className="aspect-video rounded-lg border bg-muted/30" />
+						<Image
+							src="/dashboard-screenshot.png"
+							alt="Poggle dashboard"
+							width={1280}
+							height={720}
+							className="rounded-lg w-full"
+							priority
+						/>
 					</div>
 				</motion.div>
 			</div>
