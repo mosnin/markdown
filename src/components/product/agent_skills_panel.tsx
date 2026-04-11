@@ -1,3 +1,5 @@
+"use client";
+
 import { File, Zap } from "lucide-react";
 import Link from "next/link";
 import { useState, useTransition } from "react";
