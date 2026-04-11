@@ -11,9 +11,10 @@ import {
 import { auditBundleRead } from "@/server/services/audit_service";
 import { log } from "@/lib/logger";
 import { type ContextBundle } from "@/server/domain/types/context_bundle";
-import type { ActionResult } from "@/app/app/boxes/actions";
 
-export type { ActionResult };
+export type ActionResult<T = void> =
+  | { ok: true; data: T }
+  | { ok: false; error: string };
 
 // ─── Field size guards — match API route limits ───────────────────────────────
 const MAX_TITLE_LENGTH = 500;
