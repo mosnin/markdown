@@ -596,9 +596,9 @@ async function _approveObjectCreate(
 
   const objectId = (newObj as { id: string }).id;
 
-  // Create initial version
+  // Create initial version for the already-inserted object row
   const { data: versionId, error: versionErr } = await adminClient.rpc(
-    "create_object_with_initial_version",
+    "append_initial_object_version",
     {
       p_object_type: objectType,
       p_object_id: objectId,
