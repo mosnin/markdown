@@ -234,13 +234,16 @@ export async function searchNotesAction(
  * Returns folders, notes, files, skills, and agents (both box-local and
  * workspace-level reusable attachments). Used by the sidebar tree component
  * to lazily load tree data per box.
+ *
+ * Skills and agents include a `status` field so the sidebar can render archived
+ * items with reduced opacity. Trashed attached objects are excluded.
  */
 export async function getBoxTreeAction(boxId: string): Promise<ActionResult<{
   folders: Array<{ id: string; name: string; parent_folder_id: string | null; status: string }>;
   notes: Array<{ id: string; title: string; kind: string; folder_id: string | null }>;
   files: Array<{ id: string; name: string; file_extension: string | null; folder_id: string | null }>;
-  skills: Array<{ id: string; name: string; folder_id: string | null; is_reusable: boolean; is_attachment: boolean }>;
-  agents: Array<{ id: string; name: string; folder_id: string | null; is_reusable: boolean; is_attachment: boolean }>;
+  skills: Array<{ id: string; name: string; folder_id: string | null; status: string; is_reusable: boolean; is_attachment: boolean }>;
+  agents: Array<{ id: string; name: string; folder_id: string | null; status: string; is_reusable: boolean; is_attachment: boolean }>;
 }>> {
   try {
     const { supabase, workspaceId } = await requireContext();
@@ -260,8 +263,8 @@ export async function getBoxTreeAction(boxId: string): Promise<ActionResult<{
       listFoldersByBox(supabase, boxId),
       listNotesByBox(supabase, boxId),
       listFilesByBox(supabase, boxId),
-      listSkillsByBox(supabase, boxId),
-      listAgentsByBox(supabase, boxId),
+      listSkillsByBox(supabase, boxId, { includeArchived: true }),
+      listAgentsByBox(supabase, boxId, { includeArchived: true }),
       listAttachmentsForBox(supabase, boxId),
     ]);
 
@@ -272,10 +275,14 @@ export async function getBoxTreeAction(boxId: string): Promise<ActionResult<{
     const attachedAgentIds = attachments
       .filter((a) => a.object_type === "agent")
       .map((a) => a.object_id);
-    const [attachedSkills, attachedAgents] = await Promise.all([
+    const [attachedSkillsRaw, attachedAgentsRaw] = await Promise.all([
       getSkillsByIds(supabase, attachedSkillIds),
       getAgentsByIds(supabase, attachedAgentIds),
     ]);
+
+    // Exclude trashed attached objects — archived ones still show (dimmed in sidebar)
+    const attachedSkills = attachedSkillsRaw.filter((s) => s.status !== "trashed");
+    const attachedAgents = attachedAgentsRaw.filter((a) => a.status !== "trashed");
 
     // Build lookup maps for attachment folder placement
     const skillAttachmentFolderById = new Map(
@@ -315,6 +322,7 @@ export async function getBoxTreeAction(boxId: string): Promise<ActionResult<{
             id: s.id,
             name: s.name,
             folder_id: s.folder_id,
+            status: s.status,
             is_reusable: s.is_reusable,
             is_attachment: false,
           })),
@@ -322,6 +330,7 @@ export async function getBoxTreeAction(boxId: string): Promise<ActionResult<{
             id: s.id,
             name: s.name,
             folder_id: skillAttachmentFolderById.get(s.id) ?? null,
+            status: s.status,
             is_reusable: true,
             is_attachment: true,
           })),
@@ -331,6 +340,7 @@ export async function getBoxTreeAction(boxId: string): Promise<ActionResult<{
             id: a.id,
             name: a.name,
             folder_id: a.folder_id,
+            status: a.status,
             is_reusable: a.is_reusable,
             is_attachment: false,
           })),
@@ -338,6 +348,7 @@ export async function getBoxTreeAction(boxId: string): Promise<ActionResult<{
             id: a.id,
             name: a.name,
             folder_id: agentAttachmentFolderById.get(a.id) ?? null,
+            status: a.status,
             is_reusable: true,
             is_attachment: true,
           })),
@@ -346,5 +357,198 @@ export async function getBoxTreeAction(boxId: string): Promise<ActionResult<{
     };
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : "Failed to load tree" };
+  }
+}
+
+// ─── Attachment actions ───────────────────────────────────────────────────────
+
+/**
+ * Attach a workspace-level reusable skill to a box by reference.
+ * No-op safe: if already attached, returns the existing attachment id.
+ * The skill is not copied — changes to the source are reflected in all boxes.
+ */
+export async function attachSkillToBoxAction(
+  boxId: string,
+  skillId: string,
+  folderId?: string | null
+): Promise<ActionResult<{ id: string }>> {
+  try {
+    const { supabase, userId, workspaceId } = await requireContext();
+    const { getBoxById } = await import("@/server/repositories/box_repository");
+    const { getSkillById } = await import("@/server/repositories/skill_repository");
+    const {
+      isObjectAttachedToBox,
+      createAttachment,
+      listAttachmentsForBox,
+    } = await import("@/server/repositories/box_object_attachment_repository");
+
+    const [box, skill] = await Promise.all([
+      getBoxById(supabase, boxId),
+      getSkillById(supabase, skillId),
+    ]);
+    if (!box || box.workspace_id !== workspaceId) return { ok: false, error: "Box not found" };
+    if (!skill || skill.workspace_id !== workspaceId) return { ok: false, error: "Skill not found" };
+    if (!skill.is_reusable) return { ok: false, error: "Only workspace-level reusable skills can be attached" };
+    if (skill.status === "trashed") return { ok: false, error: "Cannot attach a trashed skill" };
+
+    // Return existing attachment silently if already present
+    const alreadyAttached = await isObjectAttachedToBox(supabase, boxId, "skill", skillId);
+    if (alreadyAttached) {
+      const existing = await listAttachmentsForBox(supabase, boxId);
+      const row = existing.find((a) => a.object_type === "skill" && a.object_id === skillId);
+      return { ok: true, data: { id: row?.id ?? skillId } };
+    }
+
+    const attachment = await createAttachment(supabase, {
+      workspace_id: workspaceId,
+      box_id: boxId,
+      folder_id: folderId ?? null,
+      object_type: "skill",
+      object_id: skillId,
+      attached_by: userId,
+    });
+
+    revalidatePath(`/app/boxes/${boxId}`);
+    return { ok: true, data: { id: attachment.id } };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Failed to attach skill" };
+  }
+}
+
+/**
+ * Attach a workspace-level reusable agent to a box by reference.
+ * No-op safe: if already attached, returns the existing attachment id.
+ * The agent is not copied — changes to the source are reflected in all boxes.
+ */
+export async function attachAgentToBoxAction(
+  boxId: string,
+  agentId: string,
+  folderId?: string | null
+): Promise<ActionResult<{ id: string }>> {
+  try {
+    const { supabase, userId, workspaceId } = await requireContext();
+    const { getBoxById } = await import("@/server/repositories/box_repository");
+    const { getAgentById } = await import("@/server/repositories/agent_repository");
+    const {
+      isObjectAttachedToBox,
+      createAttachment,
+      listAttachmentsForBox,
+    } = await import("@/server/repositories/box_object_attachment_repository");
+
+    const [box, agent] = await Promise.all([
+      getBoxById(supabase, boxId),
+      getAgentById(supabase, agentId),
+    ]);
+    if (!box || box.workspace_id !== workspaceId) return { ok: false, error: "Box not found" };
+    if (!agent || agent.workspace_id !== workspaceId) return { ok: false, error: "Agent not found" };
+    if (!agent.is_reusable) return { ok: false, error: "Only workspace-level reusable agents can be attached" };
+    if (agent.status === "trashed") return { ok: false, error: "Cannot attach a trashed agent" };
+
+    const alreadyAttached = await isObjectAttachedToBox(supabase, boxId, "agent", agentId);
+    if (alreadyAttached) {
+      const existing = await listAttachmentsForBox(supabase, boxId);
+      const row = existing.find((a) => a.object_type === "agent" && a.object_id === agentId);
+      return { ok: true, data: { id: row?.id ?? agentId } };
+    }
+
+    const attachment = await createAttachment(supabase, {
+      workspace_id: workspaceId,
+      box_id: boxId,
+      folder_id: folderId ?? null,
+      object_type: "agent",
+      object_id: agentId,
+      attached_by: userId,
+    });
+
+    revalidatePath(`/app/boxes/${boxId}`);
+    return { ok: true, data: { id: attachment.id } };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Failed to attach agent" };
+  }
+}
+
+/**
+ * Detach a reusable skill or agent from a box.
+ * Removes the reference only — the source object and its attachments in
+ * other boxes are not affected.
+ */
+export async function detachFromBoxAction(
+  boxId: string,
+  objectType: "skill" | "agent",
+  objectId: string
+): Promise<ActionResult> {
+  try {
+    const { supabase, workspaceId } = await requireContext();
+    const { getBoxById } = await import("@/server/repositories/box_repository");
+    const { deleteAttachmentForObject } = await import("@/server/repositories/box_object_attachment_repository");
+
+    const box = await getBoxById(supabase, boxId);
+    if (!box || box.workspace_id !== workspaceId) return { ok: false, error: "Box not found" };
+
+    await deleteAttachmentForObject(supabase, boxId, objectType, objectId);
+    revalidatePath(`/app/boxes/${boxId}`);
+    return { ok: true, data: undefined };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Failed to detach" };
+  }
+}
+
+/**
+ * Fetch workspace-level reusable skills and agents not yet attached to a given box.
+ * Used to populate the "Attach reusable" dialog.
+ */
+export async function getAttachablesToBoxAction(boxId: string): Promise<ActionResult<{
+  skills: Array<{ id: string; name: string; description: string | null; canonical_format: string; status: string }>;
+  agents: Array<{ id: string; name: string; description: string | null; canonical_format: string; agent_type: string | null; status: string }>;
+}>> {
+  try {
+    const { supabase, workspaceId } = await requireContext();
+    const { getBoxById } = await import("@/server/repositories/box_repository");
+    const { listReusableSkills } = await import("@/server/repositories/skill_repository");
+    const { listReusableAgents } = await import("@/server/repositories/agent_repository");
+    const { listAttachmentsForBox } = await import("@/server/repositories/box_object_attachment_repository");
+
+    const box = await getBoxById(supabase, boxId);
+    if (!box || box.workspace_id !== workspaceId) return { ok: false, error: "Box not found" };
+
+    const [allSkills, allAgents, attachments] = await Promise.all([
+      listReusableSkills(supabase, workspaceId),
+      listReusableAgents(supabase, workspaceId),
+      listAttachmentsForBox(supabase, boxId),
+    ]);
+
+    const attachedSkillIds = new Set(
+      attachments.filter((a) => a.object_type === "skill").map((a) => a.object_id)
+    );
+    const attachedAgentIds = new Set(
+      attachments.filter((a) => a.object_type === "agent").map((a) => a.object_id)
+    );
+
+    return {
+      ok: true,
+      data: {
+        skills: allSkills
+          .filter((s) => !attachedSkillIds.has(s.id))
+          .map((s) => ({
+            id: s.id,
+            name: s.name,
+            description: s.description,
+            canonical_format: s.canonical_format,
+            status: s.status,
+          })),
+        agents: allAgents
+          .filter((a) => !attachedAgentIds.has(a.id))
+          .map((a) => ({
+            id: a.id,
+            name: a.name,
+            description: a.description,
+            canonical_format: a.canonical_format,
+            agent_type: a.agent_type,
+            status: a.status,
+          })),
+      },
+    };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Failed to load attachables" };
   }
 }

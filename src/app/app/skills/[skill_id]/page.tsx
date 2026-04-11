@@ -3,6 +3,9 @@ import { Calendar, Tag, Zap } from "lucide-react";
 import { requireAuthenticatedUser } from "@/server/auth/require_authenticated_user";
 import { createClient } from "@/lib/supabase/server";
 import { getSkillById } from "@/server/repositories/skill_repository";
+import { getBoxById } from "@/server/repositories/box_repository";
+import { isObjectAttachedToBox } from "@/server/repositories/box_object_attachment_repository";
+import { ReferenceContextBanner } from "@/components/product/reference_context_banner";
 import { cn } from "@/lib/utils";
 
 // ─── Meta row ─────────────────────────────────────────────────────────────────
@@ -20,15 +23,29 @@ function MetaRow({ label, children }: { label: string; children: React.ReactNode
 
 export default async function SkillPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ skill_id: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const ctx = await requireAuthenticatedUser();
   const supabase = await createClient();
   const { skill_id } = await params;
+  const resolvedSearch = await searchParams;
+  const boxContextId = typeof resolvedSearch.box_id === "string" ? resolvedSearch.box_id : null;
 
   const skill = await getSkillById(supabase, skill_id);
   if (!skill || skill.workspace_id !== ctx.workspace.id) notFound();
+
+  // Reference context: reusable skill viewed from a specific box via ?box_id=
+  let refBox: { id: string; name: string } | null = null;
+  if (skill.is_reusable && boxContextId) {
+    const candidate = await getBoxById(supabase, boxContextId);
+    if (candidate && candidate.workspace_id === ctx.workspace.id) {
+      const attached = await isObjectAttachedToBox(supabase, boxContextId, "skill", skill_id);
+      if (attached) refBox = { id: candidate.id, name: candidate.name };
+    }
+  }
 
   const createdDate = new Date(skill.created_at).toLocaleDateString(undefined, {
     year: "numeric",
@@ -57,6 +74,18 @@ export default async function SkillPage({
           )}
         </div>
       </div>
+
+      {/* Reference context banner — shown when a reusable skill is viewed from a box */}
+      {refBox && (
+        <div className="border-b border-border px-6 py-3">
+          <ReferenceContextBanner
+            boxId={refBox.id}
+            boxName={refBox.name}
+            objectType="skill"
+            objectId={skill_id}
+          />
+        </div>
+      )}
 
       {/* Content */}
       <div className="flex-1 overflow-auto">

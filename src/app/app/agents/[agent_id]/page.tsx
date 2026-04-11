@@ -7,7 +7,10 @@ import { getAgentForWorkspace } from "@/server/services/agent_service";
 import { getBoxById } from "@/server/repositories/box_repository";
 import { getLinksForObject } from "@/server/services/object_link_service";
 import { listObjectVersions } from "@/server/repositories/object_version_repository";
-import { listAttachmentsForObject } from "@/server/repositories/box_object_attachment_repository";
+import {
+  listAttachmentsForObject,
+  isObjectAttachedToBox,
+} from "@/server/repositories/box_object_attachment_repository";
 import { listNotesByBox } from "@/server/repositories/note_repository";
 import { listFilesByBox } from "@/server/repositories/file_repository";
 import { listSkillsByBox } from "@/server/repositories/skill_repository";
@@ -23,6 +26,7 @@ import { AgentSkillsPanel } from "@/components/product/agent_skills_panel";
 import { AgentContextPanel } from "@/components/product/agent_context_panel";
 import { AgentObjectLinksPanel } from "@/components/product/agent_object_links_panel";
 import { AgentLifecycleMenu } from "@/components/product/agent_lifecycle_menu";
+import { ReferenceContextBanner } from "@/components/product/reference_context_banner";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { AgentTypeBadge } from "@/components/product/agent_type_badge";
 import { AgentReferenceBadge } from "@/components/product/agent_reference_badge";
@@ -147,6 +151,8 @@ export default async function AgentPage({
   const defaultTab: AgentTab = VALID_TABS.includes(rawTab as AgentTab)
     ? (rawTab as AgentTab)
     : "overview";
+  // box_id query param — present when a reusable agent is opened from a box context
+  const boxContextId = typeof resolvedSearch.box_id === "string" ? resolvedSearch.box_id : null;
 
   const ctx = await requireAuthenticatedUser();
   const supabase = await createClient();
@@ -154,7 +160,19 @@ export default async function AgentPage({
   const agent = await getAgentForWorkspace(supabase, agent_id, ctx.workspace.id);
   if (!agent) notFound();
 
-  const box = agent.box_id ? await getBoxById(supabase, agent.box_id) : null;
+  // Canonical box: box-local agents use agent.box_id; reusable agents opened from a box use box_id param
+  const canonicalBoxId = agent.box_id ?? null;
+  const box = canonicalBoxId ? await getBoxById(supabase, canonicalBoxId) : null;
+
+  // Reference context: reusable agent viewed from a specific box via ?box_id=
+  let refBox: { id: string; name: string } | null = null;
+  if (agent.is_reusable && boxContextId && boxContextId !== canonicalBoxId) {
+    const candidate = await getBoxById(supabase, boxContextId);
+    if (candidate && candidate.workspace_id === ctx.workspace.id) {
+      const attached = await isObjectAttachedToBox(supabase, boxContextId, "agent", agent_id);
+      if (attached) refBox = { id: candidate.id, name: candidate.name };
+    }
+  }
 
   // Parallel data fetching
   const [rawLinks, versions, attachments, boxNotes, boxFiles, boxSkills, boxAgents, reusableAgents] =
@@ -235,10 +253,10 @@ export default async function AgentPage({
           <div className="flex items-center gap-3 min-w-0">
             <Breadcrumb
               workspaceName={ctx.workspace.name}
-              boxId={box?.id ?? null}
-              boxName={box?.name ?? null}
+              boxId={refBox?.id ?? box?.id ?? null}
+              boxName={refBox?.name ?? box?.name ?? null}
               agentName={agent.name}
-              isReusable={agent.is_reusable}
+              isReusable={agent.is_reusable && !refBox}
             />
           </div>
           <div className="flex shrink-0 items-center gap-1.5">
@@ -296,6 +314,18 @@ export default async function AgentPage({
             </div>
           </div>
         </div>
+
+        {/* Reference context banner — shown when a reusable agent is viewed from a box */}
+        {refBox && (
+          <div className="border-b border-border px-6 py-3">
+            <ReferenceContextBanner
+              boxId={refBox.id}
+              boxName={refBox.name}
+              objectType="agent"
+              objectId={agent_id}
+            />
+          </div>
+        )}
 
         {/* Tabbed workspace */}
         <Tabs defaultValue={defaultTab} className="flex flex-1 flex-col overflow-hidden">

@@ -2,7 +2,9 @@ import { Zap } from "lucide-react";
 import { requireAuthenticatedUser } from "@/server/auth/require_authenticated_user";
 import { createClient } from "@/lib/supabase/server";
 import { listReusableSkills } from "@/server/repositories/skill_repository";
+import { listBoxesByWorkspace } from "@/server/repositories/box_repository";
 import Link from "next/link";
+import { AttachToBoxTrigger } from "@/components/product/attach_to_box_trigger";
 import { cn } from "@/lib/utils";
 
 // ─── Empty state ──────────────────────────────────────────────────────────────
@@ -25,36 +27,50 @@ function EmptySkills() {
 
 // ─── Skill card ───────────────────────────────────────────────────────────────
 
-function SkillCard({ skill }: { skill: { id: string; name: string; description: string | null; canonical_format: string; tags: string[] } }) {
+function SkillCard({
+  skill,
+  boxes,
+}: {
+  skill: { id: string; name: string; description: string | null; canonical_format: string; tags: string[] };
+  boxes: Array<{ id: string; name: string }>;
+}) {
   return (
-    <Link
-      href={`/app/skills/${skill.id}`}
-      className={cn(
-        "flex flex-col gap-1.5 rounded-lg border border-border bg-card p-4",
-        "transition-colors duration-150 hover:bg-accent/40",
-        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-      )}
-    >
-      <div className="flex items-center gap-2">
-        <Zap className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-        <span className="text-sm font-medium text-foreground truncate">{skill.name}</span>
-        <span className="ml-auto shrink-0 rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
-          {skill.canonical_format}
-        </span>
-      </div>
-      {skill.description && (
-        <p className="text-xs text-muted-foreground line-clamp-2">{skill.description}</p>
-      )}
-      {skill.tags.length > 0 && (
-        <div className="flex flex-wrap gap-1 pt-0.5">
+    <div className="relative flex flex-col gap-0">
+      <Link
+        href={`/app/skills/${skill.id}`}
+        className={cn(
+          "flex flex-col gap-1.5 rounded-lg border border-border bg-card p-4",
+          "transition-colors duration-150 hover:bg-accent/40",
+          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        )}
+      >
+        <div className="flex items-center gap-2">
+          <Zap className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+          <span className="text-sm font-medium text-foreground truncate">{skill.name}</span>
+          <span className="ml-auto shrink-0 rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+            {skill.canonical_format}
+          </span>
+        </div>
+        {skill.description && (
+          <p className="text-xs text-muted-foreground line-clamp-2">{skill.description}</p>
+        )}
+        <div className="flex flex-wrap items-center gap-1 pt-0.5">
           {skill.tags.slice(0, 5).map((tag) => (
             <span key={tag} className="rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
               {tag}
             </span>
           ))}
+          <div className="ml-auto">
+            <AttachToBoxTrigger
+              objectType="skill"
+              objectId={skill.id}
+              objectName={skill.name}
+              boxes={boxes}
+            />
+          </div>
         </div>
-      )}
-    </Link>
+      </Link>
+    </div>
   );
 }
 
@@ -64,7 +80,10 @@ export default async function SkillsPage() {
   const ctx = await requireAuthenticatedUser();
   const supabase = await createClient();
 
-  const skills = await listReusableSkills(supabase, ctx.workspace.id);
+  const [skills, boxes] = await Promise.all([
+    listReusableSkills(supabase, ctx.workspace.id),
+    listBoxesByWorkspace(supabase, ctx.workspace.id),
+  ]);
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
@@ -86,7 +105,7 @@ export default async function SkillsPage() {
           <div className="mx-auto max-w-3xl px-6 py-6">
             <div className="grid gap-3 sm:grid-cols-2">
               {skills.map((skill) => (
-                <SkillCard key={skill.id} skill={skill} />
+                <SkillCard key={skill.id} skill={skill} boxes={boxes} />
               ))}
             </div>
           </div>

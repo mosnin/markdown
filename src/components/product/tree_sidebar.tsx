@@ -13,8 +13,10 @@ import {
   FileText,
   Folder,
   FolderPlus,
+  Link2,
   Package,
   Plus,
+  Trash2,
   Zap,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -22,7 +24,13 @@ import { Spinner } from "@/components/ui/spinner";
 import { createClient } from "@/lib/supabase/browser";
 import { FileCreateDialog } from "@/components/product/file_create_dialog";
 import { AgentCreateDialog } from "@/components/product/agent_create_dialog";
-import { getBoxTreeAction, createNoteAction, createFolderAction } from "@/app/app/boxes/actions";
+import { AttachReusableDialog } from "@/components/product/attach_reusable_dialog";
+import {
+  getBoxTreeAction,
+  createNoteAction,
+  createFolderAction,
+  detachFromBoxAction,
+} from "@/app/app/boxes/actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -45,8 +53,8 @@ type BoxTreeData = {
   folders: Array<{ id: string; name: string; parent_folder_id: string | null; status: string }>;
   notes: Array<{ id: string; title: string; kind: string; folder_id: string | null }>;
   files: Array<{ id: string; name: string; file_extension: string | null; folder_id: string | null }>;
-  skills: Array<{ id: string; name: string; folder_id: string | null; is_reusable: boolean; is_attachment: boolean }>;
-  agents: Array<{ id: string; name: string; folder_id: string | null; is_reusable: boolean; is_attachment: boolean }>;
+  skills: Array<{ id: string; name: string; folder_id: string | null; status: string; is_reusable: boolean; is_attachment: boolean }>;
+  agents: Array<{ id: string; name: string; folder_id: string | null; status: string; is_reusable: boolean; is_attachment: boolean }>;
 };
 
 type TreeNoteNode = {
@@ -64,6 +72,7 @@ type TreeFileNode = {
 type TreeSkillNode = {
   id: string;
   name: string;
+  status: string;
   is_reusable: boolean;
   is_attachment: boolean;
 };
@@ -71,6 +80,7 @@ type TreeSkillNode = {
 type TreeAgentNode = {
   id: string;
   name: string;
+  status: string;
   is_reusable: boolean;
   is_attachment: boolean;
 };
@@ -145,7 +155,7 @@ function buildTree(data: BoxTreeData): BuiltTree {
 
   const rootSkills: TreeSkillNode[] = [];
   for (const s of (data.skills ?? [])) {
-    const item: TreeSkillNode = { id: s.id, name: s.name, is_reusable: s.is_reusable, is_attachment: s.is_attachment };
+    const item: TreeSkillNode = { id: s.id, name: s.name, status: s.status, is_reusable: s.is_reusable, is_attachment: s.is_attachment };
     if (s.folder_id && folderMap.has(s.folder_id)) {
       folderMap.get(s.folder_id)!.skills.push(item);
     } else {
@@ -155,7 +165,7 @@ function buildTree(data: BoxTreeData): BuiltTree {
 
   const rootAgents: TreeAgentNode[] = [];
   for (const a of (data.agents ?? [])) {
-    const item: TreeAgentNode = { id: a.id, name: a.name, is_reusable: a.is_reusable, is_attachment: a.is_attachment };
+    const item: TreeAgentNode = { id: a.id, name: a.name, status: a.status, is_reusable: a.is_reusable, is_attachment: a.is_attachment };
     if (a.folder_id && folderMap.has(a.folder_id)) {
       folderMap.get(a.folder_id)!.agents.push(item);
     } else {
@@ -340,36 +350,78 @@ function FileRow({
 function SkillRow({
   skill,
   depth,
+  boxId,
   isActive,
   onNavigate,
+  onDetached,
 }: {
   skill: TreeSkillNode;
   depth: number;
+  /** Current box context — used to set ?box_id= on attached reusable links and for detach. */
+  boxId?: string;
   isActive: boolean;
   onNavigate?: () => void;
+  onDetached?: () => void;
 }) {
+  const [isPendingDetach, startDetach] = useTransition();
   const depthClass = depth <= 1 ? "pl-7" : "pl-8";
+  const isArchived = skill.status === "archived";
+
+  // Attached reusables link with box context so the page can show the reference banner
+  const href = skill.is_attachment && boxId
+    ? `/app/skills/${skill.id}?box_id=${boxId}`
+    : `/app/skills/${skill.id}`;
+
+  function handleDetach(e: React.MouseEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!boxId) return;
+    startDetach(async () => {
+      await detachFromBoxAction(boxId, "skill", skill.id);
+      onDetached?.();
+    });
+  }
+
   return (
-    <Link
-      href={`/app/skills/${skill.id}`}
-      onClick={onNavigate}
-      className={cn(
-        "flex items-center gap-2 rounded-md py-1 pr-2 text-xs",
-        "transition-colors duration-150",
-        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1",
-        depthClass,
-        isActive
-          ? "bg-accent text-foreground font-medium"
-          : "text-muted-foreground hover:text-foreground hover:bg-accent/50"
+    <div className={cn("group/skill-row flex items-center gap-0 rounded-md", depthClass)}>
+      <Link
+        href={href}
+        onClick={onNavigate}
+        className={cn(
+          "flex flex-1 items-center gap-2 rounded-md py-1 pr-1 text-xs min-w-0",
+          "transition-colors duration-150",
+          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1",
+          isArchived && "opacity-50",
+          isActive
+            ? "bg-accent text-foreground font-medium"
+            : "text-muted-foreground hover:text-foreground hover:bg-accent/50"
+        )}
+        aria-current={isActive ? "page" : undefined}
+      >
+        <Zap className="h-4 w-4 shrink-0" aria-hidden="true" />
+        <span className="truncate">{skill.name}</span>
+        {skill.is_attachment && (
+          <span className="shrink-0 text-[10px] text-muted-foreground/30" title="Attached from workspace library">↗</span>
+        )}
+      </Link>
+      {/* Detach button — only for attachments, shown on hover */}
+      {skill.is_attachment && boxId && (
+        <button
+          type="button"
+          onClick={handleDetach}
+          disabled={isPendingDetach}
+          title="Detach from this box"
+          className={cn(
+            "flex h-5 w-5 shrink-0 items-center justify-center rounded",
+            "opacity-0 group-hover/skill-row:opacity-100 transition-opacity duration-150",
+            "text-muted-foreground/50 hover:text-destructive hover:bg-destructive/10",
+            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:opacity-100"
+          )}
+        >
+          <Trash2 className="h-3 w-3" aria-hidden="true" />
+        </button>
       )}
-      aria-current={isActive ? "page" : undefined}
-    >
-      <Zap className="h-4 w-4 shrink-0" aria-hidden="true" />
-      <span className="truncate">{skill.name}</span>
-      {skill.is_attachment && (
-        <span className="shrink-0 text-[10px] text-muted-foreground/30" title="Attached from workspace library">↗</span>
-      )}
-    </Link>
+    </div>
   );
 }
 
@@ -378,36 +430,77 @@ function SkillRow({
 function AgentRow({
   agent,
   depth,
+  boxId,
   isActive,
   onNavigate,
+  onDetached,
 }: {
   agent: TreeAgentNode;
   depth: number;
+  /** Current box context — used to set ?box_id= on attached reusable links and for detach. */
+  boxId?: string;
   isActive: boolean;
   onNavigate?: () => void;
+  onDetached?: () => void;
 }) {
+  const [isPendingDetach, startDetach] = useTransition();
   const depthClass = depth <= 1 ? "pl-7" : "pl-8";
+  const isArchived = agent.status === "archived";
+
+  const href = agent.is_attachment && boxId
+    ? `/app/agents/${agent.id}?box_id=${boxId}`
+    : `/app/agents/${agent.id}`;
+
+  function handleDetach(e: React.MouseEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!boxId) return;
+    startDetach(async () => {
+      await detachFromBoxAction(boxId, "agent", agent.id);
+      onDetached?.();
+    });
+  }
+
   return (
-    <Link
-      href={`/app/agents/${agent.id}`}
-      onClick={onNavigate}
-      className={cn(
-        "flex items-center gap-2 rounded-md py-1 pr-2 text-xs",
-        "transition-colors duration-150",
-        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1",
-        depthClass,
-        isActive
-          ? "bg-accent text-foreground font-medium"
-          : "text-muted-foreground hover:text-foreground hover:bg-accent/50"
+    <div className={cn("group/agent-row flex items-center gap-0 rounded-md", depthClass)}>
+      <Link
+        href={href}
+        onClick={onNavigate}
+        className={cn(
+          "flex flex-1 items-center gap-2 rounded-md py-1 pr-1 text-xs min-w-0",
+          "transition-colors duration-150",
+          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1",
+          isArchived && "opacity-50",
+          isActive
+            ? "bg-accent text-foreground font-medium"
+            : "text-muted-foreground hover:text-foreground hover:bg-accent/50"
+        )}
+        aria-current={isActive ? "page" : undefined}
+      >
+        <Bot className="h-4 w-4 shrink-0" aria-hidden="true" />
+        <span className="truncate">{agent.name}</span>
+        {agent.is_attachment && (
+          <span className="shrink-0 text-[10px] text-muted-foreground/30" title="Attached from workspace library">↗</span>
+        )}
+      </Link>
+      {/* Detach button — only for attachments, shown on hover */}
+      {agent.is_attachment && boxId && (
+        <button
+          type="button"
+          onClick={handleDetach}
+          disabled={isPendingDetach}
+          title="Detach from this box"
+          className={cn(
+            "flex h-5 w-5 shrink-0 items-center justify-center rounded",
+            "opacity-0 group-hover/agent-row:opacity-100 transition-opacity duration-150",
+            "text-muted-foreground/50 hover:text-destructive hover:bg-destructive/10",
+            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:opacity-100"
+          )}
+        >
+          <Trash2 className="h-3 w-3" aria-hidden="true" />
+        </button>
       )}
-      aria-current={isActive ? "page" : undefined}
-    >
-      <Bot className="h-4 w-4 shrink-0" aria-hidden="true" />
-      <span className="truncate">{agent.name}</span>
-      {agent.is_attachment && (
-        <span className="shrink-0 text-[10px] text-muted-foreground/30" title="Attached from workspace library">↗</span>
-      )}
-    </Link>
+    </div>
   );
 }
 
@@ -423,16 +516,21 @@ function folderContainsNote(folder: TreeFolderNode, noteId: string): boolean {
 function FolderNode({
   folder,
   depth,
+  boxId,
   currentNoteId,
   defaultOpen,
   onNavigate,
+  onTreeRefresh,
 }: {
   folder: TreeFolderNode;
   depth: number;
+  /** Box context — passed to SkillRow/AgentRow for ?box_id= links and detach. */
+  boxId?: string;
   currentNoteId?: string;
   /** Whether this folder should be open by default (e.g., it's an ancestor of the active note) */
   defaultOpen?: boolean;
   onNavigate?: () => void;
+  onTreeRefresh?: () => void;
 }) {
   const [isOpen, setIsOpen] = useState(defaultOpen ?? false);
   const hasChildren =
@@ -516,8 +614,10 @@ function FolderNode({
               key={skill.id}
               skill={skill}
               depth={depth + 1}
+              boxId={boxId}
               isActive={false}
               onNavigate={onNavigate}
+              onDetached={onTreeRefresh}
             />
           ))}
           {folder.agents.map((agent) => (
@@ -525,8 +625,10 @@ function FolderNode({
               key={agent.id}
               agent={agent}
               depth={depth + 1}
+              boxId={boxId}
               isActive={false}
               onNavigate={onNavigate}
+              onDetached={onTreeRefresh}
             />
           ))}
           {folder.children.map((child) => (
@@ -534,9 +636,11 @@ function FolderNode({
               key={child.id}
               folder={child}
               depth={depth + 1}
+              boxId={boxId}
               currentNoteId={currentNoteId}
               defaultOpen={currentNoteId ? folderContainsNote(child, currentNoteId) : false}
               onNavigate={onNavigate}
+              onTreeRefresh={onTreeRefresh}
             />
           ))}
         </div>
@@ -549,12 +653,16 @@ function FolderNode({
 
 function BoxTree({
   data,
+  boxId,
   currentNoteId,
   onNavigate,
+  onTreeRefresh,
 }: {
   data: BoxTreeData;
+  boxId: string;
   currentNoteId?: string;
   onNavigate?: () => void;
+  onTreeRefresh?: () => void;
 }) {
   const { rootFolders, rootNotes, rootFiles, rootSkills, rootAgents } = buildTree(data);
   const empty =
@@ -580,9 +688,11 @@ function BoxTree({
           key={folder.id}
           folder={folder}
           depth={1}
+          boxId={boxId}
           currentNoteId={currentNoteId}
           defaultOpen={ancestorIds.has(folder.id)}
           onNavigate={onNavigate}
+          onTreeRefresh={onTreeRefresh}
         />
       ))}
       {rootNotes.map((note) => (
@@ -608,8 +718,10 @@ function BoxTree({
           key={skill.id}
           skill={skill}
           depth={1}
+          boxId={boxId}
           isActive={false}
           onNavigate={onNavigate}
+          onDetached={onTreeRefresh}
         />
       ))}
       {rootAgents.map((agent) => (
@@ -617,8 +729,10 @@ function BoxTree({
           key={agent.id}
           agent={agent}
           depth={1}
+          boxId={boxId}
           isActive={false}
           onNavigate={onNavigate}
+          onDetached={onTreeRefresh}
         />
       ))}
     </div>
@@ -646,6 +760,7 @@ function BoxQuickCreateMenu({
   const [folderOpen, setFolderOpen] = useState(false);
   const [fileCreateOpen, setFileCreateOpen] = useState(false);
   const [agentCreateOpen, setAgentCreateOpen] = useState(false);
+  const [attachOpen, setAttachOpen] = useState(false);
   const [noteTitle, setNoteTitle] = useState("");
   const [folderName, setFolderName] = useState("");
   const [noteError, setNoteError] = useState<string | null>(null);
@@ -720,6 +835,10 @@ function BoxQuickCreateMenu({
             <Bot className="h-3.5 w-3.5" aria-hidden="true" />
             New agent
           </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => setAttachOpen(true)}>
+            <Link2 className="h-3.5 w-3.5" aria-hidden="true" />
+            Attach reusable…
+          </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
 
@@ -791,6 +910,14 @@ function BoxQuickCreateMenu({
         open={agentCreateOpen}
         onOpenChange={setAgentCreateOpen}
         onCreated={() => { setAgentCreateOpen(false); onTreeRefresh?.(); }}
+      />
+
+      {/* Attach reusable dialog — browse workspace skills/agents and attach by reference */}
+      <AttachReusableDialog
+        boxId={box.id}
+        open={attachOpen}
+        onOpenChange={setAttachOpen}
+        onAttached={() => { setAttachOpen(false); onTreeRefresh?.(); }}
       />
     </>
   );
@@ -873,8 +1000,10 @@ function BoxRow({
           {treeData ? (
             <BoxTree
               data={treeData}
+              boxId={box.id}
               currentNoteId={currentNoteId}
               onNavigate={onNavigate}
+              onTreeRefresh={onTreeRefresh}
             />
           ) : isLoading ? null : (
             <p className="pl-7 py-1.5 text-xs text-muted-foreground/40 italic">
@@ -994,6 +1123,11 @@ export function TreeSidebar({
         "postgres_changes",
         { event: "*", schema: "public", table: "boxes", filter: `workspace_id=eq.${workspaceId}` },
         () => router.refresh()
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "box_object_attachments", filter: `workspace_id=eq.${workspaceId}` },
+        makeHandler
       )
       .subscribe();
 

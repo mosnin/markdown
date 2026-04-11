@@ -213,6 +213,7 @@ Server actions for each type live at `src/app/app/{type}s/actions.ts`.
 See type-specific documentation:
 - Files: [docs/files_object_and_editor_v1.md](files_object_and_editor_v1.md)
 - Agents: [docs/agents_object_and_editor_v1.md](agents_object_and_editor_v1.md)
+- Reusable attach/reference model: [docs/reusable_attach_and_reference_model_v1.md](reusable_attach_and_reference_model_v1.md)
 
 ---
 
