@@ -1,3 +1,5 @@
+"use client";
+
 import { File, FileText, Bot, Zap, Folder, FolderPlus, Plus } from "lucide-react";
 import Link from "next/link";
 import { useState, useTransition } from "react";
