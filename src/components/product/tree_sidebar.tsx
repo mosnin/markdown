@@ -37,6 +37,13 @@ import {
   detachFromBoxAction,
   moveTreeNodeAction,
 } from "@/app/app/boxes/actions";
+import {
+  renameNoteAction,
+  renameFolderAction as treeRenameFolderAction,
+  renameFileAction,
+  renameSkillAction,
+  renameAgentAction,
+} from "@/app/app/boxes/tree_actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -326,34 +333,70 @@ function TreeNode({
         <span className="w-5 shrink-0" />
       )}
 
-      {/* Clickable link to object */}
-      <Link
-        href={finalHref}
-        onClick={(e) => e.stopPropagation()}
-        className={cn(
-          "flex flex-1 min-w-0 items-center gap-1.5 rounded-md px-1 py-0.5 text-xs",
-          "transition-colors duration-150",
-          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-          isActive
-            ? "bg-accent text-foreground font-medium"
-            : "text-muted-foreground hover:text-foreground hover:bg-accent/50"
-        )}
-        aria-current={isActive ? "page" : undefined}
-      >
-        {/* Icon is a stable module-level reference from lucide/hugeicons, not a new component */}
-        {/* eslint-disable-next-line react-hooks/static-components */}
-        <Icon className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-        <span className="truncate">{data.name}</span>
-        {data.isAttachment && (
-          <span className="shrink-0 text-[10px] text-muted-foreground/30" title="Attached from workspace library">↗</span>
-        )}
-        {ext && (
-          <span className="shrink-0 text-[10px] text-muted-foreground/40">{ext}</span>
-        )}
-      </Link>
+      {/* Inline rename input — shown when react-arborist enters edit mode */}
+      {node.isEditing ? (
+        <form
+          className="flex flex-1 min-w-0 items-center gap-1 px-1"
+          onSubmit={(e) => {
+            e.preventDefault();
+            const input = e.currentTarget.querySelector("input");
+            if (input) node.submit(input.value);
+          }}
+        >
+          {/* eslint-disable-next-line react-hooks/static-components */}
+          <Icon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+          <input
+            type="text"
+            defaultValue={data.name}
+            autoFocus
+            className={cn(
+              "flex-1 min-w-0 rounded border border-ring bg-background px-1 py-0.5 text-xs text-foreground",
+              "outline-none focus:ring-1 focus:ring-ring"
+            )}
+            onBlur={(e) => node.submit(e.currentTarget.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Escape") { e.stopPropagation(); node.reset(); }
+            }}
+          />
+        </form>
+      ) : (
+        /* Clickable link to object */
+        <Link
+          href={finalHref}
+          onClick={(e) => e.stopPropagation()}
+          onDoubleClick={(e) => {
+            // Double-click to rename (only for non-attachment items)
+            if (!data.isAttachment) {
+              e.preventDefault();
+              e.stopPropagation();
+              node.edit();
+            }
+          }}
+          className={cn(
+            "flex flex-1 min-w-0 items-center gap-1.5 rounded-md px-1 py-0.5 text-xs",
+            "transition-colors duration-150",
+            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+            isActive
+              ? "bg-accent text-foreground font-medium"
+              : "text-muted-foreground hover:text-foreground hover:bg-accent/50"
+          )}
+          aria-current={isActive ? "page" : undefined}
+        >
+          {/* Icon is a stable module-level reference from lucide/hugeicons, not a new component */}
+          {/* eslint-disable-next-line react-hooks/static-components */}
+          <Icon className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+          <span className="truncate">{data.name}</span>
+          {data.isAttachment && (
+            <span className="shrink-0 text-[10px] text-muted-foreground/30" title="Attached from workspace library">↗</span>
+          )}
+          {ext && (
+            <span className="shrink-0 text-[10px] text-muted-foreground/40">{ext}</span>
+          )}
+        </Link>
+      )}
 
       {/* Detach button for attached reusable items */}
-      {data.isAttachment && boxId && (
+      {data.isAttachment && boxId && !node.isEditing && (
         <button
           type="button"
           onClick={handleDetach}
@@ -389,6 +432,7 @@ function BoxTree({
   onTreeRefresh?: () => void;
 }) {
   const [isMovePending, startMove] = useTransition();
+  const [, startRename] = useTransition();
 
   const treeData = useMemo(() => buildArboristTree(data), [data]);
   const initialOpenState = useMemo(() => computeOpenState(data, currentNoteId), [data, currentNoteId]);
@@ -433,6 +477,34 @@ function BoxTree({
     });
   };
 
+  // Handle inline rename via react-arborist
+  const handleRename = (args: { id: string; name: string; node: NodeApi<TreeNodeData> }) => {
+    const nodeData = args.node.data;
+    const newName = args.name.trim();
+    if (!newName || newName === nodeData.name) return;
+
+    startRename(async () => {
+      switch (nodeData.nodeType) {
+        case "note":
+          await renameNoteAction(nodeData.objectId, newName);
+          break;
+        case "folder":
+          await treeRenameFolderAction(nodeData.objectId, newName);
+          break;
+        case "file":
+          await renameFileAction(nodeData.objectId, newName);
+          break;
+        case "skill":
+          await renameSkillAction(nodeData.objectId, newName);
+          break;
+        case "agent":
+          await renameAgentAction(nodeData.objectId, newName);
+          break;
+      }
+      onTreeRefresh?.();
+    });
+  };
+
   // Disable drop onto non-folder nodes (only folders and root can receive children)
   const disableDrop = (args: {
     parentNode: NodeApi<TreeNodeData>;
@@ -459,8 +531,9 @@ function BoxTree({
     <Tree<TreeNodeData>
       data={treeData}
       onMove={handleMove}
+      onRename={handleRename}
       disableDrop={disableDrop}
-      disableEdit={true}
+      disableEdit={(d) => !!d.isAttachment}
       disableMultiSelection={true}
       openByDefault={false}
       initialOpenState={initialOpenState}
@@ -825,7 +898,17 @@ export function TreeSidebar({
       .on("postgres_changes", { event: "*", schema: "public", table: "files", filter: `workspace_id=eq.${workspaceId}` }, makeHandler)
       .on("postgres_changes", { event: "*", schema: "public", table: "skills", filter: `workspace_id=eq.${workspaceId}` }, makeHandler)
       .on("postgres_changes", { event: "*", schema: "public", table: "agents", filter: `workspace_id=eq.${workspaceId}` }, makeHandler)
-      .on("postgres_changes", { event: "*", schema: "public", table: "boxes", filter: `workspace_id=eq.${workspaceId}` }, () => router.refresh())
+      .on("postgres_changes", { event: "*", schema: "public", table: "boxes", filter: `workspace_id=eq.${workspaceId}` }, () => {
+        // Throttle box-level refreshes (name/status changes update sidebar labels)
+        const debounceMap = realtimeDebounceRef.current;
+        const existing = debounceMap.get("__boxes__");
+        if (existing) clearTimeout(existing);
+        const timer = setTimeout(() => {
+          debounceMap.delete("__boxes__");
+          router.refresh();
+        }, 500);
+        debounceMap.set("__boxes__", timer);
+      })
       .on("postgres_changes", { event: "*", schema: "public", table: "box_object_attachments", filter: `workspace_id=eq.${workspaceId}` }, makeHandler)
       .subscribe();
 

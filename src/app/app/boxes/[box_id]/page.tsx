@@ -53,6 +53,7 @@ import { FolderPolicyToggle } from "@/components/product/folder_policy_toggle";
 import { BoxEditDialog } from "@/components/product/box_edit_dialog";
 import { BoxOverviewPanel } from "@/components/product/box_overview_panel";
 import { BoxTemplateSetup } from "@/components/product/box_template_setup";
+import { WorkspaceLiveRefresh } from "@/components/product/workspace_live_refresh";
 import { type Folder as FolderType } from "@/server/domain/types/folder";
 import { type Note } from "@/server/domain/types/note";
 
@@ -347,6 +348,12 @@ export default async function BoxPage({
 
   return (
     <div className="flex h-full overflow-hidden">
+      <WorkspaceLiveRefresh
+        workspaceId={ctx.workspace.id}
+        scope="box"
+        boxId={box.id}
+        protectWhileEditing
+      />
       {/* Main content */}
       <div className="flex flex-1 flex-col overflow-hidden min-w-0">
 

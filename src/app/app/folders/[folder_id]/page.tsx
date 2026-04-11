@@ -21,6 +21,7 @@ import { AgentCreateDialog } from "@/components/product/agent_create_dialog";
 import { FolderWorkspaceActions } from "@/components/product/folder_workspace_actions";
 import { FolderLifecycleMenu } from "@/components/product/folder_lifecycle_menu";
 import { FolderPolicyToggle } from "@/components/product/folder_policy_toggle";
+import { FolderExportButton } from "@/components/product/folder_export_button";
 import { WorkspaceLiveRefresh } from "@/components/product/workspace_live_refresh";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -153,6 +154,7 @@ export default async function FolderPage({
 
             {/* Actions */}
             <div className="flex shrink-0 items-center gap-2">
+              <FolderExportButton folderId={folder.id} folderName={folder.name} />
               <FolderLifecycleMenu
                 folderId={folder.id}
                 folderStatus={folder.status as "active" | "archived" | "trashed"}

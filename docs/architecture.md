@@ -217,21 +217,35 @@ See type-specific documentation:
 
 ---
 
-## Current implementation status and remaining work (April 2026)
+## Current implementation status (April 2026)
 
-The following items are intentionally called out so architecture docs stay aligned with product reality:
+1. **Tree implementation** — **Complete.**
+   - `TreeSidebar` uses `react-arborist` with custom node renderer for all five object types.
+   - Built-in drag-drop reparenting via react-dnd, virtualized rendering, keyboard navigation.
+   - Inline rename: double-click a node to edit; `onRename` dispatches to type-specific server actions.
+   - `BoxContentsTree` (tree tab) also uses react-arborist (read-only mode).
 
-1. **Tree implementation**
-   - Current: `TreeSidebar` is custom and uses server actions + Supabase realtime + local drag/drop handling.
-   - Remaining: migration to a library-backed interactive tree (target: `react-arborist`) has **not** been completed yet.
+2. **Graph surface** — **Complete.**
+   - Graph uses `@xyflow/react` with `@dagrejs/dagre` for automatic hierarchical layout.
+   - All five object types rendered as nodes. Both `note_links` and `object_links` shown as edges.
+   - Interactive: pan, zoom, node dragging, click-to-select with detail panel. Read-only.
 
-2. **Graph surface scope**
-   - Current: graph reflects the existing BoxOverview model (folders + notes + note links).
-   - Remaining: graph does **not yet** include full files/skills/agents topology.
+3. **Realtime precision** — **Mostly complete.**
+   - `WorkspaceLiveRefresh` provides scoped push-based updates per page (workspace/library/box/folder/object scopes).
+   - Tree sidebar has its own per-box realtime subscription with debounced refetch.
+   - Box page, folder page, library pages, and workspaces page all have scoped `WorkspaceLiveRefresh`.
+   - Active editors are protected from destabilizing refreshes via `protectWhileEditing`.
+   - Remaining: per-tab precision within the box page (all tabs re-render together).
 
-3. **Docs coverage**
-   - Current: architecture and design docs describe established boundaries and current object model expansion.
-   - Remaining: deeper parity updates across all requested docs and examples are still in progress and should be tracked as follow-up documentation work, not inferred as complete.
+4. **Folder workspace parity** — **Complete.**
+   - Folder pages have full breadcrumb navigation, lifecycle menu, AI policy toggle, rename,
+     create actions, content grid for all child types, right context panel, and export.
+
+5. **Library choices**
+   - Tree: `react-arborist` v3 (react-dnd + react-window)
+   - Graph: `@xyflow/react` v12 + `@dagrejs/dagre` v3
+   - UI: shadcn v4 (Base UI, not Radix) + Tailwind CSS v4
+   - Design tokens: oklch color system via CSS variables
 
 For the active checklist, see [docs/remaining_scope_tracker.md](remaining_scope_tracker.md).
 

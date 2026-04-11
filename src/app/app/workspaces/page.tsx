@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { listBoxesByWorkspace } from "@/server/repositories/box_repository";
 import { PageHeader } from "@/components/product/page_header";
 import { CreateBoxDialog } from "@/components/product/create_box_dialog";
+import { WorkspaceLiveRefresh } from "@/components/product/workspace_live_refresh";
 import { Badge } from "@/components/ui/badge";
 import { BoxList } from "./box_list";
 
@@ -71,6 +72,7 @@ export default async function WorkspacesPage() {
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
+      <WorkspaceLiveRefresh workspaceId={ctx.workspace.id} scope="workspace" />
       <PageHeader
         title="Workspaces"
         description="Manage your workspace and browse all boxes in your context store."
