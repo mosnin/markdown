@@ -9,3 +9,6 @@
 export * from "./workspace_schemas";
 export * from "./box_schemas";
 export * from "./note_schemas";
+export * from "./file_schemas";
+export * from "./skill_schemas";
+export * from "./agent_schemas";
