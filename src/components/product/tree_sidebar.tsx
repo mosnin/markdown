@@ -34,6 +34,7 @@ import {
   createNoteAction,
   createFolderAction,
   detachFromBoxAction,
+  moveTreeNodeAction,
 } from "@/app/app/boxes/actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -54,23 +55,27 @@ import {
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type BoxTreeData = {
-  folders: Array<{ id: string; name: string; parent_folder_id: string | null; status: string }>;
-  notes: Array<{ id: string; title: string; kind: string; folder_id: string | null }>;
-  files: Array<{ id: string; name: string; file_extension: string | null; folder_id: string | null }>;
-  skills: Array<{ id: string; name: string; folder_id: string | null; status: string; is_reusable: boolean; is_attachment: boolean }>;
-  agents: Array<{ id: string; name: string; folder_id: string | null; status: string; is_reusable: boolean; is_attachment: boolean }>;
+  folders: Array<{ id: string; name: string; parent_folder_id: string | null; status: string; sort_order: number }>;
+  notes: Array<{ id: string; title: string; kind: string; folder_id: string | null; status: string; sort_order: number }>;
+  files: Array<{ id: string; name: string; file_extension: string | null; folder_id: string | null; status: string; sort_order: number }>;
+  skills: Array<{ id: string; name: string; folder_id: string | null; status: string; is_reusable: boolean; is_attachment: boolean; sort_order: number }>;
+  agents: Array<{ id: string; name: string; folder_id: string | null; status: string; is_reusable: boolean; is_attachment: boolean; sort_order: number }>;
 };
 
 type TreeNoteNode = {
   id: string;
   title: string;
   kind: string;
+  status: string;
+  sort_order: number;
 };
 
 type TreeFileNode = {
   id: string;
   name: string;
   file_extension: string | null;
+  status: string;
+  sort_order: number;
 };
 
 type TreeSkillNode = {
@@ -79,6 +84,7 @@ type TreeSkillNode = {
   status: string;
   is_reusable: boolean;
   is_attachment: boolean;
+  sort_order: number;
 };
 
 type TreeAgentNode = {
@@ -87,16 +93,26 @@ type TreeAgentNode = {
   status: string;
   is_reusable: boolean;
   is_attachment: boolean;
+  sort_order: number;
 };
 
 type TreeFolderNode = {
   id: string;
   name: string;
+  status: string;
+  sort_order: number;
   children: TreeFolderNode[];
   notes: TreeNoteNode[];
   files: TreeFileNode[];
   skills: TreeSkillNode[];
   agents: TreeAgentNode[];
+};
+
+type DragNode = {
+  type: "folder" | "note" | "file" | "skill" | "agent";
+  id: string;
+  is_attachment?: boolean;
+  folder_id?: string | null;
 };
 
 export interface TreeSidebarProps {
@@ -124,7 +140,7 @@ type BuiltTree = {
 function buildTree(data: BoxTreeData): BuiltTree {
   const folderMap = new Map<string, TreeFolderNode>();
   for (const f of data.folders) {
-    folderMap.set(f.id, { id: f.id, name: f.name, children: [], notes: [], files: [], skills: [], agents: [] });
+    folderMap.set(f.id, { id: f.id, name: f.name, status: f.status, sort_order: f.sort_order, children: [], notes: [], files: [], skills: [], agents: [] });
   }
 
   const rootFolders: TreeFolderNode[] = [];
@@ -139,7 +155,7 @@ function buildTree(data: BoxTreeData): BuiltTree {
 
   const rootNotes: TreeNoteNode[] = [];
   for (const n of data.notes) {
-    const item: TreeNoteNode = { id: n.id, title: n.title, kind: n.kind };
+    const item: TreeNoteNode = { id: n.id, title: n.title, kind: n.kind, status: n.status, sort_order: n.sort_order };
     if (n.folder_id && folderMap.has(n.folder_id)) {
       folderMap.get(n.folder_id)!.notes.push(item);
     } else {
@@ -149,7 +165,7 @@ function buildTree(data: BoxTreeData): BuiltTree {
 
   const rootFiles: TreeFileNode[] = [];
   for (const f of (data.files ?? [])) {
-    const item: TreeFileNode = { id: f.id, name: f.name, file_extension: f.file_extension };
+    const item: TreeFileNode = { id: f.id, name: f.name, file_extension: f.file_extension, status: f.status, sort_order: f.sort_order };
     if (f.folder_id && folderMap.has(f.folder_id)) {
       folderMap.get(f.folder_id)!.files.push(item);
     } else {
@@ -159,7 +175,7 @@ function buildTree(data: BoxTreeData): BuiltTree {
 
   const rootSkills: TreeSkillNode[] = [];
   for (const s of (data.skills ?? [])) {
-    const item: TreeSkillNode = { id: s.id, name: s.name, status: s.status, is_reusable: s.is_reusable, is_attachment: s.is_attachment };
+    const item: TreeSkillNode = { id: s.id, name: s.name, status: s.status, is_reusable: s.is_reusable, is_attachment: s.is_attachment, sort_order: s.sort_order };
     if (s.folder_id && folderMap.has(s.folder_id)) {
       folderMap.get(s.folder_id)!.skills.push(item);
     } else {
@@ -169,7 +185,7 @@ function buildTree(data: BoxTreeData): BuiltTree {
 
   const rootAgents: TreeAgentNode[] = [];
   for (const a of (data.agents ?? [])) {
-    const item: TreeAgentNode = { id: a.id, name: a.name, status: a.status, is_reusable: a.is_reusable, is_attachment: a.is_attachment };
+    const item: TreeAgentNode = { id: a.id, name: a.name, status: a.status, is_reusable: a.is_reusable, is_attachment: a.is_attachment, sort_order: a.sort_order };
     if (a.folder_id && folderMap.has(a.folder_id)) {
       folderMap.get(a.folder_id)!.agents.push(item);
     } else {
@@ -177,11 +193,21 @@ function buildTree(data: BoxTreeData): BuiltTree {
     }
   }
 
-  rootFolders.sort((a, b) => a.name.localeCompare(b.name));
-  rootNotes.sort((a, b) => a.title.localeCompare(b.title));
-  rootFiles.sort((a, b) => a.name.localeCompare(b.name));
-  rootSkills.sort((a, b) => a.name.localeCompare(b.name));
-  rootAgents.sort((a, b) => a.name.localeCompare(b.name));
+  rootFolders.sort((a, b) => a.sort_order - b.sort_order || a.name.localeCompare(b.name));
+  rootNotes.sort((a, b) => a.sort_order - b.sort_order || a.title.localeCompare(b.title));
+  rootFiles.sort((a, b) => a.sort_order - b.sort_order || a.name.localeCompare(b.name));
+  rootSkills.sort((a, b) => a.sort_order - b.sort_order || a.name.localeCompare(b.name));
+  rootAgents.sort((a, b) => a.sort_order - b.sort_order || a.name.localeCompare(b.name));
+
+  function sortFolder(node: TreeFolderNode) {
+    node.children.sort((a, b) => a.sort_order - b.sort_order || a.name.localeCompare(b.name));
+    node.notes.sort((a, b) => a.sort_order - b.sort_order || a.title.localeCompare(b.title));
+    node.files.sort((a, b) => a.sort_order - b.sort_order || a.name.localeCompare(b.name));
+    node.skills.sort((a, b) => a.sort_order - b.sort_order || a.name.localeCompare(b.name));
+    node.agents.sort((a, b) => a.sort_order - b.sort_order || a.name.localeCompare(b.name));
+    for (const child of node.children) sortFolder(child);
+  }
+  for (const root of rootFolders) sortFolder(root);
 
   return { rootFolders, rootNotes, rootFiles, rootSkills, rootAgents };
 }
@@ -279,11 +305,17 @@ function NoteRow({
   depth,
   isActive,
   onNavigate,
+  onDropNode,
+  onDragStartNode,
+  parentFolderId,
 }: {
   note: TreeNoteNode;
   depth: number;
   isActive: boolean;
   onNavigate?: () => void;
+  onDropNode?: (target: DragNode, position: "before" | "inside" | "root", targetFolderId?: string | null) => void;
+  onDragStartNode?: (node: DragNode) => void;
+  parentFolderId?: string | null;
 }) {
   const Icon = noteIcon(note.kind);
   // depth 1 → pl-7, depth 2+ → pl-8 (further indented sub-items)
@@ -291,6 +323,10 @@ function NoteRow({
   return (
     <Link
       href={`/app/notes/${note.id}`}
+      draggable
+      onDragStart={() => onDragStartNode?.({ type: "note", id: note.id, folder_id: parentFolderId ?? null })}
+      onDragOver={(e) => e.preventDefault()}
+      onDrop={(e) => { e.preventDefault(); e.stopPropagation(); onDropNode?.({ type: "note", id: note.id, folder_id: parentFolderId ?? null }, "before", parentFolderId ?? null); }}
       onClick={onNavigate}
       className={cn(
         "flex items-center gap-2 rounded-md py-1 pr-2 text-xs",
@@ -319,17 +355,27 @@ function FileRow({
   depth,
   isActive,
   onNavigate,
+  onDropNode,
+  onDragStartNode,
+  parentFolderId,
 }: {
   file: TreeFileNode;
   depth: number;
   isActive: boolean;
   onNavigate?: () => void;
+  onDropNode?: (target: DragNode, position: "before" | "inside" | "root", targetFolderId?: string | null) => void;
+  onDragStartNode?: (node: DragNode) => void;
+  parentFolderId?: string | null;
 }) {
   const depthClass = depth <= 1 ? "pl-7" : "pl-8";
   const ext = file.file_extension ? (file.file_extension.startsWith(".") ? file.file_extension : `.${file.file_extension}`) : null;
   return (
     <Link
       href={`/app/files/${file.id}`}
+      draggable
+      onDragStart={() => onDragStartNode?.({ type: "file", id: file.id, folder_id: parentFolderId ?? null })}
+      onDragOver={(e) => e.preventDefault()}
+      onDrop={(e) => { e.preventDefault(); e.stopPropagation(); onDropNode?.({ type: "file", id: file.id, folder_id: parentFolderId ?? null }, "before", parentFolderId ?? null); }}
       onClick={onNavigate}
       className={cn(
         "flex items-center gap-2 rounded-md py-1 pr-2 text-xs",
@@ -358,6 +404,9 @@ function SkillRow({
   isActive,
   onNavigate,
   onDetached,
+  onDropNode,
+  onDragStartNode,
+  parentFolderId,
 }: {
   skill: TreeSkillNode;
   depth: number;
@@ -366,6 +415,9 @@ function SkillRow({
   isActive: boolean;
   onNavigate?: () => void;
   onDetached?: () => void;
+  onDropNode?: (target: DragNode, position: "before" | "inside" | "root", targetFolderId?: string | null) => void;
+  onDragStartNode?: (node: DragNode) => void;
+  parentFolderId?: string | null;
 }) {
   const [isPendingDetach, startDetach] = useTransition();
   const depthClass = depth <= 1 ? "pl-7" : "pl-8";
@@ -390,6 +442,10 @@ function SkillRow({
     <div className={cn("group/skill-row flex items-center gap-0 rounded-md", depthClass)}>
       <Link
         href={href}
+        draggable
+        onDragStart={() => onDragStartNode?.({ type: "skill", id: skill.id, is_attachment: skill.is_attachment, folder_id: parentFolderId ?? null })}
+        onDragOver={(e) => e.preventDefault()}
+        onDrop={(e) => { e.preventDefault(); e.stopPropagation(); onDropNode?.({ type: "skill", id: skill.id, is_attachment: skill.is_attachment, folder_id: parentFolderId ?? null }, "before", parentFolderId ?? null); }}
         onClick={onNavigate}
         className={cn(
           "flex flex-1 items-center gap-2 rounded-md py-1 pr-1 text-xs min-w-0",
@@ -438,6 +494,9 @@ function AgentRow({
   isActive,
   onNavigate,
   onDetached,
+  onDropNode,
+  onDragStartNode,
+  parentFolderId,
 }: {
   agent: TreeAgentNode;
   depth: number;
@@ -446,6 +505,9 @@ function AgentRow({
   isActive: boolean;
   onNavigate?: () => void;
   onDetached?: () => void;
+  onDropNode?: (target: DragNode, position: "before" | "inside" | "root", targetFolderId?: string | null) => void;
+  onDragStartNode?: (node: DragNode) => void;
+  parentFolderId?: string | null;
 }) {
   const [isPendingDetach, startDetach] = useTransition();
   const depthClass = depth <= 1 ? "pl-7" : "pl-8";
@@ -469,6 +531,10 @@ function AgentRow({
     <div className={cn("group/agent-row flex items-center gap-0 rounded-md", depthClass)}>
       <Link
         href={href}
+        draggable
+        onDragStart={() => onDragStartNode?.({ type: "agent", id: agent.id, is_attachment: agent.is_attachment, folder_id: parentFolderId ?? null })}
+        onDragOver={(e) => e.preventDefault()}
+        onDrop={(e) => { e.preventDefault(); e.stopPropagation(); onDropNode?.({ type: "agent", id: agent.id, is_attachment: agent.is_attachment, folder_id: parentFolderId ?? null }, "before", parentFolderId ?? null); }}
         onClick={onNavigate}
         className={cn(
           "flex flex-1 items-center gap-2 rounded-md py-1 pr-1 text-xs min-w-0",
@@ -525,6 +591,8 @@ function FolderNode({
   defaultOpen,
   onNavigate,
   onTreeRefresh,
+  onDropNode,
+  onDragStartNode,
 }: {
   folder: TreeFolderNode;
   depth: number;
@@ -535,6 +603,8 @@ function FolderNode({
   defaultOpen?: boolean;
   onNavigate?: () => void;
   onTreeRefresh?: () => void;
+  onDropNode?: (target: DragNode, position: "before" | "inside" | "root", targetFolderId?: string | null) => void;
+  onDragStartNode?: (node: DragNode) => void;
 }) {
   const [isOpen, setIsOpen] = useState(defaultOpen ?? false);
   const isEmpty =
@@ -554,6 +624,10 @@ function FolderNode({
         {/* Chevron toggle */}
         <button
           type="button"
+          draggable
+          onDragStart={() => onDragStartNode?.({ type: "folder", id: folder.id })}
+          onDragOver={(e) => e.preventDefault()}
+          onDrop={(e) => { e.preventDefault(); e.stopPropagation(); onDropNode?.({ type: "folder", id: folder.id, folder_id: null }, "inside", folder.id); }}
           onClick={() => setIsOpen((o) => !o)}
           className={cn(
             "flex h-5 w-5 shrink-0 items-center justify-center rounded",
@@ -572,9 +646,9 @@ function FolderNode({
         </button>
 
         {/* Folder name */}
-        <button
-          type="button"
-          onClick={() => setIsOpen((o) => !o)}
+        <Link
+          href={`/app/folders/${folder.id}`}
+          onClick={onNavigate}
           className={cn(
             "flex flex-1 items-center gap-1.5 rounded-md px-1 py-1 text-xs min-w-0",
             "transition-colors duration-150",
@@ -587,7 +661,7 @@ function FolderNode({
             : <Folder01Icon className="h-3.5 w-3.5 shrink-0 text-muted-foreground/50" aria-hidden="true" />
           }
           <span className="truncate font-medium tracking-tight">{folder.name}</span>
-        </button>
+        </Link>
       </div>
 
       {/* Children — animated collapse/expand */}
@@ -605,6 +679,9 @@ function FolderNode({
               depth={depth + 1}
               isActive={note.id === currentNoteId}
               onNavigate={onNavigate}
+              onDropNode={onDropNode}
+              onDragStartNode={onDragStartNode}
+              parentFolderId={folder.id}
             />
           ))}
           {folder.files.map((file) => (
@@ -614,6 +691,9 @@ function FolderNode({
               depth={depth + 1}
               isActive={false}
               onNavigate={onNavigate}
+              onDropNode={onDropNode}
+              onDragStartNode={onDragStartNode}
+              parentFolderId={folder.id}
             />
           ))}
           {folder.skills.map((skill) => (
@@ -625,6 +705,9 @@ function FolderNode({
               isActive={false}
               onNavigate={onNavigate}
               onDetached={onTreeRefresh}
+              onDropNode={onDropNode}
+              onDragStartNode={onDragStartNode}
+              parentFolderId={folder.id}
             />
           ))}
           {folder.agents.map((agent) => (
@@ -636,6 +719,9 @@ function FolderNode({
               isActive={false}
               onNavigate={onNavigate}
               onDetached={onTreeRefresh}
+              onDropNode={onDropNode}
+              onDragStartNode={onDragStartNode}
+              parentFolderId={folder.id}
             />
           ))}
           {folder.children.map((child) => (
@@ -648,6 +734,8 @@ function FolderNode({
               defaultOpen={currentNoteId ? folderContainsNote(child, currentNoteId) : false}
               onNavigate={onNavigate}
               onTreeRefresh={onTreeRefresh}
+              onDropNode={onDropNode}
+              onDragStartNode={onDragStartNode}
             />
           ))}
         </div>
@@ -671,6 +759,8 @@ function BoxTree({
   onNavigate?: () => void;
   onTreeRefresh?: () => void;
 }) {
+  const [draggedNode, setDraggedNode] = useState<DragNode | null>(null);
+  const [isMovePending, startMove] = useTransition();
   const { rootFolders, rootNotes, rootFiles, rootSkills, rootAgents } = buildTree(data);
   const empty =
     rootFolders.length === 0 &&
@@ -688,8 +778,46 @@ function BoxTree({
     );
   }
 
+  function handleDrop(target: DragNode, position: "before" | "inside" | "root", targetFolderId?: string | null) {
+    if (!draggedNode || isMovePending) return;
+    if (draggedNode.id === target.id && draggedNode.type === target.type) return;
+    startMove(async () => {
+      await moveTreeNodeAction({
+        boxId,
+        draggedType: draggedNode.type,
+        draggedId: draggedNode.id,
+        targetType: target.type,
+        targetId: target.id,
+        targetFolderId: targetFolderId ?? null,
+        position,
+        isAttachment: draggedNode.is_attachment,
+      });
+      setDraggedNode(null);
+      onTreeRefresh?.();
+    });
+  }
+
   return (
-    <div className="flex flex-col gap-0.5 pb-1">
+    <div
+      className="flex flex-col gap-0.5 pb-1"
+      onDragOver={(e) => e.preventDefault()}
+      onDrop={(e) => {
+        e.preventDefault();
+        if (!draggedNode) return;
+        startMove(async () => {
+          await moveTreeNodeAction({
+            boxId,
+            draggedType: draggedNode.type,
+            draggedId: draggedNode.id,
+            position: "root",
+            targetFolderId: null,
+            isAttachment: draggedNode.is_attachment,
+          });
+          setDraggedNode(null);
+          onTreeRefresh?.();
+        });
+      }}
+    >
       {rootFolders.map((folder) => (
         <FolderNode
           key={folder.id}
@@ -700,6 +828,8 @@ function BoxTree({
           defaultOpen={ancestorIds.has(folder.id)}
           onNavigate={onNavigate}
           onTreeRefresh={onTreeRefresh}
+          onDropNode={handleDrop}
+          onDragStartNode={setDraggedNode}
         />
       ))}
       {rootNotes.map((note) => (
@@ -709,6 +839,9 @@ function BoxTree({
           depth={1}
           isActive={note.id === currentNoteId}
           onNavigate={onNavigate}
+          onDropNode={handleDrop}
+          onDragStartNode={setDraggedNode}
+          parentFolderId={null}
         />
       ))}
       {rootFiles.map((file) => (
@@ -718,6 +851,9 @@ function BoxTree({
           depth={1}
           isActive={false}
           onNavigate={onNavigate}
+          onDropNode={handleDrop}
+          onDragStartNode={setDraggedNode}
+          parentFolderId={null}
         />
       ))}
       {rootSkills.map((skill) => (
@@ -729,6 +865,9 @@ function BoxTree({
           isActive={false}
           onNavigate={onNavigate}
           onDetached={onTreeRefresh}
+          onDropNode={handleDrop}
+          onDragStartNode={setDraggedNode}
+          parentFolderId={null}
         />
       ))}
       {rootAgents.map((agent) => (
@@ -740,6 +879,9 @@ function BoxTree({
           isActive={false}
           onNavigate={onNavigate}
           onDetached={onTreeRefresh}
+          onDropNode={handleDrop}
+          onDragStartNode={setDraggedNode}
+          parentFolderId={null}
         />
       ))}
     </div>

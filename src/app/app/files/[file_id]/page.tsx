@@ -20,6 +20,7 @@ import { type SourceFormat } from "@/server/domain/constants/object_constants";
 import { type ResolvedObjectLink, type LinkTarget } from "@/components/product/file_object_links_panel";
 import { type ObjectLink } from "@/server/domain/types/object_link";
 import { cn } from "@/lib/utils";
+import { WorkspaceLiveRefresh } from "@/components/product/workspace_live_refresh";
 
 // ─── Breadcrumb ───────────────────────────────────────────────────────────────
 
@@ -195,6 +196,13 @@ export default async function FilePage({
 
   return (
     <div className="flex h-full overflow-hidden">
+      <WorkspaceLiveRefresh
+        workspaceId={ctx.workspace.id}
+        scope="object"
+        objectType="file"
+        objectId={file_id}
+        protectWhileEditing
+      />
       {/* Center — file editor */}
       <div className="flex flex-1 flex-col overflow-hidden min-w-0">
         {/* Top bar: breadcrumb + format badge + actions */}

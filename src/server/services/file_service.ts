@@ -64,6 +64,23 @@ async function pathCacheExistsInFiles(
   return !!data;
 }
 
+/** Check whether a path_cache is already taken for workspace-level files. */
+async function pathCacheExistsInWorkspaceFiles(
+  supabase: SupabaseClient,
+  workspaceId: string,
+  pathCache: string
+): Promise<boolean> {
+  const { data } = await supabase
+    .from("files")
+    .select("id")
+    .eq("workspace_id", workspaceId)
+    .is("box_id", null)
+    .eq("path_cache", pathCache)
+    .neq("status", OBJECT_STATUS.TRASHED)
+    .maybeSingle();
+  return !!data;
+}
+
 /** Build path_cache from folder (if any) + slug. */
 async function buildPathCache(
   supabase: SupabaseClient,
@@ -79,7 +96,8 @@ async function buildPathCache(
 /** Generate a unique slug/path_cache for a file in a given box+folder. */
 async function uniqueFileSlug(
   supabase: SupabaseClient,
-  boxId: string,
+  workspaceId: string,
+  boxId: string | null | undefined,
   folderId: string | null | undefined,
   name: string
 ): Promise<{ slug: string; pathCache: string }> {
@@ -88,7 +106,13 @@ async function uniqueFileSlug(
   let suffix = 2;
   let pathCache = await buildPathCache(supabase, folderId, slug);
 
-  while (await pathCacheExistsInFiles(supabase, boxId, pathCache)) {
+  // Box-local files enforce uniqueness by box+path_cache.
+  // Workspace-level files (box_id NULL) enforce uniqueness by workspace+path_cache.
+  while (
+    boxId
+      ? await pathCacheExistsInFiles(supabase, boxId, pathCache)
+      : await pathCacheExistsInWorkspaceFiles(supabase, workspaceId, pathCache)
+  ) {
     slug = `${base}-${suffix++}`;
     pathCache = await buildPathCache(supabase, folderId, slug);
   }
@@ -200,11 +224,7 @@ export async function createFile(
     summary,
   } = params;
 
-  if (!boxId) {
-    throw new Error("boxId is required to create a file");
-  }
-
-  const { slug, pathCache } = await uniqueFileSlug(supabase, boxId, folderId, name);
+  const { slug, pathCache } = await uniqueFileSlug(supabase, workspaceId, boxId, folderId, name);
   const contentBytes = Buffer.byteLength(sourceContent, "utf8");
 
   const { data, error } = await supabase.rpc("create_object_with_initial_version", {

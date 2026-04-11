@@ -34,6 +34,7 @@ import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
+import { WorkspaceLiveRefresh } from "@/components/product/workspace_live_refresh";
 
 function formatDate(dateStr: string): string {
   return new Date(dateStr).toLocaleDateString("en-US", {
@@ -500,6 +501,13 @@ export default async function NotePage({
 
   return (
     <div className="flex h-full overflow-hidden">
+      <WorkspaceLiveRefresh
+        workspaceId={ctx.workspace.id}
+        scope="object"
+        objectType="note"
+        objectId={note_id}
+        protectWhileEditing
+      />
       {/* Center — note editor */}
       <div className="flex flex-1 flex-col overflow-hidden min-w-0">
         {/* Top bar: breadcrumb + badges + actions */}

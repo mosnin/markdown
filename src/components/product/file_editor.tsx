@@ -177,6 +177,7 @@ export function FileEditor({ file }: FileEditorProps) {
         <textarea
           value={content}
           onChange={(e) => setContent(e.target.value)}
+          data-editor-dirty={isDirty}
           spellCheck={false}
           // eslint-disable-next-line @typescript-eslint/ban-ts-comment
           // @ts-ignore — autoCorrect is a valid HTML attribute; React types lag behind

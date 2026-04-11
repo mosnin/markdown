@@ -30,6 +30,10 @@ const FORMAT_LABELS: Record<SkillAgentFormat, string> = {
   markdown: "Markdown",
   json: "JSON",
   yaml: "YAML",
+  xml: "XML",
+  javascript: "JavaScript",
+  shell: "Shell",
+  plain_text: "Text",
   typescript: "TypeScript",
   python: "Python",
 };

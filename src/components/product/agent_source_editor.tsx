@@ -118,6 +118,7 @@ export function AgentSourceEditor({ agent }: AgentSourceEditorProps) {
   }
 
   const lineCount = content.split("\n").length;
+  const isDirty = autosaveState === "unsaved" || autosaveState === "saving" || autosaveState === "error";
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
@@ -158,6 +159,7 @@ export function AgentSourceEditor({ agent }: AgentSourceEditorProps) {
         <textarea
           value={content}
           onChange={(e) => handleChange(e.target.value)}
+          data-editor-dirty={isDirty}
           spellCheck={false}
           autoCorrect="off"
           autoCapitalize="off"

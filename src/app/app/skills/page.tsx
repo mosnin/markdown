@@ -7,6 +7,7 @@ import Link from "next/link";
 import { AttachToBoxTrigger } from "@/components/product/attach_to_box_trigger";
 import { SkillImportTrigger } from "@/components/product/skill_import_dialog";
 import { SkillCreateDialog } from "@/components/product/skill_create_dialog";
+import { WorkspaceLiveRefresh } from "@/components/product/workspace_live_refresh";
 import { cn } from "@/lib/utils";
 
 // ─── Empty state ──────────────────────────────────────────────────────────────
@@ -89,6 +90,7 @@ export default async function SkillsPage() {
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
+      <WorkspaceLiveRefresh workspaceId={ctx.workspace.id} scope="library" />
       {/* Header */}
       <div className="border-b border-border bg-background px-6 pt-6 pb-4">
         <div className="flex items-center gap-2.5">
