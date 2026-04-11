@@ -18,6 +18,7 @@ import { SkillHistoryPanel, SkillLifecycleControls } from "@/components/product/
 import { SkillSourceEditor } from "@/components/product/skill_source_editor";
 import { SkillChildrenPanel } from "@/components/product/skill_children_panel";
 import { OBJECT_TYPE } from "@/server/domain/constants/object_constants";
+import { WorkspaceLiveRefresh } from "@/components/product/workspace_live_refresh";
 
 // ─── Meta row ─────────────────────────────────────────────────────────────────
 
@@ -121,6 +122,13 @@ export default async function SkillPage({
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
+      <WorkspaceLiveRefresh
+        workspaceId={ctx.workspace.id}
+        scope="object"
+        objectType="skill"
+        objectId={skill_id}
+        protectWhileEditing
+      />
       {/* Header */}
       <div className="border-b border-border bg-background px-6 pt-6 pb-4">
         <div className="flex items-start gap-3">

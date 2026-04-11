@@ -37,6 +37,7 @@ import { AgentHistoryPanel, AgentLifecycleControls } from "@/components/product/
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { AgentTypeBadge } from "@/components/product/agent_type_badge";
 import { AgentReferenceBadge } from "@/components/product/agent_reference_badge";
+import { WorkspaceLiveRefresh } from "@/components/product/workspace_live_refresh";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -282,6 +283,13 @@ export default async function AgentPage({
 
   return (
     <div className="flex h-full overflow-hidden">
+      <WorkspaceLiveRefresh
+        workspaceId={ctx.workspace.id}
+        scope="object"
+        objectType="agent"
+        objectId={agent_id}
+        protectWhileEditing
+      />
       {/* Center — main workspace */}
       <div className="flex flex-1 flex-col overflow-hidden min-w-0">
         {/* Top bar */}
