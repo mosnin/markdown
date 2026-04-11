@@ -135,6 +135,64 @@ For the full schema, column definitions, RLS policies, and design decisions see 
 
 ---
 
+## Object model expansion (v2)
+
+This section describes the additive expansion of the domain model from notes-only to four object types. All existing architecture is unchanged.
+
+### Updated hierarchy
+
+```
+Workspace
+  └── Box
+        ├── Folder (optional)
+        │     └── Note | File | Skill | Agent
+        └── Note | File | Skill | Agent (root-level)
+```
+
+Notes remain the primary human document type. Files, Skills, and Agents are new first-class content types. All four participate in the shared `workspace_objects` structural registry.
+
+### New tables
+
+| Table | Purpose |
+|---|---|
+| `workspace_objects` | Flat registry of all content objects (note, file, skill, agent, folder) — enables uniform tree, search, and graph operations |
+| `files` | Non-markdown artifact objects with a `canonical_format` |
+| `skills` | Reusable functional building blocks, workspace-level or box-local |
+| `agents` | Structured orchestrators with explicit `agent_type`, `model_hint`, `system_prompt` fields |
+| `object_versions` | Shared immutable version history for files, skills, and agents (mirrors `note_versions`) |
+| `object_links` | Heterogeneous semantic relationships between any two content objects — same 10-value vocabulary as `note_links` |
+| `box_object_attachments` | Join table for attaching workspace-level reusable skills/agents into boxes by reference |
+
+### New services
+
+| Service | Responsibility |
+|---|---|
+| `file_service.ts` | File CRUD, version management, canonical format enforcement |
+| `skill_service.ts` | Skill CRUD, reusability management, version management |
+| `agent_service.ts` | Agent CRUD, reusability management, structured field management |
+| `object_link_service.ts` | Cross-type `object_links` CRUD with same-workspace validation |
+| `object_registry_service.ts` | Keep `workspace_objects` in sync with type-specific tables on every mutation |
+
+### New constant module
+
+`src/server/domain/constants/object_constants.ts` — `OBJECT_TYPE`, `SOURCE_FORMAT`, `AGENT_TYPE`, `OBJECT_STATUS`, and `OBJECT_CHANGE_ORIGIN` typed string-enum constants.
+
+### New type modules
+
+| Module | Exports |
+|---|---|
+| `src/server/domain/types/workspace_object.ts` | `WorkspaceObject` |
+| `src/server/domain/types/file.ts` | `File` |
+| `src/server/domain/types/skill.ts` | `Skill` |
+| `src/server/domain/types/agent.ts` | `Agent` |
+| `src/server/domain/types/object_version.ts` | `ObjectVersion` |
+| `src/server/domain/types/object_link.ts` | `ObjectLink` |
+| `src/server/domain/types/box_object_attachment.ts` | `BoxObjectAttachment` |
+
+For the full object model design — taxonomy, canonical format semantics, reusable reference model, trust rules, versioning, and migration safety — see [docs/object_model_expansion_v1.md](object_model_expansion_v1.md).
+
+---
+
 ## Data flow
 
 ```

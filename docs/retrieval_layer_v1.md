@@ -165,3 +165,43 @@ When limits are exceeded, `truncated: true` is set and a visible warning is show
 - Creates GIN index
 - Backfills existing rows
 - Defines `search_notes(p_box_id, p_query, p_limit)` RPC
+
+---
+
+## Object type retrieval groundwork
+
+The object model expansion (see [docs/object_model_expansion_v1.md](object_model_expansion_v1.md)) introduces three new object types — files, skills, and agents — alongside the existing notes. This section describes the structural groundwork now in place and what retrieval extensions are planned for future prompts.
+
+All existing retrieval behavior (note links, FTS search, system guide, box guide, box overview) is unchanged.
+
+### Shared structural layer
+
+All four object types — note, file, skill, agent — are registered in `workspace_objects` at creation time. This table provides:
+
+- `object_type`, `display_name`, `slug`, `status`, `box_id`, `folder_id` for every object in a workspace.
+- A single queryable surface for operations that previously required per-type UNION queries.
+- A uniform FK target for `object_links` edges, enabling traversal without type-specific branching.
+
+Every retrieval feature that currently operates on notes can be extended to operate on all four types by querying `workspace_objects` rather than `notes` directly.
+
+### Search groundwork
+
+`workspace_objects` is the structural precondition for cross-type search. The current `search_notes` RPC and `search_service.ts` are unmodified and continue to operate on `notes` only.
+
+Future implementation: a `search_objects` RPC that queries a `search_vector` tsvector column on `workspace_objects` (or a parallel FTS table), with per-type weighted fields. The table structure and registry population are in place. Cross-type FTS implementation is a future prompt.
+
+### Graph groundwork
+
+`object_links` provides heterogeneous directed edges between any two content objects. The current `overview_service.ts` traverses `note_links` for the box overview graph and is not modified.
+
+Future implementation: extend `overview_service.ts` to query `object_links` in addition to `note_links`, returning a mixed graph whose nodes can be notes, files, skills, or agents. The edge table is in place. Extended graph traversal is a future prompt.
+
+### Context bundle groundwork
+
+`context_bundle_service.ts` assembles bounded retrieval packages centered on a note (`kind = 'bundle'`). The structural preconditions for bundles centered on non-note objects — traversable `object_links` edges and `workspace_objects` entries for files, skills, and agents — are now in place.
+
+Future implementation: extend `assembleContextBundle` to accept a `WorkspaceObject` entry point of any type, not only a note. The current bundle assembly logic, `ContextBundle` type, and all bundle-related services are unchanged. Non-note bundle centers are a future prompt.
+
+### Notes and NoteLinks: unchanged
+
+`search_notes`, `link_service.ts`, `note_links`, all relationship type constants, and all retrieval services described in this document operate exactly as in V1. The object model expansion does not modify any existing retrieval code path.

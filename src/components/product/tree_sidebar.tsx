@@ -5,14 +5,17 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   BookOpen,
+  Bot,
   Box,
   ChevronDown,
   ChevronRight,
+  File,
   FileText,
   Folder,
   FolderPlus,
   Package,
   Plus,
+  Zap,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Spinner } from "@/components/ui/spinner";
@@ -39,6 +42,9 @@ import {
 type BoxTreeData = {
   folders: Array<{ id: string; name: string; parent_folder_id: string | null; status: string }>;
   notes: Array<{ id: string; title: string; kind: string; folder_id: string | null }>;
+  files: Array<{ id: string; name: string; file_extension: string | null; folder_id: string | null }>;
+  skills: Array<{ id: string; name: string; folder_id: string | null; is_reusable: boolean; is_attachment: boolean }>;
+  agents: Array<{ id: string; name: string; folder_id: string | null; is_reusable: boolean; is_attachment: boolean }>;
 };
 
 type TreeNoteNode = {
@@ -47,11 +53,34 @@ type TreeNoteNode = {
   kind: string;
 };
 
+type TreeFileNode = {
+  id: string;
+  name: string;
+  file_extension: string | null;
+};
+
+type TreeSkillNode = {
+  id: string;
+  name: string;
+  is_reusable: boolean;
+  is_attachment: boolean;
+};
+
+type TreeAgentNode = {
+  id: string;
+  name: string;
+  is_reusable: boolean;
+  is_attachment: boolean;
+};
+
 type TreeFolderNode = {
   id: string;
   name: string;
   children: TreeFolderNode[];
   notes: TreeNoteNode[];
+  files: TreeFileNode[];
+  skills: TreeSkillNode[];
+  agents: TreeAgentNode[];
 };
 
 export interface TreeSidebarProps {
@@ -68,10 +97,18 @@ export interface TreeSidebarProps {
 
 // ─── Build tree from flat data ────────────────────────────────────────────────
 
-function buildTree(data: BoxTreeData): { rootFolders: TreeFolderNode[]; rootNotes: TreeNoteNode[] } {
+type BuiltTree = {
+  rootFolders: TreeFolderNode[];
+  rootNotes: TreeNoteNode[];
+  rootFiles: TreeFileNode[];
+  rootSkills: TreeSkillNode[];
+  rootAgents: TreeAgentNode[];
+};
+
+function buildTree(data: BoxTreeData): BuiltTree {
   const folderMap = new Map<string, TreeFolderNode>();
   for (const f of data.folders) {
-    folderMap.set(f.id, { id: f.id, name: f.name, children: [], notes: [] });
+    folderMap.set(f.id, { id: f.id, name: f.name, children: [], notes: [], files: [], skills: [], agents: [] });
   }
 
   const rootFolders: TreeFolderNode[] = [];
@@ -94,10 +131,43 @@ function buildTree(data: BoxTreeData): { rootFolders: TreeFolderNode[]; rootNote
     }
   }
 
+  const rootFiles: TreeFileNode[] = [];
+  for (const f of (data.files ?? [])) {
+    const item: TreeFileNode = { id: f.id, name: f.name, file_extension: f.file_extension };
+    if (f.folder_id && folderMap.has(f.folder_id)) {
+      folderMap.get(f.folder_id)!.files.push(item);
+    } else {
+      rootFiles.push(item);
+    }
+  }
+
+  const rootSkills: TreeSkillNode[] = [];
+  for (const s of (data.skills ?? [])) {
+    const item: TreeSkillNode = { id: s.id, name: s.name, is_reusable: s.is_reusable, is_attachment: s.is_attachment };
+    if (s.folder_id && folderMap.has(s.folder_id)) {
+      folderMap.get(s.folder_id)!.skills.push(item);
+    } else {
+      rootSkills.push(item);
+    }
+  }
+
+  const rootAgents: TreeAgentNode[] = [];
+  for (const a of (data.agents ?? [])) {
+    const item: TreeAgentNode = { id: a.id, name: a.name, is_reusable: a.is_reusable, is_attachment: a.is_attachment };
+    if (a.folder_id && folderMap.has(a.folder_id)) {
+      folderMap.get(a.folder_id)!.agents.push(item);
+    } else {
+      rootAgents.push(item);
+    }
+  }
+
   rootFolders.sort((a, b) => a.name.localeCompare(b.name));
   rootNotes.sort((a, b) => a.title.localeCompare(b.title));
+  rootFiles.sort((a, b) => a.name.localeCompare(b.name));
+  rootSkills.sort((a, b) => a.name.localeCompare(b.name));
+  rootAgents.sort((a, b) => a.name.localeCompare(b.name));
 
-  return { rootFolders, rootNotes };
+  return { rootFolders, rootNotes, rootFiles, rootSkills, rootAgents };
 }
 
 // ─── Collect all folder IDs that are ancestors of a note ─────────────────────
@@ -221,6 +291,120 @@ function NoteRow({
       {/* eslint-disable-next-line react-hooks/static-components */}
       <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
       <span className="truncate">{note.title}</span>
+      <span className="shrink-0 text-[10px] text-muted-foreground/40">.md</span>
+    </Link>
+  );
+}
+
+// ─── File row ─────────────────────────────────────────────────────────────────
+
+function FileRow({
+  file,
+  depth,
+  isActive,
+  onNavigate,
+}: {
+  file: TreeFileNode;
+  depth: number;
+  isActive: boolean;
+  onNavigate?: () => void;
+}) {
+  const depthClass = depth <= 1 ? "pl-7" : "pl-8";
+  const ext = file.file_extension ? (file.file_extension.startsWith(".") ? file.file_extension : `.${file.file_extension}`) : null;
+  return (
+    <Link
+      href={`/app/files/${file.id}`}
+      onClick={onNavigate}
+      className={cn(
+        "flex items-center gap-2 rounded-md py-1 pr-2 text-xs",
+        "transition-colors duration-150",
+        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1",
+        depthClass,
+        isActive
+          ? "bg-accent text-foreground font-medium"
+          : "text-muted-foreground hover:text-foreground hover:bg-accent/50"
+      )}
+      aria-current={isActive ? "page" : undefined}
+    >
+      <File className="h-4 w-4 shrink-0" aria-hidden="true" />
+      <span className="truncate">{file.name}</span>
+      {ext && <span className="shrink-0 text-[10px] text-muted-foreground/40">{ext}</span>}
+    </Link>
+  );
+}
+
+// ─── Skill row ────────────────────────────────────────────────────────────────
+
+function SkillRow({
+  skill,
+  depth,
+  isActive,
+  onNavigate,
+}: {
+  skill: TreeSkillNode;
+  depth: number;
+  isActive: boolean;
+  onNavigate?: () => void;
+}) {
+  const depthClass = depth <= 1 ? "pl-7" : "pl-8";
+  return (
+    <Link
+      href={`/app/skills/${skill.id}`}
+      onClick={onNavigate}
+      className={cn(
+        "flex items-center gap-2 rounded-md py-1 pr-2 text-xs",
+        "transition-colors duration-150",
+        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1",
+        depthClass,
+        isActive
+          ? "bg-accent text-foreground font-medium"
+          : "text-muted-foreground hover:text-foreground hover:bg-accent/50"
+      )}
+      aria-current={isActive ? "page" : undefined}
+    >
+      <Zap className="h-4 w-4 shrink-0" aria-hidden="true" />
+      <span className="truncate">{skill.name}</span>
+      {skill.is_attachment && (
+        <span className="shrink-0 text-[10px] text-muted-foreground/30" title="Attached from workspace library">↗</span>
+      )}
+    </Link>
+  );
+}
+
+// ─── Agent row ────────────────────────────────────────────────────────────────
+
+function AgentRow({
+  agent,
+  depth,
+  isActive,
+  onNavigate,
+}: {
+  agent: TreeAgentNode;
+  depth: number;
+  isActive: boolean;
+  onNavigate?: () => void;
+}) {
+  const depthClass = depth <= 1 ? "pl-7" : "pl-8";
+  return (
+    <Link
+      href={`/app/agents/${agent.id}`}
+      onClick={onNavigate}
+      className={cn(
+        "flex items-center gap-2 rounded-md py-1 pr-2 text-xs",
+        "transition-colors duration-150",
+        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1",
+        depthClass,
+        isActive
+          ? "bg-accent text-foreground font-medium"
+          : "text-muted-foreground hover:text-foreground hover:bg-accent/50"
+      )}
+      aria-current={isActive ? "page" : undefined}
+    >
+      <Bot className="h-4 w-4 shrink-0" aria-hidden="true" />
+      <span className="truncate">{agent.name}</span>
+      {agent.is_attachment && (
+        <span className="shrink-0 text-[10px] text-muted-foreground/30" title="Attached from workspace library">↗</span>
+      )}
     </Link>
   );
 }
@@ -249,7 +433,12 @@ function FolderNode({
   onNavigate?: () => void;
 }) {
   const [isOpen, setIsOpen] = useState(defaultOpen ?? false);
-  const hasChildren = folder.children.length > 0 || folder.notes.length > 0;
+  const hasChildren =
+    folder.children.length > 0 ||
+    folder.notes.length > 0 ||
+    folder.files.length > 0 ||
+    folder.skills.length > 0 ||
+    folder.agents.length > 0;
 
   // depth 1 → pl-7 for sub-folder header, depth 2+ → pl-8
   const depthClass = depth <= 1 ? "pl-7" : "pl-8";
@@ -311,6 +500,33 @@ function FolderNode({
               onNavigate={onNavigate}
             />
           ))}
+          {folder.files.map((file) => (
+            <FileRow
+              key={file.id}
+              file={file}
+              depth={depth + 1}
+              isActive={false}
+              onNavigate={onNavigate}
+            />
+          ))}
+          {folder.skills.map((skill) => (
+            <SkillRow
+              key={skill.id}
+              skill={skill}
+              depth={depth + 1}
+              isActive={false}
+              onNavigate={onNavigate}
+            />
+          ))}
+          {folder.agents.map((agent) => (
+            <AgentRow
+              key={agent.id}
+              agent={agent}
+              depth={depth + 1}
+              isActive={false}
+              onNavigate={onNavigate}
+            />
+          ))}
           {folder.children.map((child) => (
             <FolderNode
               key={child.id}
@@ -338,8 +554,13 @@ function BoxTree({
   currentNoteId?: string;
   onNavigate?: () => void;
 }) {
-  const { rootFolders, rootNotes } = buildTree(data);
-  const empty = rootFolders.length === 0 && rootNotes.length === 0;
+  const { rootFolders, rootNotes, rootFiles, rootSkills, rootAgents } = buildTree(data);
+  const empty =
+    rootFolders.length === 0 &&
+    rootNotes.length === 0 &&
+    rootFiles.length === 0 &&
+    rootSkills.length === 0 &&
+    rootAgents.length === 0;
   const ancestorIds = currentNoteId ? collectAncestorFolderIds(data, currentNoteId) : new Set<string>();
 
   if (empty) {
@@ -368,6 +589,33 @@ function BoxTree({
           note={note}
           depth={1}
           isActive={note.id === currentNoteId}
+          onNavigate={onNavigate}
+        />
+      ))}
+      {rootFiles.map((file) => (
+        <FileRow
+          key={file.id}
+          file={file}
+          depth={1}
+          isActive={false}
+          onNavigate={onNavigate}
+        />
+      ))}
+      {rootSkills.map((skill) => (
+        <SkillRow
+          key={skill.id}
+          skill={skill}
+          depth={1}
+          isActive={false}
+          onNavigate={onNavigate}
+        />
+      ))}
+      {rootAgents.map((agent) => (
+        <AgentRow
+          key={agent.id}
+          agent={agent}
+          depth={1}
+          isActive={false}
           onNavigate={onNavigate}
         />
       ))}
@@ -680,25 +928,38 @@ export function TreeSidebar({
       scheduleTreeRefetch(boxId);
     };
 
+    const makeHandler = (payload: { new: Record<string, unknown>; old: Record<string, unknown> }) =>
+      handleContentChange(
+        payload.new as Record<string, unknown>,
+        payload.old as Record<string, unknown>
+      );
+
     const channel = supabase
       .channel(`workspace-tree:${workspaceId}`)
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "notes", filter: `workspace_id=eq.${workspaceId}` },
-        (payload) =>
-          handleContentChange(
-            payload.new as Record<string, unknown>,
-            payload.old as Record<string, unknown>
-          )
+        makeHandler
       )
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "folders", filter: `workspace_id=eq.${workspaceId}` },
-        (payload) =>
-          handleContentChange(
-            payload.new as Record<string, unknown>,
-            payload.old as Record<string, unknown>
-          )
+        makeHandler
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "files", filter: `workspace_id=eq.${workspaceId}` },
+        makeHandler
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "skills", filter: `workspace_id=eq.${workspaceId}` },
+        makeHandler
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "agents", filter: `workspace_id=eq.${workspaceId}` },
+        makeHandler
       )
       .on(
         "postgres_changes",

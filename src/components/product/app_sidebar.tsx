@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
+  Bot,
   ChevronDown,
   ClipboardList,
   Home,
@@ -11,6 +12,7 @@ import {
   Plus,
   Search,
   Settings,
+  Zap,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { type Box as BoxType } from "@/server/domain/types/box";
@@ -39,6 +41,8 @@ const primaryNav = [
   { label: "Home", href: "/app", icon: Home },
   { label: "Search", href: "/app/search", icon: Search },
   { label: "Workspaces", href: "/app/workspaces", icon: LayoutGrid },
+  { label: "Agents", href: "/app/agents", icon: Bot },
+  { label: "Skills", href: "/app/skills", icon: Zap },
   { label: "Proposals", href: "/app/proposals", icon: Inbox },
   { label: "Audit log", href: "/app/audit", icon: ClipboardList },
 ];
@@ -166,7 +170,11 @@ export function AppSidebar({
                   href={item.href}
                   icon={item.icon}
                   label={item.label}
-                  isActive={pathname === item.href}
+                  isActive={
+                    item.href === "/app"
+                      ? pathname === "/app"
+                      : pathname === item.href || pathname.startsWith(item.href + "/")
+                  }
                 />
               </li>
             ))}

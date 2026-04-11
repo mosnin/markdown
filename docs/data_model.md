@@ -362,3 +362,264 @@ Returns `jsonb: { note: {...}, version: {...} }`
 Returns `jsonb: { note: {...}, version: {...} }`
 
 Both functions are `SECURITY INVOKER` — RLS policies from the calling user's JWT apply normally.
+
+---
+
+## Extended object model (v2)
+
+This section describes the 7 new tables added by the object model expansion. All 11 original tables are unchanged. For the full design rationale see [docs/object_model_expansion_v1.md](object_model_expansion_v1.md).
+
+The updated storage hierarchy is:
+
+```
+Workspace
+  └── Box
+        ├── Folder (optional)
+        │     └── Note | File | Skill | Agent
+        └── Note | File | Skill | Agent (root-level)
+              └── ObjectVersion (immutable history, for File/Skill/Agent)
+              └── ObjectLink (cross-type relationships)
+```
+
+---
+
+### `workspace_objects`
+
+Flat registry of all content objects. Every note, file, skill, agent, and folder has exactly one row here. Enables uniform tree navigation, cross-type search groundwork, graph traversal, and audit targeting without per-type UNION queries.
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | uuid PK | Same uuid as the type-specific table row |
+| `workspace_id` | uuid FK | → `workspaces` |
+| `box_id` | uuid | nullable FK → `boxes` (null for workspace-level reusable objects) |
+| `folder_id` | uuid | nullable FK → `folders` |
+| `object_type` | text | `'note'` \| `'file'` \| `'skill'` \| `'agent'` \| `'folder'` |
+| `display_name` | text | Denormalized from core table; kept in sync by `object_registry_service` |
+| `slug` | text | URL-safe identifier |
+| `status` | text | `'draft'` \| `'active'` \| `'archived'` \| `'trashed'` — mirrors core table |
+| `is_reusable` | boolean | `true` for workspace-level skills/agents; `false` for all others |
+| `sort_order` | integer | Ordering within parent container |
+| `created_at` | timestamptz | |
+| `updated_at` | timestamptz | |
+
+**Indexes:** `(workspace_id)`, `(box_id)`, `(folder_id)`, `(workspace_id, object_type)`, `(workspace_id, status)`.
+
+**Constraints:** `CHECK (object_type IN ('note', 'file', 'skill', 'agent', 'folder'))`. No uniqueness constraint on `(box_id, slug)` here — enforced on each type-specific table instead.
+
+**RLS:** SELECT/INSERT/UPDATE gated on `owns_workspace(workspace_id)`. No DELETE policy — soft delete only via `status = 'trashed'`.
+
+---
+
+### `files`
+
+Non-markdown artifact objects. Images, PDFs, code files, data files, binaries — anything that is not a markdown note.
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | uuid PK | Shared with `workspace_objects.id` |
+| `workspace_id` | uuid FK | → `workspaces` |
+| `box_id` | uuid FK | → `boxes` |
+| `folder_id` | uuid | nullable FK → `folders` |
+| `current_version_id` | uuid | nullable FK → `object_versions` (set via ALTER TABLE) |
+| `name` | text | Display name |
+| `slug` | text | URL-safe |
+| `canonical_format` | text | Fixed at creation — `plain_text`, `json`, `yaml`, `python`, `typescript`, `binary`, etc. |
+| `description` | text | nullable |
+| `tags` | text[] | |
+| `content_bytes` | integer | Byte length of current version's content |
+| `origin_type` | text | `'user_created'` \| `'imported'` \| `'generated_by_tool'` \| `'duplicated'` |
+| `status` | text | `'draft'` \| `'active'` \| `'archived'` \| `'trashed'` |
+| `metadata` | jsonb | nullable |
+| `created_at` | timestamptz | |
+| `updated_at` | timestamptz | |
+
+**Indexes:** `(box_id)`, `(box_id, slug)` excluding trashed.
+
+**Constraints:** `UNIQUE (box_id, slug)` excluding trashed. `CHECK (canonical_format IN (...))` against the supported format set. `CHECK (status IN (...))`.
+
+**RLS:** Through box → workspace ownership. Same two-hop pattern as `notes`.
+
+---
+
+### `skills`
+
+Reusable functional building blocks. Prompt templates, parameterized procedures, callable units. Context Store stores and versions skills; it does not execute them.
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | uuid PK | Shared with `workspace_objects.id` |
+| `workspace_id` | uuid FK | → `workspaces` |
+| `box_id` | uuid | nullable FK → `boxes` (null = pure workspace-level, no home box) |
+| `folder_id` | uuid | nullable FK → `folders` |
+| `current_version_id` | uuid | nullable FK → `object_versions` (set via ALTER TABLE) |
+| `name` | text | |
+| `slug` | text | |
+| `canonical_format` | text | `'markdown'` \| `'json'` \| `'yaml'` \| `'typescript'` \| `'python'` |
+| `description` | text | nullable |
+| `tags` | text[] | |
+| `is_reusable` | boolean | `true` = workspace-level; `false` = box-local |
+| `content_bytes` | integer | |
+| `origin_type` | text | `'user_created'` \| `'imported'` \| `'generated_by_tool'` \| `'duplicated'` |
+| `status` | text | `'draft'` \| `'active'` \| `'archived'` \| `'trashed'` |
+| `metadata` | jsonb | nullable |
+| `created_at` | timestamptz | |
+| `updated_at` | timestamptz | |
+
+**Indexes:** `(workspace_id)`, `(box_id)` where not null, `(workspace_id, is_reusable)`.
+
+**Constraints:** `UNIQUE (workspace_id, slug) WHERE is_reusable = true`. `UNIQUE (box_id, slug) WHERE is_reusable = false`, excluding trashed. `CHECK (canonical_format IN (...))`.
+
+**RLS:** For box-local skills: through box → workspace. For workspace-level skills (`box_id` null): directly on `workspace_id`.
+
+---
+
+### `agents`
+
+Structured orchestrators with explicit input/output contracts and behavior configuration. Context Store stores and versions agents; it does not execute them.
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | uuid PK | Shared with `workspace_objects.id` |
+| `workspace_id` | uuid FK | → `workspaces` |
+| `box_id` | uuid | nullable FK → `boxes` |
+| `folder_id` | uuid | nullable FK → `folders` |
+| `current_version_id` | uuid | nullable FK → `object_versions` (set via ALTER TABLE) |
+| `name` | text | |
+| `slug` | text | |
+| `canonical_format` | text | `'json'` \| `'yaml'` \| `'markdown'` |
+| `agent_type` | text | `'retrieval'` \| `'generation'` \| `'orchestration'` \| `'custom'` |
+| `model_hint` | text | nullable — model preference, not execution config |
+| `system_prompt` | text | nullable — stored for context retrieval; not used to execute |
+| `description` | text | nullable |
+| `tags` | text[] | |
+| `is_reusable` | boolean | |
+| `content_bytes` | integer | |
+| `origin_type` | text | `'user_created'` \| `'imported'` \| `'generated_by_tool'` \| `'duplicated'` |
+| `status` | text | `'draft'` \| `'active'` \| `'archived'` \| `'trashed'` |
+| `metadata` | jsonb | nullable |
+| `created_at` | timestamptz | |
+| `updated_at` | timestamptz | |
+
+**Indexes:** Same pattern as `skills`.
+
+**Constraints:** Same slug uniqueness pattern as `skills`, scoped by `is_reusable`. `CHECK (agent_type IN (...))`. `CHECK (canonical_format IN (...))`.
+
+**RLS:** Same two-path pattern as `skills` (box-local vs workspace-level).
+
+---
+
+### `object_versions`
+
+Immutable full-content version snapshots for files, skills, and agents. Never mutated after creation. Mirrors the design of `note_versions`.
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | uuid PK | |
+| `object_id` | uuid FK | → `workspace_objects` |
+| `parent_version_id` | uuid | nullable FK → `object_versions` (linked list) |
+| `version_number` | integer | Monotonically increasing per object, starting at 1 |
+| `actor_type` | text | `'user'` \| `'connection'` \| `'system'` |
+| `actor_id` | text | uuid or `'system'` |
+| `change_origin` | text | `'human_edit'` \| `'import'` \| `'generated'` \| `'proposal_approved'` \| `'rollback'` |
+| `canonical_format` | text | Snapshot of the canonical format at this version |
+| `content_ref` | text | Storage path or inline content reference |
+| `content_bytes` | integer | Byte size of this version's content |
+| `diff_summary` | jsonb | nullable, lightweight change description |
+| `created_at` | timestamptz | |
+
+No `updated_at` — immutable by design.
+
+**Indexes:** `(object_id)`, `(object_id, version_number)`.
+
+**Constraints:** `UNIQUE (object_id, version_number)`.
+
+**RLS:** Through `object_id` → `workspace_objects` → workspace ownership. No UPDATE or DELETE policies — immutable.
+
+Object creation and editing use Postgres RPC functions (`create_object_with_initial_version`, `update_object_and_create_version`) to guarantee atomicity — the same pattern as note versioning.
+
+---
+
+### `object_links`
+
+Explicit directed semantic relationships between any combination of content object types. Generalizes `note_links` to heterogeneous type pairs.
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | uuid PK | |
+| `workspace_id` | uuid FK | → `workspaces` |
+| `source_object_id` | uuid FK | → `workspace_objects` |
+| `target_object_id` | uuid FK | → `workspace_objects` |
+| `relationship_type` | text | One of the 10 canonical values (same vocabulary as `note_links`) |
+| `relationship_note` | text | nullable — optional annotation describing the specific link |
+| `created_at` | timestamptz | |
+
+**Indexes:** `(workspace_id)`, `(source_object_id)`, `(target_object_id)`.
+
+**Constraints:**
+- `CHECK (relationship_type IN (...))` — enforced 10-value vocabulary.
+- `CHECK (source_object_id <> target_object_id)` — no self-links.
+- `UNIQUE (source_object_id, target_object_id, relationship_type)` — no duplicate links per type.
+- Same-workspace enforcement (both endpoints must belong to the same workspace) is the service layer's responsibility.
+
+**RLS:** SELECT/INSERT gated on `owns_workspace(workspace_id)`. No UPDATE policy — changing a link requires delete + re-insert. DELETE allowed by workspace owner.
+
+**Backward compatibility:** `note_links` is not deprecated. Note-to-note relationships continue to use `note_links`. `object_links` handles any link where at least one endpoint is a non-note type.
+
+---
+
+### `box_object_attachments`
+
+Join table for attaching workspace-level reusable skills or agents into boxes by reference. No copy of the object is made — the attachment points to the single canonical source object.
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | uuid PK | |
+| `box_id` | uuid FK | → `boxes` |
+| `object_type` | text | `'skill'` \| `'agent'` |
+| `object_id` | uuid FK | → `workspace_objects` |
+| `folder_id` | uuid | nullable FK → `folders` — placement within the target box |
+| `sort_order` | integer | Ordering in the target box's tree |
+| `attached_by` | uuid | FK → `auth.users` |
+| `created_at` | timestamptz | |
+
+**Indexes:** `(box_id)`, `(object_id)`.
+
+**Constraints:** `UNIQUE (box_id, object_type, object_id)` — a skill or agent may be attached to a box at most once. Only objects with `is_reusable = true` may be attached — enforced by the service layer before insert.
+
+**RLS:** Through box → workspace ownership. No UPDATE policy — detach and re-attach to change placement. DELETE allowed by workspace owner.
+
+---
+
+## RLS — extended object model
+
+RLS is enabled on all 7 new tables. Policies use the same `owns_workspace(wid)` SECURITY DEFINER helper as the original 11 tables.
+
+**Policy summary (new tables):**
+
+| Table | SELECT | INSERT | UPDATE | DELETE |
+|---|---|---|---|---|
+| workspace_objects | `owns_workspace(workspace_id)` | same | same | — |
+| files | through box → workspace | same | same | — |
+| skills | via workspace_id (direct or through box) | same | same | — |
+| agents | via workspace_id (direct or through box) | same | same | — |
+| object_versions | through object → workspace | same | **none** | **none** |
+| object_links | `owns_workspace(workspace_id)` | same | **none** | same |
+| box_object_attachments | through box → workspace | same | **none** | same |
+
+`object_versions` has no UPDATE or DELETE policies — immutable by design, same as `note_versions`.
+
+---
+
+## Extended migration files
+
+| File | Contents |
+|---|---|
+| `supabase/migrations/20260411000001_object_model_expansion.sql` | All 7 new tables, indexes, constraints, atomic RPC functions |
+| `supabase/migrations/20260411000002_object_model_rls.sql` | RLS enable + policies for all 7 new tables |
+| `supabase/migrations/20260411000003_workspace_objects_backfill.sql` | Backfill of existing notes and folders into `workspace_objects` |
+
+Circular FK references for new tables are resolved via `ALTER TABLE ... ADD CONSTRAINT` after `object_versions` exists:
+
+- `files.current_version_id → object_versions`
+- `skills.current_version_id → object_versions`
+- `agents.current_version_id → object_versions`

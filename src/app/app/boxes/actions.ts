@@ -230,12 +230,17 @@ export async function searchNotesAction(
 // ─── Box tree action ──────────────────────────────────────────────────────────
 
 /**
- * Fetch the folder and note tree for a box.
- * Used by the sidebar tree component to lazily load tree data.
+ * Fetch the full mixed-object tree for a box.
+ * Returns folders, notes, files, skills, and agents (both box-local and
+ * workspace-level reusable attachments). Used by the sidebar tree component
+ * to lazily load tree data per box.
  */
 export async function getBoxTreeAction(boxId: string): Promise<ActionResult<{
   folders: Array<{ id: string; name: string; parent_folder_id: string | null; status: string }>;
   notes: Array<{ id: string; title: string; kind: string; folder_id: string | null }>;
+  files: Array<{ id: string; name: string; file_extension: string | null; folder_id: string | null }>;
+  skills: Array<{ id: string; name: string; folder_id: string | null; is_reusable: boolean; is_attachment: boolean }>;
+  agents: Array<{ id: string; name: string; folder_id: string | null; is_reusable: boolean; is_attachment: boolean }>;
 }>> {
   try {
     const { supabase, workspaceId } = await requireContext();
@@ -246,10 +251,44 @@ export async function getBoxTreeAction(boxId: string): Promise<ActionResult<{
     }
     const { listFoldersByBox } = await import("@/server/repositories/folder_repository");
     const { listNotesByBox } = await import("@/server/repositories/note_repository");
-    const [folders, notes] = await Promise.all([
+    const { listFilesByBox } = await import("@/server/repositories/file_repository");
+    const { listSkillsByBox, getSkillsByIds } = await import("@/server/repositories/skill_repository");
+    const { listAgentsByBox, getAgentsByIds } = await import("@/server/repositories/agent_repository");
+    const { listAttachmentsForBox } = await import("@/server/repositories/box_object_attachment_repository");
+
+    const [folders, notes, files, localSkills, localAgents, attachments] = await Promise.all([
       listFoldersByBox(supabase, boxId),
       listNotesByBox(supabase, boxId),
+      listFilesByBox(supabase, boxId),
+      listSkillsByBox(supabase, boxId),
+      listAgentsByBox(supabase, boxId),
+      listAttachmentsForBox(supabase, boxId),
     ]);
+
+    // Resolve attached reusable skills and agents by id
+    const attachedSkillIds = attachments
+      .filter((a) => a.object_type === "skill")
+      .map((a) => a.object_id);
+    const attachedAgentIds = attachments
+      .filter((a) => a.object_type === "agent")
+      .map((a) => a.object_id);
+    const [attachedSkills, attachedAgents] = await Promise.all([
+      getSkillsByIds(supabase, attachedSkillIds),
+      getAgentsByIds(supabase, attachedAgentIds),
+    ]);
+
+    // Build lookup maps for attachment folder placement
+    const skillAttachmentFolderById = new Map(
+      attachments
+        .filter((a) => a.object_type === "skill")
+        .map((a) => [a.object_id, a.folder_id ?? null])
+    );
+    const agentAttachmentFolderById = new Map(
+      attachments
+        .filter((a) => a.object_type === "agent")
+        .map((a) => [a.object_id, a.folder_id ?? null])
+    );
+
     return {
       ok: true,
       data: {
@@ -265,6 +304,44 @@ export async function getBoxTreeAction(boxId: string): Promise<ActionResult<{
           kind: n.kind,
           folder_id: n.folder_id,
         })),
+        files: files.map((f) => ({
+          id: f.id,
+          name: f.name,
+          file_extension: f.file_extension,
+          folder_id: f.folder_id,
+        })),
+        skills: [
+          ...localSkills.map((s) => ({
+            id: s.id,
+            name: s.name,
+            folder_id: s.folder_id,
+            is_reusable: s.is_reusable,
+            is_attachment: false,
+          })),
+          ...attachedSkills.map((s) => ({
+            id: s.id,
+            name: s.name,
+            folder_id: skillAttachmentFolderById.get(s.id) ?? null,
+            is_reusable: true,
+            is_attachment: true,
+          })),
+        ],
+        agents: [
+          ...localAgents.map((a) => ({
+            id: a.id,
+            name: a.name,
+            folder_id: a.folder_id,
+            is_reusable: a.is_reusable,
+            is_attachment: false,
+          })),
+          ...attachedAgents.map((a) => ({
+            id: a.id,
+            name: a.name,
+            folder_id: agentAttachmentFolderById.get(a.id) ?? null,
+            is_reusable: true,
+            is_attachment: true,
+          })),
+        ],
       },
     };
   } catch (err) {

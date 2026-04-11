@@ -400,3 +400,86 @@ The note path goes through `importIntoNoteAction` → `updateNote` with `changeO
 
 - **replace** — overwrites the note body atomically; prior body preserved as a version.
 - **append** — appends imported content after the current body, separated by `---`.
+
+---
+
+## Object type import/export groundwork
+
+The object model expansion (see [docs/object_model_expansion_v1.md](object_model_expansion_v1.md)) introduces files, skills, and agents as first-class content types. This section describes the portability groundwork now in place for those types and what full flows are planned for future prompts.
+
+All existing note import/export behavior is unchanged.
+
+### Manifest schema extensibility
+
+`ExportManifest` is defined with extensible top-level arrays for the new types alongside the existing `folders`, `notes`, and `links` arrays:
+
+```
+manifest.json {
+  schema_version    "1.0" | "1.1"
+  ...existing fields...
+  files[]           ManifestFile entries  (empty in notes-only exports)
+  skills[]          ManifestSkill entries (empty in notes-only exports)
+  agents[]          ManifestAgent entries (empty in notes-only exports)
+}
+```
+
+`schema_version` is `"1.0"` for manifests containing only notes and folders (backward compatible with all existing import tooling). `schema_version` is `"1.1"` when any file, skill, or agent entry is present. An importer that reads a `"1.1"` manifest but contains only note/folder entries proceeds identically to a `"1.0"` manifest.
+
+`ManifestFile`, `ManifestSkill`, and `ManifestAgent` type stubs are defined in `src/server/domain/types/import_export.ts`. They carry the same identity fields as `ManifestNote` (`id`, `slug`, `path`, `status`) plus `canonical_format` and `object_type`.
+
+### Explicit object typing on import
+
+Incoming manifest entries carry an `object_type` field: `'note'`, `'file'`, `'skill'`, or `'agent'`. The import parser routes each entry to the appropriate creation path based on this field.
+
+- `'note'` → existing note creation path (unchanged).
+- `'file'` → `file_service.ts` creation with `canonical_format` from the manifest entry.
+- `'skill'` → `skill_service.ts` creation with `is_reusable` and `canonical_format` from the manifest entry.
+- `'agent'` → `agent_service.ts` creation with structured fields from the manifest entry.
+- Unknown `object_type` values → warning added to `ImportSummaryReport`; entry skipped without failing the import.
+
+### Schema detection with override (`canonical_format`)
+
+For incoming file, skill, and agent entries, `canonical_format` is determined in this order:
+
+1. Declared `canonical_format` field in the manifest entry — used as-is.
+2. If absent: detected from the file extension of the associated artifact in the zip (e.g. `.py` → `python`, `.yaml` → `yaml`).
+3. If both are present and disagree: the declared manifest value wins; a `canonical_format_override` warning is added to the import summary.
+
+Once stored, `canonical_format` is fixed on the created object. It is not re-derived on subsequent imports of the same object via `replace_by_id`.
+
+### Packaged export for complex objects
+
+Skills may include child files. Agents may reference skills and their child files. A packaged export for a complex object bundles all referenced artifacts into a single zip and describes the internal references via `object_links` entries in the manifest.
+
+Packaged export structure (example — agent with a referenced skill):
+
+```
+agent-name-agent.zip
+├── manifest.json          (schema_version "1.1", agents[], skills[], object_links[])
+├── agents/
+│   └── agent-name.yaml
+└── skills/
+    └── referenced-skill.md
+```
+
+The manifest's `object_links` entries describe the `skill child_of agent` relationship, allowing the importer to reconstruct both objects and their link in one pass.
+
+Full packaged export assembly — wiring `export_service.ts` to traverse `object_links` and collect referenced objects — is a future prompt. The manifest schema and type definitions are in place.
+
+### Current state
+
+What is implemented now:
+
+- `ManifestFile`, `ManifestSkill`, `ManifestAgent` type stubs in `import_export.ts`.
+- `ExportManifest.files`, `.skills`, `.agents` arrays (populated empty by current export service).
+- `schema_version` detection logic (`"1.0"` vs `"1.1"`).
+- Import parser recognizes `object_type` field and routes to the correct creation path.
+- `canonical_format` detection and override logic on import.
+- `ImportSummaryReport` counts extended to include `files`, `skills`, `agents` in `created_counts`, `replaced_counts`, etc.
+
+What is planned for future prompts:
+
+- `export_service.ts`: populate `files`, `skills`, `agents` arrays; package canonical content.
+- Packaged export: traverse `object_links` to collect referenced objects; multi-type zip assembly.
+- Import UI: extend `ImportDialog` and `ImportSummaryReport` display to show file/skill/agent counts.
+- Import service: full collision mode handling for file/skill/agent entries (create, replace, remap, merge).
