@@ -39,6 +39,7 @@ export function SkillSourceEditor({ skill }: { skill: Skill }) {
   useEffect(() => {
     if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
     if (statusTimeoutRef.current) clearTimeout(statusTimeoutRef.current);
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setContent(skill.source_content);
     setAutosaveState("idle");
     setSaveError(null);
@@ -75,6 +76,8 @@ export function SkillSourceEditor({ skill }: { skill: Skill }) {
     debounceTimerRef.current = setTimeout(() => { performSave(value); }, AUTOSAVE_DEBOUNCE_MS);
   }
 
+  const isDirty = autosaveState === "unsaved" || autosaveState === "saving" || autosaveState === "error";
+
   return (
     <div className="flex h-full flex-col overflow-hidden rounded-lg border border-border bg-card">
       <div className="flex items-center justify-between border-b border-border px-3 py-2">
@@ -95,6 +98,7 @@ export function SkillSourceEditor({ skill }: { skill: Skill }) {
       <textarea
         value={content}
         onChange={(e) => handleChange(e.target.value)}
+        data-editor-dirty={isDirty}
         spellCheck={false}
         autoCorrect="off"
         autoCapitalize="off"

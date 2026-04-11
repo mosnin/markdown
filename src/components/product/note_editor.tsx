@@ -307,6 +307,7 @@ export function NoteEditor({ note, initialMode = "document" }: NoteEditorProps) 
             <textarea
               value={content}
               onChange={(e) => setContent(e.target.value)}
+              data-editor-dirty={isDirty}
               placeholder="Start writing…"
               spellCheck
               aria-label="Note content"
@@ -341,6 +342,7 @@ export function NoteEditor({ note, initialMode = "document" }: NoteEditorProps) 
             <textarea
               value={content}
               onChange={(e) => setContent(e.target.value)}
+              data-editor-dirty={isDirty}
               placeholder="Write in Markdown…"
               spellCheck
               aria-label="Markdown content"

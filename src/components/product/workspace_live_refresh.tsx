@@ -42,8 +42,11 @@ export function WorkspaceLiveRefresh({
       return active.isContentEditable;
     };
 
+    const hasDirtyEditor = () =>
+      document.querySelector('[data-editor-dirty="true"]') !== null;
+
     const scheduleRefresh = () => {
-      if (protectWhileEditing && isEditingSurfaceActive()) {
+      if (protectWhileEditing && (isEditingSurfaceActive() || hasDirtyEditor())) {
         pendingRefreshRef.current = true;
         return;
       }
@@ -86,16 +89,19 @@ export function WorkspaceLiveRefresh({
 
     const flushPending = () => {
       if (!pendingRefreshRef.current) return;
+      if (protectWhileEditing && (isEditingSurfaceActive() || hasDirtyEditor())) return;
       pendingRefreshRef.current = false;
       if (timerRef.current) clearTimeout(timerRef.current);
       timerRef.current = setTimeout(() => router.refresh(), 100);
     };
     window.addEventListener("focus", flushPending);
     document.addEventListener("visibilitychange", flushPending);
+    const pendingCheck = setInterval(flushPending, 2000);
 
     return () => {
       window.removeEventListener("focus", flushPending);
       document.removeEventListener("visibilitychange", flushPending);
+      clearInterval(pendingCheck);
       if (timerRef.current) clearTimeout(timerRef.current);
       void supabase.removeChannel(channel);
     };
