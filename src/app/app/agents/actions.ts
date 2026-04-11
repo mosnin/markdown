@@ -108,6 +108,51 @@ export async function createAgentInBoxAction(
       isReusable: false,
     });
 
+    // Materialize package-supporting defaults as real child files.
+    // This keeps canonical source as the single editable source of truth while
+    // still giving Agents concrete persisted internal structure.
+    const readme = await createFile(supabase, ctx.user.id, ctx.workspace.id, {
+      boxId,
+      folderId: agent.folder_id ?? null,
+      name: "README",
+      sourceContent: params.description?.trim()
+        ? `# ${trimmedName}\n\n${params.description.trim()}\n`
+        : `# ${trimmedName}\n`,
+      canonicalFormat: "markdown",
+      sourceLanguage: null,
+      fileExtension: ".md",
+      mimeType: "text/markdown",
+    });
+    await createLink(supabase, ctx.workspace.id, {
+      sourceObjectType: OBJECT_TYPE.AGENT,
+      sourceObjectId: agent.id,
+      targetObjectType: OBJECT_TYPE.FILE,
+      targetObjectId: readme.id,
+      relationshipType: RELATIONSHIP_TYPE.PARENT_OF,
+      relationshipNote: "Agent README",
+    });
+
+    if (params.systemPrompt?.trim()) {
+      const systemPromptFile = await createFile(supabase, ctx.user.id, ctx.workspace.id, {
+        boxId,
+        folderId: agent.folder_id ?? null,
+        name: "SYSTEM_PROMPT",
+        sourceContent: `${params.systemPrompt.trim()}\n`,
+        canonicalFormat: "markdown",
+        sourceLanguage: null,
+        fileExtension: ".md",
+        mimeType: "text/markdown",
+      });
+      await createLink(supabase, ctx.workspace.id, {
+        sourceObjectType: OBJECT_TYPE.AGENT,
+        sourceObjectId: agent.id,
+        targetObjectType: OBJECT_TYPE.FILE,
+        targetObjectId: systemPromptFile.id,
+        relationshipType: RELATIONSHIP_TYPE.PARENT_OF,
+        relationshipNote: "Agent system prompt",
+      });
+    }
+
     revalidatePath(`/app/boxes/${boxId}`);
     return { ok: true, data: { id: agent.id } };
   } catch (err) {
