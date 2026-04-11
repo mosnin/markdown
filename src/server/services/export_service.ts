@@ -5,20 +5,32 @@ import { type Note } from "@/server/domain/types/note";
 import { type Folder } from "@/server/domain/types/folder";
 import { type NoteLink } from "@/server/domain/types/note_link";
 import { type Box } from "@/server/domain/types/box";
+import { type File } from "@/server/domain/types/file";
+import { type Skill } from "@/server/domain/types/skill";
+import { type Agent } from "@/server/domain/types/agent";
 import {
   type ExportManifest,
   type ExportPackage,
+  type RawExportContent,
   type ManifestNote,
   type ManifestFolder,
   type ManifestLink,
   type ManifestBundle,
+  type ManifestFile,
+  type ManifestSkill,
+  type ManifestAgent,
+  type ManifestObjectLink,
   type ExportOptions,
   type BundleExportOptions,
+  type ExportMode,
 } from "@/server/domain/types/import_export";
 import { getNoteById, listAllNotesByBox, getNotesByIds } from "@/server/repositories/note_repository";
 import { getBoxById } from "@/server/repositories/box_repository";
 import { getFolderById, listAllFoldersByBox } from "@/server/repositories/folder_repository";
 import { listLinksForNoteSet } from "@/server/repositories/note_link_repository";
+import { getFileById } from "@/server/repositories/file_repository";
+import { getSkillById } from "@/server/repositories/skill_repository";
+import { getAgentById } from "@/server/repositories/agent_repository";
 import { assembleContextBundle } from "@/server/services/context_bundle_service";
 
 /**
@@ -542,4 +554,303 @@ export async function exportBundle(
  */
 export function packageToZip(pkg: ExportPackage): Buffer {
   return buildZip(pkg.files);
+}
+
+// ─── Source format → file extension map ──────────────────────────────────────
+
+const FORMAT_EXTENSION: Record<string, string> = {
+  markdown: ".md",
+  json: ".json",
+  yaml: ".yaml",
+  typescript: ".ts",
+  python: ".py",
+  javascript: ".js",
+  shell: ".sh",
+  sql: ".sql",
+  html: ".html",
+  css: ".css",
+  toml: ".toml",
+  xml: ".xml",
+  plain_text: ".txt",
+};
+
+const FORMAT_MIME: Record<string, string> = {
+  markdown: "text/markdown",
+  json: "application/json",
+  yaml: "text/yaml",
+  typescript: "text/x-typescript",
+  python: "text/x-python",
+  javascript: "text/javascript",
+  shell: "text/x-shellscript",
+  sql: "application/sql",
+  html: "text/html",
+  css: "text/css",
+  toml: "text/x-toml",
+  xml: "application/xml",
+  plain_text: "text/plain",
+};
+
+function sourceFormatExtension(format: string): string {
+  return FORMAT_EXTENSION[format] ?? ".txt";
+}
+
+function sourceFormatMime(format: string): string {
+  return FORMAT_MIME[format] ?? "text/plain";
+}
+
+function emptyV11Fields(): { object_files: ManifestFile[]; skills: ManifestSkill[]; agents: ManifestAgent[]; object_links: ManifestObjectLink[] } {
+  return { object_files: [], skills: [], agents: [], object_links: [] };
+}
+
+// ─── Manifest conversion helpers ─────────────────────────────────────────────
+
+function toManifestFile(file: File): ManifestFile {
+  const ext = file.file_extension ?? sourceFormatExtension(file.canonical_format);
+  const safeName = slugify(file.name);
+  return {
+    id: file.id,
+    folder_id: file.folder_id,
+    name: file.name,
+    slug: file.slug,
+    path: file.path_cache,
+    status: file.status,
+    description: file.description,
+    summary: file.summary,
+    tags: file.tags,
+    origin_type: file.origin_type,
+    canonical_format: file.canonical_format,
+    file_extension: file.file_extension,
+    source_language: file.source_language ?? null,
+    content_sha256: sha256(file.source_content),
+    file_path: `files/${safeName}${ext}`,
+  };
+}
+
+function toManifestSkill(skill: Skill): ManifestSkill {
+  const ext = sourceFormatExtension(skill.canonical_format);
+  const safeName = slugify(skill.name);
+  return {
+    id: skill.id,
+    folder_id: skill.folder_id,
+    name: skill.name,
+    slug: skill.slug,
+    path: skill.path_cache,
+    status: skill.status,
+    description: skill.description,
+    summary: skill.summary,
+    tags: skill.tags,
+    origin_type: skill.origin_type,
+    canonical_format: skill.canonical_format,
+    is_reusable: skill.is_reusable,
+    content_sha256: sha256(skill.source_content),
+    file_path: `skills/${safeName}${ext}`,
+  };
+}
+
+function toManifestAgent(agent: Agent): ManifestAgent {
+  const ext = sourceFormatExtension(agent.canonical_format);
+  const safeName = slugify(agent.name);
+  return {
+    id: agent.id,
+    folder_id: agent.folder_id,
+    name: agent.name,
+    slug: agent.slug,
+    path: agent.path_cache,
+    status: agent.status,
+    description: agent.description,
+    summary: agent.summary,
+    tags: agent.tags,
+    origin_type: agent.origin_type,
+    agent_type: agent.agent_type,
+    canonical_format: agent.canonical_format,
+    is_reusable: agent.is_reusable,
+    content_sha256: sha256(agent.source_content),
+    file_path: `agents/${safeName}${ext}`,
+  };
+}
+
+// ─── Export: file ─────────────────────────────────────────────────────────────
+
+/**
+ * Export a single file as a packaged zip.
+ * Verifies workspace ownership via the file's box.
+ */
+export async function exportFile(
+  supabase: SupabaseClient,
+  workspaceId: string,
+  fileId: string
+): Promise<ExportPackage> {
+  const file = await getFileById(supabase, fileId);
+  if (!file) throw new Error("File not found");
+
+  if (file.box_id) {
+    const box = await getBoxById(supabase, file.box_id);
+    if (!box || box.workspace_id !== workspaceId) throw new Error("Not found");
+  } else if (file.workspace_id !== workspaceId) {
+    throw new Error("Not found");
+  }
+
+  const mf = toManifestFile(file);
+
+  const manifest: ExportManifest = {
+    schema_version: "1.1",
+    export_type: "file",
+    exported_at: new Date().toISOString(),
+    workspace: { id: workspaceId, name: "" },
+    box: null,
+    root: null,
+    folders: [],
+    notes: [],
+    links: [],
+    bundle: null,
+    files: [mf.file_path],
+    counts: { folders: 0, notes: 0, links: 0, files: 1, skills: 0, agents: 0 },
+    ...emptyV11Fields(),
+    object_files: [mf],
+  };
+
+  const exportFiles: Record<string, string> = {
+    "manifest.json": buildManifestJson(manifest),
+    [mf.file_path]: file.source_content,
+  };
+
+  return {
+    filename: `${slugify(file.name)}-file.zip`,
+    files: exportFiles,
+    manifest,
+  };
+}
+
+// ─── Export: skill ────────────────────────────────────────────────────────────
+
+/**
+ * Export a single skill.
+ *
+ * mode = "canonical_source": returns a RawExportContent (single source file, no zip)
+ * mode = "packaged": returns an ExportPackage (zip with manifest.json + source file)
+ */
+export async function exportSkill(
+  supabase: SupabaseClient,
+  workspaceId: string,
+  skillId: string,
+  mode: ExportMode = "packaged"
+): Promise<ExportPackage | RawExportContent> {
+  const skill = await getSkillById(supabase, skillId);
+  if (!skill) throw new Error("Skill not found");
+
+  if (skill.box_id) {
+    const box = await getBoxById(supabase, skill.box_id);
+    if (!box || box.workspace_id !== workspaceId) throw new Error("Not found");
+  } else if (skill.workspace_id !== workspaceId) {
+    throw new Error("Not found");
+  }
+
+  const ext = sourceFormatExtension(skill.canonical_format);
+  const safeName = slugify(skill.name);
+  const filename = `${safeName}${ext}`;
+
+  if (mode === "canonical_source") {
+    return {
+      filename,
+      content: skill.source_content,
+      contentType: sourceFormatMime(skill.canonical_format),
+    } satisfies RawExportContent;
+  }
+
+  const ms = toManifestSkill(skill);
+
+  const manifest: ExportManifest = {
+    schema_version: "1.1",
+    export_type: "skill",
+    exported_at: new Date().toISOString(),
+    workspace: { id: workspaceId, name: "" },
+    box: null,
+    root: null,
+    folders: [],
+    notes: [],
+    links: [],
+    bundle: null,
+    files: [ms.file_path],
+    counts: { folders: 0, notes: 0, links: 0, files: 1, skills: 1, agents: 0 },
+    ...emptyV11Fields(),
+    skills: [ms],
+  };
+
+  const exportFiles: Record<string, string> = {
+    "manifest.json": buildManifestJson(manifest),
+    [ms.file_path]: skill.source_content,
+  };
+
+  return {
+    filename: `${safeName}-skill.zip`,
+    files: exportFiles,
+    manifest,
+  } satisfies ExportPackage;
+}
+
+// ─── Export: agent ────────────────────────────────────────────────────────────
+
+/**
+ * Export a single agent.
+ *
+ * mode = "canonical_source": returns a RawExportContent (single source file, no zip)
+ * mode = "packaged": returns an ExportPackage (zip with manifest.json + source file)
+ */
+export async function exportAgent(
+  supabase: SupabaseClient,
+  workspaceId: string,
+  agentId: string,
+  mode: ExportMode = "packaged"
+): Promise<ExportPackage | RawExportContent> {
+  const agent = await getAgentById(supabase, agentId);
+  if (!agent) throw new Error("Agent not found");
+
+  if (agent.box_id) {
+    const box = await getBoxById(supabase, agent.box_id);
+    if (!box || box.workspace_id !== workspaceId) throw new Error("Not found");
+  } else if (agent.workspace_id !== workspaceId) {
+    throw new Error("Not found");
+  }
+
+  const ext = sourceFormatExtension(agent.canonical_format);
+  const safeName = slugify(agent.name);
+  const filename = `${safeName}${ext}`;
+
+  if (mode === "canonical_source") {
+    return {
+      filename,
+      content: agent.source_content,
+      contentType: sourceFormatMime(agent.canonical_format),
+    } satisfies RawExportContent;
+  }
+
+  const ma = toManifestAgent(agent);
+
+  const manifest: ExportManifest = {
+    schema_version: "1.1",
+    export_type: "agent",
+    exported_at: new Date().toISOString(),
+    workspace: { id: workspaceId, name: "" },
+    box: null,
+    root: null,
+    folders: [],
+    notes: [],
+    links: [],
+    bundle: null,
+    files: [ma.file_path],
+    counts: { folders: 0, notes: 0, links: 0, files: 1, skills: 0, agents: 1 },
+    ...emptyV11Fields(),
+    agents: [ma],
+  };
+
+  const exportFiles: Record<string, string> = {
+    "manifest.json": buildManifestJson(manifest),
+    [ma.file_path]: agent.source_content,
+  };
+
+  return {
+    filename: `${safeName}-agent.zip`,
+    files: exportFiles,
+    manifest,
+  } satisfies ExportPackage;
 }

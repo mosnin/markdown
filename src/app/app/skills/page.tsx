@@ -5,6 +5,7 @@ import { listReusableSkills } from "@/server/repositories/skill_repository";
 import { listBoxesByWorkspace } from "@/server/repositories/box_repository";
 import Link from "next/link";
 import { AttachToBoxTrigger } from "@/components/product/attach_to_box_trigger";
+import { SkillImportTrigger } from "@/components/product/skill_import_dialog";
 import { cn } from "@/lib/utils";
 
 // ─── Empty state ──────────────────────────────────────────────────────────────
@@ -94,6 +95,9 @@ export default async function SkillsPage() {
           <div>
             <h1 className="text-xl font-bold tracking-tight text-foreground">Skills</h1>
             <p className="text-xs text-muted-foreground">Workspace-level reusable skills shared across all boxes</p>
+          </div>
+          <div className="ml-auto">
+            <SkillImportTrigger />
           </div>
         </div>
       </div>

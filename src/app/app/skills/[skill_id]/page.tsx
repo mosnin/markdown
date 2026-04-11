@@ -6,6 +6,7 @@ import { getSkillById } from "@/server/repositories/skill_repository";
 import { getBoxById } from "@/server/repositories/box_repository";
 import { isObjectAttachedToBox } from "@/server/repositories/box_object_attachment_repository";
 import { ReferenceContextBanner } from "@/components/product/reference_context_banner";
+import { SkillExportMenu } from "@/components/product/export_menu";
 import { cn } from "@/lib/utils";
 
 // ─── Meta row ─────────────────────────────────────────────────────────────────
@@ -67,11 +68,14 @@ export default async function SkillPage({
               <p className="mt-0.5 text-sm text-muted-foreground">{skill.description}</p>
             )}
           </div>
-          {skill.is_reusable && (
-            <span className="shrink-0 rounded-full bg-muted px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-              Reusable
-            </span>
-          )}
+          <div className="ml-auto flex items-center gap-2 shrink-0">
+            {skill.is_reusable && (
+              <span className="rounded-full bg-muted px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                Reusable
+              </span>
+            )}
+            <SkillExportMenu skillId={skill_id} skillName={skill.name} />
+          </div>
         </div>
       </div>
 

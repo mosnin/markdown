@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { Archive, Bot, ChevronRight, History, Trash2 } from "lucide-react";
+import { AgentExportMenu } from "@/components/product/export_menu";
 import Link from "next/link";
 import { requireAuthenticatedUser } from "@/server/auth/require_authenticated_user";
 import { createClient } from "@/lib/supabase/server";
@@ -273,6 +274,8 @@ export default async function AgentPage({
                 Trash
               </Badge>
             )}
+            {/* Export */}
+            <AgentExportMenu agentId={agent_id} agentName={agent.name} />
             {/* History shortcut */}
             <Link
               href="?tab=history"

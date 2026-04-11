@@ -12,6 +12,10 @@
  *   - stable ids throughout (no ephemeral display-only identifiers)
  *   - explicit, boring shape — no hidden computed behavior
  *   - shared by human UI, future API, and future MCP export surfaces
+ *
+ * Schema versions:
+ *   1.0 — notes, folders, links, context bundles
+ *   1.1 — adds files, skills, agents, cross-type object_links
  */
 
 // ─── Manifest entry types ─────────────────────────────────────────────────────
@@ -65,6 +69,104 @@ export interface ManifestLink {
 }
 
 /**
+ * A file included in the export package (v1.1+).
+ * Files are non-note source objects (code, config, data, etc.).
+ */
+export interface ManifestFile {
+  id: string;
+  /** Folder id, or null for root-level files. */
+  folder_id: string | null;
+  name: string;
+  slug: string;
+  path: string;
+  status: string;
+  description: string | null;
+  summary: string | null;
+  tags: string[];
+  origin_type: string;
+  /** e.g. "typescript", "python", "json", "markdown" */
+  canonical_format: string;
+  /** e.g. ".ts", ".py" — may be null */
+  file_extension: string | null;
+  source_language: string | null;
+  /** SHA-256 hex digest of the source_content. */
+  content_sha256: string;
+  /** Relative path to the source file within the zip (e.g. "files/my-script.ts"). */
+  file_path: string;
+}
+
+/**
+ * A skill included in the export package (v1.1+).
+ * Skills are reusable capability objects with canonical source content.
+ */
+export interface ManifestSkill {
+  id: string;
+  /** Folder id, or null for root-level skills. */
+  folder_id: string | null;
+  name: string;
+  slug: string;
+  path: string;
+  status: string;
+  description: string | null;
+  summary: string | null;
+  tags: string[];
+  origin_type: string;
+  canonical_format: string;
+  /**
+   * Whether this skill was workspace-level reusable at export time.
+   * Importers MUST preserve this flag — never silently convert.
+   */
+  is_reusable: boolean;
+  /** SHA-256 hex digest of the source_content. */
+  content_sha256: string;
+  /** Relative path to the source file within the zip (e.g. "skills/my-skill.md"). */
+  file_path: string;
+}
+
+/**
+ * An agent included in the export package (v1.1+).
+ * Agents are reusable orchestration objects with canonical source content.
+ */
+export interface ManifestAgent {
+  id: string;
+  /** Folder id, or null for root-level agents. */
+  folder_id: string | null;
+  name: string;
+  slug: string;
+  path: string;
+  status: string;
+  description: string | null;
+  summary: string | null;
+  tags: string[];
+  origin_type: string;
+  agent_type: string | null;
+  canonical_format: string;
+  /**
+   * Whether this agent was workspace-level reusable at export time.
+   * Importers MUST preserve this flag — never silently convert.
+   */
+  is_reusable: boolean;
+  /** SHA-256 hex digest of the source_content. */
+  content_sha256: string;
+  /** Relative path to the source file within the zip (e.g. "agents/my-agent.md"). */
+  file_path: string;
+}
+
+/**
+ * A cross-type semantic link included in the export package (v1.1+).
+ * These are object_links rows — distinct from note_links which are note-to-note only.
+ */
+export interface ManifestObjectLink {
+  id: string;
+  source_type: string;
+  source_id: string;
+  target_type: string;
+  target_id: string;
+  relationship_type: string;
+  relationship_note: string | null;
+}
+
+/**
  * Bundle-specific manifest section — only present in context bundle exports.
  * Describes which notes were selected and how the bundle was assembled.
  */
@@ -88,6 +190,10 @@ export interface ManifestCounts {
   notes: number;
   links: number;
   files: number;
+  /** Number of file paths (note markdowns + source files) in the zip. */
+  // (kept for backward compat — files above counts zip file entries)
+  skills: number;
+  agents: number;
 }
 
 /** Workspace metadata embedded in the manifest. */
@@ -114,10 +220,13 @@ export interface ManifestBox {
  *   'folder'  — one folder subtree, box section included
  *   'box'     — full box, box section included
  *   'bundle'  — context bundle, box section included, bundle section included
+ *   'file'    — single file export (v1.1)
+ *   'skill'   — single skill export (v1.1)
+ *   'agent'   — single agent export (v1.1)
  */
 export interface ExportManifest {
-  schema_version: "1.0";
-  export_type: "note" | "folder" | "box" | "bundle";
+  schema_version: "1.0" | "1.1";
+  export_type: "note" | "folder" | "box" | "bundle" | "file" | "skill" | "agent";
   exported_at: string;
   workspace: ManifestWorkspace;
   /** Present for folder, box, and bundle exports. */
@@ -129,9 +238,17 @@ export interface ExportManifest {
   links: ManifestLink[];
   /** Present only for bundle exports. */
   bundle: ManifestBundle | null;
-  /** Paths of non-manifest files in the zip (markdown files). */
+  /** Paths of all content files in the zip (markdown and source files). */
   files: string[];
   counts: ManifestCounts;
+  /** v1.1 — Files included in this export. Absent in v1.0 manifests. */
+  object_files?: ManifestFile[];
+  /** v1.1 — Skills included in this export. Absent in v1.0 manifests. */
+  skills?: ManifestSkill[];
+  /** v1.1 — Agents included in this export. Absent in v1.0 manifests. */
+  agents?: ManifestAgent[];
+  /** v1.1 — Cross-type object links between exported objects. Absent in v1.0 manifests. */
+  object_links?: ManifestObjectLink[];
 }
 
 // ─── Collision modes ──────────────────────────────────────────────────────────
@@ -163,6 +280,21 @@ export type CollisionMode =
   | "merge_metadata_only"
   | "remap_ids_and_import";
 
+// ─── Export mode (v1.1) ───────────────────────────────────────────────────────
+
+/**
+ * Export mode for skills and agents.
+ *
+ * canonical_source:
+ *   A single raw source file (e.g. skill.md, agent.ts) — no manifest, no zip.
+ *   Suitable for copying the source into another editor or version control.
+ *
+ * packaged:
+ *   A zip with manifest.json + the source file. Includes all metadata needed
+ *   to re-import the object with full fidelity (id, tags, description, etc).
+ */
+export type ExportMode = "canonical_source" | "packaged";
+
 // ─── Import summary report ────────────────────────────────────────────────────
 
 /**
@@ -170,7 +302,7 @@ export type CollisionMode =
  * Every created, replaced, duplicated, remapped, or skipped object produces one.
  */
 export interface ImportAction {
-  /** 'folder' | 'note' | 'link' */
+  /** 'folder' | 'note' | 'link' | 'file' | 'skill' | 'agent' | 'object_link' */
   object_type: string;
   /** The id from the incoming package (may differ from final_id after remap). */
   incoming_id: string | null;
@@ -202,11 +334,11 @@ export interface ImportWarning {
  */
 export interface ImportSummaryReport {
   collision_mode: CollisionMode;
-  created_counts: { folders: number; notes: number; links: number };
-  replaced_counts: { notes: number; folders: number };
-  duplicated_counts: { notes: number; folders: number };
-  remapped_counts: { notes: number; folders: number };
-  skipped_counts: { notes: number; folders: number; links: number };
+  created_counts: { folders: number; notes: number; links: number; files: number; skills: number; agents: number };
+  replaced_counts: { notes: number; folders: number; files: number; skills: number; agents: number };
+  duplicated_counts: { notes: number; folders: number; files: number; skills: number; agents: number };
+  remapped_counts: { notes: number; folders: number; files: number; skills: number; agents: number };
+  skipped_counts: { notes: number; folders: number; links: number; files: number; skills: number; agents: number };
   actions: ImportAction[];
   warnings: ImportWarning[];
 }
@@ -222,6 +354,9 @@ export interface ManifestSummary {
   note_count: number;
   folder_count: number;
   link_count: number;
+  file_count: number;
+  skill_count: number;
+  agent_count: number;
 }
 
 /**
@@ -274,4 +409,17 @@ export interface ExportPackage {
   files: Record<string, string>;
   /** The assembled manifest for this package. */
   manifest: ExportManifest;
+}
+
+/**
+ * A raw single-file export (canonical_source mode for skills/agents/files).
+ * Delivered as raw content, not zipped.
+ */
+export interface RawExportContent {
+  /** Suggested filename for saving (e.g. "my-skill.md"). */
+  filename: string;
+  /** UTF-8 source content. */
+  content: string;
+  /** MIME type for the download (e.g. "text/markdown", "text/x-python"). */
+  contentType: string;
 }

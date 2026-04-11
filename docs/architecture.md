@@ -373,24 +373,28 @@ shared client component. Sanitization can be added in one place here when needed
 
 ## Portability layer
 
-See [docs/import_export_v1.md](import_export_v1.md) for the full import/export architecture:
+See [docs/import_export_v1.md](import_export_v1.md) for Notes/Folders/Boxes/Bundles.
+See [docs/contextual_import_export_v1.md](contextual_import_export_v1.md) for Files/Skills/Agents (schema v1.1).
 
-- Typed manifest schema (`ExportManifest`) shared by UI, future API, and MCP
-- `export_service.ts` — note, folder, box, and context bundle export assembly
-- `import_service.ts` — parse `.md` / `.zip`, four deterministic collision modes
-- Authenticated delivery via server actions returning base64 zip for client-side download
-- `ImportSummaryReport` — typed per-object action log surfaced in the UI
+- Manifest schema v1.0 → Notes, Folders, Links, Bundles
+- Manifest schema v1.1 → adds Files (`object_files`), Skills (`skills`), Agents (`agents`), cross-type links (`object_links`)
+- Export modes: `canonical_source` (single raw file) | `packaged` (zip + manifest) — for Skills and Agents
+- Workspace-level import: `importWorkspaceLevelPackageAction` — no box required for reusable skill/agent packages
+- `is_reusable` is always preserved on import — never silently converted
+- Delivery via `deliverExportPackage` (zip) or `deliverRawContent` (raw file) in `artifact_delivery_service.ts`
+- `ImportSummaryReport` — typed per-object action log including files/skills/agents
 
 ```
 src/server/services/
-├── export_service.ts          Note/folder/box/bundle assembly → zip
-└── import_service.ts          Parse + validate + apply with collision handling
+├── export_service.ts          Note/folder/box/bundle/file/skill/agent assembly → zip or raw
+├── import_service.ts          Parse + validate + apply with collision handling (all object types)
+└── artifact_delivery_service.ts  Package/raw content → Storage → signed URL
 
 src/server/domain/types/
-└── import_export.ts           ExportManifest, ImportSummaryReport, CollisionMode
+└── import_export.ts           ExportManifest (v1.0+v1.1), ImportSummaryReport, CollisionMode, ExportMode
 
 src/app/app/import_export/
-└── actions.ts                 Export/import server actions
+└── actions.ts                 Export/import server actions (all object types)
 
 src/components/product/
 ├── export_menu.tsx            NoteExportMenu, BoxExportMenu (client)

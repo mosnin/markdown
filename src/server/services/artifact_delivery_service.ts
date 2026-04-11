@@ -1,6 +1,7 @@
 import { type SupabaseClient } from "@supabase/supabase-js";
 import { type ExportPackage } from "@/server/domain/types/import_export";
 import { packageToZip } from "@/server/services/export_service";
+import { type RawExportContent } from "@/server/domain/types/import_export";
 
 /**
  * Export artifact delivery service.
@@ -97,5 +98,56 @@ export async function deliverExportPackage(
     expires_at: expiresAt,
     filename: pkg.filename,
     size_bytes: zip.length,
+  };
+}
+
+/**
+ * Upload raw file content (not zipped) to Storage and return a signed download URL.
+ * Used for canonical_source exports (single-file skill/agent/file downloads).
+ *
+ * @param adminClient  Service-role Supabase client.
+ * @param workspaceId  Used as the storage path prefix.
+ * @param raw          The raw content descriptor from RawExportContent.
+ */
+export async function deliverRawContent(
+  adminClient: SupabaseClient,
+  workspaceId: string,
+  raw: RawExportContent
+): Promise<ArtifactDeliveryResult> {
+  const bytes = Buffer.from(raw.content, "utf-8");
+  const storagePath = `${workspaceId}/${raw.filename}`;
+
+  const { error: uploadError } = await adminClient.storage
+    .from(EXPORT_BUCKET)
+    .upload(storagePath, bytes, {
+      contentType: raw.contentType,
+      upsert: true,
+    });
+
+  if (uploadError) {
+    throw new Error(`Raw export upload failed: ${uploadError.message}`);
+  }
+
+  const { data: signedData, error: signError } = await adminClient.storage
+    .from(EXPORT_BUCKET)
+    .createSignedUrl(storagePath, SIGNED_URL_TTL_SECONDS, {
+      download: raw.filename,
+    });
+
+  if (signError || !signedData?.signedUrl) {
+    throw new Error(
+      `Failed to create signed export URL: ${signError?.message ?? "unknown error"}`
+    );
+  }
+
+  const expiresAt = new Date(
+    Date.now() + SIGNED_URL_TTL_SECONDS * 1000
+  ).toISOString();
+
+  return {
+    signed_url: signedData.signedUrl,
+    expires_at: expiresAt,
+    filename: raw.filename,
+    size_bytes: bytes.length,
   };
 }

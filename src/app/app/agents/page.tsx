@@ -7,6 +7,7 @@ import Link from "next/link";
 import { AgentTypeBadge } from "@/components/product/agent_type_badge";
 import { AgentCreateDialog } from "@/components/product/agent_create_dialog";
 import { AttachToBoxTrigger } from "@/components/product/attach_to_box_trigger";
+import { AgentImportTrigger } from "@/components/product/agent_import_dialog";
 import { cn } from "@/lib/utils";
 
 // ─── Empty state ──────────────────────────────────────────────────────────────
@@ -116,6 +117,7 @@ export default async function AgentsPage() {
               </p>
             </div>
           </div>
+          <AgentImportTrigger />
           <AgentCreateDialog forceReusable />
         </div>
       </div>

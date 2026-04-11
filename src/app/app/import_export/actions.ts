@@ -9,8 +9,14 @@ import {
   exportFolder,
   exportBox,
   exportBundle,
+  exportFile,
+  exportSkill,
+  exportAgent,
 } from "@/server/services/export_service";
-import { deliverExportPackage } from "@/server/services/artifact_delivery_service";
+import {
+  deliverExportPackage,
+  deliverRawContent,
+} from "@/server/services/artifact_delivery_service";
 import { importPackage } from "@/server/services/import_service";
 import {
   auditNoteExported,
@@ -19,11 +25,15 @@ import {
   auditBundleExported,
   auditImportCompleted,
 } from "@/server/services/audit_service";
+import { createAuditEvent } from "@/server/repositories/audit_event_repository";
 import {
   type CollisionMode,
   type BundleExportOptions,
   type ImportSummaryReport,
   type ExportArtifact,
+  type ExportMode,
+  type ExportPackage,
+  type RawExportContent,
 } from "@/server/domain/types/import_export";
 
 // ─── Action result type ───────────────────────────────────────────────────────
@@ -249,5 +259,220 @@ export async function importPackageAction(
       ok: false,
       error: err instanceof Error ? err.message : "Import failed",
     };
+  }
+}
+
+// ─── Export: file ─────────────────────────────────────────────────────────────
+
+export async function exportFileAction(
+  fileId: string
+): Promise<ActionResult<ExportArtifact>> {
+  try {
+    const { supabase, userId, workspaceId } = await requireContext();
+    const adminClient = createAdminClient();
+
+    const pkg = await exportFile(supabase, workspaceId, fileId);
+    const delivery = await deliverExportPackage(adminClient, workspaceId, pkg);
+
+    await createAuditEvent(supabase, {
+      workspace_id: workspaceId,
+      actor_type: "user",
+      actor_id: userId,
+      object_type: "file",
+      object_id: fileId,
+      event_type: "file.exported",
+      metadata: null,
+    });
+
+    return {
+      ok: true,
+      data: {
+        ...delivery,
+        manifest_summary: {
+          export_type: pkg.manifest.export_type,
+          note_count: 0,
+          folder_count: 0,
+          link_count: 0,
+          file_count: 1,
+          skill_count: 0,
+          agent_count: 0,
+        },
+      },
+    };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Export failed" };
+  }
+}
+
+// ─── Export: skill ────────────────────────────────────────────────────────────
+
+/**
+ * Export a skill.
+ * mode = "canonical_source": returns a raw source file download.
+ * mode = "packaged" (default): returns a zip with manifest + source file.
+ */
+export async function exportSkillAction(
+  skillId: string,
+  mode: ExportMode = "packaged"
+): Promise<ActionResult<ExportArtifact>> {
+  try {
+    const { supabase, userId, workspaceId } = await requireContext();
+    const adminClient = createAdminClient();
+
+    const result = await exportSkill(supabase, workspaceId, skillId, mode);
+
+    let delivery;
+    let exportType: "skill" = "skill";
+
+    if (mode === "canonical_source") {
+      delivery = await deliverRawContent(adminClient, workspaceId, result as RawExportContent);
+    } else {
+      const pkg = result as ExportPackage;
+      delivery = await deliverExportPackage(adminClient, workspaceId, pkg);
+      exportType = pkg.manifest.export_type as "skill";
+    }
+
+    await createAuditEvent(supabase, {
+      workspace_id: workspaceId,
+      actor_type: "user",
+      actor_id: userId,
+      object_type: "skill",
+      object_id: skillId,
+      event_type: "skill.exported",
+      metadata: { mode },
+    });
+
+    return {
+      ok: true,
+      data: {
+        ...delivery,
+        manifest_summary: {
+          export_type: exportType,
+          note_count: 0,
+          folder_count: 0,
+          link_count: 0,
+          file_count: 0,
+          skill_count: 1,
+          agent_count: 0,
+        },
+      },
+    };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Export failed" };
+  }
+}
+
+// ─── Export: agent ────────────────────────────────────────────────────────────
+
+export async function exportAgentAction(
+  agentId: string,
+  mode: ExportMode = "packaged"
+): Promise<ActionResult<ExportArtifact>> {
+  try {
+    const { supabase, userId, workspaceId } = await requireContext();
+    const adminClient = createAdminClient();
+
+    const result = await exportAgent(supabase, workspaceId, agentId, mode);
+
+    let delivery;
+    let exportType: "agent" = "agent";
+
+    if (mode === "canonical_source") {
+      delivery = await deliverRawContent(adminClient, workspaceId, result as RawExportContent);
+    } else {
+      const pkg = result as ExportPackage;
+      delivery = await deliverExportPackage(adminClient, workspaceId, pkg);
+      exportType = pkg.manifest.export_type as "agent";
+    }
+
+    await createAuditEvent(supabase, {
+      workspace_id: workspaceId,
+      actor_type: "user",
+      actor_id: userId,
+      object_type: "agent",
+      object_id: agentId,
+      event_type: "agent.exported",
+      metadata: { mode },
+    });
+
+    return {
+      ok: true,
+      data: {
+        ...delivery,
+        manifest_summary: {
+          export_type: exportType,
+          note_count: 0,
+          folder_count: 0,
+          link_count: 0,
+          file_count: 0,
+          skill_count: 0,
+          agent_count: 1,
+        },
+      },
+    };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Export failed" };
+  }
+}
+
+// ─── Import: workspace-level (skills/agents) ──────────────────────────────────
+
+/**
+ * Import a .zip package at workspace level (no box required).
+ * For v1.1 packages containing reusable skills/agents.
+ * Accepts FormData with fields:
+ *   - file: File (.zip only)
+ *   - collision_mode: CollisionMode
+ */
+export async function importWorkspaceLevelPackageAction(
+  formData: FormData
+): Promise<ActionResult<ImportSummaryReport>> {
+  try {
+    const { supabase, userId, workspaceId } = await requireContext();
+
+    const file = formData.get("file") as File | null;
+    const collisionMode = formData.get("collision_mode") as CollisionMode | null;
+
+    if (!file) throw new Error("No file provided.");
+    if (!collisionMode) throw new Error("No collision_mode provided.");
+
+    if (!file.name.toLowerCase().endsWith(".zip")) {
+      throw new Error("Workspace-level import requires a .zip package.");
+    }
+
+    const bytes = await file.arrayBuffer();
+    const buffer = Buffer.from(bytes);
+
+    const report = await importPackage(
+      supabase,
+      workspaceId,
+      userId,
+      { buffer, filename: file.name },
+      { boxId: null, targetFolderId: null },
+      collisionMode
+    );
+
+    await createAuditEvent(supabase, {
+      workspace_id: workspaceId,
+      actor_type: "user",
+      actor_id: userId,
+      object_type: "workspace",
+      object_id: workspaceId,
+      event_type: "workspace.import_completed",
+      metadata: {
+        collision_mode: collisionMode,
+        created_skills: report.created_counts.skills,
+        created_agents: report.created_counts.agents,
+        warnings: report.warnings.length,
+      },
+    });
+
+    revalidatePath("/app/skills");
+    revalidatePath("/app/agents");
+    revalidatePath("/app");
+
+    return { ok: true, data: report };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Import failed" };
   }
 }
