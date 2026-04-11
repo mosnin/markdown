@@ -4,9 +4,10 @@ import { createClient } from "@/lib/supabase/server";
 import { getRequestContext } from "@/server/auth/get_request_context";
 import { createLink, updateLink, deleteLink } from "@/server/services/link_service";
 import { type RelationshipType } from "@/server/domain/constants/note_constants";
-import { type ActionResult } from "@/app/app/boxes/actions";
 
-export type { ActionResult };
+type ActionResult<T = void> =
+  | { ok: true; data: T }
+  | { ok: false; error: string };
 
 // ─── Auth helper ──────────────────────────────────────────────────────────────
 
