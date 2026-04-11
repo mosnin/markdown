@@ -7,6 +7,9 @@ import { getAgentForWorkspace, createAgent, updateAgentContent } from "@/server/
 import { updateAgent } from "@/server/repositories/agent_repository";
 import { getBoxById } from "@/server/repositories/box_repository";
 import { createLink, removeLink } from "@/server/services/object_link_service";
+import { createFolder } from "@/server/services/folder_service";
+import { createFile } from "@/server/services/file_service";
+import { getSkillForWorkspace } from "@/server/services/skill_service";
 import {
   OBJECT_TYPE,
   SKILL_AGENT_FORMATS,
@@ -220,5 +223,102 @@ export async function deleteAgentObjectLinkAction(
   } catch (err) {
     console.error("[deleteAgentObjectLinkAction]", err);
     return { ok: false, error: err instanceof Error ? err.message : "Failed to delete link" };
+  }
+}
+
+export async function createAgentChildFolderAction(
+  agentId: string,
+  name: string
+): Promise<ActionResult<{ id: string }>> {
+  try {
+    const ctx = await requireAuthenticatedUser();
+    const supabase = await createClient();
+    const agent = await getAgentForWorkspace(supabase, agentId, ctx.workspace.id);
+    if (!agent || !agent.box_id) return { ok: false, error: "Agent does not support children in this scope" };
+    const folder = await createFolder(supabase, ctx.user.id, ctx.workspace.id, {
+      boxId: agent.box_id,
+      name: name.trim(),
+      parentFolderId: agent.folder_id ?? null,
+    });
+    await createLink(supabase, ctx.workspace.id, {
+      sourceObjectType: OBJECT_TYPE.AGENT,
+      sourceObjectId: agentId,
+      targetObjectType: OBJECT_TYPE.FOLDER,
+      targetObjectId: folder.id,
+      relationshipType: RELATIONSHIP_TYPE.PARENT_OF,
+      relationshipNote: "Agent child folder",
+    });
+    revalidatePath(`/app/agents/${agentId}`);
+    revalidatePath(`/app/boxes/${agent.box_id}`);
+    return { ok: true, data: { id: folder.id } };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Failed to create child folder" };
+  }
+}
+
+export async function createAgentChildFileAction(
+  agentId: string,
+  params: {
+    filename: string;
+    canonicalFormat: SkillAgentFormat;
+    initialContent?: string;
+  }
+): Promise<ActionResult<{ id: string }>> {
+  try {
+    const ctx = await requireAuthenticatedUser();
+    const supabase = await createClient();
+    const agent = await getAgentForWorkspace(supabase, agentId, ctx.workspace.id);
+    if (!agent || !agent.box_id) return { ok: false, error: "Agent does not support children in this scope" };
+    const file = await createFile(supabase, ctx.user.id, ctx.workspace.id, {
+      boxId: agent.box_id,
+      folderId: agent.folder_id ?? null,
+      name: params.filename.trim(),
+      sourceContent: params.initialContent ?? "",
+      canonicalFormat: params.canonicalFormat,
+      sourceLanguage: null,
+      fileExtension: null,
+      mimeType: null,
+    });
+    await createLink(supabase, ctx.workspace.id, {
+      sourceObjectType: OBJECT_TYPE.AGENT,
+      sourceObjectId: agentId,
+      targetObjectType: OBJECT_TYPE.FILE,
+      targetObjectId: file.id,
+      relationshipType: RELATIONSHIP_TYPE.PARENT_OF,
+      relationshipNote: "Agent child file",
+    });
+    revalidatePath(`/app/agents/${agentId}`);
+    revalidatePath(`/app/boxes/${agent.box_id}`);
+    return { ok: true, data: { id: file.id } };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Failed to create child file" };
+  }
+}
+
+export async function attachSkillToAgentAction(
+  agentId: string,
+  skillId: string
+): Promise<ActionResult<{ id: string }>> {
+  try {
+    const ctx = await requireAuthenticatedUser();
+    const supabase = await createClient();
+    const [agent, skill] = await Promise.all([
+      getAgentForWorkspace(supabase, agentId, ctx.workspace.id),
+      getSkillForWorkspace(supabase, skillId, ctx.workspace.id),
+    ]);
+    if (!agent) return { ok: false, error: "Agent not found" };
+    if (!skill) return { ok: false, error: "Skill not found" };
+    const link = await createLink(supabase, ctx.workspace.id, {
+      sourceObjectType: OBJECT_TYPE.AGENT,
+      sourceObjectId: agentId,
+      targetObjectType: OBJECT_TYPE.SKILL,
+      targetObjectId: skillId,
+      relationshipType: RELATIONSHIP_TYPE.DEPENDS_ON,
+      relationshipNote: "Agent skill dependency",
+    });
+    revalidatePath(`/app/agents/${agentId}`);
+    return { ok: true, data: { id: link.id } };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Failed to attach skill" };
   }
 }

@@ -1,8 +1,12 @@
 import { File, Zap } from "lucide-react";
 import Link from "next/link";
+import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { type ResolvedAgentLink } from "@/components/product/agent_object_links_panel";
 import { cn } from "@/lib/utils";
+import { attachSkillToAgentAction } from "@/app/app/agents/actions";
+import { Button } from "@/components/ui/button";
 
 // ─── Skill/file reference card ────────────────────────────────────────────────
 
@@ -61,6 +65,8 @@ function ReferenceCard({
 interface AgentSkillsPanelProps {
   /** All outgoing links from this agent — filtered client-side for skills and files */
   outgoingLinks: ResolvedAgentLink[];
+  agentId: string;
+  availableSkills?: Array<{ id: string; name: string }>;
 }
 
 /**
@@ -74,7 +80,10 @@ interface AgentSkillsPanelProps {
  * Uses the existing object_links system — the same links also appear in the
  * Relationships tab, but here they are filtered and presented with more structure.
  */
-export function AgentSkillsPanel({ outgoingLinks }: AgentSkillsPanelProps) {
+export function AgentSkillsPanel({ outgoingLinks, agentId, availableSkills = [] }: AgentSkillsPanelProps) {
+  const router = useRouter();
+  const [skillId, setSkillId] = useState("");
+  const [isPending, start] = useTransition();
   const skillLinks = outgoingLinks.filter((l) => l.linkedObjectType === "skill");
   const fileLinks = outgoingLinks.filter((l) => l.linkedObjectType === "file");
 
@@ -96,10 +105,25 @@ export function AgentSkillsPanel({ outgoingLinks }: AgentSkillsPanelProps) {
           <div className="space-y-1">
             <p className="text-sm font-medium text-foreground">No skill or file references</p>
             <p className="text-xs text-muted-foreground max-w-xs">
-              Use the Relationships tab to add links to skills and files. Links with{" "}
-              <em>Depends on</em> are shown here as strong dependencies.
+              Add a skill dependency directly from this tab, or use Relationships for loose semantic links.
             </p>
           </div>
+          {availableSkills.length > 0 && (
+            <div className="flex items-center gap-2">
+              <select value={skillId} onChange={(e) => setSkillId(e.target.value)} className="h-8 rounded-md border border-input bg-background px-2 text-xs">
+                <option value="">Select skill…</option>
+                {availableSkills.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+              </select>
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={isPending || !skillId}
+                onClick={() => start(async () => { await attachSkillToAgentAction(agentId, skillId); setSkillId(""); router.refresh(); })}
+              >
+                Attach skill
+              </Button>
+            </div>
+          )}
         </div>
       </ScrollArea>
     );
@@ -108,6 +132,22 @@ export function AgentSkillsPanel({ outgoingLinks }: AgentSkillsPanelProps) {
   return (
     <ScrollArea className="h-full">
       <div className="flex flex-col gap-6 px-6 py-6">
+        {availableSkills.length > 0 && (
+          <div className="flex items-center gap-2">
+            <select value={skillId} onChange={(e) => setSkillId(e.target.value)} className="h-8 rounded-md border border-input bg-background px-2 text-xs">
+              <option value="">Select skill…</option>
+              {availableSkills.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+            </select>
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={isPending || !skillId}
+              onClick={() => start(async () => { await attachSkillToAgentAction(agentId, skillId); setSkillId(""); router.refresh(); })}
+            >
+              Attach skill
+            </Button>
+          </div>
+        )}
         {hasSkills && (
           <section className="flex flex-col gap-3">
             <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">

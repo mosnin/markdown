@@ -239,11 +239,11 @@ export async function searchNotesAction(
  * items with reduced opacity. Trashed attached objects are excluded.
  */
 export async function getBoxTreeAction(boxId: string): Promise<ActionResult<{
-  folders: Array<{ id: string; name: string; parent_folder_id: string | null; status: string }>;
-  notes: Array<{ id: string; title: string; kind: string; folder_id: string | null }>;
-  files: Array<{ id: string; name: string; file_extension: string | null; folder_id: string | null }>;
-  skills: Array<{ id: string; name: string; folder_id: string | null; status: string; is_reusable: boolean; is_attachment: boolean }>;
-  agents: Array<{ id: string; name: string; folder_id: string | null; status: string; is_reusable: boolean; is_attachment: boolean }>;
+  folders: Array<{ id: string; name: string; parent_folder_id: string | null; status: string; sort_order: number }>;
+  notes: Array<{ id: string; title: string; kind: string; folder_id: string | null; status: string; sort_order: number }>;
+  files: Array<{ id: string; name: string; file_extension: string | null; folder_id: string | null; status: string; sort_order: number }>;
+  skills: Array<{ id: string; name: string; folder_id: string | null; status: string; is_reusable: boolean; is_attachment: boolean; sort_order: number }>;
+  agents: Array<{ id: string; name: string; folder_id: string | null; status: string; is_reusable: boolean; is_attachment: boolean; sort_order: number }>;
 }>> {
   try {
     const { supabase, workspaceId } = await requireContext();
@@ -267,6 +267,14 @@ export async function getBoxTreeAction(boxId: string): Promise<ActionResult<{
       listAgentsByBox(supabase, boxId, { includeArchived: true }),
       listAttachmentsForBox(supabase, boxId),
     ]);
+    const { data: registryRows } = await supabase
+      .from("workspace_objects")
+      .select("object_type, object_id, sort_order")
+      .eq("box_id", boxId);
+    const sortOrder = new Map<string, number>();
+    for (const row of registryRows ?? []) {
+      sortOrder.set(`${row.object_type}:${row.object_id}`, row.sort_order ?? 0);
+    }
 
     // Resolve attached reusable skills and agents by id
     const attachedSkillIds = attachments
@@ -304,18 +312,23 @@ export async function getBoxTreeAction(boxId: string): Promise<ActionResult<{
           name: f.name,
           parent_folder_id: f.parent_folder_id,
           status: f.status,
+          sort_order: sortOrder.get(`folder:${f.id}`) ?? 0,
         })),
         notes: notes.map((n) => ({
           id: n.id,
           title: n.title,
           kind: n.kind,
           folder_id: n.folder_id,
+          status: n.status,
+          sort_order: sortOrder.get(`note:${n.id}`) ?? 0,
         })),
         files: files.map((f) => ({
           id: f.id,
           name: f.name,
           file_extension: f.file_extension,
           folder_id: f.folder_id,
+          status: f.status,
+          sort_order: sortOrder.get(`file:${f.id}`) ?? 0,
         })),
         skills: [
           ...localSkills.map((s) => ({
@@ -325,6 +338,7 @@ export async function getBoxTreeAction(boxId: string): Promise<ActionResult<{
             status: s.status,
             is_reusable: s.is_reusable,
             is_attachment: false,
+            sort_order: sortOrder.get(`skill:${s.id}`) ?? 0,
           })),
           ...attachedSkills.map((s) => ({
             id: s.id,
@@ -333,6 +347,7 @@ export async function getBoxTreeAction(boxId: string): Promise<ActionResult<{
             status: s.status,
             is_reusable: true,
             is_attachment: true,
+            sort_order: attachments.find((a) => a.object_type === "skill" && a.object_id === s.id)?.sort_order ?? 0,
           })),
         ],
         agents: [
@@ -343,6 +358,7 @@ export async function getBoxTreeAction(boxId: string): Promise<ActionResult<{
             status: a.status,
             is_reusable: a.is_reusable,
             is_attachment: false,
+            sort_order: sortOrder.get(`agent:${a.id}`) ?? 0,
           })),
           ...attachedAgents.map((a) => ({
             id: a.id,
@@ -351,6 +367,7 @@ export async function getBoxTreeAction(boxId: string): Promise<ActionResult<{
             status: a.status,
             is_reusable: true,
             is_attachment: true,
+            sort_order: attachments.find((at) => at.object_type === "agent" && at.object_id === a.id)?.sort_order ?? 0,
           })),
         ],
       },
@@ -550,5 +567,175 @@ export async function getAttachablesToBoxAction(boxId: string): Promise<ActionRe
     };
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : "Failed to load attachables" };
+  }
+}
+
+type TreeObjectType = "folder" | "note" | "file" | "skill" | "agent";
+type MovePosition = "inside" | "before" | "after" | "root";
+
+interface MoveTreeNodeInput {
+  boxId: string;
+  draggedType: TreeObjectType;
+  draggedId: string;
+  targetType?: TreeObjectType;
+  targetId?: string;
+  targetFolderId?: string | null;
+  position: MovePosition;
+  isAttachment?: boolean;
+}
+
+async function computePathCache(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  table: "notes" | "files" | "skills" | "agents",
+  objectId: string,
+  targetFolderId: string | null
+) {
+  const { data: row, error } = await supabase
+    .from(table)
+    .select("slug")
+    .eq("id", objectId)
+    .single();
+  if (error || !row) throw new Error("Object not found");
+  if (!targetFolderId) return row.slug as string;
+  const { data: folder, error: folderError } = await supabase
+    .from("folders")
+    .select("path_cache")
+    .eq("id", targetFolderId)
+    .single();
+  if (folderError || !folder) throw new Error("Target folder not found");
+  return `${folder.path_cache}/${row.slug}`;
+}
+
+export async function moveTreeNodeAction(input: MoveTreeNodeInput): Promise<ActionResult> {
+  try {
+    const { supabase, workspaceId } = await requireContext();
+    const { boxId, draggedType, draggedId, targetType, targetId, targetFolderId, position, isAttachment } = input;
+
+    const { data: box } = await supabase.from("boxes").select("id, workspace_id").eq("id", boxId).single();
+    if (!box || box.workspace_id !== workspaceId) return { ok: false, error: "Box not found" };
+
+    let nextFolderId: string | null = null;
+    if (position === "inside") {
+      if (targetType !== "folder" || !targetId) return { ok: false, error: "Inside moves require a folder target" };
+      nextFolderId = targetId;
+    } else if (position === "root") {
+      nextFolderId = null;
+    } else {
+      nextFolderId = targetFolderId ?? null;
+    }
+
+    // folder guardrails
+    if (draggedType === "folder") {
+      if (nextFolderId === draggedId) return { ok: false, error: "Cannot move a folder into itself" };
+      if (nextFolderId) {
+        const { data: targetFolder } = await supabase
+          .from("folders")
+          .select("path_cache, box_id")
+          .eq("id", nextFolderId)
+          .single();
+        const { data: sourceFolder } = await supabase
+          .from("folders")
+          .select("path_cache, box_id")
+          .eq("id", draggedId)
+          .single();
+        if (!targetFolder || !sourceFolder || targetFolder.box_id !== boxId || sourceFolder.box_id !== boxId) {
+          return { ok: false, error: "Folder not found" };
+        }
+        if (targetFolder.path_cache.startsWith(`${sourceFolder.path_cache}/`)) {
+          return { ok: false, error: "Cannot move a folder into its descendant" };
+        }
+      }
+    }
+
+    const sortValue = Date.now();
+    if (draggedType === "folder") {
+      const { data: folder } = await supabase
+        .from("folders")
+        .select("id, box_id, slug, path_cache")
+        .eq("id", draggedId)
+        .single();
+      if (!folder || folder.box_id !== boxId) return { ok: false, error: "Folder not found" };
+
+      let newPath = folder.slug;
+      if (nextFolderId) {
+        const { data: parent } = await supabase.from("folders").select("path_cache").eq("id", nextFolderId).single();
+        if (!parent) return { ok: false, error: "Target folder not found" };
+        newPath = `${parent.path_cache}/${folder.slug}`;
+      }
+      const oldPath = folder.path_cache;
+      await supabase.from("folders").update({ parent_folder_id: nextFolderId, path_cache: newPath }).eq("id", draggedId);
+      await supabase
+        .from("workspace_objects")
+        .update({ folder_id: nextFolderId, sort_order: sortValue })
+        .eq("object_type", "folder")
+        .eq("object_id", draggedId);
+
+      // cascade descendant folder path caches
+      const { data: descendants } = await supabase
+        .from("folders")
+        .select("id, path_cache")
+        .like("path_cache", `${oldPath}/%`);
+      for (const d of descendants ?? []) {
+        const patched = d.path_cache.replace(oldPath, newPath);
+        await supabase.from("folders").update({ path_cache: patched }).eq("id", d.id);
+      }
+      // cascade item path caches
+      for (const table of ["notes", "files", "skills", "agents"] as const) {
+        const { data: rows } = await supabase
+          .from(table)
+          .select("id, path_cache")
+          .eq("box_id", boxId)
+          .like("path_cache", `${oldPath}/%`);
+        for (const row of rows ?? []) {
+          await supabase.from(table).update({ path_cache: row.path_cache.replace(oldPath, newPath) }).eq("id", row.id);
+        }
+      }
+    } else {
+      if (isAttachment && (draggedType === "skill" || draggedType === "agent")) {
+        await supabase
+          .from("box_object_attachments")
+          .update({ folder_id: nextFolderId, sort_order: sortValue })
+          .eq("box_id", boxId)
+          .eq("object_type", draggedType)
+          .eq("object_id", draggedId);
+      } else {
+        const table = draggedType === "note" ? "notes" : draggedType === "file" ? "files" : draggedType === "skill" ? "skills" : "agents";
+        const pathCache = await computePathCache(supabase, table, draggedId, nextFolderId);
+        await supabase.from(table).update({ folder_id: nextFolderId, path_cache: pathCache }).eq("id", draggedId).eq("box_id", boxId);
+        await supabase
+          .from("workspace_objects")
+          .update({ folder_id: nextFolderId, sort_order: sortValue })
+          .eq("object_type", draggedType)
+          .eq("object_id", draggedId);
+      }
+    }
+
+    // lightweight sibling reorder support
+    if (position === "before" || position === "after") {
+      if (!targetType || !targetId) return { ok: false, error: "Missing target for reorder" };
+      const targetSort = isAttachment
+        ? (await supabase.from("box_object_attachments").select("sort_order").eq("box_id", boxId).eq("object_type", targetType).eq("object_id", targetId).maybeSingle()).data?.sort_order ?? sortValue
+        : (await supabase.from("workspace_objects").select("sort_order").eq("object_type", targetType).eq("object_id", targetId).maybeSingle()).data?.sort_order ?? sortValue;
+      const adjusted = position === "before" ? targetSort - 1 : targetSort + 1;
+      if (isAttachment && (draggedType === "skill" || draggedType === "agent")) {
+        await supabase
+          .from("box_object_attachments")
+          .update({ sort_order: adjusted })
+          .eq("box_id", boxId)
+          .eq("object_type", draggedType)
+          .eq("object_id", draggedId);
+      } else {
+        await supabase
+          .from("workspace_objects")
+          .update({ sort_order: adjusted })
+          .eq("object_type", draggedType)
+          .eq("object_id", draggedId);
+      }
+    }
+
+    revalidatePath(`/app/boxes/${boxId}`);
+    return { ok: true, data: undefined };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Failed to move tree node" };
   }
 }

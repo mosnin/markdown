@@ -6,6 +6,9 @@ import { createClient } from "@/lib/supabase/server";
 import { createSkill } from "@/server/services/skill_service";
 import { getBoxById } from "@/server/repositories/box_repository";
 import { createLink, removeLink } from "@/server/services/object_link_service";
+import { createFolder } from "@/server/services/folder_service";
+import { createFile } from "@/server/services/file_service";
+import { updateSkillContent, getSkillForWorkspace } from "@/server/services/skill_service";
 import {
   OBJECT_TYPE,
   SKILL_AGENT_FORMATS,
@@ -195,6 +198,94 @@ export async function duplicateSkillAction(
   } catch (err) {
     console.error("[duplicateSkillAction]", err);
     return { ok: false, error: err instanceof Error ? err.message : "Failed to duplicate skill" };
+  }
+}
+
+export async function saveSkillAction(
+  skillId: string,
+  params: {
+    sourceContent: string;
+    description?: string | null;
+    tags?: string[];
+    summary?: string | null;
+  }
+): Promise<ActionResult<{ id: string }>> {
+  try {
+    const ctx = await requireAuthenticatedUser();
+    const supabase = await createClient();
+    const updated = await updateSkillContent(supabase, ctx.user.id, ctx.workspace.id, skillId, params);
+    return { ok: true, data: { id: updated.id } };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Failed to save skill" };
+  }
+}
+
+export async function createSkillChildFolderAction(
+  skillId: string,
+  name: string
+): Promise<ActionResult<{ id: string }>> {
+  try {
+    const ctx = await requireAuthenticatedUser();
+    const supabase = await createClient();
+    const skill = await getSkillForWorkspace(supabase, skillId, ctx.workspace.id);
+    if (!skill || !skill.box_id) return { ok: false, error: "Skill does not support children in this scope" };
+    const folder = await createFolder(supabase, ctx.user.id, ctx.workspace.id, {
+      boxId: skill.box_id,
+      name: name.trim(),
+      parentFolderId: skill.folder_id ?? null,
+    });
+    await createLink(supabase, ctx.workspace.id, {
+      sourceObjectType: OBJECT_TYPE.SKILL,
+      sourceObjectId: skillId,
+      targetObjectType: OBJECT_TYPE.FOLDER,
+      targetObjectId: folder.id,
+      relationshipType: RELATIONSHIP_TYPE.PARENT_OF,
+      relationshipNote: "Skill child folder",
+    });
+    revalidatePath(`/app/skills/${skillId}`);
+    revalidatePath(`/app/boxes/${skill.box_id}`);
+    return { ok: true, data: { id: folder.id } };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Failed to create child folder" };
+  }
+}
+
+export async function createSkillChildFileAction(
+  skillId: string,
+  params: {
+    filename: string;
+    canonicalFormat: SkillAgentFormat;
+    initialContent?: string;
+  }
+): Promise<ActionResult<{ id: string }>> {
+  try {
+    const ctx = await requireAuthenticatedUser();
+    const supabase = await createClient();
+    const skill = await getSkillForWorkspace(supabase, skillId, ctx.workspace.id);
+    if (!skill || !skill.box_id) return { ok: false, error: "Skill does not support children in this scope" };
+    const file = await createFile(supabase, ctx.user.id, ctx.workspace.id, {
+      boxId: skill.box_id,
+      folderId: skill.folder_id ?? null,
+      name: params.filename.trim(),
+      sourceContent: params.initialContent ?? "",
+      canonicalFormat: params.canonicalFormat,
+      sourceLanguage: null,
+      fileExtension: null,
+      mimeType: null,
+    });
+    await createLink(supabase, ctx.workspace.id, {
+      sourceObjectType: OBJECT_TYPE.SKILL,
+      sourceObjectId: skillId,
+      targetObjectType: OBJECT_TYPE.FILE,
+      targetObjectId: file.id,
+      relationshipType: RELATIONSHIP_TYPE.PARENT_OF,
+      relationshipNote: "Skill child file",
+    });
+    revalidatePath(`/app/skills/${skillId}`);
+    revalidatePath(`/app/boxes/${skill.box_id}`);
+    return { ok: true, data: { id: file.id } };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Failed to create child file" };
   }
 }
 
