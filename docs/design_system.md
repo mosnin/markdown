@@ -195,6 +195,17 @@ Installed primitives:
 | `FileLifecycleMenu` | File archive/unarchive/trash/restore; inline confirm for destructive ops |
 | `FileCreateDialog` | File creation dialog: filename + format select + optional initial content |
 | `FileObjectLinksPanel` | Semantic object links panel for files: outgoing/incoming, create/delete |
+| `AgentTypeBadge` | Agent type taxonomy badge (reasoning, coding, research, etc.) |
+| `AgentReferenceBadge` | Communicates reusable/local/attached state for agents |
+| `AgentSourceEditor` | Code textarea editor for agents (all formats); autosave; type + format in toolbar |
+| `AgentOverviewPanel` | Agent Overview tab: structured readable summary including structured core |
+| `AgentExportsPanel` | Agent Exports tab: read-only generated JSON/YAML from structured core fields |
+| `AgentChildrenPanel` | Agent Children tab: associated files/notes via object_links |
+| `AgentSkillsPanel` | Agent Skills tab: skill/file references; strong dependencies vs associations |
+| `AgentObjectLinksPanel` | Semantic links panel for agents: outgoing/incoming; create/delete |
+| `AgentContextPanel` | Agent right-pane: Info / Links / History tabs (no Bundle tab) |
+| `AgentLifecycleMenu` | Agent archive/unarchive/trash/restore; inline confirm |
+| `AgentCreateDialog` | Agent creation: name, scope, format, type, model hint, system prompt, content |
 
 ### Three-pane workspace layout
 
@@ -237,6 +248,16 @@ to make the current note or box feel situated in a structured knowledge system.
 
 Files do not have a Bundle tab. Files are not context documents; they are code and data artifacts.
 
+**Agent right pane tabs:**
+
+| Tab | Contents |
+|---|---|
+| Info | Identity (name, reusable/local badge, agent type), format, structured core (model hint, agent type), system prompt preview, size, tags, summary, location, version |
+| Links | `AgentObjectLinksPanel` — object links to notes, files, skills, agents |
+| History | Immutable version list (no rollback in this version) |
+
+Agents do not have a Bundle tab. The center surface has six tabs (Overview / Source / Exports / Children / Skills / Relationships) — the right pane is the compact metadata companion.
+
 **Box right pane:**
 
 Guide note is always the first section (front door). Sections: guide note card + picker → box identity → contents stats → folder policies → details.
@@ -261,6 +282,33 @@ Notes and Files are distinct object types. Do not conflate them.
 | Semantic links | `note_links` + `object_links` | `object_links` only |
 
 Do not add a document view or rendering surface to Files. Do not add code editor behavior to Notes.
+
+### Notes vs Files vs Skills vs Agents: the full matrix
+
+| Dimension | Note | File | Skill | Agent |
+|---|---|---|---|---|
+| Format | Markdown only | Typed (many) | markdown/json/yaml/ts/py | markdown/json/yaml/ts/py |
+| Editor | Document + Markdown | Code textarea | Code textarea | Code textarea |
+| Structured core | No | No | No | Yes (agent_type, model_hint, system_prompt) |
+| Center tabs | (single pane) | (single pane) | (single page) | Overview/Source/Exports/Children/Skills/Relationships |
+| Right pane tabs | Info/Links/Bundle/History | Info/Links/History | — | Info/Links/History |
+| Reusable | No | No | Yes | Yes |
+
+Agents are the heaviest object type. They have the richest workspace surface because they represent structured orchestration logic, not just prose or code.
+
+### Agent workspace surface
+
+The Agent page has a **six-tab center surface** plus a right context panel.
+
+Center tabs (in order):
+1. **Overview** — human-readable structured summary; makes the agent understandable before opening source
+2. **Source** — the single canonical editable source; code textarea for all formats
+3. **Exports** — read-only generated representations derived from structured core fields; always labeled as generated
+4. **Children** — associated files/notes via object_links; `parent_of`/`child_of` shown as structural containment
+5. **Skills** — skill/file references; `depends_on` links shown as strong dependencies
+6. **Relationships** — full `AgentObjectLinksPanel`; add/remove semantic links
+
+The Exports tab banner must always make clear: **these are generated read-only views**. Editing must use the Source tab.
 
 ### File editor
 

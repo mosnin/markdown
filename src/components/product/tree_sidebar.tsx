@@ -21,6 +21,7 @@ import { cn } from "@/lib/utils";
 import { Spinner } from "@/components/ui/spinner";
 import { createClient } from "@/lib/supabase/browser";
 import { FileCreateDialog } from "@/components/product/file_create_dialog";
+import { AgentCreateDialog } from "@/components/product/agent_create_dialog";
 import { getBoxTreeAction, createNoteAction, createFolderAction } from "@/app/app/boxes/actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -644,6 +645,7 @@ function BoxQuickCreateMenu({
   const [noteOpen, setNoteOpen] = useState(false);
   const [folderOpen, setFolderOpen] = useState(false);
   const [fileCreateOpen, setFileCreateOpen] = useState(false);
+  const [agentCreateOpen, setAgentCreateOpen] = useState(false);
   const [noteTitle, setNoteTitle] = useState("");
   const [folderName, setFolderName] = useState("");
   const [noteError, setNoteError] = useState<string | null>(null);
@@ -710,11 +712,13 @@ function BoxQuickCreateMenu({
             New folder
           </DropdownMenuItem>
           {/* File creation is handled by its own dialog via FileCreateDialog */}
-          <DropdownMenuItem
-            onClick={() => setFileCreateOpen(true)}
-          >
+          <DropdownMenuItem onClick={() => setFileCreateOpen(true)}>
             <File className="h-3.5 w-3.5" aria-hidden="true" />
             New file
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => setAgentCreateOpen(true)}>
+            <Bot className="h-3.5 w-3.5" aria-hidden="true" />
+            New agent
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
@@ -779,6 +783,14 @@ function BoxQuickCreateMenu({
         open={fileCreateOpen}
         onOpenChange={setFileCreateOpen}
         onCreated={() => { setFileCreateOpen(false); onTreeRefresh?.(); }}
+      />
+
+      {/* Agent creation dialog — controlled from dropdown "New agent" item */}
+      <AgentCreateDialog
+        boxId={box.id}
+        open={agentCreateOpen}
+        onOpenChange={setAgentCreateOpen}
+        onCreated={() => { setAgentCreateOpen(false); onTreeRefresh?.(); }}
       />
     </>
   );

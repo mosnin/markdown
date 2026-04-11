@@ -3,6 +3,8 @@ import { requireAuthenticatedUser } from "@/server/auth/require_authenticated_us
 import { createClient } from "@/lib/supabase/server";
 import { listReusableAgents } from "@/server/repositories/agent_repository";
 import Link from "next/link";
+import { AgentTypeBadge } from "@/components/product/agent_type_badge";
+import { AgentCreateDialog } from "@/components/product/agent_create_dialog";
 import { cn } from "@/lib/utils";
 
 // ─── Empty state ──────────────────────────────────────────────────────────────
@@ -15,8 +17,8 @@ function EmptyAgents() {
       </div>
       <div className="space-y-1">
         <p className="text-sm font-medium text-foreground">No workspace agents yet</p>
-        <p className="text-xs text-muted-foreground">
-          Workspace-level reusable agents will appear here. Box-local agents live inside their box.
+        <p className="text-xs text-muted-foreground max-w-xs">
+          Workspace-level reusable agents appear here. Box-local agents live inside their box.
         </p>
       </div>
     </div>
@@ -25,7 +27,19 @@ function EmptyAgents() {
 
 // ─── Agent card ───────────────────────────────────────────────────────────────
 
-function AgentCard({ agent }: { agent: { id: string; name: string; description: string | null; agent_type: string | null; tags: string[] } }) {
+function AgentCard({
+  agent,
+}: {
+  agent: {
+    id: string;
+    name: string;
+    description: string | null;
+    agent_type: string | null;
+    tags: string[];
+    canonical_format: string;
+    status: string;
+  };
+}) {
   return (
     <Link
       href={`/app/agents/${agent.id}`}
@@ -37,25 +51,28 @@ function AgentCard({ agent }: { agent: { id: string; name: string; description: 
     >
       <div className="flex items-center gap-2">
         <Bot className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-        <span className="text-sm font-medium text-foreground truncate">{agent.name}</span>
+        <span className="text-sm font-medium text-foreground truncate flex-1">{agent.name}</span>
         {agent.agent_type && (
-          <span className="ml-auto shrink-0 rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground uppercase tracking-wider">
-            {agent.agent_type}
-          </span>
+          <AgentTypeBadge agentType={agent.agent_type} subtle className="ml-auto shrink-0" />
         )}
       </div>
       {agent.description && (
         <p className="text-xs text-muted-foreground line-clamp-2">{agent.description}</p>
       )}
-      {agent.tags.length > 0 && (
-        <div className="flex flex-wrap gap-1 pt-0.5">
-          {agent.tags.slice(0, 5).map((tag) => (
-            <span key={tag} className="rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
-              {tag}
-            </span>
-          ))}
-        </div>
-      )}
+      <div className="flex items-center gap-2 mt-0.5">
+        <span className="rounded-md border border-border/50 bg-muted/40 px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
+          {agent.canonical_format}
+        </span>
+        {agent.tags.length > 0 && (
+          <div className="flex flex-wrap gap-1">
+            {agent.tags.slice(0, 4).map((tag) => (
+              <span key={tag} className="rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
+                {tag}
+              </span>
+            ))}
+          </div>
+        )}
+      </div>
     </Link>
   );
 }
@@ -72,12 +89,17 @@ export default async function AgentsPage() {
     <div className="flex h-full flex-col overflow-hidden">
       {/* Header */}
       <div className="border-b border-border bg-background px-6 pt-6 pb-4">
-        <div className="flex items-center gap-2.5">
-          <Bot className="h-5 w-5 shrink-0 text-muted-foreground" aria-hidden="true" />
-          <div>
-            <h1 className="text-xl font-bold tracking-tight text-foreground">Agents</h1>
-            <p className="text-xs text-muted-foreground">Workspace-level reusable agents shared across all boxes</p>
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5">
+            <Bot className="h-5 w-5 shrink-0 text-muted-foreground" aria-hidden="true" />
+            <div>
+              <h1 className="text-xl font-bold tracking-tight text-foreground">Agents</h1>
+              <p className="text-xs text-muted-foreground">
+                Workspace-level reusable agents shared across all boxes
+              </p>
+            </div>
           </div>
+          <AgentCreateDialog forceReusable />
         </div>
       </div>
 

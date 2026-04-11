@@ -193,6 +193,29 @@ For the full object model design — taxonomy, canonical format semantics, reusa
 
 ---
 
+## First-class object type surfaces (v3+)
+
+Each object type now has a complete product surface:
+
+| Type | Route | Editor | Right pane | Center tabs |
+|---|---|---|---|---|
+| Note | `/app/notes/[id]` | Document + Markdown | Info/Links/Bundle/History | — |
+| File | `/app/files/[id]` | Code textarea | Info/Links/History | — |
+| Skill | `/app/skills/[id]` | Code textarea (read-only page) | — | — |
+| Agent | `/app/agents/[id]` | Code textarea (Source tab) | Info/Links/History | Overview/Source/Exports/Children/Skills/Relationships |
+
+Agent routes handle all three identity contexts from a single stable URL:
+- Workspace-level reusable agent: breadcrumb via `Workspace → Agents → Name`
+- Box-local agent: breadcrumb via `Workspace → Box → Name`
+
+Server actions for each type live at `src/app/app/{type}s/actions.ts`.
+
+See type-specific documentation:
+- Files: [docs/files_object_and_editor_v1.md](files_object_and_editor_v1.md)
+- Agents: [docs/agents_object_and_editor_v1.md](agents_object_and_editor_v1.md)
+
+---
+
 ## Data flow
 
 ```
