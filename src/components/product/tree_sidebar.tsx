@@ -646,9 +646,9 @@ function FolderNode({
         </button>
 
         {/* Folder name */}
-        <button
-          type="button"
-          onClick={() => setIsOpen((o) => !o)}
+        <Link
+          href={`/app/folders/${folder.id}`}
+          onClick={onNavigate}
           className={cn(
             "flex flex-1 items-center gap-1.5 rounded-md px-1 py-1 text-xs min-w-0",
             "transition-colors duration-150",
@@ -661,7 +661,7 @@ function FolderNode({
             : <Folder01Icon className="h-3.5 w-3.5 shrink-0 text-muted-foreground/50" aria-hidden="true" />
           }
           <span className="truncate font-medium tracking-tight">{folder.name}</span>
-        </button>
+        </Link>
       </div>
 
       {/* Children — animated collapse/expand */}
