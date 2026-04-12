@@ -25,7 +25,6 @@ import {
 } from "@/components/ui/sheet";
 import { ThemeToggle } from "@/components/product/theme_toggle";
 import { UserMenu } from "@/components/product/user_menu";
-import { WorkspaceSwitcher } from "@/components/product/workspace_switcher";
 import { Separator } from "@/components/ui/separator";
 
 const settingsNav = [
@@ -101,18 +100,29 @@ export function MobileSettingsSidebar({
             </button>
           </SheetHeader>
 
-          {/* Workspace switcher */}
-          <div className="px-3 pt-3 pb-2">
-            <WorkspaceSwitcher
-              workspaces={
-                workspaces.length > 0
-                  ? workspaces
-                  : workspaceId
-                    ? [{ id: workspaceId, name: workspaceName, slug: "" }]
-                    : []
-              }
-              activeWorkspaceId={workspaceId ?? ""}
-            />
+          {/* Workspace label — inline, no nested dropdown / dialog to
+              avoid the Sheet-inside-Sheet portal collision. */}
+          <div className="px-4 pt-3 pb-1">
+            <div className="flex items-center justify-between gap-2">
+              <div className="min-w-0">
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-sidebar-foreground/40">
+                  Workspace
+                </p>
+                <p
+                  className="truncate text-sm font-semibold text-sidebar-foreground"
+                  title={workspaceName}
+                >
+                  {workspaceName}
+                </p>
+              </div>
+              <Link
+                href="/app/workspaces"
+                onClick={close}
+                className="shrink-0 rounded-md px-2 py-1 text-[11px] text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+              >
+                Manage
+              </Link>
+            </div>
           </div>
 
           <Separator className="mx-3 bg-sidebar-border" />

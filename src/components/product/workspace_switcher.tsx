@@ -70,15 +70,30 @@ export function WorkspaceSwitcher({
 
   function selectWorkspace(id: string) {
     if (id === activeWorkspaceId) return;
-    startSwitching(async () => {
-      const result = await setActiveWorkspaceAction(id);
-      if (result.ok) {
-        // Push to /app so users land somewhere sensible in the new
-        // workspace instead of a detail page from the previous one.
-        router.push("/app");
-        router.refresh();
-      }
-    });
+    // Defer the server action one tick so Base UI's Menu close animation
+    // and focus return complete first. Without this, the menu close can
+    // cancel the router navigation on some browsers.
+    setTimeout(() => {
+      startSwitching(async () => {
+        const result = await setActiveWorkspaceAction(id);
+        if (result.ok) {
+          router.push("/app");
+          router.refresh();
+        } else {
+          console.error("Workspace switch failed:", result.error);
+        }
+      });
+    }, 0);
+  }
+
+  function openCreateDialog() {
+    // Open the dialog after the menu's close animation + focus return
+    // completes. Running setCreateOpen(true) synchronously inside a
+    // DropdownMenuItem onClick causes the Base UI Dialog focus trap to
+    // collide with the Menu's own focus management, which prevents the
+    // dialog from appearing. The microtask defer lets the menu finish
+    // closing before the dialog takes over.
+    setTimeout(() => setCreateOpen(true), 0);
   }
 
   function handleCreate(e: React.FormEvent) {
@@ -163,7 +178,7 @@ export function WorkspaceSwitcher({
           })}
           <DropdownMenuSeparator />
           <DropdownMenuItem
-            onClick={() => setCreateOpen(true)}
+            onClick={openCreateDialog}
             className="flex items-center gap-2 text-foreground"
           >
             <Plus className="h-3.5 w-3.5" aria-hidden="true" />

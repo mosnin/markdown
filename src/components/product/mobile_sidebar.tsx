@@ -27,7 +27,6 @@ import { UserMenu } from "@/components/product/user_menu";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { TreeSidebar } from "@/components/product/tree_sidebar";
-import { WorkspaceSwitcher } from "@/components/product/workspace_switcher";
 
 /**
  * Mobile navigation sidebar.
@@ -113,17 +112,32 @@ export function MobileSidebar({
           </SheetHeader>
 
           {/* Workspace switcher — same as desktop */}
-          <div className="px-3 pt-3 pb-2">
-            <WorkspaceSwitcher
-              workspaces={
-                workspaces.length > 0
-                  ? workspaces
-                  : workspaceId
-                    ? [{ id: workspaceId, name: workspaceName, slug: "" }]
-                    : []
-              }
-              activeWorkspaceId={workspaceId ?? ""}
-            />
+          {/* Workspace label + manage link — inline list, no nested
+              DropdownMenu or Dialog. Nesting a Base UI DropdownMenu +
+              Dialog inside the Sheet's Dialog caused three portaled
+              overlays to collide and prevented the sheet from opening.
+              Users switch / create workspaces from /app/workspaces. */}
+          <div className="px-4 pt-3 pb-1">
+            <div className="flex items-center justify-between gap-2">
+              <div className="min-w-0">
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-sidebar-foreground/40">
+                  Workspace
+                </p>
+                <p
+                  className="truncate text-sm font-semibold text-sidebar-foreground"
+                  title={workspaceName}
+                >
+                  {workspaceName}
+                </p>
+              </div>
+              <Link
+                href="/app/workspaces"
+                onClick={close}
+                className="shrink-0 rounded-md px-2 py-1 text-[11px] text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+              >
+                Manage
+              </Link>
+            </div>
           </div>
 
           {/* Primary nav */}
