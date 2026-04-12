@@ -332,9 +332,25 @@ Box-local agents are accessed via `/app/agents/[agent_id]` regardless of where t
 
 ## Known limitations and follow-ons
 
-1. **True child file containment** requires an `agent_id` FK on the `files` table (DB migration). The current Children tab uses `object_links` as a foundation.
-2. **Source format immutability** is enforced at the service layer. Adding a format migration path requires careful versioning design.
-3. **No rollback** in the History tab. Add it in the versioning follow-on.
-4. **No bundle tab** for agents. The context bundle system currently targets notes. Extending it to agents is a follow-on.
-5. **Limited reusable agent link targets** — workspace-level reusable agents can only link to other workspace-level objects. Cross-box linking would require a different authorization model.
-6. **SKILL_AGENT_FORMATS** currently has 5 values (markdown, json, yaml, typescript, python). Extending to javascript/shell/xml requires a DB migration to update the CHECK constraint.
+1. **True child file containment** — DONE. Files and folders now carry
+   `parent_agent_id` FK columns (migration
+   `20260412000001_skill_agent_child_containment.sql`). The Children tab
+   continues to maintain `object_links` rows for the heterogeneous
+   semantic model in addition to the direct FK.
+2. **Reusable workspace agents can now own child folders** — DONE. The
+   same migration made `folders.box_id` nullable and added a direct
+   `workspace_id` column, so reusable agents (box_id = null) can own
+   workspace-level folders and files.
+3. **Source format immutability** is enforced at the service layer.
+   Adding a format migration path requires careful versioning design.
+4. **No rollback** in the History tab. Add it in the versioning
+   follow-on.
+5. **No bundle tab** for agents. The context bundle system currently
+   targets notes. Extending it to agents is a follow-on.
+6. **Limited reusable agent link targets** — workspace-level reusable
+   agents can only link to other workspace-level objects. Cross-box
+   linking would require a different authorization model.
+7. **SKILL_AGENT_FORMATS** is defined in the object constants module
+   with the current supported value set. Extending to additional
+   formats requires both the constant update and a DB migration to
+   update the CHECK constraint on `files.canonical_format`.

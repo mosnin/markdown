@@ -30,7 +30,11 @@ export function LegalStickyFooter() {
         role="contentinfo"
         aria-label="Legal links"
         className={cn(
-          "sticky bottom-0 left-0 right-0 z-10",
+          // z-30 keeps this above regular page content (z-0..z-20) but safely
+          // below dropdowns (z-50+) and modal dialogs (z-50). This prevents
+          // scrolling content from overlapping the legal bar while still
+          // letting dropdowns and modals cover it as expected.
+          "sticky bottom-0 left-0 right-0 z-30 shrink-0",
           "border-t border-border/40 bg-background/90 backdrop-blur-sm",
           "px-3 py-1.5",
         )}
