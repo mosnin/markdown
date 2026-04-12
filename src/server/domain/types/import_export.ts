@@ -341,6 +341,13 @@ export interface ImportSummaryReport {
   skipped_counts: { notes: number; folders: number; links: number; files: number; skills: number; agents: number };
   actions: ImportAction[];
   warnings: ImportWarning[];
+  /**
+   * The change_set_id that wraps this import. Populated when the import
+   * is run through a caller that opened a change set around the
+   * importPackage invocation (the standard path). Restores use this id
+   * to undo the entire import as one operation.
+   */
+  change_set_id?: string;
 }
 
 // ─── Export artifact (signed delivery) ───────────────────────────────────────

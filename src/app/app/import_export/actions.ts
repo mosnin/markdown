@@ -19,6 +19,12 @@ import {
 } from "@/server/services/artifact_delivery_service";
 import { importPackage } from "@/server/services/import_service";
 import {
+  openChangeSet,
+  commitChangeSet,
+  abortChangeSet,
+  recordChangeSetItem,
+} from "@/server/services/change_set_service";
+import {
   auditNoteExported,
   auditFolderExported,
   auditBoxExported,
@@ -245,27 +251,84 @@ export async function importPackageAction(
     const bytes = await file.arrayBuffer();
     const buffer = Buffer.from(bytes);
 
-    const report = await importPackage(
-      supabase,
-      workspaceId,
-      userId,
-      { buffer, filename: file.name },
-      { boxId, targetFolderId },
-      collisionMode
-    );
-
-    await auditImportCompleted(supabase, workspaceId, userId, boxId, {
-      collision_mode: collisionMode,
-      created_notes: report.created_counts.notes,
-      created_folders: report.created_counts.folders,
-      created_links: report.created_counts.links,
-      warnings: report.warnings.length,
+    // Every import is wrapped in a change set so the entire import can
+    // be undone as one rollback operation. The change set is marked
+    // 'open' before the work begins and 'committed' after
+    // auditImportCompleted fires; a throw aborts it. The import_service
+    // itself doesn't know about change sets yet, so per-object items are
+    // recorded after the fact using the ImportAction log the service
+    // returns.
+    const changeSet = await openChangeSet(supabase, {
+      workspace_id: workspaceId,
+      origin: "import",
+      actor_type: "user",
+      actor_id: userId,
+      summary: `Import package "${file.name}" into box ${boxId.slice(0, 8)}`,
+      metadata: { filename: file.name, collision_mode: collisionMode, box_id: boxId },
     });
 
-    revalidatePath(`/app/boxes/${boxId}`);
-    revalidatePath("/app");
+    try {
+      const report = await importPackage(
+        supabase,
+        workspaceId,
+        userId,
+        { buffer, filename: file.name },
+        { boxId, targetFolderId },
+        collisionMode
+      );
 
-    return { ok: true, data: report };
+      // Record one change_set_item per created/replaced object so a
+      // later restore can reason about exactly what this import
+      // produced. ImportAction already carries the canonical identity
+      // needed; we don't store per-object before_snapshots for
+      // 'create' since the prior state was non-existence.
+      for (const act of report.actions) {
+        if (!act.final_id) continue;
+        const op = act.action === "created"
+          ? "create"
+          : act.action === "replaced" || act.action === "remapped"
+            ? "update"
+            : null;
+        if (!op) continue;
+        // ImportAction carries a string object_type whose domain includes
+        // non-object_type rows (like link / object_link). Limit to the
+        // types a change_set_item can point at.
+        const mapped = (
+          ["note", "file", "skill", "agent", "folder"] as const
+        ).find((t) => t === act.object_type);
+        if (!mapped) continue;
+        await recordChangeSetItem(supabase, {
+          change_set_id: changeSet.id,
+          workspace_id: workspaceId,
+          operation: op,
+          object_type: mapped,
+          object_id: act.final_id,
+          after_snapshot: { final_path: act.final_path, box_id: boxId },
+        });
+      }
+
+      await auditImportCompleted(supabase, workspaceId, userId, boxId, {
+        collision_mode: collisionMode,
+        created_notes: report.created_counts.notes,
+        created_folders: report.created_counts.folders,
+        created_links: report.created_counts.links,
+        warnings: report.warnings.length,
+      });
+
+      await commitChangeSet(supabase, changeSet.id);
+
+      revalidatePath(`/app/boxes/${boxId}`);
+      revalidatePath("/app");
+
+      return { ok: true, data: { ...report, change_set_id: changeSet.id } };
+    } catch (innerErr) {
+      await abortChangeSet(
+        supabase,
+        changeSet.id,
+        innerErr instanceof Error ? innerErr.message : "import failed"
+      );
+      throw innerErr;
+    }
   } catch (err) {
     return {
       ok: false,

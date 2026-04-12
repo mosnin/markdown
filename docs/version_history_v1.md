@@ -247,3 +247,22 @@ UI: `ObjectHistoryPanel` + `HeterogeneousVersionTimeline` (collapsible, shows ve
 | Server action | `src/app/app/notes/[note_id]/actions.ts` | `rollbackNoteAction` — human only |
 | Component | `src/components/product/note_history_panel.tsx` | Version list + detail + rollback confirm UI |
 | Note page | `src/app/app/notes/[note_id]/page.tsx` | Added History tab |
+
+## Extension: change-set correlation (v1.1)
+
+Every version row now carries a nullable `change_set_id` pointing at
+the `change_sets` row that produced it. The underlying version graph is
+unchanged — versions are still immutable, rollback still writes a new
+version, `parent_version_id` still forms the linked list — but the
+extra link lets the restore service walk from a grouped operation
+(import, proposal approval, structural move, another rollback) to the
+specific versions it produced, and back. See
+[`docs/rollback_architecture_v1.md`](rollback_architecture_v1.md) for
+the full model.
+
+The human-only rollback action (`rollbackNoteToVersion`) is also
+wrapped by `restoreNoteVersion` in
+`src/server/services/restore_service.ts`, which opens a
+`origin: 'rollback'` change set around the existing call and tags the
+new version with the change set id. Direct callers of
+`rollbackNoteToVersion` continue to work unchanged.

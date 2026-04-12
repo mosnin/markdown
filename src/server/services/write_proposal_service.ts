@@ -26,6 +26,12 @@ import {
   auditWriteProposalRejected,
   auditWriteProposalConflicted,
 } from "@/server/services/audit_service";
+import {
+  openChangeSet,
+  commitChangeSet,
+  abortChangeSet,
+  recordChangeSetItem,
+} from "@/server/services/change_set_service";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -411,30 +417,107 @@ export async function approveProposal(
     throw new Error(`Proposal is not pending (status: ${proposal.status})`);
   }
 
-  if (proposal.proposal_type === PROPOSAL_TYPE.CREATE_NOTE) {
-    return _approveCreate(adminClient, userId, workspaceId, proposal, reviewNote ?? null);
-  }
+  // Every proposal approval is a change set. The change set wraps both
+  // the note-writing RPC and the audit entry so a later restore can
+  // undo the approval as a single atomic operation. Connections propose
+  // and humans approve; both are recorded — the change set's actor is
+  // the approving user, with metadata carrying the connection_id so we
+  // preserve attribution.
+  const changeSet = await openChangeSet(adminClient, {
+    workspace_id: workspaceId,
+    origin: "proposal_approval",
+    actor_type: "user",
+    actor_id: userId,
+    summary: `Approve ${proposal.proposal_type} from connection ${proposal.connection_id.slice(0, 8)}`,
+    metadata: {
+      proposal_id: proposal.id,
+      proposal_type: proposal.proposal_type,
+      connection_id: proposal.connection_id,
+    },
+  });
 
-  if (NOTE_PROPOSAL_TYPES.has(proposal.proposal_type)) {
-    return _approveUpdate(adminClient, userId, workspaceId, proposal, reviewNote ?? null);
-  }
+  try {
+    let outcome: ApproveOutcome;
+    if (proposal.proposal_type === PROPOSAL_TYPE.CREATE_NOTE) {
+      outcome = await _approveCreate(adminClient, userId, workspaceId, proposal, reviewNote ?? null);
+    } else if (NOTE_PROPOSAL_TYPES.has(proposal.proposal_type)) {
+      outcome = await _approveUpdate(adminClient, userId, workspaceId, proposal, reviewNote ?? null);
+    } else if (
+      proposal.proposal_type === PROPOSAL_TYPE.UPDATE_FILE ||
+      proposal.proposal_type === PROPOSAL_TYPE.UPDATE_SKILL ||
+      proposal.proposal_type === PROPOSAL_TYPE.UPDATE_AGENT
+    ) {
+      outcome = await _approveObjectUpdate(adminClient, userId, workspaceId, proposal, reviewNote ?? null);
+    } else if (
+      proposal.proposal_type === PROPOSAL_TYPE.CREATE_SKILL ||
+      proposal.proposal_type === PROPOSAL_TYPE.CREATE_AGENT
+    ) {
+      outcome = await _approveObjectCreate(adminClient, userId, workspaceId, proposal, reviewNote ?? null);
+    } else {
+      throw new Error(`Unsupported proposal_type for approval: ${proposal.proposal_type}`);
+    }
 
+    // Record the affected object on the change set if the approval
+    // produced a concrete result. Conflicted proposals don't touch any
+    // content; the change set stays open for the abort path below.
+    if (outcome.outcome === "approved") {
+      const mapped = targetObjectTypeFromProposal(proposal.proposal_type);
+      const targetId = outcome.note?.id ?? outcome.object_id ?? proposal.target_note_id ?? proposal.target_object_id;
+      if (targetId) {
+        await recordChangeSetItem(adminClient, {
+          change_set_id: changeSet.id,
+          workspace_id: workspaceId,
+          operation: proposal.proposal_type === PROPOSAL_TYPE.CREATE_NOTE ||
+                     proposal.proposal_type === PROPOSAL_TYPE.CREATE_SKILL ||
+                     proposal.proposal_type === PROPOSAL_TYPE.CREATE_AGENT
+            ? "create"
+            : "update",
+          object_type: mapped,
+          object_id: targetId,
+          version_id: outcome.version_id ?? null,
+          after_snapshot: { proposal_id: proposal.id },
+        });
+      }
+
+      // Link the proposal row itself to this change set for traceability.
+      await adminClient
+        .from("write_proposals")
+        .update({ change_set_id: changeSet.id })
+        .eq("id", proposal.id);
+
+      await commitChangeSet(adminClient, changeSet.id);
+    } else {
+      // Conflicted / unapproved outcome — nothing durable was written
+      // so mark the change set aborted and move on.
+      await abortChangeSet(adminClient, changeSet.id, "proposal conflicted");
+    }
+
+    return outcome;
+  } catch (err) {
+    await abortChangeSet(
+      adminClient,
+      changeSet.id,
+      err instanceof Error ? err.message : "approval failed"
+    );
+    throw err;
+  }
+}
+
+function targetObjectTypeFromProposal(
+  proposalType: string
+): "note" | "file" | "skill" | "agent" {
   if (
-    proposal.proposal_type === PROPOSAL_TYPE.UPDATE_FILE ||
-    proposal.proposal_type === PROPOSAL_TYPE.UPDATE_SKILL ||
-    proposal.proposal_type === PROPOSAL_TYPE.UPDATE_AGENT
-  ) {
-    return _approveObjectUpdate(adminClient, userId, workspaceId, proposal, reviewNote ?? null);
-  }
-
+    proposalType === PROPOSAL_TYPE.UPDATE_FILE
+  ) return "file";
   if (
-    proposal.proposal_type === PROPOSAL_TYPE.CREATE_SKILL ||
-    proposal.proposal_type === PROPOSAL_TYPE.CREATE_AGENT
-  ) {
-    return _approveObjectCreate(adminClient, userId, workspaceId, proposal, reviewNote ?? null);
-  }
-
-  throw new Error(`Unsupported proposal_type for approval: ${proposal.proposal_type}`);
+    proposalType === PROPOSAL_TYPE.CREATE_SKILL ||
+    proposalType === PROPOSAL_TYPE.UPDATE_SKILL
+  ) return "skill";
+  if (
+    proposalType === PROPOSAL_TYPE.CREATE_AGENT ||
+    proposalType === PROPOSAL_TYPE.UPDATE_AGENT
+  ) return "agent";
+  return "note";
 }
 
 async function _approveUpdate(

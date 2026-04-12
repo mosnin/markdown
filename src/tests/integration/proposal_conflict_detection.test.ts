@@ -50,6 +50,68 @@ function makePendingProposal(overrides: Record<string, unknown> = {}) {
   };
 }
 
+/**
+ * Build a Supabase-like mock client that satisfies the subset of the
+ * builder surface approveProposal now touches:
+ *   - .rpc (existing — for the approval SQL function)
+ *   - .from("change_sets").insert(...).select().single() for openChangeSet
+ *   - .from("change_sets").update(...).eq(...).eq(...)            for commit/abort
+ *   - .from("change_sets").select(...).eq(...).maybeSingle()      for state reads
+ *   - .from("change_set_items").insert(...).select().single()
+ *   - .from("write_proposals").update(...).eq(...)                for linking
+ */
+function buildMockSupabase(rpcImpl: (...args: unknown[]) => unknown) {
+  const changeSet = {
+    id: "cs-test",
+    workspace_id: WORKSPACE_ID,
+    origin: "proposal_approval",
+    actor_type: "user",
+    actor_id: REVIEWER_ID,
+    status: "open",
+    summary: null,
+    metadata: {},
+    parent_change_set_id: null,
+    created_at: new Date().toISOString(),
+    committed_at: null,
+    aborted_at: null,
+  };
+
+  function fromFn(table: string) {
+    const builder: Record<string, unknown> = {};
+    builder.insert = () => ({
+      select: () => ({
+        single: () => Promise.resolve({ data: { ...changeSet }, error: null }),
+      }),
+    });
+    builder.update = () => ({
+      eq: () => ({
+        eq: () => Promise.resolve({ error: null, data: null }),
+        single: () => Promise.resolve({ data: null, error: null }),
+        maybeSingle: () => Promise.resolve({ data: null, error: null }),
+      }),
+    });
+    builder.select = () => ({
+      eq: () => ({
+        maybeSingle: () => Promise.resolve({
+          data: table === "change_sets" ? { ...changeSet, status: "open" } : null,
+          error: null,
+        }),
+        order: () => ({
+          limit: () => ({
+            maybeSingle: () => Promise.resolve({ data: null, error: null }),
+          }),
+        }),
+      }),
+    });
+    return builder;
+  }
+
+  return {
+    rpc: rpcImpl,
+    from: fromFn,
+  } as never;
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(auditService.auditWriteProposalApproved).mockReturnValue(undefined as never);
@@ -73,7 +135,7 @@ describe("Proposal approval — conflict detection", () => {
       error: null,
     });
 
-    const mockSupabase = { rpc: mockRpc } as never;
+    const mockSupabase = buildMockSupabase(mockRpc) as never;
 
     const result = await approveProposal(
       mockSupabase,
@@ -93,12 +155,12 @@ describe("Proposal approval — conflict detection", () => {
       makePendingProposal() as never
     );
 
-    const mockSupabase = {
-      rpc: vi.fn().mockResolvedValue({
+    const mockSupabase = buildMockSupabase(
+      vi.fn().mockResolvedValue({
         data: { outcome: "conflicted", reason: "stale" },
         error: null,
-      }),
-    } as never;
+      })
+    ) as never;
 
     await approveProposal(mockSupabase, REVIEWER_ID, WORKSPACE_ID, PROPOSAL_ID);
 
@@ -119,12 +181,12 @@ describe("Proposal approval — conflict detection", () => {
       makePendingProposal() as never
     );
 
-    const mockSupabase = {
-      rpc: vi.fn().mockResolvedValue({
+    const mockSupabase = buildMockSupabase(
+      vi.fn().mockResolvedValue({
         data: { outcome: "approved", note: approvedNote },
         error: null,
-      }),
-    } as never;
+      })
+    ) as never;
 
     const result = await approveProposal(
       mockSupabase,

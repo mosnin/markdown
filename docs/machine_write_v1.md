@@ -271,3 +271,19 @@ Route: `/app/proposals`
 | Component | `src/components/product/folder_policy_toggle.tsx` | Folder policy toggle |
 | Box view | `src/app/app/boxes/[box_id]/page.tsx` | Folder policies section in right panel |
 | Sidebar | `src/components/product/app_sidebar.tsx` | Proposals nav link added |
+
+## Extension: proposal approvals are change sets (v1.1)
+
+`approveProposal` now opens a change set of origin `proposal_approval`
+around the approval flow. The change set's actor is the approving human
+(`actor_type: 'user'`); the originating connection id is carried in
+`metadata` so attribution is preserved on both sides. On an approved
+outcome the service records a single `change_set_item` for the
+affected object and writes `change_set_id` back onto the `write_proposals`
+row; on a conflicted outcome the change set is aborted and nothing
+durable is written.
+
+This means every approved proposal is a durable, restore-able
+operation, addressable by a single id. The rollback architecture
+(`docs/rollback_architecture_v1.md`) can undo an approved proposal as
+one atomic operation via `restoreFromChangeSet`.

@@ -255,3 +255,19 @@ A trashed box disappears from the sidebar with no discovery surface unless expli
 
 **Why no `status` column on `note_versions`?**
 Version history is a snapshot chain — it records what the note looked like at each point in time. Lifecycle state is current-row metadata on the `notes` table. These concerns are separate.
+
+## Extension: lifecycle transitions are restorable (v1.1)
+
+Lifecycle transitions (archive / unarchive / trash / restore) can now
+be enclosed in a change set with `operation: 'archive' | 'unarchive' |
+'trash' | 'restore_lifecycle'` items. The restore planner's inverse
+map turns each of these into its counterpart on restore, writing the
+prior `status` back to the canonical row. Audit remains append-only
+and is untouched by the restore; the undoing operation writes a new
+audit event on its own change set.
+
+See [`docs/rollback_architecture_v1.md`](rollback_architecture_v1.md)
+for the change set / item model and the full invariant list. Lifecycle
+services continue to own their own validation logic (guide-note
+protection, subtree cascade guards, etc.); the restore service
+delegates to them when it needs richer checks.

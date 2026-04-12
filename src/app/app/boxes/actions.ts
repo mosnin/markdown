@@ -752,12 +752,60 @@ async function computePathCache(
 }
 
 export async function moveTreeNodeAction(input: MoveTreeNodeInput): Promise<ActionResult> {
+  // Every tree mutation is a change set. Opened before the work starts so
+  // the state transition (move, reorder, cascade path rewrites) is
+  // recorded as one grouped operation restorable with one click. The
+  // change set is opened lazily after we confirm ownership so invalid
+  // requests don't leak empty open change sets into history.
+  let changeSetId: string | null = null;
+  let changeSetSupabase: Awaited<ReturnType<typeof createClient>> | null = null;
   try {
-    const { supabase, workspaceId } = await requireContext();
+    const { supabase, userId, workspaceId } = await requireContext();
     const { boxId, draggedType, draggedId, isAttachment = false } = input;
 
     const { data: box } = await supabase.from("boxes").select("id, workspace_id").eq("id", boxId).single();
     if (!box || box.workspace_id !== workspaceId) return { ok: false, error: "Box not found" };
+
+    // Capture the dragged node's pre-move state so the structural event
+    // carries a complete before-snapshot. This is what the restore
+    // planner will replay LIFO. For attachments the pre-state lives in
+    // box_object_attachments; for native objects in workspace_objects.
+    const preStateRow = isAttachment && (draggedType === "skill" || draggedType === "agent")
+      ? (await supabase
+          .from("box_object_attachments")
+          .select("box_id, folder_id, sort_order, object_type")
+          .eq("box_id", boxId)
+          .eq("object_type", draggedType)
+          .eq("object_id", draggedId)
+          .maybeSingle()).data
+      : (await supabase
+          .from("workspace_objects")
+          .select("box_id, folder_id, sort_order, object_type")
+          .eq("object_type", draggedType)
+          .eq("object_id", draggedId)
+          .maybeSingle()).data;
+
+    // For folder moves we also capture the folders row so parent_folder_id
+    // and path_cache can be restored on rollback.
+    const preFolderRow = draggedType === "folder"
+      ? (await supabase
+          .from("folders")
+          .select("parent_folder_id, path_cache")
+          .eq("id", draggedId)
+          .maybeSingle()).data
+      : null;
+
+    const { openChangeSet } = await import("@/server/services/change_set_service");
+    const cs = await openChangeSet(supabase, {
+      workspace_id: workspaceId,
+      origin: "structural_move",
+      actor_type: "user",
+      actor_id: userId,
+      summary: `Move ${draggedType} ${draggedId.slice(0, 8)} in box ${boxId.slice(0, 8)}`,
+      metadata: { box_id: boxId, dragged_type: draggedType, is_attachment: isAttachment },
+    });
+    changeSetId = cs.id;
+    changeSetSupabase = supabase;
 
     // Resolve destination folder. Prefer explicit targetFolderId. Fall back
     // to the legacy position/targetId contract so older callers keep working.
@@ -925,9 +973,70 @@ export async function moveTreeNodeAction(input: MoveTreeNodeInput): Promise<Acti
     ];
     await writeSiblingOrder(supabase, boxId, ordered);
 
+    // Record the structural event on the change set we opened above.
+    // The before_state is the pre-move placement; after_state is where
+    // the object ended up. This is enough for the restore service to
+    // rebuild the prior topology.
+    const { recordStructuralEvent, commitChangeSet } = await import("@/server/services/change_set_service");
+    const postStateRow = isAttachment && (draggedType === "skill" || draggedType === "agent")
+      ? (await supabase
+          .from("box_object_attachments")
+          .select("box_id, folder_id, sort_order, object_type")
+          .eq("box_id", boxId)
+          .eq("object_type", draggedType)
+          .eq("object_id", draggedId)
+          .maybeSingle()).data
+      : (await supabase
+          .from("workspace_objects")
+          .select("box_id, folder_id, sort_order, object_type")
+          .eq("object_type", draggedType)
+          .eq("object_id", draggedId)
+          .maybeSingle()).data;
+    const postFolderRow = draggedType === "folder"
+      ? (await supabase
+          .from("folders")
+          .select("parent_folder_id, path_cache")
+          .eq("id", draggedId)
+          .maybeSingle()).data
+      : null;
+
+    await recordStructuralEvent(supabase, {
+      change_set_id: cs.id,
+      workspace_id: workspaceId,
+      box_id: boxId,
+      event_type: "move",
+      object_type: isAttachment ? "box_object_attachment" : draggedType,
+      object_id: draggedId,
+      before_state: {
+        ...(preStateRow ?? {}),
+        ...(preFolderRow ? {
+          parent_folder_id: preFolderRow.parent_folder_id,
+          path_cache: preFolderRow.path_cache,
+        } : {}),
+      },
+      after_state: {
+        ...(postStateRow ?? {}),
+        ...(postFolderRow ? {
+          parent_folder_id: postFolderRow.parent_folder_id,
+          path_cache: postFolderRow.path_cache,
+        } : {}),
+      },
+    });
+    await commitChangeSet(supabase, cs.id);
+
     revalidatePath(`/app/boxes/${boxId}`);
     return { ok: true, data: undefined };
   } catch (err) {
+    // Abort the change set if it was opened so we don't leave dangling
+    // open rows. The abort call is idempotent and safe in a finally.
+    if (changeSetId && changeSetSupabase) {
+      const { abortChangeSet } = await import("@/server/services/change_set_service");
+      await abortChangeSet(
+        changeSetSupabase,
+        changeSetId,
+        err instanceof Error ? err.message : "move failed"
+      ).catch(() => {});
+    }
     return { ok: false, error: err instanceof Error ? err.message : "Failed to move tree node" };
   }
 }

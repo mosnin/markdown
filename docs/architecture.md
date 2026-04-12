@@ -224,6 +224,13 @@ See type-specific documentation:
    - Built-in drag-drop reparenting via react-dnd, virtualized rendering, keyboard navigation.
    - Inline rename: double-click a node to edit; `onRename` dispatches to type-specific server actions.
    - `BoxContentsTree` (tree tab) also uses react-arborist (read-only mode).
+   - Rollback and restoration: see [docs/rollback_architecture_v1.md](rollback_architecture_v1.md).
+     `change_sets` + `change_set_items` group every mutation;
+     `structural_events` capture tree-shape changes; `draft_branches` +
+     `branch_heads` land the foundation for exploratory editing;
+     `restore_records` audit every restore. Imports, proposal approvals,
+     and tree moves all open and commit change sets, so each is
+     undoable as one operation via `restoreFromChangeSet`.
    - Multi-user membership: see [docs/auth_and_permissions.md](auth_and_permissions.md)
      and [docs/workspace_selector_search_and_membership_v1.md](workspace_selector_search_and_membership_v1.md).
      `workspace_memberships` carries viewer/member/admin roles;
