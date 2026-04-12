@@ -33,6 +33,7 @@ import { DeleteAccountButton } from "./delete_account_button";
 import { MembersSection } from "./members_section";
 import { canAdmin } from "@/server/auth/require_role";
 import { ConnectedAppsSection } from "./connected_apps_section";
+import { DeveloperAppsSection } from "./developer_apps_section";
 
 // Settings section nav is rendered by SettingsSidebar (see
 // src/components/product/settings_sidebar.tsx). Keeping the sections
@@ -182,6 +183,13 @@ export default async function SettingsPage() {
               should use this surface.
             */}
             <ConnectedAppsSection />
+
+            {/*
+              Developer-facing surface for registering third-party OAuth
+              apps. Paired with the RFC 7591 endpoint at
+              /api/oauth/register for scripted registration.
+            */}
+            <DeveloperAppsSection />
 
             <SecuritySection />
 

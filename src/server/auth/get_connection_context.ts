@@ -69,6 +69,24 @@ export async function getConnectionContext(
     if (!authHeader.startsWith("Bearer ")) return null;
 
     const rawToken = authHeader.slice(7).trim();
+
+    // The canonical /api/v1 endpoints now accept two token families:
+    //
+    //   1. csk_v1_<64hex>      — legacy connection token (connections +
+    //                            connection_tokens). Kept for backward
+    //                            compatibility; new integrations should
+    //                            use OAuth.
+    //   2. cso_a_<urlsafe_b64> — OAuth 2.1 access token issued via the
+    //                            /api/oauth/token endpoint. Resolves to
+    //                            an (oauth_client, user, workspace,
+    //                            scope) triple.
+    //
+    // We dispatch on prefix so each family keeps its own verification
+    // path. Both return the same ConnectionRequestContext shape so
+    // every downstream route handler remains identical.
+    if (rawToken.startsWith("cso_a_")) {
+      return await resolveOAuthContext(rawToken);
+    }
     if (!rawToken.startsWith("csk_v1_")) return null;
 
     const hex = rawToken.slice(7); // characters after "csk_v1_"
@@ -131,6 +149,97 @@ export async function getConnectionContext(
     });
     return null;
   }
+}
+
+// ─── OAuth 2.1 access-token bridge ───────────────────────────────────────────
+
+/**
+ * Resolve a ConnectionRequestContext for an OAuth 2.1 bearer access
+ * token. This is the bridge that lets the `/api/v1/**` handlers —
+ * which were designed around the connection + connection_token model
+ * — accept OAuth tokens without any per-route refactor.
+ *
+ * We synthesize a minimal `Connection` record from the oauth_client +
+ * scope so downstream permission_mode checks keep working:
+ *
+ *   - `context:propose` in the scope set → permission_mode =
+ *     propose_writes.
+ *   - `context:generate` in the scope set → permission_mode =
+ *     generate_in_allowed_folders.
+ *   - Otherwise → read_only.
+ *
+ * `allowedBoxIds` is populated with every box in the authorized
+ * workspace — OAuth scope is workspace-wide, not box-level, which
+ * matches the product's membership model introduced in
+ * 20260412000003. Connection box scopes remain a legacy concept tied
+ * to the old connection_tokens path.
+ */
+async function resolveOAuthContext(
+  rawToken: string
+): Promise<ConnectionRequestContext | null> {
+  // Dynamic imports to avoid a circular dep: oauth_token_service uses
+  // the admin client which also imports from this file in some paths.
+  const { parseBearerAccessToken, resolveAccessToken } = await import(
+    "@/server/services/oauth_token_service"
+  );
+  const { hasScope } = await import(
+    "@/server/services/oauth_scope_service"
+  );
+  const parsed = parseBearerAccessToken(`Bearer ${rawToken}`);
+  if (!parsed) return null;
+
+  const admin = createAdminClient();
+  const resolved = await resolveAccessToken(admin, parsed);
+  if (!resolved) return null;
+
+  // Pull every active box in the workspace so the existing
+  // allowedBoxIds check behaves like a workspace-wide grant. Trashed
+  // boxes are excluded so a revoked box can't be reached via a stale
+  // token.
+  const { data: boxes } = await admin
+    .from("boxes")
+    .select("id")
+    .eq("workspace_id", resolved.workspaceId)
+    .neq("status", "trashed");
+  const allowedBoxIds = new Set((boxes ?? []).map((b: { id: string }) => b.id));
+
+  // Synthetic Connection shape. This is NOT a persisted row — it's a
+  // transport-layer adapter so the service code paths that expect a
+  // Connection keep working unchanged. The id carries the OAuth
+  // client_id so audit attribution still points at the calling
+  // connector.
+  const permissionMode = hasScope(resolved.scope, "context:generate")
+    ? "generate_in_allowed_folders"
+    : hasScope(resolved.scope, "context:propose")
+      ? "propose_writes"
+      : "read_only";
+
+  const syntheticConnection: Connection = {
+    id: resolved.tokenId,
+    workspace_id: resolved.workspaceId,
+    name: `oauth:${resolved.clientId}`,
+    description: null,
+    connection_type: "mcp",
+    status: "active",
+    permission_mode: permissionMode,
+    last_used_at: null,
+    usage_count: 0,
+    metadata: {
+      auth_source: "oauth",
+      oauth_client_id: resolved.clientId,
+      oauth_user_id: resolved.userId,
+      scope: resolved.scope.join(" "),
+    },
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  };
+
+  return {
+    connection: syntheticConnection,
+    workspaceId: resolved.workspaceId,
+    allowedBoxIds,
+    tokenId: resolved.tokenId,
+  };
 }
 
 // ─── Usage tracking ───────────────────────────────────────────────────────────

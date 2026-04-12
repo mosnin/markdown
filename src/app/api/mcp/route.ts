@@ -87,8 +87,50 @@ const TOOLS: ToolDef[] = [
     inputSchema: { type: "object", properties: {}, additionalProperties: false },
   },
   {
+    name: "get_box_overview",
+    description:
+      "Full hierarchy + link graph for a single box: folders, notes, files, skills, agents, note links, and object links.",
+    scope: "context:read",
+    writes: false,
+    inputSchema: {
+      type: "object",
+      properties: { box_id: { type: "string" } },
+      required: ["box_id"],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "list_folder_contents",
+    description:
+      "Folders and notes at one hierarchy level inside a box. Pass folder_id=null for box-root contents.",
+    scope: "context:read",
+    writes: false,
+    inputSchema: {
+      type: "object",
+      properties: {
+        box_id: { type: "string" },
+        folder_id: { type: ["string", "null"] },
+      },
+      required: ["box_id"],
+      additionalProperties: false,
+    },
+  },
+  {
     name: "get_note",
     description: "Fetch a single note (title, body, tags, summary) by id.",
+    scope: "context:read",
+    writes: false,
+    inputSchema: {
+      type: "object",
+      properties: { note_id: { type: "string" } },
+      required: ["note_id"],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "get_linked_notes",
+    description:
+      "Notes linked to or from the given note with relationship_type metadata. Returns both inbound and outbound links.",
     scope: "context:read",
     writes: false,
     inputSchema: {
@@ -115,6 +157,23 @@ const TOOLS: ToolDef[] = [
     },
   },
   {
+    name: "get_context_bundle",
+    description:
+      "Deterministic context bundle centered on a note: guide note, ancestor summary, linked notes. Bounded size, deduplicated.",
+    scope: "context:bundles",
+    writes: false,
+    inputSchema: {
+      type: "object",
+      properties: {
+        note_id: { type: "string" },
+        linked_limit: { type: "number" },
+        include_archived: { type: "boolean" },
+      },
+      required: ["note_id"],
+      additionalProperties: false,
+    },
+  },
+  {
     name: "create_write_proposal",
     description:
       "Submit a proposal to update or create a note. Humans in the workspace will review and approve before any change is applied.",
@@ -136,6 +195,25 @@ const TOOLS: ToolDef[] = [
         rationale: { type: "string" },
       },
       required: ["proposal_type"],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "create_generated_note",
+    description:
+      "Create a note directly in a folder that is explicitly marked as accepting generated content. Requires context:generate scope AND the folder's accepts_generated_notes flag. Reusable skills and agents still require proposals.",
+    scope: "context:generate",
+    writes: true,
+    inputSchema: {
+      type: "object",
+      properties: {
+        folder_id: { type: "string" },
+        title: { type: "string" },
+        markdown_content: { type: "string" },
+        summary: { type: "string" },
+        tags: { type: "array", items: { type: "string" } },
+      },
+      required: ["folder_id", "title", "markdown_content"],
       additionalProperties: false,
     },
   },
@@ -228,6 +306,153 @@ async function dispatchTool(
       if (!query) throw toolError(-32602, "query is required");
       const hits = await searchWorkspace(admin, ctx.workspaceId, query);
       return { hits };
+    }
+
+    case "get_box_overview": {
+      const boxId = String(args.box_id ?? "");
+      if (!boxId) throw toolError(-32602, "box_id is required");
+      const { getBoxById } = await import("@/server/repositories/box_repository");
+      const box = await getBoxById(admin, boxId);
+      if (!box || box.workspace_id !== ctx.workspaceId) return { overview: null };
+      const { getBoxOverview } = await import("@/server/services/overview_service");
+      const overview = await getBoxOverview(admin, box);
+      return { overview };
+    }
+
+    case "list_folder_contents": {
+      const boxId = String(args.box_id ?? "");
+      if (!boxId) throw toolError(-32602, "box_id is required");
+      const { getBoxById } = await import("@/server/repositories/box_repository");
+      const box = await getBoxById(admin, boxId);
+      if (!box || box.workspace_id !== ctx.workspaceId) {
+        return { folders: [], notes: [] };
+      }
+      const folderId = args.folder_id === null || args.folder_id === undefined
+        ? null
+        : String(args.folder_id);
+      // Folders at this level — the repo's listFoldersByParent only
+      // accepts a single parent filter so we query directly to also
+      // scope by box_id and exclude trashed rows.
+      const foldersQuery = admin
+        .from("folders")
+        .select("id, name, slug, path_cache, description, status, updated_at")
+        .eq("box_id", boxId)
+        .neq("status", "trashed")
+        .order("name", { ascending: true });
+      const { data: folders } = await (folderId === null
+        ? foldersQuery.is("parent_folder_id", null)
+        : foldersQuery.eq("parent_folder_id", folderId));
+      // Notes scoped to the same (box, folder) level.
+      const notesQuery = admin
+        .from("notes")
+        .select("id, title, slug, kind, status, updated_at, path_cache, summary, tags")
+        .eq("box_id", boxId)
+        .neq("status", "trashed");
+      const { data: notes } = await (folderId === null
+        ? notesQuery.is("folder_id", null)
+        : notesQuery.eq("folder_id", folderId));
+      return { folders: folders ?? [], notes: notes ?? [] };
+    }
+
+    case "get_linked_notes": {
+      const noteId = String(args.note_id ?? "");
+      if (!noteId) throw toolError(-32602, "note_id is required");
+      // Ownership gate: the note must be in a box in the caller's workspace.
+      const { data: note } = await admin
+        .from("notes")
+        .select("id, box_id")
+        .eq("id", noteId)
+        .maybeSingle();
+      if (!note) return { outbound: [], inbound: [] };
+      const { data: box } = await admin
+        .from("boxes")
+        .select("workspace_id")
+        .eq("id", note.box_id)
+        .maybeSingle();
+      if (box?.workspace_id !== ctx.workspaceId) return { outbound: [], inbound: [] };
+      const { listLinksFromNote, listLinksToNote } = await import(
+        "@/server/repositories/note_link_repository"
+      );
+      const [outbound, inbound] = await Promise.all([
+        listLinksFromNote(admin, noteId),
+        listLinksToNote(admin, noteId),
+      ]);
+      return { outbound, inbound };
+    }
+
+    case "get_context_bundle": {
+      const noteId = String(args.note_id ?? "");
+      if (!noteId) throw toolError(-32602, "note_id is required");
+      const { assembleContextBundle } = await import(
+        "@/server/services/context_bundle_service"
+      );
+      try {
+        const bundle = await assembleContextBundle(admin, ctx.workspaceId, noteId, {
+          linkedLimit: typeof args.linked_limit === "number" ? args.linked_limit : undefined,
+          includeArchived: args.include_archived === true,
+        });
+        return { bundle };
+      } catch (err) {
+        // assembleContextBundle throws on not-found / ownership failure.
+        // Normalize to a clean JSON-RPC response — an empty bundle is
+        // indistinguishable from "you can't see this" which is the
+        // right answer for attribution leakage reasons.
+        if (err instanceof Error && /not found/i.test(err.message)) {
+          return { bundle: null };
+        }
+        throw err;
+      }
+    }
+
+    case "create_generated_note": {
+      const folderId = String(args.folder_id ?? "");
+      const title = String(args.title ?? "");
+      const markdown = String(args.markdown_content ?? "");
+      if (!folderId || !title || !markdown) {
+        throw toolError(-32602, "folder_id, title, and markdown_content are required");
+      }
+      // Build a ConnectionRequestContext that the existing
+      // generated_note_service expects. allowedBoxIds is synthesized
+      // from the workspace's live boxes at call time so a revoked
+      // workspace box can't be written to. permission_mode is pinned
+      // to generate_in_allowed_folders because the scope gate above
+      // already required context:generate.
+      const { data: boxes } = await admin
+        .from("boxes")
+        .select("id")
+        .eq("workspace_id", ctx.workspaceId)
+        .neq("status", "trashed");
+      const allowedBoxIds = new Set((boxes ?? []).map((b: { id: string }) => b.id));
+      const { createGeneratedNote } = await import(
+        "@/server/services/generated_note_service"
+      );
+      const syntheticConnection = {
+        connection: {
+          id: `oauth:${ctx.clientId}`,
+          workspace_id: ctx.workspaceId,
+          name: `oauth:${ctx.clientId}`,
+          description: null,
+          connection_type: "mcp" as const,
+          status: "active" as const,
+          permission_mode: "generate_in_allowed_folders" as const,
+          last_used_at: null,
+          usage_count: 0,
+          metadata: { oauth_client_id: ctx.clientId, oauth_user_id: ctx.userId },
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        },
+        workspaceId: ctx.workspaceId,
+        allowedBoxIds,
+        tokenId: `oauth:${ctx.clientId}`,
+      };
+      const result = await createGeneratedNote(admin, syntheticConnection, {
+        folder_id: folderId,
+        title,
+        markdown_content: markdown,
+        summary: typeof args.summary === "string" ? args.summary : null,
+        tags: Array.isArray(args.tags) ? (args.tags as string[]) : [],
+      });
+      return { note: result };
     }
 
     case "create_write_proposal": {

@@ -245,20 +245,92 @@ There is no forced migration deadline in V1. Existing deployments
 using the stdio + env-var flow keep working; new connector-style
 integrations land on OAuth.
 
-## Limitations
+## Follow-ups landed (v1.1)
 
-- **Third-party client self-registration** is not in the UI.
-  `registerClient` exists; a developer portal needs to wrap it.
-- **HTTP MCP tool coverage** is a subset of the stdio server in V1
-  (read/search/propose are covered; `get_context_bundle`,
-  `list_folder_contents`, `get_linked_notes`, `get_box_overview`,
-  `create_generated_note` port in a follow-up without further auth
-  work).
-- **Streamable HTTP (MCP spec)** is not implemented yet — `/api/mcp`
-  uses request/response JSON-RPC. Most production connectors accept
-  either.
-- **Dynamic client registration (RFC 7591)** not implemented.
-- **Connection-token attribution** on the canonical API is unchanged;
-  OAuth tokens are not yet accepted on `/api/v1/**` (only on
-  `/api/mcp`). A small helper can route either token family through
-  the same identity resolver once the stdio path is retired.
+The V1 deferrals below were the next tranche of work. Each is now live
+and covered by the architecture.
+
+### Feature-parity HTTP MCP tool set
+
+The HTTP `/api/mcp` transport now exposes every read + write tool the
+legacy stdio server offered, adapted to OAuth identity:
+
+| Tool                    | Scope                | Notes                                              |
+|-------------------------|----------------------|----------------------------------------------------|
+| `list_boxes`            | `context:read`       | unchanged                                          |
+| `get_box_overview`      | `context:read`       | proxies `overview_service.getBoxOverview`          |
+| `list_folder_contents`  | `context:read`       | folder + note list scoped to `(box, parent)`       |
+| `get_note`              | `context:read`       | unchanged                                          |
+| `get_linked_notes`      | `context:read`       | inbound + outbound via `note_link_repository`      |
+| `search_workspace`      | `context:search`     | cross-type search                                  |
+| `get_context_bundle`    | `context:bundles`    | `context_bundle_service.assembleContextBundle`     |
+| `create_write_proposal` | `context:propose`    | human-review queue                                 |
+| `create_generated_note` | `context:generate`   | folder must have `accepts_generated_notes = true`  |
+
+`create_generated_note` synthesizes a minimal `ConnectionRequestContext`
+from the OAuth identity so the existing `generated_note_service` runs
+unchanged — the folder-policy check still fires and reusable
+skills/agents still require proposals.
+
+### Unified identity resolver on `/api/v1/**`
+
+`src/server/auth/get_connection_context.ts` now dispatches on token
+prefix:
+
+- `csk_v1_<hex>` → legacy connection_token path (unchanged).
+- `cso_a_<base64url>` → OAuth access token. A synthetic
+  `Connection` is built from `(oauth_client, scope)` so every existing
+  `/api/v1/**` handler accepts OAuth tokens without modification.
+  Permission_mode is derived from scope: `context:generate` →
+  `generate_in_allowed_folders`, `context:propose` →
+  `propose_writes`, otherwise `read_only`. `allowedBoxIds` is every
+  live box in the workspace, matching membership semantics.
+
+### Dynamic Client Registration (RFC 7591)
+
+- New endpoint: `POST /api/oauth/register`.
+- Requires an authenticated Context Store identity (session cookie or
+  existing OAuth access token) — no anonymous drive-by registration.
+- Request body follows RFC 7591 §2 (`client_name`, `redirect_uris`,
+  `scope`, `client_uri`, `logo_uri`, `token_endpoint_auth_method`).
+- Unknown scopes are silently dropped per RFC 7591 §3.2.1.
+- Response follows RFC 7591 §3.2 with `client_secret_expires_at = 0`
+  for confidential clients (we don't rotate secrets; clients delete +
+  re-register if needed).
+- `registration_endpoint` is advertised in the discovery metadata at
+  `/.well-known/oauth-authorization-server`.
+- Every registration writes an `oauth.client.registered` audit event.
+
+### Developer Apps UI
+
+Settings → Developer apps exposes the same registration flow through
+the product UI:
+
+- List apps the user registered + first-party seeded apps (read-only).
+- Register dialog with public vs confidential selector, scope
+  checkboxes, redirect-URI textarea.
+- Credentials dialog shows `client_id` and (for confidential clients)
+  the one-time `client_secret` with a copy button and a clear warning
+  that the secret is unrecoverable after close.
+- Per-app delete button that revokes every live token for the client
+  in one update before soft-deleting the row.
+
+## Remaining limitations
+
+- **Streamable HTTP transport (MCP spec)** is still not implemented.
+  `/api/mcp` is request/response JSON-RPC, which every production
+  connector we target currently accepts. Streamable HTTP adds value
+  for long-running tools (incremental outputs) which Context Store
+  tools don't have today. Deferred with no user-visible impact.
+- **Confidential-client secret rotation** is not exposed. Current
+  workflow: delete the client (revokes all tokens) and register a
+  new one. A rotate-secret endpoint is a future-friendly addition.
+- **OAuth authorize CSRF**: we rely on the OAuth `state` parameter
+  (which the connector generates + verifies) plus Supabase session
+  cookie auth and exact-match redirect URIs. A double-submit CSRF
+  token on the approve action would be belt-and-suspenders; standard
+  OAuth doesn't require it.
+- **Per-box scope grants** for OAuth tokens. V1 OAuth tokens are
+  workspace-wide; legacy `connection_tokens` still support per-box
+  scoping. A `context:read:box:<id>` scope family is the natural
+  extension and doesn't require a migration.
