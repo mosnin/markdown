@@ -18,7 +18,14 @@ import {
   planRestoreFromChangeSet,
   type RestorePlan,
   type RestoreResult,
+  type RestoreScopeFilter,
 } from "@/server/services/restore_service";
+import {
+  summarizeRestoreCandidate,
+  compareChangeSetToCurrent,
+  type RestoreCandidateSummary,
+  type ChangeSetObjectComparison,
+} from "@/server/services/change_set_metadata_service";
 
 export type ActionResult<T = void> =
   | { ok: true; data: T }
@@ -57,6 +64,8 @@ export async function getChangeSetDetailAction(
   items: ChangeSetItem[];
   structural: StructuralEvent[];
   plan: RestorePlan;
+  summary: RestoreCandidateSummary | null;
+  comparison: ChangeSetObjectComparison[];
 }>> {
   try {
     const ctx = await requireAuthenticatedUser();
@@ -65,19 +74,28 @@ export async function getChangeSetDetailAction(
     if (!cs || cs.workspace_id !== ctx.workspace.id) {
       return { ok: false, error: "Change set not found" };
     }
-    const [items, structural, plan] = await Promise.all([
+    // Pull the raw lists plus the richer metadata surface in parallel
+    // so the client gets dirtyAfter warnings + compact display hints
+    // in one round trip.
+    const [items, structural, plan, summary, comparison] = await Promise.all([
       listChangeSetItems(supabase, id),
       listStructuralEvents(supabase, id),
       planRestoreFromChangeSet(supabase, id),
+      summarizeRestoreCandidate(supabase, id),
+      compareChangeSetToCurrent(supabase, id),
     ]);
-    return { ok: true, data: { changeSet: cs, items, structural, plan } };
+    return {
+      ok: true,
+      data: { changeSet: cs, items, structural, plan, summary, comparison },
+    };
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : "Failed to load change set" };
   }
 }
 
 export async function restoreChangeSetAction(
-  changeSetId: string
+  changeSetId: string,
+  filter?: RestoreScopeFilter
 ): Promise<ActionResult<RestoreResult>> {
   const gate = await requireWriteRoleResult();
   if (!gate.ok) return { ok: false, error: gate.error };
@@ -102,7 +120,8 @@ export async function restoreChangeSetAction(
       supabase,
       ctx.workspace.id,
       ctx.user.id,
-      changeSetId
+      changeSetId,
+      filter
     );
     revalidatePath("/app/history");
     revalidatePath("/app");

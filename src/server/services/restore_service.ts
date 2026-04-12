@@ -133,6 +133,22 @@ export async function planRestoreFromChangeSet(
 }
 
 /**
+ * Optional filter for partial restore. When omitted, the engine is
+ * all-or-nothing across the entire change set — the right default
+ * semantic for grouped operations like imports. Pass `itemIds` to
+ * only invert those change_set_items, or `eventIds` to only invert
+ * those structural_events. Both may be combined; an empty set is
+ * treated as "none of that kind".
+ *
+ * The planner blockers still apply to the chosen subset — you can't
+ * bypass the "missing before_snapshot" guard by filtering.
+ */
+export interface RestoreScopeFilter {
+  itemIds?: string[];
+  eventIds?: string[];
+}
+
+/**
  * Execute a restore plan. Creates a fresh change set (origin='restore')
  * that records the undoing operations, then applies each item/event in
  * order. Stops and aborts the child change set on first failure — the
@@ -141,12 +157,18 @@ export async function planRestoreFromChangeSet(
  * The actorId is the auth.users.id of the human triggering the restore.
  * Restores are intentionally not exposed to connections / the canonical
  * API; only a human can restore.
+ *
+ * `filter` narrows the restore to specific change_set_items or
+ * structural_events — used by the UI when a user wants to undo part
+ * of a grouped change rather than the whole thing. See
+ * RestoreScopeFilter above.
  */
 export async function restoreFromChangeSet(
   supabase: SupabaseClient,
   workspaceId: string,
   actorId: string,
-  changeSetId: string
+  changeSetId: string,
+  filter?: RestoreScopeFilter
 ): Promise<RestoreResult> {
   const plan = await planRestoreFromChangeSet(supabase, changeSetId);
   if (plan.blockers.length > 0) {
@@ -171,21 +193,36 @@ export async function restoreFromChangeSet(
     origin: "restore",
     actor_type: "user",
     actor_id: actorId,
-    summary: `Restore of change set ${changeSetId.slice(0, 8)}`,
+    summary: filter
+      ? `Partial restore of change set ${changeSetId.slice(0, 8)}`
+      : `Restore of change set ${changeSetId.slice(0, 8)}`,
     parent_change_set_id: changeSetId,
+    metadata: filter
+      ? {
+          partial: true,
+          selected_item_ids: filter.itemIds ?? null,
+          selected_event_ids: filter.eventIds ?? null,
+        }
+      : {},
   });
 
   try {
     // 1. Undo structural events in reverse sequence first so content
     //    restores land into the topology they originally came from.
-    const structural = await listStructuralEvents(supabase, changeSetId);
+    const allStructural = await listStructuralEvents(supabase, changeSetId);
+    const structural = filter?.eventIds
+      ? allStructural.filter((e) => filter.eventIds!.includes(e.id))
+      : allStructural;
     for (const se of [...structural].reverse()) {
       await applyStructuralInverse(supabase, workspaceId, restoreCs.id, se);
     }
 
     // 2. Undo content items. Version-bearing items use the version graph;
     //    lifecycle items flip the status back.
-    const items = await listChangeSetItems(supabase, changeSetId);
+    const allItems = await listChangeSetItems(supabase, changeSetId);
+    const items = filter?.itemIds
+      ? allItems.filter((i) => filter.itemIds!.includes(i.id))
+      : allItems;
     for (const it of [...items].reverse()) {
       await applyItemInverse(supabase, workspaceId, restoreCs.id, actorId, it);
     }
@@ -396,6 +433,82 @@ export async function restoreObjectVersion(
       error: message,
     };
   }
+}
+
+/**
+ * Restore across multiple source change sets as one atomic operation.
+ *
+ * Each source change set is restored in its own child change set as
+ * usual — but all child change sets share a single bracketing parent
+ * `origin: 'restore'` record so they render as one "Batch undo" entry
+ * in history and can themselves be restored atomically later.
+ *
+ * Failure semantics: best-effort per source. A failure on source N
+ * does NOT roll back sources 0..N-1 (those inverses have already
+ * landed as their own child change sets). The bracketing parent is
+ * marked committed if at least one source restored, aborted if none
+ * did. Each child's success / failure is surfaced in the returned
+ * array so the caller can render per-source status.
+ *
+ * When `filters[i]` is present, that source's restore is narrowed
+ * the same way RestoreScopeFilter works for single restores.
+ */
+export async function restoreManyChangeSets(
+  supabase: SupabaseClient,
+  workspaceId: string,
+  actorId: string,
+  sources: Array<{ changeSetId: string; filter?: RestoreScopeFilter }>
+): Promise<{
+  ok: boolean;
+  bracketChangeSetId: string;
+  results: Array<{ changeSetId: string; result: RestoreResult }>;
+}> {
+  const bracket = await openChangeSet(supabase, {
+    workspace_id: workspaceId,
+    origin: "restore",
+    actor_type: "user",
+    actor_id: actorId,
+    summary: `Batch restore of ${sources.length} change set${sources.length === 1 ? "" : "s"}`,
+    metadata: {
+      batch: true,
+      source_change_set_ids: sources.map((s) => s.changeSetId),
+    },
+  });
+
+  const results: Array<{ changeSetId: string; result: RestoreResult }> = [];
+  let anySucceeded = false;
+
+  for (const source of sources) {
+    const result = await restoreFromChangeSet(
+      supabase,
+      workspaceId,
+      actorId,
+      source.changeSetId,
+      source.filter
+    );
+    results.push({ changeSetId: source.changeSetId, result });
+    if (result.ok) anySucceeded = true;
+    // Chain every child's parent_change_set_id to the bracket so a
+    // history renderer can collapse them under one row.
+    if (result.restoreChangeSetId) {
+      await supabase
+        .from("change_sets")
+        .update({ parent_change_set_id: bracket.id })
+        .eq("id", result.restoreChangeSetId);
+    }
+  }
+
+  if (anySucceeded) {
+    await commitChangeSet(supabase, bracket.id);
+  } else {
+    await abortChangeSet(supabase, bracket.id, "All source restores failed");
+  }
+
+  return {
+    ok: anySucceeded,
+    bracketChangeSetId: bracket.id,
+    results,
+  };
 }
 
 // ─── Planners (pure, exported for tests) ─────────────────────────────────────

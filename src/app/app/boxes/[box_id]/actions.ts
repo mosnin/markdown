@@ -10,95 +10,174 @@ import {
   archiveBox,
   unarchiveBox,
 } from "@/server/services/lifecycle_service";
+import {
+  withLifecycleChangeSet,
+  lifecycleStatusFor,
+} from "@/server/services/lifecycle_change_set";
+import { type ChangeSetItemOperation } from "@/server/services/change_set_service";
 
 type ActionResult<T = undefined> =
   | { success: true; data: T }
   | { success: false; error: string };
 
+/**
+ * Folder and box lifecycle actions.
+ *
+ * Every transition runs inside a `origin: 'lifecycle'` change set so
+ * the operation is grouped, attributable, and reversible. The
+ * lifecycle services keep running all their own guards (guide-note
+ * protection, subtree cascade guards); the wrapper is pure
+ * bookkeeping.
+ *
+ * Subtree operations (`archiveFolder`, `trashFolder`, etc.) cascade to
+ * descendants inside a single SQL RPC — the change_set records the
+ * root folder only, which is enough for the restore engine to undo
+ * the whole subtree via the same RPC's inverse. Per-descendant
+ * structural events are not written here because the subtree is
+ * already described by the root folder's before/after status.
+ */
+
+async function runFolderLifecycle(
+  folderId: string,
+  op: Extract<
+    ChangeSetItemOperation,
+    "archive" | "unarchive" | "trash" | "restore_lifecycle"
+  >,
+  perform: (
+    sb: ReturnType<typeof createAdminClient>,
+    userId: string,
+    workspaceId: string
+  ) => Promise<{ folder_count: number; note_count: number }>,
+  beforeStatus: string
+): Promise<ActionResult<{ folder_count: number; note_count: number }>> {
+  try {
+    const ctx = await requireAuthenticatedUser();
+    const supabase = createAdminClient();
+    let result: { folder_count: number; note_count: number } = { folder_count: 0, note_count: 0 };
+    await withLifecycleChangeSet(
+      supabase,
+      {
+        workspaceId: ctx.workspace.id,
+        userId: ctx.user!.id,
+        objectType: "folder",
+        objectId: folderId,
+        operation: op,
+        beforeStatus,
+        afterStatus: lifecycleStatusFor(op),
+        summary: `${op} folder ${folderId.slice(0, 8)}`,
+      },
+      async () => {
+        result = await perform(supabase, ctx.user!.id, ctx.workspace.id);
+      }
+    );
+    return { success: true, data: result };
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : "Failed" };
+  }
+}
+
+async function runBoxLifecycle(
+  boxId: string,
+  op: "archive" | "unarchive",
+  perform: (
+    sb: ReturnType<typeof createAdminClient>,
+    userId: string,
+    workspaceId: string
+  ) => Promise<{ folder_count: number; note_count: number }>,
+  beforeStatus: string
+): Promise<ActionResult<{ folder_count: number; note_count: number }>> {
+  try {
+    const ctx = await requireAuthenticatedUser();
+    const supabase = createAdminClient();
+    let result: { folder_count: number; note_count: number } = { folder_count: 0, note_count: 0 };
+    await withLifecycleChangeSet(
+      supabase,
+      {
+        workspaceId: ctx.workspace.id,
+        userId: ctx.user!.id,
+        objectType: "box",
+        objectId: boxId,
+        operation: op,
+        beforeStatus,
+        afterStatus: lifecycleStatusFor(op),
+        summary: `${op} box ${boxId.slice(0, 8)}`,
+      },
+      async () => {
+        result = await perform(supabase, ctx.user!.id, ctx.workspace.id);
+      }
+    );
+    return { success: true, data: result };
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : "Failed" };
+  }
+}
+
 // ─── Folder lifecycle actions ─────────────────────────────────────────────────
 
-/**
- * Archive a folder and all descendant folders and notes.
- * Blocked if the subtree contains the box's current guide note.
- */
 export async function archiveFolderAction(
   folderId: string
 ): Promise<ActionResult<{ folder_count: number; note_count: number }>> {
-  try {
-    const ctx = await requireAuthenticatedUser();
-    const result = await archiveFolder(createAdminClient(), ctx.user!.id, ctx.workspace.id, folderId);
-    return { success: true, data: result };
-  } catch (err) {
-    return { success: false, error: err instanceof Error ? err.message : "Failed" };
-  }
+  return runFolderLifecycle(
+    folderId,
+    "archive",
+    async (sb, u, w) => archiveFolder(sb, u, w, folderId),
+    "active"
+  );
 }
 
-/** Unarchive a folder subtree. */
 export async function unarchiveFolderAction(
   folderId: string
 ): Promise<ActionResult<{ folder_count: number; note_count: number }>> {
-  try {
-    const ctx = await requireAuthenticatedUser();
-    const result = await unarchiveFolder(createAdminClient(), ctx.user!.id, ctx.workspace.id, folderId);
-    return { success: true, data: result };
-  } catch (err) {
-    return { success: false, error: err instanceof Error ? err.message : "Failed" };
-  }
+  return runFolderLifecycle(
+    folderId,
+    "unarchive",
+    async (sb, u, w) => unarchiveFolder(sb, u, w, folderId),
+    "archived"
+  );
 }
 
-/**
- * Trash a folder and all descendant folders and notes.
- * Blocked if the subtree contains the box's current guide note.
- */
 export async function trashFolderAction(
   folderId: string
 ): Promise<ActionResult<{ folder_count: number; note_count: number }>> {
-  try {
-    const ctx = await requireAuthenticatedUser();
-    const result = await trashFolder(createAdminClient(), ctx.user!.id, ctx.workspace.id, folderId);
-    return { success: true, data: result };
-  } catch (err) {
-    return { success: false, error: err instanceof Error ? err.message : "Failed" };
-  }
+  return runFolderLifecycle(
+    folderId,
+    "trash",
+    async (sb, u, w) => trashFolder(sb, u, w, folderId),
+    "active"
+  );
 }
 
-/** Restore a trashed folder subtree. */
 export async function restoreFolderAction(
   folderId: string
 ): Promise<ActionResult<{ folder_count: number; note_count: number }>> {
-  try {
-    const ctx = await requireAuthenticatedUser();
-    const result = await restoreFolder(createAdminClient(), ctx.user!.id, ctx.workspace.id, folderId);
-    return { success: true, data: result };
-  } catch (err) {
-    return { success: false, error: err instanceof Error ? err.message : "Failed" };
-  }
+  return runFolderLifecycle(
+    folderId,
+    "restore_lifecycle",
+    async (sb, u, w) => restoreFolder(sb, u, w, folderId),
+    "trashed"
+  );
 }
 
 // ─── Box lifecycle actions ────────────────────────────────────────────────────
 
-/** Archive a box and all its non-trashed folders and notes. */
 export async function archiveBoxAction(
   boxId: string
 ): Promise<ActionResult<{ folder_count: number; note_count: number }>> {
-  try {
-    const ctx = await requireAuthenticatedUser();
-    const result = await archiveBox(createAdminClient(), ctx.user!.id, ctx.workspace.id, boxId);
-    return { success: true, data: result };
-  } catch (err) {
-    return { success: false, error: err instanceof Error ? err.message : "Failed" };
-  }
+  return runBoxLifecycle(
+    boxId,
+    "archive",
+    async (sb, u, w) => archiveBox(sb, u, w, boxId),
+    "active"
+  );
 }
 
-/** Unarchive a box and all its archived folders and notes. */
 export async function unarchiveBoxAction(
   boxId: string
 ): Promise<ActionResult<{ folder_count: number; note_count: number }>> {
-  try {
-    const ctx = await requireAuthenticatedUser();
-    const result = await unarchiveBox(createAdminClient(), ctx.user!.id, ctx.workspace.id, boxId);
-    return { success: true, data: result };
-  } catch (err) {
-    return { success: false, error: err instanceof Error ? err.message : "Failed" };
-  }
+  return runBoxLifecycle(
+    boxId,
+    "unarchive",
+    async (sb, u, w) => unarchiveBox(sb, u, w, boxId),
+    "archived"
+  );
 }

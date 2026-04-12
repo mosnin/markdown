@@ -10,6 +10,11 @@ import {
   restoreSkill,
 } from "@/server/services/lifecycle_service";
 import { rollbackObjectToVersion } from "@/server/services/version_history_service";
+import {
+  withLifecycleChangeSet,
+  lifecycleStatusFor,
+} from "@/server/services/lifecycle_change_set";
+import { type ChangeSetItemOperation } from "@/server/services/change_set_service";
 
 type ActionResult<T = void> =
   | { ok: true; data: T }
@@ -22,77 +27,84 @@ function assertNonEmptyId(id: string, label: string): { ok: false; error: string
 
 // ─── Skill lifecycle ──────────────────────────────────────────────────────────
 
-export async function archiveSkillAction(skillId: string): Promise<ActionResult> {
+async function runSkillLifecycle(
+  skillId: string,
+  op: Extract<
+    ChangeSetItemOperation,
+    "archive" | "unarchive" | "trash" | "restore_lifecycle"
+  >,
+  perform: (
+    sb: Awaited<ReturnType<typeof createClient>>,
+    userId: string,
+    workspaceId: string
+  ) => Promise<unknown>,
+  beforeStatus: string,
+  errorLabel: string
+): Promise<ActionResult> {
   const guard = assertNonEmptyId(skillId, "skillId");
   if (guard) return guard;
   try {
     const ctx = await requireAuthenticatedUser();
     const supabase = await createClient();
-    await archiveSkill(supabase, ctx.user.id, ctx.workspace.id, skillId);
+    await withLifecycleChangeSet(
+      supabase,
+      {
+        workspaceId: ctx.workspace.id,
+        userId: ctx.user.id,
+        objectType: "skill",
+        objectId: skillId,
+        operation: op,
+        beforeStatus,
+        afterStatus: lifecycleStatusFor(op),
+        summary: `${op} skill ${skillId.slice(0, 8)}`,
+      },
+      async () => { await perform(supabase, ctx.user.id, ctx.workspace.id); }
+    );
     revalidatePath(`/app/skills/${skillId}`);
     revalidatePath("/app/skills");
     return { ok: true, data: undefined };
   } catch (err) {
-    return { ok: false, error: err instanceof Error ? err.message : "Failed to archive skill" };
+    return { ok: false, error: err instanceof Error ? err.message : errorLabel };
   }
+}
+
+export async function archiveSkillAction(skillId: string): Promise<ActionResult> {
+  return runSkillLifecycle(
+    skillId, "archive",
+    async (sb, u, w) => archiveSkill(sb, u, w, skillId),
+    "active", "Failed to archive skill"
+  );
 }
 
 export async function unarchiveSkillAction(skillId: string): Promise<ActionResult> {
-  const guard = assertNonEmptyId(skillId, "skillId");
-  if (guard) return guard;
-  try {
-    const ctx = await requireAuthenticatedUser();
-    const supabase = await createClient();
-    await unarchiveSkill(supabase, ctx.user.id, ctx.workspace.id, skillId);
-    revalidatePath(`/app/skills/${skillId}`);
-    revalidatePath("/app/skills");
-    return { ok: true, data: undefined };
-  } catch (err) {
-    return { ok: false, error: err instanceof Error ? err.message : "Failed to unarchive skill" };
-  }
+  return runSkillLifecycle(
+    skillId, "unarchive",
+    async (sb, u, w) => unarchiveSkill(sb, u, w, skillId),
+    "archived", "Failed to unarchive skill"
+  );
 }
 
 export async function trashSkillAction(skillId: string): Promise<ActionResult> {
-  const guard = assertNonEmptyId(skillId, "skillId");
-  if (guard) return guard;
-  try {
-    const ctx = await requireAuthenticatedUser();
-    const supabase = await createClient();
-    await trashSkill(supabase, ctx.user.id, ctx.workspace.id, skillId);
-    revalidatePath(`/app/skills/${skillId}`);
-    revalidatePath("/app/skills");
-    return { ok: true, data: undefined };
-  } catch (err) {
-    return { ok: false, error: err instanceof Error ? err.message : "Failed to trash skill" };
-  }
+  return runSkillLifecycle(
+    skillId, "trash",
+    async (sb, u, w) => trashSkill(sb, u, w, skillId),
+    "active", "Failed to trash skill"
+  );
 }
 
 export async function restoreSkillAction(skillId: string): Promise<ActionResult> {
-  const guard = assertNonEmptyId(skillId, "skillId");
-  if (guard) return guard;
-  try {
-    const ctx = await requireAuthenticatedUser();
-    const supabase = await createClient();
-    await restoreSkill(supabase, ctx.user.id, ctx.workspace.id, skillId);
-    revalidatePath(`/app/skills/${skillId}`);
-    revalidatePath("/app/skills");
-    return { ok: true, data: undefined };
-  } catch (err) {
-    return { ok: false, error: err instanceof Error ? err.message : "Failed to restore skill" };
-  }
+  return runSkillLifecycle(
+    skillId, "restore_lifecycle",
+    async (sb, u, w) => restoreSkill(sb, u, w, skillId),
+    "trashed", "Failed to restore skill"
+  );
 }
 
 // ─── Skill rollback ───────────────────────────────────────────────────────────
 
 /**
- * Roll back a skill to a prior version.
- * Creates a new version — history is never mutated.
- * Rollback is human-only: not exposed to connections or the API.
- *
- * Note: for reusable shared skills, rollback still requires human action
- * and is audited as such. The human-controlled rollback is the one exception
- * where a reusable shared object can be mutated without a proposal — because
- * the human owner is explicitly choosing to restore to a known-good state.
+ * Roll back a skill's canonical source to a prior version.
+ * Human-only — not exposed to connections or the API.
  */
 export async function rollbackSkillAction(
   skillId: string,

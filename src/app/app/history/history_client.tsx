@@ -35,6 +35,7 @@ import type {
   StructuralEvent,
 } from "@/server/services/change_set_service";
 import type { RestorePlan } from "@/server/services/restore_service";
+import type { ChangeSetObjectComparison } from "@/server/services/change_set_metadata_service";
 
 /**
  * History list + detail + restore UI.
@@ -75,15 +76,20 @@ export function HistoryClient({
     items: ChangeSetItem[];
     structural: StructuralEvent[];
     plan: RestorePlan;
+    comparison: ChangeSetObjectComparison[];
   } | null>(null);
   const [detailLoading, startDetailLoad] = useTransition();
   const [confirmingId, setConfirmingId] = useState<string | null>(null);
+  // Per-item restore selection. Undefined while the user hasn't
+  // opened any partial-restore toggles yet; then a set of item ids.
+  const [selectedItemIds, setSelectedItemIds] = useState<Set<string> | null>(null);
   const [restoreResult, setRestoreResult] = useState<{ id: string; ok: boolean; message: string } | null>(null);
   const [restoring, startRestore] = useTransition();
 
   function openDetail(id: string) {
     setDetailId(id);
     setDetail(null);
+    setSelectedItemIds(null);
     startDetailLoad(async () => {
       const res = await getChangeSetDetailAction(id);
       if (res.ok) setDetail(res.data);
@@ -93,6 +99,7 @@ export function HistoryClient({
   function closeDetail() {
     setDetailId(null);
     setDetail(null);
+    setSelectedItemIds(null);
   }
 
   function confirmRestore(id: string) {
@@ -102,8 +109,14 @@ export function HistoryClient({
   function runRestore() {
     if (!confirmingId) return;
     const id = confirmingId;
+    // Build a filter if the user deselected any items in the detail
+    // drawer. Null / all-selected means full restore.
+    const filter =
+      selectedItemIds && detail && selectedItemIds.size !== detail.items.length
+        ? { itemIds: Array.from(selectedItemIds) }
+        : undefined;
     startRestore(async () => {
-      const res = await restoreChangeSetAction(id);
+      const res = await restoreChangeSetAction(id, filter);
       setConfirmingId(null);
       if (res.ok && res.data) {
         setRestoreResult({
@@ -194,6 +207,9 @@ export function HistoryClient({
               items={detail.items}
               structural={detail.structural}
               plan={detail.plan}
+              comparison={detail.comparison}
+              selectedItemIds={selectedItemIds}
+              onSelectionChange={setSelectedItemIds}
             />
           )}
           <DialogFooter showCloseButton />
@@ -206,11 +222,32 @@ export function HistoryClient({
           <DialogHeader>
             <DialogTitle>Undo this change?</DialogTitle>
           </DialogHeader>
-          <p className="text-sm text-muted-foreground">
-            This will revert every object touched by this change set. A new
-            entry will be added to history recording the undo. The original
-            change set stays in history — nothing is deleted.
-          </p>
+          {/* Summary of what's about to change. When the user has
+              narrowed the selection to a subset, call that out
+              explicitly so they know they're not reverting everything. */}
+          {detail && selectedItemIds && selectedItemIds.size !== detail.items.length ? (
+            <p className="text-sm text-muted-foreground">
+              This will revert <strong>{selectedItemIds.size} of {detail.items.length}</strong>
+              {" "}selected objects from this change set. A new entry will
+              be added to history recording the undo. The original change
+              set stays in history — nothing is deleted.
+            </p>
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              This will revert every object touched by this change set. A new
+              entry will be added to history recording the undo. The original
+              change set stays in history — nothing is deleted.
+            </p>
+          )}
+          {/* Warn when the user's restore will overwrite newer edits. */}
+          {detail && hasDirtyAfter(detail.items, detail.comparison, selectedItemIds) && (
+            <div className="rounded-md border border-warning/30 bg-warning/5 px-3 py-2 text-xs text-warning">
+              Some of the objects you&apos;re reverting have been edited since
+              this change committed. Restoring will overwrite those newer
+              edits. Any overwritten work remains reachable through each
+              object&apos;s version history.
+            </div>
+          )}
           <DialogFooter>
             <Button
               variant="outline"
@@ -228,6 +265,26 @@ export function HistoryClient({
       </Dialog>
     </div>
   );
+}
+
+function hasDirtyAfter(
+  items: ChangeSetItem[],
+  comparison: ChangeSetObjectComparison[],
+  selectedItemIds: Set<string> | null
+): boolean {
+  // dirtyAfter is indexed by (object_type, object_id); the restore
+  // filter selects by change_set_item.id. Walk the selected items
+  // and look up whether their target has been edited since commit.
+  const cmpByKey = new Map<string, ChangeSetObjectComparison>();
+  for (const c of comparison) {
+    cmpByKey.set(`${c.object_type}:${c.object_id}`, c);
+  }
+  for (const item of items) {
+    if (selectedItemIds && !selectedItemIds.has(item.id)) continue;
+    const cmp = cmpByKey.get(`${item.object_type}:${item.object_id}`);
+    if (cmp?.dirtyAfter) return true;
+  }
+  return false;
 }
 
 function HistoryRow({
@@ -299,11 +356,41 @@ function DetailBody({
   items,
   structural,
   plan,
+  comparison,
+  selectedItemIds,
+  onSelectionChange,
 }: {
   items: ChangeSetItem[];
   structural: StructuralEvent[];
   plan: RestorePlan;
+  comparison: ChangeSetObjectComparison[];
+  selectedItemIds: Set<string> | null;
+  onSelectionChange: (set: Set<string> | null) => void;
 }) {
+  // Initialise the selection to "all items" the first time the user
+  // interacts with a checkbox. Passing null back to the parent means
+  // "full restore" — we only materialise a set when the user wants
+  // to narrow.
+  const effectiveSelection = selectedItemIds ?? new Set(items.map((i) => i.id));
+
+  // Quick lookup from object_type:object_id -> comparison row so we
+  // can render a "Edited since" badge next to the corresponding item.
+  const compByObject = new Map<string, ChangeSetObjectComparison>();
+  for (const c of comparison) {
+    compByObject.set(`${c.object_type}:${c.object_id}`, c);
+  }
+
+  function toggle(id: string) {
+    const next = new Set(effectiveSelection);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    onSelectionChange(next);
+  }
+
+  function selectAll() {
+    onSelectionChange(null);
+  }
+
   return (
     <div className="space-y-4 text-sm">
       {plan.blockers.length > 0 && (
@@ -318,24 +405,62 @@ function DetailBody({
       )}
 
       <section>
-        <h3 className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-          Content items
-          <span className="ml-2 text-[10px] font-normal">{items.length}</span>
-        </h3>
+        <div className="mb-2 flex items-center justify-between">
+          <h3 className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+            Content items
+            <span className="ml-2 text-[10px] font-normal">{items.length}</span>
+          </h3>
+          {selectedItemIds && selectedItemIds.size !== items.length && (
+            <button
+              type="button"
+              onClick={selectAll}
+              className="text-[10px] text-muted-foreground underline hover:text-foreground"
+            >
+              select all
+            </button>
+          )}
+        </div>
         {items.length === 0 ? (
           <p className="text-xs text-muted-foreground">No content items.</p>
         ) : (
           <ul className="flex flex-col gap-1 list-none">
-            {items.map((it) => (
-              <li key={it.id} className="flex items-center gap-2 rounded border border-border bg-card px-3 py-2">
-                <Badge variant="secondary" className="shrink-0 text-[10px] font-normal capitalize">
-                  {it.operation}
-                </Badge>
-                <span className="truncate text-xs">
-                  {it.object_type} · {it.object_id.slice(0, 8)}
-                </span>
-              </li>
-            ))}
+            {items.map((it) => {
+              const cmp = compByObject.get(`${it.object_type}:${it.object_id}`);
+              const isDirty = cmp?.dirtyAfter ?? false;
+              const checked = effectiveSelection.has(it.id);
+              return (
+                <li
+                  key={it.id}
+                  className={cn(
+                    "flex items-center gap-2 rounded border px-3 py-2",
+                    checked ? "border-border bg-card" : "border-dashed border-border/60 bg-transparent"
+                  )}
+                >
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    onChange={() => toggle(it.id)}
+                    aria-label={`Include ${it.object_type} ${it.object_id.slice(0, 8)} in restore`}
+                    className="h-3.5 w-3.5"
+                  />
+                  <Badge variant="secondary" className="shrink-0 text-[10px] font-normal capitalize">
+                    {it.operation}
+                  </Badge>
+                  <span className="min-w-0 flex-1 truncate text-xs">
+                    {it.object_type} · {it.object_id.slice(0, 8)}
+                  </span>
+                  {isDirty && (
+                    <Badge
+                      variant="outline"
+                      className="shrink-0 border-warning/40 text-[10px] font-normal text-warning"
+                      title="Edited since this change committed — restoring will overwrite newer state."
+                    >
+                      edited since
+                    </Badge>
+                  )}
+                </li>
+              );
+            })}
           </ul>
         )}
       </section>

@@ -12,6 +12,11 @@ import {
 import {
   rollbackObjectToVersion,
 } from "@/server/services/version_history_service";
+import {
+  withLifecycleChangeSet,
+  lifecycleStatusFor,
+} from "@/server/services/lifecycle_change_set";
+import { type ChangeSetItemOperation } from "@/server/services/change_set_service";
 
 type ActionResult<T = void> =
   | { ok: true; data: T }
@@ -25,60 +30,76 @@ function assertNonEmptyId(id: string, label: string): { ok: false; error: string
 
 // ─── File lifecycle ───────────────────────────────────────────────────────────
 
-export async function archiveFileAction(fileId: string): Promise<ActionResult> {
+async function runFileLifecycle(
+  fileId: string,
+  op: Extract<
+    ChangeSetItemOperation,
+    "archive" | "unarchive" | "trash" | "restore_lifecycle"
+  >,
+  perform: (
+    sb: Awaited<ReturnType<typeof createClient>>,
+    userId: string,
+    workspaceId: string
+  ) => Promise<unknown>,
+  beforeStatus: string,
+  errorLabel: string
+): Promise<ActionResult> {
   const guard = assertNonEmptyId(fileId, "fileId");
   if (guard) return guard;
   try {
     const ctx = await requireAuthenticatedUser();
     const supabase = await createClient();
-    await archiveFile(supabase, ctx.user.id, ctx.workspace.id, fileId);
+    await withLifecycleChangeSet(
+      supabase,
+      {
+        workspaceId: ctx.workspace.id,
+        userId: ctx.user.id,
+        objectType: "file",
+        objectId: fileId,
+        operation: op,
+        beforeStatus,
+        afterStatus: lifecycleStatusFor(op),
+        summary: `${op} file ${fileId.slice(0, 8)}`,
+      },
+      async () => { await perform(supabase, ctx.user.id, ctx.workspace.id); }
+    );
     revalidatePath(`/app/files/${fileId}`);
     return { ok: true, data: undefined };
   } catch (err) {
-    return { ok: false, error: err instanceof Error ? err.message : "Failed to archive file" };
+    return { ok: false, error: err instanceof Error ? err.message : errorLabel };
   }
+}
+
+export async function archiveFileAction(fileId: string): Promise<ActionResult> {
+  return runFileLifecycle(
+    fileId, "archive",
+    async (sb, u, w) => archiveFile(sb, u, w, fileId),
+    "active", "Failed to archive file"
+  );
 }
 
 export async function unarchiveFileAction(fileId: string): Promise<ActionResult> {
-  const guard = assertNonEmptyId(fileId, "fileId");
-  if (guard) return guard;
-  try {
-    const ctx = await requireAuthenticatedUser();
-    const supabase = await createClient();
-    await unarchiveFile(supabase, ctx.user.id, ctx.workspace.id, fileId);
-    revalidatePath(`/app/files/${fileId}`);
-    return { ok: true, data: undefined };
-  } catch (err) {
-    return { ok: false, error: err instanceof Error ? err.message : "Failed to unarchive file" };
-  }
+  return runFileLifecycle(
+    fileId, "unarchive",
+    async (sb, u, w) => unarchiveFile(sb, u, w, fileId),
+    "archived", "Failed to unarchive file"
+  );
 }
 
 export async function trashFileAction(fileId: string): Promise<ActionResult> {
-  const guard = assertNonEmptyId(fileId, "fileId");
-  if (guard) return guard;
-  try {
-    const ctx = await requireAuthenticatedUser();
-    const supabase = await createClient();
-    await trashFile(supabase, ctx.user.id, ctx.workspace.id, fileId);
-    revalidatePath(`/app/files/${fileId}`);
-    return { ok: true, data: undefined };
-  } catch (err) {
-    return { ok: false, error: err instanceof Error ? err.message : "Failed to trash file" };
-  }
+  return runFileLifecycle(
+    fileId, "trash",
+    async (sb, u, w) => trashFile(sb, u, w, fileId),
+    "active", "Failed to trash file"
+  );
 }
 
 export async function restoreFileAction(fileId: string): Promise<ActionResult> {
-  const guard = assertNonEmptyId(fileId, "fileId");
-  if (guard) return guard;
-  try {
-    const ctx = await requireAuthenticatedUser();
-    const supabase = await createClient();
-    await restoreFile(supabase, ctx.user.id, ctx.workspace.id, fileId);
-    revalidatePath(`/app/files/${fileId}`);
-    return { ok: true, data: undefined };
-  } catch (err) {
-    return { ok: false, error: err instanceof Error ? err.message : "Failed to restore file" };
-  }
+  return runFileLifecycle(
+    fileId, "restore_lifecycle",
+    async (sb, u, w) => restoreFile(sb, u, w, fileId),
+    "trashed", "Failed to restore file"
+  );
 }
 
 // ─── File rollback ────────────────────────────────────────────────────────────

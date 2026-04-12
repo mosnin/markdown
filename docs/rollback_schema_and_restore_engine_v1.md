@@ -177,26 +177,75 @@ Supported end-to-end:
 
 Full suite: 259 / 259 passing.
 
+## Follow-ups landed (v1.3)
+
+### Full lifecycle wrapping coverage
+
+Every lifecycle action across the product now routes through
+`withLifecycleChangeSet`:
+
+| Surface | File |
+|---|---|
+| Notes | `src/app/app/notes/[note_id]/actions.ts` |
+| Folders + boxes | `src/app/app/boxes/[box_id]/actions.ts` |
+| Files | `src/app/app/files/lifecycle_actions.ts` |
+| Skills | `src/app/app/skills/lifecycle_actions.ts` |
+| Agents | `src/app/app/agents/lifecycle_actions.ts` |
+
+Every archive / unarchive / trash / restore transition writes a
+`change_set_item` with before/after `status` and is restorable via
+`restoreFromChangeSet`.
+
+### Partial restore within a change set
+
+`restoreFromChangeSet(workspaceId, actorId, changeSetId, filter?)`
+accepts an optional `RestoreScopeFilter { itemIds?, eventIds? }`. A
+populated filter narrows the inverse pass to the chosen items /
+events; the planner blockers still apply to the chosen subset.
+
+The History confirm dialog lets users deselect items via checkboxes;
+the client passes the resulting `itemIds` through. The full-restore
+path (no filter) stays the default.
+
+### Cross-change-set compensating restore
+
+`restoreManyChangeSets(workspaceId, actorId, sources)` takes an
+ordered list of `{ changeSetId, filter? }` and wraps every per-source
+restore under a single bracketing `origin: 'restore'` change set with
+`metadata.batch: true`. Children's `parent_change_set_id` is rewritten
+to point at the bracket so a history renderer can collapse them into
+one row. Failure semantics are best-effort per source; the bracket
+commits iff at least one child succeeded.
+
+### Enhanced confirm dialog
+
+The `/app/history` detail drawer now consumes the new metadata
+surface:
+
+- `summarizeRestoreCandidate` produces a `RestoreCandidateSummary`
+  embedded in the detail fetch so the UI can render blockers,
+  affected-object counts, and display hints in one shot.
+- `compareChangeSetToCurrent` flags `dirtyAfter` per object. The
+  detail row shows an "edited since" badge next to any item whose
+  target has been modified since the change set committed.
+- The confirm dialog surfaces an explicit "will overwrite newer
+  edits" banner when any selected item is `dirtyAfter`.
+- The detail body renders per-item checkboxes so partial restore is
+  a one-click action.
+
 ## Intentionally deferred (not TODOs)
 
 * **Branch-aware writes.** Editor actions don't consult `branch_heads`
   yet. Adding requires threading a branch id through every mutation
   and a UI for selecting branches. Schema + resolver are ready.
-* **Full lifecycle change-set wrapping for folders / files / skills /
-  agents / boxes.** The `withLifecycleChangeSet` helper is generic;
-  notes are wired as the reference. The remaining object types adopt
-  the same pattern without code changes to the helper.
 * **History timeline UI** beyond `/app/history`. The metadata surface
-  (`summarizeRestoreCandidate`, `compareVersionToCurrent`) is ready
-  for richer renderings.
-* **Partial restore** (restore some items from a change set, skip
-  others). The current engine is all-or-nothing inside a change set —
-  the right semantic for grouped operations like imports. Finer
-  granularity would need per-item restore planning, which the
-  planner's shape can already accommodate.
-* **Batch compensating change sets.** Individual compensating items
-  can already be authored manually; the engine doesn't offer a
-  helper for "restore across multiple source change sets" yet.
+  is already wired; richer surfaces (graph view, cross-user filter)
+  are layered surfaces that don't require engine changes.
+* **Streaming / virtualised very-large change-set detail rendering.**
+  Typical change sets have tens of items; imports might touch hundreds.
+  Current non-virtualised list is fine at those sizes; a change set
+  with >1k items would need windowing, which is a pure client
+  concern.
 
 ## Referenced docs
 
