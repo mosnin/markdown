@@ -1,6 +1,10 @@
 # Import / Export V1
 
-This document describes Context Store's portability layer — how notes, folders, boxes, and context bundles can be exported and re-imported.
+This document describes Context Store's portability layer — how every
+object type can be exported and re-imported. For the April 2026
+corrective pass that extended this layer to the full object model
+(Files, Skills, Agents, their children, and cross-type `object_links`),
+see [expanded_object_import_export_fix_v1.md](expanded_object_import_export_fix_v1.md).
 
 ---
 
@@ -8,10 +12,15 @@ This document describes Context Store's portability layer — how notes, folders
 
 Context Store is not a local-only product. An authenticated owner can:
 
-- Export a note, folder, box, or context bundle as a structured zip package
-- Import a `.md` file or zip package into any owned box
+- Export a note, file, folder, box, skill, agent, or context bundle as a
+  structured zip package
+- Export Skills and Agents in two modes: canonical source only, or full
+  package (canonical source + child files + nested folders + manifest)
+- Import a `.md` file or zip package into any owned box, or at
+  workspace scope for reusable Skill/Agent packages
 - Choose explicit collision behavior before import
-- Receive a legible summary report after import
+- Receive a legible summary report after import covering every object
+  type created, replaced, duplicated, remapped, or skipped
 
 This is a first-class product capability, not a developer utility.
 

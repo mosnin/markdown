@@ -28,9 +28,10 @@ import { getNoteById, listAllNotesByBox, getNotesByIds } from "@/server/reposito
 import { getBoxById } from "@/server/repositories/box_repository";
 import { getFolderById, listAllFoldersByBox } from "@/server/repositories/folder_repository";
 import { listLinksForNoteSet } from "@/server/repositories/note_link_repository";
-import { getFileById } from "@/server/repositories/file_repository";
-import { getSkillById } from "@/server/repositories/skill_repository";
-import { getAgentById } from "@/server/repositories/agent_repository";
+import { getFileById, listAllFilesByBox } from "@/server/repositories/file_repository";
+import { getSkillById, listSkillsByBox } from "@/server/repositories/skill_repository";
+import { getAgentById, listAgentsByBox } from "@/server/repositories/agent_repository";
+import { getAllObjectLinksForObject } from "@/server/repositories/object_link_repository";
 import { assembleContextBundle } from "@/server/services/context_bundle_service";
 
 /**
@@ -254,14 +255,71 @@ export async function exportFolder(
     (l) => exportNoteIds.has(l.source_note_id) && exportNoteIds.has(l.target_note_id)
   );
 
+  // Collect all files, skills, and agents in the box, then filter to subtree
+  const [allBoxFiles, allBoxSkills, allBoxAgents] = await Promise.all([
+    listAllFilesByBox(supabase, box.id, { includeArchived }),
+    listSkillsByBox(supabase, box.id, { includeArchived }),
+    listAgentsByBox(supabase, box.id, { includeArchived }),
+  ]);
+
+  const subtreeFiles = allBoxFiles.filter(
+    (f) => f.folder_id !== null && exportFolderIds.has(f.folder_id)
+  );
+  const subtreeSkills = allBoxSkills.filter(
+    (s) => s.folder_id !== null && exportFolderIds.has(s.folder_id)
+  );
+  const subtreeAgents = allBoxAgents.filter(
+    (a) => a.folder_id !== null && exportFolderIds.has(a.folder_id)
+  );
+
   const manifestFolders = exportFolders.map(toManifestFolder);
-  const manifestNotes = exportNotes.map((n) => toManifestNote(n, box.guide_note_id === n.id));
+  const manifestNotes = exportNotes.map((n) =>
+    toManifestNote(n, box.guide_note_id === n.id)
+  );
   const manifestLinks = exportLinks.map(toManifestLink);
+  const manifestFiles = subtreeFiles.map(toManifestFile);
+  const manifestSkills = subtreeSkills.map(toManifestSkill);
+  const manifestAgents = subtreeAgents.map(toManifestAgent);
+
+  // Populate cross-type object_links within the exported subtree
+  const known = new Set<string>([
+    ...exportNotes.map((n) => `note:${n.id}`),
+    ...exportFolders.map((f) => `folder:${f.id}`),
+    ...subtreeFiles.map((f) => `file:${f.id}`),
+    ...subtreeSkills.map((s) => `skill:${s.id}`),
+    ...subtreeAgents.map((a) => `agent:${a.id}`),
+  ]);
+  const objectLinks: ManifestObjectLink[] = [];
+  const linkSeen = new Set<string>();
+  const linkSources: Array<{ type: "skill" | "agent" | "file"; id: string }> = [
+    ...subtreeSkills.map((s) => ({ type: "skill" as const, id: s.id })),
+    ...subtreeAgents.map((a) => ({ type: "agent" as const, id: a.id })),
+    ...subtreeFiles.map((f) => ({ type: "file" as const, id: f.id })),
+  ];
+  for (const src of linkSources) {
+    const links = await collectObjectLinksForExport(supabase, workspaceId, src, known);
+    for (const l of links) {
+      if (linkSeen.has(l.id)) continue;
+      linkSeen.add(l.id);
+      objectLinks.push(l);
+    }
+  }
 
   const noteFilePaths = exportNotes.map((n) => noteFilePath(n));
+  const objectFilePaths = [
+    ...manifestFiles.map((f) => f.file_path),
+    ...manifestSkills.map((s) => s.file_path),
+    ...manifestAgents.map((a) => a.file_path),
+  ];
+  const allFilePaths = [...noteFilePaths, ...objectFilePaths];
+
+  const schemaVersion: "1.0" | "1.1" =
+    manifestFiles.length + manifestSkills.length + manifestAgents.length > 0
+      ? "1.1"
+      : "1.0";
 
   const manifest: ExportManifest = {
-    schema_version: "1.0",
+    schema_version: schemaVersion,
     export_type: "folder",
     exported_at: new Date().toISOString(),
     workspace: { id: box.workspace_id, name: "" },
@@ -271,15 +329,19 @@ export async function exportFolder(
     notes: manifestNotes,
     links: manifestLinks,
     bundle: null,
-    files: noteFilePaths,
+    files: allFilePaths,
     counts: {
       folders: manifestFolders.length,
       notes: manifestNotes.length,
       links: manifestLinks.length,
-      files: noteFilePaths.length,
-      skills: 0,
-      agents: 0,
+      files: allFilePaths.length,
+      skills: manifestSkills.length,
+      agents: manifestAgents.length,
     },
+    object_files: manifestFiles,
+    skills: manifestSkills,
+    agents: manifestAgents,
+    object_links: objectLinks,
   };
 
   const files: Record<string, string> = {
@@ -287,6 +349,15 @@ export async function exportFolder(
   };
   for (const note of exportNotes) {
     files[noteFilePath(note)] = buildNoteMarkdown(note);
+  }
+  for (let i = 0; i < subtreeFiles.length; i++) {
+    files[manifestFiles[i].file_path] = subtreeFiles[i].source_content;
+  }
+  for (let i = 0; i < subtreeSkills.length; i++) {
+    files[manifestSkills[i].file_path] = subtreeSkills[i].source_content;
+  }
+  for (let i = 0; i < subtreeAgents.length; i++) {
+    files[manifestAgents[i].file_path] = subtreeAgents[i].source_content;
   }
 
   return {
@@ -312,9 +383,12 @@ export async function exportBox(
 
   const { includeArchived = false } = options;
 
-  const [allFolders, allNotes] = await Promise.all([
+  const [allFolders, allNotes, allFiles, allSkills, allAgents] = await Promise.all([
     listAllFoldersByBox(supabase, boxId, { includeArchived }),
     listAllNotesByBox(supabase, boxId, { includeArchived }),
+    listAllFilesByBox(supabase, boxId, { includeArchived }),
+    listSkillsByBox(supabase, boxId, { includeArchived }),
+    listAgentsByBox(supabase, boxId, { includeArchived }),
   ]);
 
   const exportNoteIds = new Set(allNotes.map((n) => n.id));
@@ -326,10 +400,49 @@ export async function exportBox(
   const manifestFolders = allFolders.map(toManifestFolder);
   const manifestNotes = allNotes.map((n) => toManifestNote(n, box.guide_note_id === n.id));
   const manifestLinks = exportLinks.map(toManifestLink);
+  const manifestFiles = allFiles.map(toManifestFile);
+  const manifestSkills = allSkills.map(toManifestSkill);
+  const manifestAgents = allAgents.map(toManifestAgent);
+
+  // Collect cross-type object_links within the box
+  const known = new Set<string>([
+    ...allNotes.map((n) => `note:${n.id}`),
+    ...allFolders.map((f) => `folder:${f.id}`),
+    ...allFiles.map((f) => `file:${f.id}`),
+    ...allSkills.map((s) => `skill:${s.id}`),
+    ...allAgents.map((a) => `agent:${a.id}`),
+  ]);
+  const objectLinks: ManifestObjectLink[] = [];
+  const linkSeen = new Set<string>();
+  const linkSources: Array<{ type: "skill" | "agent" | "file"; id: string }> = [
+    ...allSkills.map((s) => ({ type: "skill" as const, id: s.id })),
+    ...allAgents.map((a) => ({ type: "agent" as const, id: a.id })),
+    ...allFiles.map((f) => ({ type: "file" as const, id: f.id })),
+  ];
+  for (const src of linkSources) {
+    const links = await collectObjectLinksForExport(supabase, workspaceId, src, known);
+    for (const l of links) {
+      if (linkSeen.has(l.id)) continue;
+      linkSeen.add(l.id);
+      objectLinks.push(l);
+    }
+  }
+
   const noteFilePaths = allNotes.map((n) => noteFilePath(n));
+  const objectFilePaths = [
+    ...manifestFiles.map((f) => f.file_path),
+    ...manifestSkills.map((s) => s.file_path),
+    ...manifestAgents.map((a) => a.file_path),
+  ];
+  const allFilePaths = [...noteFilePaths, ...objectFilePaths];
+
+  const schemaVersion: "1.0" | "1.1" =
+    manifestFiles.length + manifestSkills.length + manifestAgents.length > 0
+      ? "1.1"
+      : "1.0";
 
   const manifest: ExportManifest = {
-    schema_version: "1.0",
+    schema_version: schemaVersion,
     export_type: "box",
     exported_at: new Date().toISOString(),
     workspace: { id: box.workspace_id, name: "" },
@@ -339,15 +452,19 @@ export async function exportBox(
     notes: manifestNotes,
     links: manifestLinks,
     bundle: null,
-    files: noteFilePaths,
+    files: allFilePaths,
     counts: {
       folders: manifestFolders.length,
       notes: manifestNotes.length,
       links: manifestLinks.length,
-      files: noteFilePaths.length,
-      skills: 0,
-      agents: 0,
+      files: allFilePaths.length,
+      skills: manifestSkills.length,
+      agents: manifestAgents.length,
     },
+    object_files: manifestFiles,
+    skills: manifestSkills,
+    agents: manifestAgents,
+    object_links: objectLinks,
   };
 
   const files: Record<string, string> = {
@@ -355,6 +472,15 @@ export async function exportBox(
   };
   for (const note of allNotes) {
     files[noteFilePath(note)] = buildNoteMarkdown(note);
+  }
+  for (let i = 0; i < allFiles.length; i++) {
+    files[manifestFiles[i].file_path] = allFiles[i].source_content;
+  }
+  for (let i = 0; i < allSkills.length; i++) {
+    files[manifestSkills[i].file_path] = allSkills[i].source_content;
+  }
+  for (let i = 0; i < allAgents.length; i++) {
+    files[manifestAgents[i].file_path] = allAgents[i].source_content;
   }
 
   return {
@@ -609,6 +735,212 @@ function emptyV11Fields(): { object_files: ManifestFile[]; skills: ManifestSkill
   return { object_files: [], skills: [], agents: [], object_links: [] };
 }
 
+// ─── Child-object collection helpers (skills and agents as packages) ─────────
+
+/**
+ * Collect all files and folders owned by a skill, traversing the
+ * `parent_skill_id` FK chain. Folders owned directly by the skill AND any
+ * nested descendant folders (owned by those folders) are included. Files
+ * are collected both by direct `parent_skill_id` FK and by `folder_id`
+ * pointing into one of the collected folders.
+ */
+async function collectSkillPackageContents(
+  supabase: SupabaseClient,
+  workspaceId: string,
+  skillId: string
+): Promise<{ folders: Folder[]; files: File[] }> {
+  // Step 1: direct child folders — folders.parent_skill_id = skillId
+  const { data: directFoldersData } = await supabase
+    .from("folders")
+    .select("*")
+    .eq("workspace_id", workspaceId)
+    .eq("parent_skill_id", skillId)
+    .neq("status", "trashed");
+  const directFolders = (directFoldersData ?? []) as Folder[];
+
+  // Step 2: recursively walk folder subtree using parent_folder_id
+  const allFolders: Folder[] = [...directFolders];
+  const seenFolderIds = new Set(directFolders.map((f) => f.id));
+  const queue = [...directFolders.map((f) => f.id)];
+  while (queue.length > 0) {
+    const parentId = queue.shift()!;
+    const { data: children } = await supabase
+      .from("folders")
+      .select("*")
+      .eq("workspace_id", workspaceId)
+      .eq("parent_folder_id", parentId)
+      .neq("status", "trashed");
+    for (const child of (children ?? []) as Folder[]) {
+      if (seenFolderIds.has(child.id)) continue;
+      seenFolderIds.add(child.id);
+      allFolders.push(child);
+      queue.push(child.id);
+    }
+  }
+
+  // Step 3: direct child files — files.parent_skill_id = skillId
+  const { data: directFiles } = await supabase
+    .from("files")
+    .select("*")
+    .eq("workspace_id", workspaceId)
+    .eq("parent_skill_id", skillId)
+    .neq("status", "trashed");
+  const files: File[] = [...((directFiles ?? []) as File[])];
+
+  // Step 4: files inside any collected folder — files.folder_id IN collected
+  if (allFolders.length > 0) {
+    const folderIds = allFolders.map((f) => f.id);
+    const { data: folderFiles } = await supabase
+      .from("files")
+      .select("*")
+      .eq("workspace_id", workspaceId)
+      .in("folder_id", folderIds)
+      .neq("status", "trashed");
+    const seenFileIds = new Set(files.map((f) => f.id));
+    for (const file of (folderFiles ?? []) as File[]) {
+      if (seenFileIds.has(file.id)) continue;
+      seenFileIds.add(file.id);
+      files.push(file);
+    }
+  }
+
+  return { folders: allFolders, files };
+}
+
+/**
+ * Collect all files and folders owned by an agent via `parent_agent_id`.
+ * Mirrors collectSkillPackageContents but scoped to agents.
+ */
+async function collectAgentPackageContents(
+  supabase: SupabaseClient,
+  workspaceId: string,
+  agentId: string
+): Promise<{ folders: Folder[]; files: File[] }> {
+  const { data: directFoldersData } = await supabase
+    .from("folders")
+    .select("*")
+    .eq("workspace_id", workspaceId)
+    .eq("parent_agent_id", agentId)
+    .neq("status", "trashed");
+  const directFolders = (directFoldersData ?? []) as Folder[];
+
+  const allFolders: Folder[] = [...directFolders];
+  const seenFolderIds = new Set(directFolders.map((f) => f.id));
+  const queue = [...directFolders.map((f) => f.id)];
+  while (queue.length > 0) {
+    const parentId = queue.shift()!;
+    const { data: children } = await supabase
+      .from("folders")
+      .select("*")
+      .eq("workspace_id", workspaceId)
+      .eq("parent_folder_id", parentId)
+      .neq("status", "trashed");
+    for (const child of (children ?? []) as Folder[]) {
+      if (seenFolderIds.has(child.id)) continue;
+      seenFolderIds.add(child.id);
+      allFolders.push(child);
+      queue.push(child.id);
+    }
+  }
+
+  const { data: directFiles } = await supabase
+    .from("files")
+    .select("*")
+    .eq("workspace_id", workspaceId)
+    .eq("parent_agent_id", agentId)
+    .neq("status", "trashed");
+  const files: File[] = [...((directFiles ?? []) as File[])];
+
+  if (allFolders.length > 0) {
+    const folderIds = allFolders.map((f) => f.id);
+    const { data: folderFiles } = await supabase
+      .from("files")
+      .select("*")
+      .eq("workspace_id", workspaceId)
+      .in("folder_id", folderIds)
+      .neq("status", "trashed");
+    const seenFileIds = new Set(files.map((f) => f.id));
+    for (const file of (folderFiles ?? []) as File[]) {
+      if (seenFileIds.has(file.id)) continue;
+      seenFileIds.add(file.id);
+      files.push(file);
+    }
+  }
+
+  return { folders: allFolders, files };
+}
+
+/** Fetch outgoing object_links for a given object id, filtered to a known
+ *  set of target object references. The target filter prevents manifests
+ *  from referring to objects that are not in the package. */
+async function collectObjectLinksForExport(
+  supabase: SupabaseClient,
+  workspaceId: string,
+  source: { type: "skill" | "agent" | "folder" | "file" | "note"; id: string },
+  knownTargets: Set<string> // format `${type}:${id}`
+): Promise<ManifestObjectLink[]> {
+  const links = await getAllObjectLinksForObject(
+    supabase,
+    workspaceId,
+    source.type,
+    source.id
+  );
+  const result: ManifestObjectLink[] = [];
+  for (const l of links) {
+    const sourceKey = `${l.source_object_type}:${l.source_object_id}`;
+    const targetKey = `${l.target_object_type}:${l.target_object_id}`;
+    // Only include the edge if both endpoints are known (in the package)
+    if (!knownTargets.has(sourceKey) || !knownTargets.has(targetKey)) continue;
+    result.push({
+      id: l.id,
+      source_type: l.source_object_type,
+      source_id: l.source_object_id,
+      target_type: l.target_object_type,
+      target_id: l.target_object_id,
+      relationship_type: l.relationship_type,
+      relationship_note: l.relationship_note,
+    });
+  }
+  return result;
+}
+
+/** Build a unique zip path for a file, prefixed so child files don&rsquo;t
+ *  collide with other sections. */
+function filePathForChildFile(
+  file: File,
+  rootPrefix: string,
+  folderPathById: Map<string, string>
+): string {
+  const ext =
+    file.file_extension ?? sourceFormatExtension(file.canonical_format);
+  const safeName = slugify(file.name);
+  const folderPath = file.folder_id ? folderPathById.get(file.folder_id) : null;
+  return folderPath
+    ? `${rootPrefix}/${folderPath}/${safeName}${ext}`
+    : `${rootPrefix}/${safeName}${ext}`;
+}
+
+/** Manifest entry for a child file owned by a skill or agent package. */
+function toManifestChildFile(file: File, relativePath: string): ManifestFile {
+  return {
+    id: file.id,
+    folder_id: file.folder_id,
+    name: file.name,
+    slug: file.slug,
+    path: file.path_cache,
+    status: file.status,
+    description: file.description,
+    summary: file.summary,
+    tags: file.tags,
+    origin_type: file.origin_type,
+    canonical_format: file.canonical_format,
+    file_extension: file.file_extension,
+    source_language: file.source_language ?? null,
+    content_sha256: sha256(file.source_content),
+    file_path: relativePath,
+  };
+}
+
 // ─── Manifest conversion helpers ─────────────────────────────────────────────
 
 function toManifestFile(file: File): ManifestFile {
@@ -764,7 +1096,68 @@ export async function exportSkill(
     } satisfies RawExportContent;
   }
 
-  const ms = toManifestSkill(skill);
+  // Packaged skill export: canonical source + child files + nested folders
+  // Canonical source is placed at the zip root so it&rsquo;s immediately visible.
+  // Child files and folders live under children/ preserving their folder tree.
+  const canonicalPath = `source${ext}`;
+  const ms: ManifestSkill = { ...toManifestSkill(skill), file_path: canonicalPath };
+
+  const { folders: childFolders, files: childFiles } =
+    await collectSkillPackageContents(supabase, workspaceId, skillId);
+
+  // Map each folder id to its relative path inside children/
+  // We use path_cache where possible but root folders get a path relative to
+  // the skill itself, not the box. Walk the tree to build relative paths.
+  const folderPathById = new Map<string, string>();
+  // Only direct children of the skill have no parent_folder chain relevant to
+  // us; nested folders use parent_folder_id to build their path.
+  const folderById = new Map(childFolders.map((f) => [f.id, f]));
+  function relPathForFolder(folder: Folder): string {
+    const segments: string[] = [];
+    let current: Folder | undefined = folder;
+    const guard = new Set<string>();
+    while (current) {
+      if (guard.has(current.id)) break;
+      guard.add(current.id);
+      segments.unshift(slugify(current.name));
+      if (current.parent_folder_id && folderById.has(current.parent_folder_id)) {
+        current = folderById.get(current.parent_folder_id);
+      } else {
+        break;
+      }
+    }
+    return segments.join("/");
+  }
+  for (const f of childFolders) folderPathById.set(f.id, relPathForFolder(f));
+
+  const manifestChildFolders: ManifestFolder[] = childFolders.map((f) => ({
+    id: f.id,
+    parent_id: f.parent_folder_id,
+    name: f.name,
+    slug: f.slug,
+    path: folderPathById.get(f.id) ?? f.path_cache,
+    status: f.status,
+    description: f.description,
+  }));
+
+  const manifestChildFiles: ManifestFile[] = childFiles.map((f) =>
+    toManifestChildFile(f, `children/${filePathForChildFile(f, "", folderPathById)}`.replace("children//", "children/"))
+  );
+
+  // object_links that are fully contained in the package
+  const known = new Set<string>([
+    `skill:${skill.id}`,
+    ...childFolders.map((f) => `folder:${f.id}`),
+    ...childFiles.map((f) => `file:${f.id}`),
+  ]);
+  const objectLinks = await collectObjectLinksForExport(
+    supabase,
+    workspaceId,
+    { type: "skill", id: skill.id },
+    known
+  );
+
+  const allFilePaths = [canonicalPath, ...manifestChildFiles.map((f) => f.file_path)];
 
   const manifest: ExportManifest = {
     schema_version: "1.1",
@@ -773,20 +1166,34 @@ export async function exportSkill(
     workspace: { id: workspaceId, name: "" },
     box: null,
     root: null,
-    folders: [],
+    folders: manifestChildFolders,
     notes: [],
     links: [],
     bundle: null,
-    files: [ms.file_path],
-    counts: { folders: 0, notes: 0, links: 0, files: 1, skills: 1, agents: 0 },
+    files: allFilePaths,
+    counts: {
+      folders: manifestChildFolders.length,
+      notes: 0,
+      links: 0,
+      files: allFilePaths.length,
+      skills: 1,
+      agents: 0,
+    },
     ...emptyV11Fields(),
     skills: [ms],
+    object_files: manifestChildFiles,
+    object_links: objectLinks,
   };
 
   const exportFiles: Record<string, string> = {
     "manifest.json": buildManifestJson(manifest),
-    [ms.file_path]: skill.source_content,
+    [canonicalPath]: skill.source_content,
   };
+  for (const f of childFiles) {
+    const rel = filePathForChildFile(f, "", folderPathById);
+    exportFiles[`children/${rel}`.replace("children//", "children/")] =
+      f.source_content;
+  }
 
   return {
     filename: `${safeName}-skill.zip`,
@@ -831,7 +1238,116 @@ export async function exportAgent(
     } satisfies RawExportContent;
   }
 
-  const ma = toManifestAgent(agent);
+  // Packaged agent export: canonical source + child files + nested folders
+  // + metadata about referenced Skills (but not the skills themselves — they
+  // remain separately exportable since agents reference, not own, skills).
+  const canonicalPath = `source${ext}`;
+  const ma: ManifestAgent = { ...toManifestAgent(agent), file_path: canonicalPath };
+
+  const { folders: childFolders, files: childFiles } =
+    await collectAgentPackageContents(supabase, workspaceId, agentId);
+
+  const folderById = new Map(childFolders.map((f) => [f.id, f]));
+  const folderPathById = new Map<string, string>();
+  function relPathForFolder(folder: Folder): string {
+    const segments: string[] = [];
+    let current: Folder | undefined = folder;
+    const guard = new Set<string>();
+    while (current) {
+      if (guard.has(current.id)) break;
+      guard.add(current.id);
+      segments.unshift(slugify(current.name));
+      if (current.parent_folder_id && folderById.has(current.parent_folder_id)) {
+        current = folderById.get(current.parent_folder_id);
+      } else {
+        break;
+      }
+    }
+    return segments.join("/");
+  }
+  for (const f of childFolders) folderPathById.set(f.id, relPathForFolder(f));
+
+  const manifestChildFolders: ManifestFolder[] = childFolders.map((f) => ({
+    id: f.id,
+    parent_id: f.parent_folder_id,
+    name: f.name,
+    slug: f.slug,
+    path: folderPathById.get(f.id) ?? f.path_cache,
+    status: f.status,
+    description: f.description,
+  }));
+
+  const manifestChildFiles: ManifestFile[] = childFiles.map((f) =>
+    toManifestChildFile(
+      f,
+      `children/${filePathForChildFile(f, "", folderPathById)}`.replace(
+        "children//",
+        "children/"
+      )
+    )
+  );
+
+  // Collect references to skills and other objects via object_links
+  const agentLinksAll = await getAllObjectLinksForObject(
+    supabase,
+    workspaceId,
+    "agent",
+    agent.id
+  );
+
+  // Known set inside package
+  const known = new Set<string>([
+    `agent:${agent.id}`,
+    ...childFolders.map((f) => `folder:${f.id}`),
+    ...childFiles.map((f) => `file:${f.id}`),
+  ]);
+
+  // Skill references: we include them as manifest entries (metadata only —
+  // canonical source and children belong to the Skill itself, not the agent)
+  const referencedSkillIds = new Set<string>();
+  for (const link of agentLinksAll) {
+    if (
+      link.source_object_type === "agent" &&
+      link.source_object_id === agent.id &&
+      link.target_object_type === "skill"
+    ) {
+      referencedSkillIds.add(link.target_object_id);
+    }
+  }
+
+  // Fetch referenced skills (metadata only — no source content packaged)
+  const referencedSkills: ManifestSkill[] = [];
+  if (referencedSkillIds.size > 0) {
+    for (const sid of referencedSkillIds) {
+      const s = await getSkillById(supabase, sid);
+      if (s && s.workspace_id === workspaceId && s.status !== "trashed") {
+        referencedSkills.push(toManifestSkill(s));
+        known.add(`skill:${s.id}`);
+      }
+    }
+  }
+
+  // Filter object_links to those whose endpoints are all in the known set
+  const objectLinks: ManifestObjectLink[] = [];
+  for (const l of agentLinksAll) {
+    const sourceKey = `${l.source_object_type}:${l.source_object_id}`;
+    const targetKey = `${l.target_object_type}:${l.target_object_id}`;
+    if (!known.has(sourceKey) || !known.has(targetKey)) continue;
+    objectLinks.push({
+      id: l.id,
+      source_type: l.source_object_type,
+      source_id: l.source_object_id,
+      target_type: l.target_object_type,
+      target_id: l.target_object_id,
+      relationship_type: l.relationship_type,
+      relationship_note: l.relationship_note,
+    });
+  }
+
+  const allFilePaths = [
+    canonicalPath,
+    ...manifestChildFiles.map((f) => f.file_path),
+  ];
 
   const manifest: ExportManifest = {
     schema_version: "1.1",
@@ -840,20 +1356,35 @@ export async function exportAgent(
     workspace: { id: workspaceId, name: "" },
     box: null,
     root: null,
-    folders: [],
+    folders: manifestChildFolders,
     notes: [],
     links: [],
     bundle: null,
-    files: [ma.file_path],
-    counts: { folders: 0, notes: 0, links: 0, files: 1, skills: 0, agents: 1 },
+    files: allFilePaths,
+    counts: {
+      folders: manifestChildFolders.length,
+      notes: 0,
+      links: 0,
+      files: allFilePaths.length,
+      skills: referencedSkills.length,
+      agents: 1,
+    },
     ...emptyV11Fields(),
     agents: [ma],
+    skills: referencedSkills,
+    object_files: manifestChildFiles,
+    object_links: objectLinks,
   };
 
   const exportFiles: Record<string, string> = {
     "manifest.json": buildManifestJson(manifest),
-    [ma.file_path]: agent.source_content,
+    [canonicalPath]: agent.source_content,
   };
+  for (const f of childFiles) {
+    const rel = filePathForChildFile(f, "", folderPathById);
+    exportFiles[`children/${rel}`.replace("children//", "children/")] =
+      f.source_content;
+  }
 
   return {
     filename: `${safeName}-agent.zip`,

@@ -229,7 +229,7 @@ export function BoxExportMenu({
               <ExportMenuItem
                 icon={<Package className="h-4 w-4" />}
                 label={`Export box "${boxName}"`}
-                description="All notes, folders, semantic links, and manifest — signed link valid 1 hour"
+                description="Full box: notes, files, skills, agents, folders, semantic links, and manifest — signed link valid 1 hour"
                 onClick={() => handleExport("box")}
                 loading={loading === "box"}
               />
@@ -237,7 +237,7 @@ export function BoxExportMenu({
                 <ExportMenuItem
                   icon={<Folder className="h-4 w-4" />}
                   label={`Export folder "${folderName}"`}
-                  description="This folder and all descendant notes — signed link valid 1 hour"
+                  description="This folder with all descendants: notes, files, skills, and agents — signed link valid 1 hour"
                   onClick={() => handleExport("folder")}
                   loading={loading === "folder"}
                 />
@@ -312,15 +312,15 @@ export function SkillExportMenu({
             <div className="p-1.5">
               <ExportMenuItem
                 icon={<FileText className="h-4 w-4" />}
-                label="Source file only"
-                description="Download the raw source content as a single file — no metadata, no zip"
+                label="Canonical source only"
+                description="Just the canonical editable source file — no child files, no manifest, no zip"
                 onClick={() => handleExport("canonical_source")}
                 loading={loading === "canonical_source"}
               />
               <ExportMenuItem
                 icon={<Zap className="h-4 w-4" />}
-                label="Packaged (zip + manifest)"
-                description="Zip with manifest.json and source file — preserves id, tags, description for round-trip import"
+                label="Full package (zip + manifest)"
+                description="Canonical source + all child files and nested folders + manifest.json for round-trip import"
                 onClick={() => handleExport("packaged")}
                 loading={loading === "packaged"}
               />
@@ -394,15 +394,15 @@ export function AgentExportMenu({
             <div className="p-1.5">
               <ExportMenuItem
                 icon={<FileText className="h-4 w-4" />}
-                label="Source file only"
-                description="Download the raw source content as a single file — no metadata, no zip"
+                label="Canonical source only"
+                description="Just the canonical editable source file — no child files, no manifest, no zip"
                 onClick={() => handleExport("canonical_source")}
                 loading={loading === "canonical_source"}
               />
               <ExportMenuItem
                 icon={<Bot className="h-4 w-4" />}
-                label="Packaged (zip + manifest)"
-                description="Zip with manifest.json and source file — preserves id, tags, agent_type, description for round-trip import"
+                label="Full package (zip + manifest)"
+                description="Canonical source + child files + nested folders + referenced Skills metadata + manifest.json"
                 onClick={() => handleExport("packaged")}
                 loading={loading === "packaged"}
               />

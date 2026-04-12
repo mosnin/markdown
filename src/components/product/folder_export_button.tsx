@@ -53,7 +53,7 @@ export function FolderExportButton({
           "disabled:opacity-50 disabled:cursor-not-allowed"
         )}
         aria-label={`Export folder "${folderName}"`}
-        title={`Export "${folderName}" and all descendant content`}
+        title={`Export "${folderName}" with all notes, files, skills, and agents inside it`}
       >
         <Download className="h-3.5 w-3.5" />
         {loading ? "Exporting…" : "Export"}

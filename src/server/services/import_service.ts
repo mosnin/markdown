@@ -8,6 +8,7 @@ import {
   type ManifestFile,
   type ManifestSkill,
   type ManifestAgent,
+  type ManifestObjectLink,
   type CollisionMode,
   type ImportSummaryReport,
   type ImportAction,
@@ -21,6 +22,9 @@ import { getLatestVersionForNote, createNoteVersion } from "@/server/repositorie
 import { getFileById } from "@/server/repositories/file_repository";
 import { getSkillById } from "@/server/repositories/skill_repository";
 import { getAgentById } from "@/server/repositories/agent_repository";
+import { createObjectLink } from "@/server/repositories/object_link_repository";
+import { type ObjectType } from "@/server/domain/constants/object_constants";
+import { type RelationshipType } from "@/server/domain/constants/note_constants";
 import { slugify } from "@/lib/slugify";
 import {
   RELATIONSHIP_TYPE,
@@ -394,10 +398,10 @@ async function applyManifest(
   });
 
   for (const mf of sortedFolders) {
-    if (!boxId) {
-      warnings.push({ code: "folder_requires_box", message: `Folder "${mf.name}" skipped — workspace-level imports do not support folders.`, subject: mf.id });
-      continue;
-    }
+    // Folders in workspace-level imports (reusable skill/agent packages) are
+    // allowed: they land at the workspace scope and are later associated with
+    // the owning skill/agent via parent_skill_id / parent_agent_id, set from
+    // the manifest's object_links rows in Step 5.
     await applyFolder(
       supabase,
       workspaceId,
@@ -538,32 +542,45 @@ async function applyManifest(
   }
 
   // Step 4 (v1.1): Import files, skills, agents
+  const fileIdMap = new Map<string, string>();
+  const skillIdMap = new Map<string, string>();
+  const agentIdMap = new Map<string, string>();
   if (manifest.schema_version === "1.1") {
-    // Files — only if we have a target box
+    // Files — importable at box or workspace scope. Workspace-level files
+    // (boxId null) are required for reusable skill/agent packaged imports.
     const manifestFiles = manifest.object_files ?? [];
-    if (boxId && manifestFiles.length > 0) {
-      const fileIdMap = new Map<string, string>();
-      for (const mf of manifestFiles) {
-        await applyFile(supabase, workspaceId, boxId, targetFolderId, mf, sourceFiles, collisionMode, folderIdMap, fileIdMap, actions, warnings, actorId);
-      }
+    for (const mf of manifestFiles) {
+      await applyFile(supabase, workspaceId, boxId, targetFolderId, mf, sourceFiles, collisionMode, folderIdMap, fileIdMap, actions, warnings, actorId);
     }
 
     // Skills
     const manifestSkills = manifest.skills ?? [];
-    if (manifestSkills.length > 0) {
-      const skillIdMap = new Map<string, string>();
-      for (const ms of manifestSkills) {
-        await applySkill(supabase, workspaceId, boxId, targetFolderId, ms, sourceFiles, collisionMode, folderIdMap, skillIdMap, actions, warnings, actorId);
-      }
+    for (const ms of manifestSkills) {
+      await applySkill(supabase, workspaceId, boxId, targetFolderId, ms, sourceFiles, collisionMode, folderIdMap, skillIdMap, actions, warnings, actorId);
     }
 
     // Agents
     const manifestAgents = manifest.agents ?? [];
-    if (manifestAgents.length > 0) {
-      const agentIdMap = new Map<string, string>();
-      for (const ma of manifestAgents) {
-        await applyAgent(supabase, workspaceId, boxId, targetFolderId, ma, sourceFiles, collisionMode, folderIdMap, agentIdMap, actions, warnings, actorId);
-      }
+    for (const ma of manifestAgents) {
+      await applyAgent(supabase, workspaceId, boxId, targetFolderId, ma, sourceFiles, collisionMode, folderIdMap, agentIdMap, actions, warnings, actorId);
+    }
+
+    // Step 4b (v1.1): Restore cross-type object_links.
+    // object_links describe semantic relationships between heterogeneous
+    // objects (skill parent_of file, agent related note, etc). Imported last
+    // so all source and target ids have been remapped in the id maps above.
+    // For parent_of edges targeting folders/files, also set the direct FK
+    // columns (parent_skill_id / parent_agent_id) for fast lookup.
+    const manifestObjectLinks = manifest.object_links ?? [];
+    for (const ol of manifestObjectLinks) {
+      await applyObjectLink(
+        supabase,
+        workspaceId,
+        ol,
+        { folderIdMap, noteIdMap, fileIdMap, skillIdMap, agentIdMap },
+        actions,
+        warnings,
+      );
     }
   }
 
@@ -606,7 +623,7 @@ async function applyManifest(
 async function applyFolder(
   supabase: SupabaseClient,
   workspaceId: string,
-  boxId: string,
+  boxId: string | null,
   targetFolderId: string | null,
   mf: ManifestFolder,
   collisionMode: CollisionMode,
@@ -701,14 +718,17 @@ async function applyFolder(
     : null;
   const pathCache = parentFolder ? `${parentFolder.path_cache}/${slug}` : slug;
 
-  // Check for path collision in create_copy mode
-  const { data: pathCollision } = await supabase
+  // Check for path collision in create_copy mode (only meaningful when inside a box —
+  // workspace-level folders owned by reusable skills/agents have no path uniqueness
+  // constraint on their own).
+  const pathCollisionQuery = supabase
     .from("folders")
     .select("id")
-    .eq("box_id", boxId)
     .eq("path_cache", pathCache)
-    .neq("status", "trashed")
-    .maybeSingle();
+    .neq("status", "trashed");
+  const { data: pathCollision } = boxId
+    ? await pathCollisionQuery.eq("box_id", boxId).maybeSingle()
+    : { data: null };
 
   let finalSlug = slug;
   let finalPathCache = pathCache;
@@ -1057,7 +1077,7 @@ async function rpcCreateFile(
     actorId,
   }: {
     workspaceId: string;
-    boxId: string;
+    boxId: string | null;
     folderId: string | null;
     name: string;
     slug: string;
@@ -1308,7 +1328,7 @@ async function rpcUpdateAgent(
 async function applyFile(
   supabase: SupabaseClient,
   workspaceId: string,
-  boxId: string,
+  boxId: string | null,
   targetFolderId: string | null,
   mf: ManifestFile,
   sourceFiles: Map<string, string>,
@@ -1561,6 +1581,109 @@ async function applyAgent(
   } catch (e) {
     warnings.push({ code: "agent_create_failed", message: `Failed to create agent "${ma.name}": ${e instanceof Error ? e.message : String(e)}`, subject: ma.id });
     actions.push({ object_type: "agent", incoming_id: ma.id, final_id: null, incoming_path: ma.path, final_path: null, action: "skipped", reason: "Create failed" });
+  }
+}
+
+// ─── applyObjectLink ──────────────────────────────────────────────────────────
+
+/**
+ * Create an object_link row from a manifest entry, remapping source and
+ * target ids through the provided idMaps. When the edge is a parent_of
+ * relationship targeting a folder or file, also set the direct FK
+ * (parent_skill_id / parent_agent_id) for fast lookup and to keep the
+ * structural model intact. Silently skips edges whose endpoints were not
+ * imported.
+ */
+async function applyObjectLink(
+  supabase: SupabaseClient,
+  workspaceId: string,
+  ol: ManifestObjectLink,
+  idMaps: {
+    folderIdMap: Map<string, string>;
+    noteIdMap: Map<string, string>;
+    fileIdMap: Map<string, string>;
+    skillIdMap: Map<string, string>;
+    agentIdMap: Map<string, string>;
+  },
+  actions: ImportAction[],
+  warnings: ImportWarning[],
+): Promise<void> {
+  function resolve(type: string, id: string): string | null {
+    switch (type) {
+      case "folder": return idMaps.folderIdMap.get(id) ?? id;
+      case "note": return idMaps.noteIdMap.get(id) ?? id;
+      case "file": return idMaps.fileIdMap.get(id) ?? id;
+      case "skill": return idMaps.skillIdMap.get(id) ?? id;
+      case "agent": return idMaps.agentIdMap.get(id) ?? id;
+      default: return null;
+    }
+  }
+
+  const sourceId = resolve(ol.source_type, ol.source_id);
+  const targetId = resolve(ol.target_type, ol.target_id);
+  if (!sourceId || !targetId) {
+    warnings.push({
+      code: "object_link_endpoint_missing",
+      message: `Object link of type "${ol.relationship_type}" skipped — endpoint not imported.`,
+      subject: ol.id,
+    });
+    return;
+  }
+
+  // Set direct FK for parent_of edges targeting folders or files.
+  // This mirrors the live createSkillChildFolder/File action behavior so the
+  // imported package matches how the app would have created these children.
+  if (ol.relationship_type === "parent_of") {
+    if (ol.source_type === "skill" && ol.target_type === "folder") {
+      await supabase.from("folders").update({ parent_skill_id: sourceId }).eq("id", targetId);
+    } else if (ol.source_type === "skill" && ol.target_type === "file") {
+      await supabase.from("files").update({ parent_skill_id: sourceId }).eq("id", targetId);
+    } else if (ol.source_type === "agent" && ol.target_type === "folder") {
+      await supabase.from("folders").update({ parent_agent_id: sourceId }).eq("id", targetId);
+    } else if (ol.source_type === "agent" && ol.target_type === "file") {
+      await supabase.from("files").update({ parent_agent_id: sourceId }).eq("id", targetId);
+    }
+  }
+
+  try {
+    await createObjectLink(supabase, {
+      workspace_id: workspaceId,
+      source_object_type: ol.source_type as ObjectType,
+      source_object_id: sourceId,
+      target_object_type: ol.target_type as ObjectType,
+      target_object_id: targetId,
+      relationship_type: ol.relationship_type as RelationshipType,
+      relationship_note: ol.relationship_note,
+    });
+    actions.push({
+      object_type: "object_link",
+      incoming_id: ol.id,
+      final_id: null,
+      incoming_path: `${ol.source_type}:${ol.source_id} -${ol.relationship_type}-> ${ol.target_type}:${ol.target_id}`,
+      final_path: `${ol.source_type}:${sourceId} -${ol.relationship_type}-> ${ol.target_type}:${targetId}`,
+      action: "created",
+      reason: null,
+    });
+  } catch (err) {
+    // Unique-constraint collisions are expected on re-import — treat as skipped.
+    const msg = err instanceof Error ? err.message : String(err);
+    if (msg.toLowerCase().includes("duplicate") || msg.toLowerCase().includes("unique")) {
+      actions.push({
+        object_type: "object_link",
+        incoming_id: ol.id,
+        final_id: null,
+        incoming_path: null,
+        final_path: null,
+        action: "skipped",
+        reason: "Already exists",
+      });
+    } else {
+      warnings.push({
+        code: "object_link_create_failed",
+        message: msg,
+        subject: ol.id,
+      });
+    }
   }
 }
 
