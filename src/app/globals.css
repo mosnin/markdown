@@ -394,3 +394,68 @@
     @apply animate-pulse bg-muted rounded;
   }
 }
+
+/* ─── Animated blur blob background (hero) ─────────────────────────────── */
+/* Used by src/components/ui/animated-blur-blob-background.tsx behind the
+   marketing home page hero. Scoped to .wrapper so it never leaks into
+   other surfaces. */
+:root {
+  --blur-blob-color: color-mix(in oklch, var(--color-violet-600) 55%, transparent);
+  --blur-blob-color-2: color-mix(in oklch, var(--color-fuchsia-500) 45%, transparent);
+  --blur-blob-color-3: color-mix(in oklch, var(--color-cyan-400) 50%, transparent);
+  --blur-1-size: clamp(400px, 60vw, 60vw);
+  --blur-2-size: clamp(300px, 40vw, 40vw);
+  --blur-3-size: clamp(100px, 10vw, 10vw);
+  --blur-amount: clamp(40px, 5vw, 90px);
+}
+
+.wrapper {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.wrapper > .blur {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  border-radius: 9999px;
+  filter: blur(var(--blur-amount));
+  will-change: transform;
+  pointer-events: none;
+}
+
+.wrapper > .blur:nth-child(1) {
+  width: var(--blur-1-size);
+  height: var(--blur-1-size);
+  background: var(--blur-blob-color);
+  margin-left: calc(var(--blur-1-size) / -2);
+  margin-top: calc(var(--blur-1-size) / -2);
+  opacity: 0.55;
+}
+
+.wrapper > .blur:nth-child(2) {
+  width: var(--blur-2-size);
+  height: var(--blur-2-size);
+  background: var(--blur-blob-color-2);
+  margin-left: calc(var(--blur-2-size) / -2);
+  margin-top: calc(var(--blur-2-size) / -2);
+  opacity: 0.45;
+}
+
+.wrapper > .blur:nth-child(3) {
+  width: var(--blur-3-size);
+  height: var(--blur-3-size);
+  background: var(--blur-blob-color-3);
+  margin-left: calc(var(--blur-3-size) / -2);
+  margin-top: calc(var(--blur-3-size) / -2);
+  opacity: 0.6;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wrapper > .blur {
+    animation: none !important;
+  }
+}

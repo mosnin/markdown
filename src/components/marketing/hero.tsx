@@ -7,6 +7,7 @@ import { motion, useAnimationControls } from "motion/react";
 import { ArrowRightIcon, SparklesIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { AnimatedBackground } from "@/components/ui/animated-blur-blob-background";
 
 // ─── Glitch title ─────────────────────────────────────────────────────────────
 
@@ -91,7 +92,9 @@ function GlitchTitle({
  */
 export function HeroSection() {
 	return (
-		<section className="mx-auto w-full max-w-5xl overflow-hidden pt-16">
+		<section className="relative mx-auto w-full max-w-5xl overflow-hidden pt-16">
+			{/* Animated blur blob background — purely decorative, sits behind content */}
+			<AnimatedBackground />
 				{/* Content */}
 			<div className="relative z-10 flex max-w-2xl flex-col gap-5 px-4">
 				{/* Badge */}
