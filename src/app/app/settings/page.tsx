@@ -28,21 +28,14 @@ import {
   WorkspaceSection,
   BillingSection,
 } from "./settings_client";
-import { SettingsMobileNav } from "./settings_mobile_nav";
 import type { Theme, NotificationPreferences } from "./actions";
 import { DeleteAccountButton } from "./delete_account_button";
 
-// ─── Section nav ─────────────────────────────────────────────────────────────
-
-const settingsNav = [
-  { id: "profile", label: "Profile", icon: User },
-  { id: "workspace", label: "Workspace", icon: Building2 },
-  { id: "billing", label: "Billing & Plans", icon: CreditCard },
-  { id: "appearance", label: "Appearance", icon: Palette },
-  { id: "notifications", label: "Notifications", icon: Bell },
-  { id: "connections", label: "Connections", icon: Key },
-  { id: "security", label: "Security", icon: Shield },
-];
+// Settings section nav is rendered by SettingsSidebar (see
+// src/components/product/settings_sidebar.tsx). Keeping the sections
+// list there in one place avoids the two-menu look on the settings
+// page — the main sidebar swaps to the settings nav while you're on
+// this route.
 
 // ─── Danger zone ──────────────────────────────────────────────────────────────
 
@@ -113,26 +106,11 @@ export default async function SettingsPage() {
         <Separator />
       </div>
 
-      {/* Mobile section nav — horizontal scrollable strip */}
-      <SettingsMobileNav />
-
       <div className="flex flex-1 overflow-hidden">
-        {/* Settings sidebar nav — desktop only */}
-        <nav
-          aria-label="Settings sections"
-          className="hidden w-52 shrink-0 flex-col gap-0.5 border-r border-border p-3 md:flex"
-        >
-          {settingsNav.map(({ id, label, icon: Icon }) => (
-            <a
-              key={id}
-              href={`#settings-${id}`}
-              className="flex items-center gap-2 rounded-md px-2.5 py-2 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-            >
-              <Icon className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-              {label}
-            </a>
-          ))}
-        </nav>
+        {/* Settings navigation moved into the main sidebar. When the user
+            is on /app/settings the AppShellSidebar swaps in the
+            SettingsSidebar, which handles anchor navigation to these
+            sections — so there's no in-page left nav or mobile strip. */}
 
         {/* Main settings area */}
         <ScrollArea className="flex-1">

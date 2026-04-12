@@ -3,8 +3,8 @@ import { requireAuthenticatedUser } from "@/server/auth/require_authenticated_us
 import { createClient } from "@/lib/supabase/server";
 import { listBoxesByWorkspace } from "@/server/repositories/box_repository";
 import { listWorkspacesByOwner } from "@/server/repositories/workspace_repository";
-import { AppSidebar } from "@/components/product/app_sidebar";
-import { MobileSidebar } from "@/components/product/mobile_sidebar";
+import { AppShellSidebar } from "@/components/product/app_shell_sidebar";
+import { MobileShellSidebar } from "@/components/product/mobile_shell_sidebar";
 import { ThemeToggle } from "@/components/product/theme_toggle";
 import { AppBreadcrumbs } from "@/components/product/app_breadcrumbs";
 import { GlobalSearch } from "@/components/product/global_search";
@@ -59,7 +59,7 @@ export default async function AppLayout({
 
       {/* Left sidebar — desktop only, fixed width with border separator */}
       <div className="hidden md:flex md:h-full md:shrink-0">
-        <AppSidebar
+        <AppShellSidebar
           userEmail={userEmail}
           workspaceName={workspaceName}
           workspaceId={ctx.workspace.id}
@@ -74,7 +74,7 @@ export default async function AppLayout({
         <header className="flex h-12 shrink-0 items-center gap-3 border-b border-border/40 bg-background px-3 md:px-4">
           {/* Mobile: hamburger + workspace name */}
           <div className="flex items-center gap-3 md:hidden">
-            <MobileSidebar
+            <MobileShellSidebar
               userEmail={userEmail}
               workspaceName={workspaceName}
               workspaceId={ctx.workspace.id}
