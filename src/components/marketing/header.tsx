@@ -229,39 +229,39 @@ function ListItem({
 
 const productLinks: LinkItem[] = [
 	{
-		title: 'Notes',
-		href: '/features',
-		description: 'Write, version, and retrieve markdown content',
+		title: 'Notes & Files',
+		href: '/notes-and-files',
+		description: 'Markdown notes and code artifacts in one place',
 		icon: FileText,
 	},
 	{
-		title: 'Boxes',
-		href: '/features',
-		description: 'Organize AI knowledge into focused collections',
+		title: 'Boxes & Folders',
+		href: '/organization',
+		description: 'Organize your work into focused containers',
 		icon: Archive,
 	},
 	{
-		title: 'Context Bundles',
-		href: '/features',
-		description: 'Curated context packs assembled for AI agents',
+		title: 'Skills & Agents',
+		href: '/skills-and-agents',
+		description: 'Reusable modules and orchestrators with real structure',
 		icon: LayersIcon,
 	},
 	{
-		title: 'Semantic Links',
-		href: '/features',
-		description: 'Connect notes with typed relationships',
+		title: 'Connections',
+		href: '/connections',
+		description: 'Typed relationships and interactive graph views',
 		icon: GitBranch,
 	},
 	{
-		title: 'AI API',
-		href: '/features',
-		description: 'Programmatic access for your agents and tools',
+		title: 'API & MCP',
+		href: '/api',
+		description: 'Programmatic access for your tools and agents',
 		icon: CodeIcon,
 	},
 	{
 		title: 'Import & Export',
-		href: '/features',
-		description: 'Portable markdown packages with full history',
+		href: '/portability',
+		description: 'Portable packages you own forever',
 		icon: Upload,
 	},
 ];
@@ -275,14 +275,14 @@ const companyLinks: LinkItem[] = [
 	},
 	{
 		title: 'Changelog',
-		href: '/about',
+		href: '/changelog',
 		description: "What's new in each release",
 		icon: BarChart2,
 	},
 	{
-		title: 'Guide Notes',
-		href: '/features',
-		description: 'How AI agents navigate your knowledge base',
+		title: 'How It Works',
+		href: '/how-it-works',
+		description: 'See how Poggle fits into your workflow',
 		icon: BookOpen,
 	},
 ];
@@ -295,27 +295,27 @@ const companyLinks2: LinkItem[] = [
 	},
 	{
 		title: 'Privacy Policy',
-		href: '/about',
+		href: '/privacy',
 		icon: Shield,
 	},
 	{
 		title: 'Terms of Service',
-		href: '/about',
+		href: '/terms',
 		icon: FileText,
 	},
 	{
 		title: 'Refund Policy',
-		href: '/about',
+		href: '/refund-policy',
 		icon: RotateCcw,
 	},
 	{
 		title: 'Blog',
-		href: '/about',
+		href: '/blog',
 		icon: Leaf,
 	},
 	{
 		title: 'Help Center',
-		href: '/about',
+		href: '/help',
 		icon: HelpCircle,
 	},
 ];

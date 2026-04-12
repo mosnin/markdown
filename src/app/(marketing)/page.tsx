@@ -236,19 +236,20 @@ export default function HomePage() {
                   Organize deliberately.
                 </h2>
                 <p className="text-base leading-relaxed text-muted-foreground">
-                  Boxes aren&apos;t just folders. They&apos;re semantic containers with a built-in
-                  guide that defines their purpose — so your notes always fit their context.
+                  Boxes are focused containers for your projects and topics. Inside each box,
+                  use folders, notes, files, skills, and agents — all navigable in an
+                  interactive tree with drag-and-drop.
                 </p>
               </div>
               <div className="space-y-4">
-                <Bullet title="Box guides">
-                  Define the purpose and shape of each container so every note knows where it belongs.
+                <Bullet title="Five object types">
+                  Notes for documents, files for code, skills for reusable modules, agents for orchestrators, and folders for structure.
                 </Bullet>
-                <Bullet title="Bidirectional links">
-                  Surface related knowledge automatically across boxes and topics.
+                <Bullet title="Semantic links">
+                  Connect any object to any other with ten typed relationship types — not just backlinks.
                 </Bullet>
-                <Bullet title="Nested hierarchy">
-                  Mirror the real structure of your thinking with folders and sub-boxes.
+                <Bullet title="Tree and graph views">
+                  Navigate your workspace in the sidebar tree or explore the full knowledge graph visually.
                 </Bullet>
               </div>
             </div>
@@ -272,22 +273,22 @@ export default function HomePage() {
             <div className="order-1 space-y-8 lg:order-2">
               <div className="space-y-4">
                 <h2 className="text-4xl font-bold tracking-tight text-foreground sm:text-5xl">
-                  Bundle precisely.
+                  Build real structure.
                 </h2>
                 <p className="text-base leading-relaxed text-muted-foreground">
-                  Stop copy-pasting into chat windows. Assemble the right notes, trim to your
-                  token budget, and export a clean bundle for any AI model in one click.
+                  Skills and agents are more than single files. Each one has a canonical source
+                  plus supporting files and nested folders — real package structure, not flat blobs.
                 </p>
               </div>
               <div className="space-y-4">
-                <Bullet title="Token-aware export">
-                  Set a budget and Poggle selects the most relevant notes that fit within it.
+                <Bullet title="Skills">
+                  Lighter reusable modules you can share across boxes. One source file, many supporting files.
                 </Bullet>
-                <Bullet title="Freshness scoring">
-                  Recently updated notes surface first so your AI always gets current context.
+                <Bullet title="Agents">
+                  Heavier orchestrators with type, model hint, system prompt, and skill references.
                 </Bullet>
-                <Bullet title="Universal format">
-                  Export as markdown, JSON, or plain text — compatible with any model or workflow.
+                <Bullet title="Portable exports">
+                  Export any box, folder, skill, or agent as a structured zip with manifest and history.
                 </Bullet>
               </div>
             </div>
@@ -305,19 +306,19 @@ export default function HomePage() {
                   Own your history.
                 </h2>
                 <p className="text-base leading-relaxed text-muted-foreground">
-                  Every edit is tracked. Every version is restorable. Poggle maintains
-                  a complete audit trail so nothing is ever truly gone.
+                  Every edit to every object is tracked. Notes, files, skills, and agents
+                  all have full version history with one-click rollback and an append-only audit log.
                 </p>
               </div>
               <div className="space-y-4">
                 <Bullet title="Version history">
-                  Track changes between every revision with one year of history per note.
+                  Every save creates a version across all object types — not just notes.
                 </Bullet>
                 <Bullet title="One-click rollback">
-                  Restore any prior version instantly — no manual diff required.
+                  Restore any prior version of any object instantly.
                 </Bullet>
                 <Bullet title="Full audit log">
-                  Team accountability and compliance visibility, built in from the start.
+                  Every action is recorded — creates, edits, lifecycle changes, and machine writes.
                 </Bullet>
               </div>
             </div>
@@ -352,7 +353,7 @@ export default function HomePage() {
                 cta: "Get started free",
                 href: "/sign_in",
                 variant: "outline" as const,
-                features: ["100 notes", "3 boxes", "Basic context export", "7-day version history"],
+                features: ["100 notes & files", "3 boxes", "Skills & agents", "7-day version history"],
               },
               {
                 icon: <Briefcase />,
@@ -365,7 +366,7 @@ export default function HomePage() {
                 cta: "Start free trial",
                 href: "/sign_in",
                 variant: "default" as const,
-                features: ["Unlimited notes", "Unlimited boxes", "AI context bundles", "Full version history", "API access"],
+                features: ["Unlimited everything", "Unlimited boxes", "Full graph & tree views", "Full version history", "API & MCP access"],
               },
               {
                 icon: <Building2 />,
@@ -446,7 +447,7 @@ export default function HomePage() {
             It&apos;s your time to focus.
           </h2>
           <p className="mt-6 text-lg text-muted-foreground">
-            Free to start. Import your existing notes in minutes.
+            Free to start. Bring your notes, files, skills, and agents together in one place.
           </p>
           <div className="mt-10">
             <Link

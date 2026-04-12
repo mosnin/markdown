@@ -109,7 +109,7 @@ export function HeroSection() {
 						<p className="font-mono text-xs">NEW</p>
 					</div>
 					<span className="text-xs">
-						MCP access, context bundles &amp; version history
+						Skills, agents, files &amp; multi-object workspaces
 					</span>
 					<span className="block h-5 border-l" />
 					<div className="pr-1">
@@ -136,10 +136,10 @@ export function HeroSection() {
 					transition={{ delay: 0.2, duration: 0.5, ease: "easeOut" }}
 					className="text-muted-foreground text-sm tracking-wide sm:text-lg md:text-xl"
 				>
-					Poggle is a structured, markdown-native context layer for AI
-					workflows. Write notes in semantic boxes with guide notes, assemble
-					token-aware bundles, and deliver clean context to any model via
-					paste, API, or MCP.
+					Poggle is a structured context store for AI workflows.
+					Organize notes, files, skills, and agents into focused boxes.
+					Build real package structures, connect everything with
+					semantic links, and deliver clean context via API or MCP.
 				</motion.p>
 
 				{/* CTA */}

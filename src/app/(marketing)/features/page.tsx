@@ -29,133 +29,133 @@ import { GridCard } from "@/components/ui/grid-card";
 export const metadata: Metadata = {
   title: "Features — Poggle",
   description:
-    "Everything you need to organize knowledge and build perfect AI context. Boxes, bundles, version history, and more.",
+    "Everything you need to organize knowledge and build AI-ready context. Notes, files, skills, agents, and more.",
 };
 
 const CATEGORIES = [
   {
     id: "organization",
-    title: "Knowledge Organization",
+    title: "Organization & Structure",
     features: [
       {
         icon: Archive,
-        title: "Semantic Boxes",
+        title: "Boxes",
         description:
-          "Group notes into topic containers with built-in guides. Every box has a purpose — not just a name.",
-      },
-      {
-        icon: ArrowLeftRight,
-        title: "Bidirectional Links",
-        description:
-          "Link notes to each other. Poggle tracks both directions automatically so nothing gets lost.",
+          "Focused containers for your projects and topics. Each box has notes, files, skills, agents, and folders.",
       },
       {
         icon: Layers,
-        title: "Nested Structure",
+        title: "Folders",
         description:
-          "Boxes can contain sub-boxes, mirroring the real hierarchy of your thinking without imposing rigidity.",
+          "Real structural containers with full lifecycle. Nest as deep as you need, drag and drop in the sidebar tree.",
+      },
+      {
+        icon: FileText,
+        title: "Notes",
+        description:
+          "Markdown documents with readable preview, version history, and semantic links. The primary human content type.",
+      },
+      {
+        icon: Code,
+        title: "Files",
+        description:
+          "Non-markdown code artifacts — JSON, YAML, Python, TypeScript, SQL, and more. Real source editing, not rich text.",
       },
       {
         icon: Search,
         title: "Full-Text Search",
         description:
-          "Instant search across every note, box, and link. Find anything in under 100ms no matter how large your vault grows.",
-      },
-      {
-        icon: FileText,
-        title: "Markdown Native",
-        description:
-          "Write in standard markdown. Every note is a plain `.md` file — portable, durable, and renderable anywhere.",
+          "Instant search across every object in a box. Weighted by title, tags, and content with deterministic ranking.",
       },
       {
         icon: Upload,
         title: "Import & Export",
         description:
-          "Import from Obsidian vaults, Notion exports, or any ZIP of markdown files. Export everything at any time.",
+          "Import from Obsidian or any ZIP of markdown files. Export boxes, folders, or individual objects at any time.",
       },
     ],
   },
   {
     id: "ai",
-    title: "AI Integration",
+    title: "Skills, Agents & AI",
     features: [
       {
         icon: Zap,
-        title: "Context Bundles",
+        title: "Skills",
         description:
-          "Select notes, set a token budget, export a clean bundle. One click gives your AI exactly the right context.",
+          "Reusable modules with one canonical source and many supporting files. Share across boxes by reference.",
       },
       {
         icon: Cpu,
-        title: "Token-Aware Packing",
+        title: "Agents",
         description:
-          "Poggle trims, prioritizes, and fits your notes into any model's context window without overflow.",
+          "Structured orchestrators with type, model hint, system prompt, skill references, and full child structure.",
       },
       {
-        icon: TrendingUp,
-        title: "Freshness Scoring",
+        icon: ArrowLeftRight,
+        title: "Semantic Links",
         description:
-          "Recently updated notes score higher in bundle assembly. Your AI always works with the most current knowledge.",
+          "Connect any object to any other with ten typed relationships. Explicit and directed, not inferred backlinks.",
       },
       {
         icon: Download,
-        title: "Multi-Format Export",
+        title: "Context Bundles",
         description:
-          "Export bundles as markdown, JSON, or plain text. Pipe directly into any API or paste into any chat interface.",
+          "Assemble token-aware bundles of notes and files. Export for any AI model in one click.",
       },
       {
         icon: Sparkles,
-        title: "System Guide Generation",
+        title: "Write Proposals",
         description:
-          "Auto-generate box-level guides that summarize the purpose and contents of each knowledge container.",
+          "External agents propose changes to your content. You approve or reject. No unsupervised machine edits.",
       },
       {
         icon: Code,
-        title: "API Access",
+        title: "API & MCP Access",
         description:
-          "Integrate Poggle into your own AI pipelines via REST API or MCP. Build custom retrieval and bundling workflows.",
+          "REST API for programmatic access. MCP adapter for native AI agent integration. Scoped connection tokens.",
       },
     ],
   },
   {
     id: "history",
-    title: "History & Audit",
+    title: "History, Trust & Lifecycle",
     features: [
       {
         icon: History,
         title: "Full Version History",
         description:
-          "Every save creates a version. Browse, diff, and restore any prior state of any note.",
+          "Every save creates an immutable version for notes, files, skills, and agents. Browse, diff, and restore.",
       },
       {
         icon: GitMerge,
         title: "Diff Viewer",
         description:
-          "Side-by-side diff between any two versions. See exactly what changed, when, and — in team mode — by whom.",
+          "Side-by-side diff between any two versions. See exactly what changed and when.",
       },
       {
         icon: RotateCcw,
         title: "One-Click Rollback",
         description:
-          "Restore any note to any prior version instantly. No confirmation ceremony — just undo and continue.",
+          "Restore any object to any prior version instantly. Works for all versioned object types.",
       },
       {
         icon: ClipboardList,
         title: "Audit Log",
         description:
-          "Immutable record of every create, edit, delete, and export action. Essential for compliance and team accountability.",
+          "Append-only immutable record of every action — creates, edits, lifecycle changes, and machine writes.",
       },
       {
         icon: FolderDown,
-        title: "Snapshot Export",
+        title: "Lifecycle Controls",
         description:
-          "Export a point-in-time snapshot of your entire vault. Archive it, back it up, or hand it off.",
+          "Draft, active, archived, trashed. Every object has a clear status with full subtree operations for folders.",
       },
       {
         icon: Bell,
-        title: "Change Notifications",
+        title: "Realtime Updates",
         description:
-          "Get notified when a note in a shared box changes — so your team's knowledge stays synchronized.",
+          "Changes appear instantly across the app via push-based realtime. No manual refresh needed.",
       },
     ],
   },
@@ -189,8 +189,8 @@ export default function FeaturesPage() {
       {/* Hero */}
       <PageHeroSection
         eyebrow="Features"
-        title={<>Everything you need to build<br className="hidden sm:block" /> perfect AI context</>}
-        description="Poggle combines structured note-taking, token-aware AI bundling, and full version history into one focused context layer."
+        title={<>Everything you need to organize<br className="hidden sm:block" /> knowledge for AI</>}
+        description="Poggle brings notes, files, skills, and agents together in one structured context store with semantic links, version history, and full API access."
         ctaPrimary={{ label: "Start free trial", href: "/sign_in" }}
         ctaSecondary={{ label: "View pricing", href: "/pricing" }}
       />
@@ -218,27 +218,27 @@ export default function FeaturesPage() {
           {[
             {
               icon: Archive,
-              title: "Semantic Boxes",
+              title: "Five Object Types",
               description:
-                "Group notes into purpose-built containers. Every box ships with a guide so your AI always knows what's inside.",
+                "Notes, files, skills, agents, and folders — each with its own editor, lifecycle, and version history.",
             },
             {
               icon: Zap,
-              title: "Context Bundles",
+              title: "Skills & Agents",
               description:
-                "Assemble token-perfect bundles for any model in one click. Freshness scoring surfaces the most current notes first.",
+                "Reusable modules and orchestrators with real multi-file package structure, not just single-file wrappers.",
             },
             {
               icon: History,
               title: "Full Version History",
               description:
-                "Every save creates a version. Browse, diff, and restore any prior state of any note — no confirmation ceremony.",
+                "Every save creates a version across all object types. Browse, diff, and restore any prior state instantly.",
             },
             {
               icon: FileText,
               title: "Open by Default",
               description:
-                "Plain markdown files, portable forever. Export your entire vault as a ZIP at any time with no friction.",
+                "Plain markdown, portable forever. Export boxes, folders, or individual objects as structured ZIPs at any time.",
             },
           ].map(({ icon: Icon, title, description }) => (
             <GridCard key={title} className="min-h-40">
