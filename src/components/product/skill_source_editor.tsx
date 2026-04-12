@@ -5,7 +5,7 @@ import { RotateCcw } from "lucide-react";
 import { AutosaveStatus } from "@/components/product/autosave_status";
 import { saveSkillAction } from "@/app/app/skills/actions";
 import { type Skill } from "@/server/domain/types/skill";
-import { cn } from "@/lib/utils";
+import { SourceEditor } from "@/components/product/source_editor";
 
 const AUTOSAVE_DEBOUNCE_MS = 2000;
 const STATUS_CLEAR_DELAY_MS = 4000;
@@ -79,7 +79,7 @@ export function SkillSourceEditor({ skill }: { skill: Skill }) {
   const isDirty = autosaveState === "unsaved" || autosaveState === "saving" || autosaveState === "error";
 
   return (
-    <div className="flex h-full flex-col overflow-hidden rounded-lg border border-border bg-card">
+    <div className="flex h-full min-h-[420px] flex-col overflow-hidden rounded-lg border border-border bg-card">
       <div className="flex items-center justify-between border-b border-border px-3 py-2">
         <div className="flex items-center gap-2">
           <span className="rounded-md border border-border/60 bg-muted/30 px-2 py-0.5 text-[10px] text-muted-foreground">
@@ -95,15 +95,17 @@ export function SkillSourceEditor({ skill }: { skill: Skill }) {
           )}
         </div>
       </div>
-      <textarea
-        value={content}
-        onChange={(e) => handleChange(e.target.value)}
-        data-editor-dirty={isDirty}
-        spellCheck={false}
-        autoCorrect="off"
-        autoCapitalize="off"
-        className={cn("h-full w-full resize-none bg-background p-4 font-mono text-sm leading-6 focus:outline-none")}
-      />
+      <div className="min-h-[320px] flex-1">
+        <SourceEditor
+          value={content}
+          onChange={handleChange}
+          format={skill.canonical_format}
+          isDirty={isDirty}
+          ariaLabel={`${skill.name} source editor`}
+          minHeight={320}
+          fillHeight
+        />
+      </div>
       {saveError && <p className="border-t border-border bg-destructive/5 px-3 py-2 text-xs text-destructive">{saveError}</p>}
     </div>
   );

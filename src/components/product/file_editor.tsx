@@ -11,6 +11,7 @@ import {
   type AutosaveState,
 } from "@/components/product/autosave_status";
 import { FileLanguageBadge } from "@/components/product/file_language_badge";
+import { SourceEditor } from "@/components/product/source_editor";
 
 /**
  * Autosave debounce for file content.
@@ -174,28 +175,15 @@ export function FileEditor({ file }: FileEditorProps) {
 
       {/* ── Code editor ───────────────────────────────────────────────────── */}
       <div className="relative flex flex-1 overflow-hidden">
-        <textarea
+        <SourceEditor
           value={content}
-          onChange={(e) => setContent(e.target.value)}
-          data-editor-dirty={isDirty}
-          spellCheck={false}
-          // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-          // @ts-ignore — autoCorrect is a valid HTML attribute; React types lag behind
-          autoCorrect="off"
-          autoCapitalize="off"
-          data-gramm="false"
-          data-gramm_editor="false"
-          data-enable-grammarly="false"
-          aria-label={`${file.name} source editor`}
-          aria-description={`Code editor for ${file.canonical_format} source. No document view — code only.`}
-          className={cn(
-            "flex-1 w-full resize-none bg-transparent",
-            "px-8 py-6",
-            "font-mono text-sm leading-6 text-foreground",
-            "placeholder:text-muted-foreground/40 focus:outline-none",
-            "tab-size-2"
-          )}
+          onChange={setContent}
+          format={file.canonical_format}
+          fileExtension={file.file_extension}
+          isDirty={isDirty}
+          ariaLabel={`${file.name} source editor`}
           placeholder={`// ${file.name}`}
+          fillHeight
         />
       </div>
     </div>

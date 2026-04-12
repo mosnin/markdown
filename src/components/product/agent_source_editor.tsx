@@ -6,6 +6,7 @@ import { AutosaveStatus } from "@/components/product/autosave_status";
 import { AgentTypeBadge } from "@/components/product/agent_type_badge";
 import { saveAgentAction } from "@/app/app/agents/actions";
 import { type Agent } from "@/server/domain/types/agent";
+import { SourceEditor } from "@/components/product/source_editor";
 import { cn } from "@/lib/utils";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -154,25 +155,16 @@ export function AgentSourceEditor({ agent }: AgentSourceEditorProps) {
         </div>
       </div>
 
-      {/* Source textarea */}
+      {/* Source editor — language-aware code editor (never a markdown document view) */}
       <div className="flex-1 overflow-hidden">
-        <textarea
+        <SourceEditor
           value={content}
-          onChange={(e) => handleChange(e.target.value)}
-          data-editor-dirty={isDirty}
-          spellCheck={false}
-          autoCorrect="off"
-          autoCapitalize="off"
-          data-gramm="false"
-          aria-label="Agent source content"
-          className={cn(
-            "h-full w-full resize-none bg-background p-4",
-            "font-mono text-sm leading-6 text-foreground",
-            "placeholder:text-muted-foreground/40",
-            "focus:outline-none",
-            "disabled:opacity-50"
-          )}
+          onChange={handleChange}
+          format={agent.canonical_format}
+          isDirty={isDirty}
+          ariaLabel="Agent source content"
           placeholder={`# ${agent.name}\n\nEdit the canonical source for this agent…`}
+          fillHeight
         />
       </div>
 
