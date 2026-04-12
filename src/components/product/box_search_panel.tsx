@@ -6,6 +6,7 @@ import Link from "next/link";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { AnimatedGlowingSearchBar } from "@/components/ui/animated-glowing-search-bar";
 import { type NoteSearchResult } from "@/server/services/search_service";
 import { searchNotesAction } from "@/app/app/boxes/actions";
 import { cn } from "@/lib/utils";
@@ -427,22 +428,15 @@ export function WorkspaceSearchPagePanel({
 
   return (
     <div className="flex flex-col gap-6">
-      {/* Prominent search input */}
+      {/* Prominent search input — animated glowing yellow gradient bar */}
       <div className="flex flex-col gap-3">
-        <div className="relative">
-          <Search
-            className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground"
-            aria-hidden="true"
-          />
-          <Input
-            value={query}
-            onChange={handleQueryChange}
-            placeholder="Search notes, boxes..."
-            aria-label="Search notes and boxes"
-            autoFocus
-            className="h-12 rounded-lg border-border pl-11 pr-4 text-base shadow-sm focus:border-ring"
-          />
-        </div>
+        <AnimatedGlowingSearchBar
+          value={query}
+          onChange={handleQueryChange}
+          placeholder="Search notes, boxes..."
+          aria-label="Search notes and boxes"
+          autoFocus
+        />
 
         {/* Box scoping row */}
         {boxes.length > 1 && (

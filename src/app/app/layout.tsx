@@ -7,6 +7,7 @@ import { AppSidebar } from "@/components/product/app_sidebar";
 import { MobileSidebar } from "@/components/product/mobile_sidebar";
 import { ThemeToggle } from "@/components/product/theme_toggle";
 import { AppBreadcrumbs } from "@/components/product/app_breadcrumbs";
+import { GlobalSearch } from "@/components/product/global_search";
 import { LegalStickyFooter } from "@/components/legal/legal_modal";
 
 /**
@@ -90,12 +91,13 @@ export default async function AppLayout({
             <AppBreadcrumbs />
           </div>
 
-          {/* Desktop: utility links + theme toggle (right) */}
+          {/* Desktop: global search + utility links + theme toggle (right) */}
           <div
             className="hidden md:flex md:items-center md:gap-2 md:ml-auto"
             role="toolbar"
             aria-label="User actions"
           >
+            <GlobalSearch boxes={boxes.map((b) => ({ id: b.id, name: b.name }))} />
             <a
               href="https://docs.contextstore.app"
               target="_blank"

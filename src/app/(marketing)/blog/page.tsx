@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 import { PageHeroSection } from "@/components/marketing/hero";
+import { Button } from "@/components/ui/button";
 
 export const metadata: Metadata = {
   title: "Blog — Poggle",
@@ -26,13 +27,8 @@ export default function BlogPage() {
           <p className="text-sm leading-relaxed text-muted-foreground mb-6">
             We&apos;re working on our first posts. In the meantime, check the changelog for the latest updates.
           </p>
-          <Link
-            href="/changelog"
-            className="inline-flex items-center gap-2 rounded-lg bg-violet-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-violet-500"
-          >
-            View changelog
-            <ArrowRight className="h-4 w-4" />
-          </Link>
+          <Button size="lg" render={<Link href="/changelog" />}>View changelog
+            <ArrowRight className="h-4 w-4" /></Button>
         </div>
       </section>
     </div>

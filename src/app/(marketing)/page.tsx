@@ -449,13 +449,10 @@ export default function HomePage() {
           <p className="mt-6 text-lg text-muted-foreground">
             Free to start. Bring your notes, files, skills, and agents together in one place.
           </p>
-          <div className="mt-10">
-            <Link
-              href="/sign_in"
-              className="inline-flex items-center gap-2 rounded-lg bg-violet-600 px-8 py-3.5 text-base font-semibold text-white shadow-sm transition-colors hover:bg-violet-500"
-            >
+          <div className="mt-10 flex justify-center">
+            <Button size="lg" render={<Link href="/sign_in" />}>
               Get Poggle
-            </Link>
+            </Button>
           </div>
         </div>
       </section>

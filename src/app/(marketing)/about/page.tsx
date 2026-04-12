@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 import { PageHeroSection } from "@/components/marketing/hero";
+import { Button } from "@/components/ui/button";
 
 export const metadata: Metadata = {
   title: "About — Poggle",
@@ -162,13 +163,8 @@ export default function AboutPage() {
             context for a team — we built Poggle for you.
           </p>
           <div className="mt-8 flex flex-col items-center gap-3 sm:flex-row sm:justify-center">
-            <Link
-              href="/sign_in"
-              className="inline-flex items-center gap-2 rounded-lg bg-violet-600 px-6 py-3 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-violet-500"
-            >
-              Get started free
-              <ArrowRight className="h-4 w-4" />
-            </Link>
+            <Button size="lg" render={<Link href="/sign_in" />}>Get started free
+              <ArrowRight className="h-4 w-4" /></Button>
             <Link
               href="/contact"
               className="inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"

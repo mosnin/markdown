@@ -11,6 +11,7 @@ import {
   Link2,
 } from "lucide-react";
 import { PageHeroSection } from "@/components/marketing/hero";
+import { Button } from "@/components/ui/button";
 
 export const metadata: Metadata = {
   title: "Import & Export — Poggle",
@@ -116,13 +117,8 @@ export default function PortabilityPage() {
             Import your existing notes in minutes. No credit card needed.
           </p>
           <div className="mt-6 flex flex-col items-center gap-2">
-            <Link
-              href="/sign_in"
-              className="inline-flex items-center gap-2 rounded-lg bg-violet-600 px-6 py-3 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-violet-500"
-            >
-              Start importing
-              <ArrowRight className="h-4 w-4" />
-            </Link>
+            <Button size="lg" render={<Link href="/sign_in" />}>Start importing
+              <ArrowRight className="h-4 w-4" /></Button>
             <ul className="mt-4 flex flex-wrap justify-center gap-4 text-xs text-muted-foreground">
               {[
                 "Free plan forever",
