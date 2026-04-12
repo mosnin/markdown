@@ -459,3 +459,177 @@
     animation: none !important;
   }
 }
+
+/* ─── Glass button (primary button style) ──────────────────────────────── */
+/* Used by src/components/ui/glass-button.tsx and applied as the default
+   variant of the shared <Button> component via the .glass-button class
+   alone. Works on a single <button> element — the wrap + shadow layers in
+   the original GlassButton component are optional and only wire up when
+   you render the composite <GlassButton /> directly. */
+
+.glass-button-wrap {
+  position: relative;
+  display: inline-block;
+  --glass-shadow-color: color-mix(in oklch, var(--color-violet-600) 60%, transparent);
+}
+
+.glass-button-shadow {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  box-shadow:
+    0 1px 1px color-mix(in oklch, var(--color-violet-600) 20%, transparent),
+    0 10px 30px -8px var(--glass-shadow-color);
+  opacity: 0.9;
+  transition: opacity 200ms ease, transform 200ms ease;
+  pointer-events: none;
+}
+
+.glass-button-wrap:hover .glass-button-shadow {
+  opacity: 1;
+  transform: translateY(1px);
+}
+
+/*
+ * Core glass button surface.
+ *
+ * The primary <Button> in the app applies this class alone (no wrap, no
+ * shadow div) so every existing <Button variant="default"> in the repo
+ * becomes a glass button without restructuring the DOM.
+ *
+ * Layering from back to front:
+ *   background       — violet gradient base
+ *   ::before         — bright inner highlight on the top edge
+ *   ::after          — subtle sheen across the top half
+ *   box-shadow       — inner highlight + bottom inner shadow + outer drop
+ */
+.glass-button {
+  position: relative;
+  isolation: isolate;
+  border-radius: 9999px;
+  border: 1px solid color-mix(in oklch, var(--color-violet-700) 60%, transparent);
+  color: #ffffff;
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in oklch, var(--color-violet-500) 100%, transparent) 0%,
+      color-mix(in oklch, var(--color-violet-700) 100%, transparent) 100%
+    );
+  box-shadow:
+    inset 0 1px 0 0 color-mix(in oklch, white 55%, transparent),
+    inset 0 -2px 4px -1px color-mix(in oklch, var(--color-violet-900) 45%, transparent),
+    0 1px 2px 0 color-mix(in oklch, var(--color-violet-900) 25%, transparent),
+    0 6px 18px -6px color-mix(in oklch, var(--color-violet-600) 55%, transparent);
+  transition:
+    transform 120ms ease,
+    box-shadow 200ms ease,
+    background 200ms ease,
+    border-color 200ms ease;
+  cursor: pointer;
+  overflow: hidden;
+}
+
+.glass-button::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(
+    180deg,
+    color-mix(in oklch, white 35%, transparent) 0%,
+    color-mix(in oklch, white 0%, transparent) 55%
+  );
+  pointer-events: none;
+  mix-blend-mode: screen;
+}
+
+.glass-button::after {
+  content: "";
+  position: absolute;
+  inset: 1px;
+  border-radius: inherit;
+  background: linear-gradient(
+    180deg,
+    color-mix(in oklch, white 12%, transparent) 0%,
+    transparent 45%
+  );
+  pointer-events: none;
+}
+
+.glass-button:hover {
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in oklch, var(--color-violet-400) 100%, transparent) 0%,
+      color-mix(in oklch, var(--color-violet-600) 100%, transparent) 100%
+    );
+  box-shadow:
+    inset 0 1px 0 0 color-mix(in oklch, white 65%, transparent),
+    inset 0 -2px 4px -1px color-mix(in oklch, var(--color-violet-900) 40%, transparent),
+    0 2px 4px 0 color-mix(in oklch, var(--color-violet-900) 30%, transparent),
+    0 10px 24px -6px color-mix(in oklch, var(--color-violet-600) 70%, transparent);
+}
+
+.glass-button:active {
+  transform: translateY(1px);
+  box-shadow:
+    inset 0 1px 0 0 color-mix(in oklch, white 40%, transparent),
+    inset 0 2px 6px 0 color-mix(in oklch, var(--color-violet-900) 55%, transparent),
+    0 1px 2px 0 color-mix(in oklch, var(--color-violet-900) 25%, transparent);
+}
+
+.glass-button:focus-visible {
+  outline: 2px solid color-mix(in oklch, var(--color-violet-400) 80%, transparent);
+  outline-offset: 2px;
+}
+
+.glass-button:disabled,
+.glass-button[aria-disabled="true"] {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.glass-button-text {
+  position: relative;
+  z-index: 1;
+  text-shadow: 0 1px 0 color-mix(in oklch, var(--color-violet-900) 35%, transparent);
+}
+
+/* Dark mode tuning — the violet-500/700 gradient is already readable on
+   dark surfaces, but the highlight + shadow intensities are adjusted so
+   the button retains presence without overpowering the dark palette. */
+.dark .glass-button {
+  border-color: color-mix(in oklch, var(--color-violet-400) 45%, transparent);
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in oklch, var(--color-violet-400) 100%, transparent) 0%,
+      color-mix(in oklch, var(--color-violet-700) 100%, transparent) 100%
+    );
+  box-shadow:
+    inset 0 1px 0 0 color-mix(in oklch, white 40%, transparent),
+    inset 0 -2px 4px -1px color-mix(in oklch, black 35%, transparent),
+    0 1px 2px 0 color-mix(in oklch, black 50%, transparent),
+    0 8px 22px -6px color-mix(in oklch, var(--color-violet-600) 65%, transparent);
+}
+
+.dark .glass-button:hover {
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in oklch, var(--color-violet-300) 100%, transparent) 0%,
+      color-mix(in oklch, var(--color-violet-600) 100%, transparent) 100%
+    );
+  box-shadow:
+    inset 0 1px 0 0 color-mix(in oklch, white 50%, transparent),
+    inset 0 -2px 4px -1px color-mix(in oklch, black 30%, transparent),
+    0 2px 4px 0 color-mix(in oklch, black 55%, transparent),
+    0 12px 28px -6px color-mix(in oklch, var(--color-violet-500) 75%, transparent);
+}
+
+.dark .glass-button-shadow {
+  --glass-shadow-color: color-mix(in oklch, var(--color-violet-500) 55%, transparent);
+  box-shadow:
+    0 1px 1px color-mix(in oklch, black 35%, transparent),
+    0 10px 30px -8px var(--glass-shadow-color);
+}
