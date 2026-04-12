@@ -10,10 +10,12 @@ import {
 import {
   parseScopeString,
   resolveGrantedScopes,
-  type OAuthScope,
+  isCapabilityScope,
+  type OAuthCapabilityScope,
 } from "@/server/services/oauth_scope_service";
 import { issueAuthorizationCode } from "@/server/services/oauth_token_service";
 import { listAccessibleWorkspaces } from "@/server/repositories/workspace_membership_repository";
+import { listBoxesByWorkspace } from "@/server/repositories/box_repository";
 import { createClient } from "@/lib/supabase/server";
 import { createAuditEvent } from "@/server/repositories/audit_event_repository";
 
@@ -57,10 +59,18 @@ export async function approveAuthorizeAction(formData: FormData): Promise<never>
     redirect(errorRedirect(redirectUri, state, "access_denied", "You do not have access to the selected workspace."));
   }
 
+  // Re-fetch the accessible boxes for the selected workspace so we
+  // re-validate any `context:box:<uuid>` scopes against the real
+  // membership state at this instant (not what the caller thinks it
+  // is). resolveGrantedScopes will reject boxes the user can't reach.
+  const accessibleBoxes = await listBoxesByWorkspace(sbUser, selectedWorkspace!.id);
+  const accessibleBoxIdSet = new Set(accessibleBoxes.map((b) => b.id));
+
   const resolution = resolveGrantedScopes({
     requested,
-    clientAllowed: client!.allowed_scopes as OAuthScope[],
+    clientAllowed: client!.allowed_scopes.filter(isCapabilityScope) as OAuthCapabilityScope[],
     role: selectedWorkspace!.role,
+    accessibleBoxIds: accessibleBoxIdSet,
   });
   if (!resolution.ok) {
     redirect(errorRedirect(redirectUri, state, "invalid_scope", resolution.error));

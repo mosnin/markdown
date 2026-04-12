@@ -182,7 +182,7 @@ async function resolveOAuthContext(
   const { parseBearerAccessToken, resolveAccessToken } = await import(
     "@/server/services/oauth_token_service"
   );
-  const { hasScope } = await import(
+  const { hasScope, splitScopes } = await import(
     "@/server/services/oauth_scope_service"
   );
   const parsed = parseBearerAccessToken(`Bearer ${rawToken}`);
@@ -192,16 +192,25 @@ async function resolveOAuthContext(
   const resolved = await resolveAccessToken(admin, parsed);
   if (!resolved) return null;
 
-  // Pull every active box in the workspace so the existing
-  // allowedBoxIds check behaves like a workspace-wide grant. Trashed
-  // boxes are excluded so a revoked box can't be reached via a stale
-  // token.
+  // Pull every active box in the workspace. Then apply two filters:
+  //   1. Drop trashed boxes so revoked boxes can't be reached via a
+  //      stale token.
+  //   2. If the token has per-box scope narrowing
+  //      (`context:box:<uuid>`), intersect the box set with the
+  //      granted ids so the canonical API honours per-box grants too.
+  //      Tokens without any box scope keep workspace-wide access.
   const { data: boxes } = await admin
     .from("boxes")
     .select("id")
     .eq("workspace_id", resolved.workspaceId)
     .neq("status", "trashed");
-  const allowedBoxIds = new Set((boxes ?? []).map((b: { id: string }) => b.id));
+  const liveBoxIds = (boxes ?? []).map((b: { id: string }) => b.id);
+  const { boxIds: grantedBoxIds } = splitScopes(resolved.scope);
+  const allowedBoxIds = new Set(
+    grantedBoxIds
+      ? liveBoxIds.filter((id: string) => grantedBoxIds.has(id))
+      : liveBoxIds
+  );
 
   // Synthetic Connection shape. This is NOT a persisted row — it's a
   // transport-layer adapter so the service code paths that expect a

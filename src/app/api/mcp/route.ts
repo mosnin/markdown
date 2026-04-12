@@ -6,7 +6,9 @@ import {
 } from "@/server/services/oauth_token_service";
 import {
   hasScope,
+  canAccessBox,
   type OAuthScope,
+  type OAuthCapabilityScope,
 } from "@/server/services/oauth_scope_service";
 import { getWorkspaceRole } from "@/server/repositories/workspace_membership_repository";
 import { listBoxesByWorkspace } from "@/server/repositories/box_repository";
@@ -73,7 +75,7 @@ function rpcError(id: JsonRpcRequest["id"], code: number, message: string, data?
 interface ToolDef {
   name: string;
   description: string;
-  scope: OAuthScope;
+  scope: OAuthCapabilityScope;
   writes: boolean;
   inputSchema: object;
 }
@@ -284,7 +286,10 @@ async function dispatchTool(
   switch (name) {
     case "list_boxes": {
       const boxes = await listBoxesByWorkspace(admin, ctx.workspaceId);
-      return { boxes: boxes.map((b) => ({
+      // Box-scoped tokens see only the boxes they were granted access
+      // to. Workspace-wide tokens (no box scope) see every box.
+      const scoped = boxes.filter((b) => canAccessBox(ctx.scope, b.id));
+      return { boxes: scoped.map((b) => ({
         id: b.id, name: b.name, slug: b.slug, description: b.description,
         created_at: b.created_at, updated_at: b.updated_at,
       })) };
@@ -295,9 +300,12 @@ async function dispatchTool(
       if (!noteId) throw toolError(-32602, "note_id is required");
       const note = await getNoteById(admin, noteId);
       if (!note) return { note: null };
-      // Verify ownership via box → workspace.
+      // Verify ownership via box → workspace AND honour any per-box
+      // scope narrowing. A note inside a box the token wasn't granted
+      // is indistinguishable from not-found from the caller's view.
       const { data: box } = await admin.from("boxes").select("workspace_id").eq("id", note.box_id).maybeSingle();
       if (box?.workspace_id !== ctx.workspaceId) return { note: null };
+      if (!canAccessBox(ctx.scope, note.box_id)) return { note: null };
       return { note };
     }
 
@@ -305,12 +313,21 @@ async function dispatchTool(
       const query = String(args.query ?? "");
       if (!query) throw toolError(-32602, "query is required");
       const hits = await searchWorkspace(admin, ctx.workspaceId, query);
-      return { hits };
+      // Filter hits whose box_id is outside the token's granted box
+      // set. Hits that have no box_id (box-level hits themselves)
+      // match on the hit's id.
+      const filtered = hits.filter((h) => {
+        if (h.objectType === "box") return canAccessBox(ctx.scope, h.id);
+        if (h.boxId) return canAccessBox(ctx.scope, h.boxId);
+        return true;
+      });
+      return { hits: filtered };
     }
 
     case "get_box_overview": {
       const boxId = String(args.box_id ?? "");
       if (!boxId) throw toolError(-32602, "box_id is required");
+      if (!canAccessBox(ctx.scope, boxId)) return { overview: null };
       const { getBoxById } = await import("@/server/repositories/box_repository");
       const box = await getBoxById(admin, boxId);
       if (!box || box.workspace_id !== ctx.workspaceId) return { overview: null };
@@ -322,6 +339,7 @@ async function dispatchTool(
     case "list_folder_contents": {
       const boxId = String(args.box_id ?? "");
       if (!boxId) throw toolError(-32602, "box_id is required");
+      if (!canAccessBox(ctx.scope, boxId)) return { folders: [], notes: [] };
       const { getBoxById } = await import("@/server/repositories/box_repository");
       const box = await getBoxById(admin, boxId);
       if (!box || box.workspace_id !== ctx.workspaceId) {
@@ -357,7 +375,8 @@ async function dispatchTool(
     case "get_linked_notes": {
       const noteId = String(args.note_id ?? "");
       if (!noteId) throw toolError(-32602, "note_id is required");
-      // Ownership gate: the note must be in a box in the caller's workspace.
+      // Ownership gate: the note must be in a box in the caller's
+      // workspace AND in the token's granted box set.
       const { data: note } = await admin
         .from("notes")
         .select("id, box_id")
@@ -370,6 +389,7 @@ async function dispatchTool(
         .eq("id", note.box_id)
         .maybeSingle();
       if (box?.workspace_id !== ctx.workspaceId) return { outbound: [], inbound: [] };
+      if (!canAccessBox(ctx.scope, note.box_id)) return { outbound: [], inbound: [] };
       const { listLinksFromNote, listLinksToNote } = await import(
         "@/server/repositories/note_link_repository"
       );
@@ -383,6 +403,16 @@ async function dispatchTool(
     case "get_context_bundle": {
       const noteId = String(args.note_id ?? "");
       if (!noteId) throw toolError(-32602, "note_id is required");
+      // Pre-check box scope so we don't leak note existence through
+      // the service's error messages.
+      const { data: noteRow } = await admin
+        .from("notes")
+        .select("box_id")
+        .eq("id", noteId)
+        .maybeSingle();
+      if (!noteRow || !canAccessBox(ctx.scope, noteRow.box_id)) {
+        return { bundle: null };
+      }
       const { assembleContextBundle } = await import(
         "@/server/services/context_bundle_service"
       );
@@ -411,18 +441,33 @@ async function dispatchTool(
       if (!folderId || !title || !markdown) {
         throw toolError(-32602, "folder_id, title, and markdown_content are required");
       }
+      // Verify the target folder lives in a box the token has box
+      // scope for before delegating to generated_note_service.
+      const { data: folder } = await admin
+        .from("folders")
+        .select("box_id")
+        .eq("id", folderId)
+        .maybeSingle();
+      if (!folder || !canAccessBox(ctx.scope, folder.box_id)) {
+        throw toolError(-32003, "Folder is not in an authorized box");
+      }
+
       // Build a ConnectionRequestContext that the existing
-      // generated_note_service expects. allowedBoxIds is synthesized
-      // from the workspace's live boxes at call time so a revoked
-      // workspace box can't be written to. permission_mode is pinned
-      // to generate_in_allowed_folders because the scope gate above
+      // generated_note_service expects. allowedBoxIds is the
+      // intersection of (a) live workspace boxes and (b) the token's
+      // granted box set, so per-box OAuth scopes propagate all the
+      // way to the service layer. permission_mode is pinned to
+      // generate_in_allowed_folders because the scope gate above
       // already required context:generate.
       const { data: boxes } = await admin
         .from("boxes")
         .select("id")
         .eq("workspace_id", ctx.workspaceId)
         .neq("status", "trashed");
-      const allowedBoxIds = new Set((boxes ?? []).map((b: { id: string }) => b.id));
+      const workspaceBoxIds = (boxes ?? []).map((b: { id: string }) => b.id);
+      const allowedBoxIds = new Set(
+        workspaceBoxIds.filter((id: string) => canAccessBox(ctx.scope, id))
+      );
       const { createGeneratedNote } = await import(
         "@/server/services/generated_note_service"
       );

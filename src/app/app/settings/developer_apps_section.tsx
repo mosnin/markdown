@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useTransition } from "react";
-import { Copy, Plus, ShieldCheck, Trash2, X } from "lucide-react";
+import { Copy, Plus, RefreshCcw, ShieldCheck, Trash2, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   Card,
@@ -24,6 +24,7 @@ import {
   listDeveloperAppsAction,
   registerDeveloperAppAction,
   deleteDeveloperAppAction,
+  rotateDeveloperAppSecretAction,
   type DeveloperAppRow,
   type NewlyRegisteredApp,
 } from "./developer_apps_actions";
@@ -140,12 +141,21 @@ export function DeveloperAppsSection() {
 function AppRow({ row, onDeleted }: { row: DeveloperAppRow; onDeleted: () => void }) {
   const [pending, startTransition] = useTransition();
   const [err, setErr] = useState<string | null>(null);
+  const [rotatedSecret, setRotatedSecret] = useState<string | null>(null);
 
   function del() {
     startTransition(async () => {
       const res = await deleteDeveloperAppAction(row.client_id);
       if (!res.ok) setErr(res.error);
       else onDeleted();
+    });
+  }
+
+  function rotate() {
+    startTransition(async () => {
+      const res = await rotateDeveloperAppSecretAction(row.client_id);
+      if (!res.ok) setErr(res.error);
+      else setRotatedSecret(res.data.client_secret);
     });
   }
 
@@ -185,18 +195,62 @@ function AppRow({ row, onDeleted }: { row: DeveloperAppRow; onDeleted: () => voi
         )}
       </div>
       {!row.is_first_party && (
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          onClick={del}
-          disabled={pending}
-          aria-label={`Delete ${row.name}`}
-          className="shrink-0 text-muted-foreground hover:text-destructive"
-        >
-          <Trash2 className="h-4 w-4" aria-hidden="true" />
-        </Button>
+        <div className="flex shrink-0 items-start gap-1">
+          {row.is_confidential && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={rotate}
+              disabled={pending}
+              aria-label={`Rotate secret for ${row.name}`}
+              className="text-muted-foreground hover:text-foreground"
+            >
+              <RefreshCcw className="h-4 w-4" aria-hidden="true" />
+            </Button>
+          )}
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={del}
+            disabled={pending}
+            aria-label={`Delete ${row.name}`}
+            className="text-muted-foreground hover:text-destructive"
+          >
+            <Trash2 className="h-4 w-4" aria-hidden="true" />
+          </Button>
+        </div>
       )}
+
+      <Dialog open={!!rotatedSecret} onOpenChange={(v) => !v && setRotatedSecret(null)}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>New client_secret for {row.name}</DialogTitle>
+          </DialogHeader>
+          {rotatedSecret && (
+            <div className="space-y-3 text-sm">
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                  client_secret
+                </p>
+                <CopyBlock value={rotatedSecret} />
+                <p className="mt-2 rounded-md border border-warning/30 bg-warning/5 px-3 py-2 text-xs text-warning">
+                  Store this secret safely — it is shown only once. The
+                  previous secret is already invalid. Existing access and
+                  refresh tokens keep working until they expire or you
+                  explicitly revoke them.
+                </p>
+              </div>
+              <div className="flex justify-end">
+                <Button size="sm" onClick={() => setRotatedSecret(null)}>
+                  Done
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

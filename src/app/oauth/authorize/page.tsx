@@ -7,9 +7,12 @@ import { getOAuthClientByClientId, isRedirectUriAllowed } from "@/server/service
 import {
   parseScopeString,
   resolveGrantedScopes,
+  splitScopes,
   OAUTH_SCOPES,
-  type OAuthScope,
+  isCapabilityScope,
+  type OAuthCapabilityScope,
 } from "@/server/services/oauth_scope_service";
+import { listBoxesByWorkspace } from "@/server/repositories/box_repository";
 import { listAccessibleWorkspaces } from "@/server/repositories/workspace_membership_repository";
 import { AuthorizeConsentForm } from "./consent_form";
 
@@ -106,16 +109,30 @@ export default async function AuthorizePage({
     const dest = buildErrorRedirect(redirectUri, state, "invalid_scope", "At least one scope is required.");
     if (dest) redirect(dest);
   }
+  // Fetch every box in the active workspace so (a) the consent UI can
+  // offer per-box narrowing and (b) resolveGrantedScopes can reject
+  // box scopes for boxes the user cannot reach.
+  const accessibleBoxes = await listBoxesByWorkspace(supabase, ctx.workspace.id);
+  const accessibleBoxIdSet = new Set(accessibleBoxes.map((b) => b.id));
+
   const resolution = resolveGrantedScopes({
     requested: requestedScopes,
-    clientAllowed: client.allowed_scopes as OAuthScope[],
+    clientAllowed: client.allowed_scopes.filter(isCapabilityScope) as OAuthCapabilityScope[],
     role: ctx.workspace.role,
+    accessibleBoxIds: accessibleBoxIdSet,
   });
   if (!resolution.ok) {
     const dest = buildErrorRedirect(redirectUri, state, "invalid_scope", resolution.error);
     if (dest) redirect(dest);
   }
   const grantableScopes = resolution.ok ? resolution.scopes : [];
+  // Capability-vs-box split used by the UI and by the server action.
+  const { capabilities: capabilityScopes, boxIds: requestedBoxIds } =
+    splitScopes(grantableScopes);
+  // Connectors that didn't ask for specific boxes get workspace-wide
+  // by default; in the UI we still show every box so the user can
+  // narrow the grant before approving.
+  const defaultBoxIds = requestedBoxIds ?? accessibleBoxIdSet;
 
   // Step 4: list the workspaces this user can authorize the connector
   // for. Default to the active workspace; the user can change it.
@@ -161,7 +178,7 @@ export default async function AuthorizePage({
                 What it will be able to do
               </h2>
               <ul className="mt-2 flex flex-col gap-2 list-none">
-                {grantableScopes.map((s) => (
+                {capabilityScopes.map((s) => (
                   <li key={s} className="flex items-start gap-2 text-sm">
                     <Lock className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
                     <div>
@@ -188,7 +205,14 @@ export default async function AuthorizePage({
               redirectUri={redirectUri}
               state={state ?? ""}
               codeChallenge={params.code_challenge ?? ""}
-              scope={grantableScopes.join(" ")}
+              capabilityScopes={capabilityScopes}
+              boxes={accessibleBoxes.map((b) => ({ id: b.id, name: b.name }))}
+              defaultBoxIds={Array.from(defaultBoxIds)}
+              // When the connector explicitly requested box ids we
+              // don't let the user add boxes beyond that set — only
+              // narrow further. When they didn't, the user is free to
+              // choose any subset.
+              connectorRequestedBoxIds={requestedBoxIds ? Array.from(requestedBoxIds) : null}
               workspaces={accessible.map((w) => ({
                 id: w.id,
                 name: w.name,

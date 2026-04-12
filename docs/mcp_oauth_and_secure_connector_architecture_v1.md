@@ -315,22 +315,66 @@ the product UI:
 - Per-app delete button that revokes every live token for the client
   in one update before soft-deleting the row.
 
+## Follow-ups landed (v1.2)
+
+### Per-box scope grants
+
+OAuth tokens can now be narrowed to specific boxes, matching (and
+exceeding) the hygiene ceiling of the legacy connection_tokens model.
+
+- Scope vocabulary gains a `context:box:<uuid>` family. A token's
+  scope string mixes capability scopes and zero or more box scopes:
+  ```
+  context:read context:search context:box:9a8c... context:box:4d2f...
+  ```
+- Absence of any `context:box:*` scope means "workspace-wide"
+  (unchanged default for existing grants).
+- Presence of one or more `context:box:*` scopes narrows every
+  capability scope to that specific set.
+- Enforcement points: `canAccessBox(scope, boxId)` is called at every
+  box-anchored MCP tool (`list_boxes`, `get_box_overview`,
+  `list_folder_contents`, `get_note`, `get_linked_notes`,
+  `get_context_bundle`, `create_generated_note`) AND propagated into
+  the `/api/v1/**` bridge (`resolveOAuthContext` intersects
+  `allowedBoxIds` with the granted set).
+- The consent page lists every box in the active workspace with
+  checkboxes. If the connector requested specific ids up-front, the
+  user can only narrow further, not broaden.
+- `resolveGrantedScopes` refuses box scopes for boxes the user itself
+  cannot reach — a workspace member cannot grant a connector access
+  to a box outside their membership.
+
+### Confidential-client secret rotation
+
+- New service: `rotateClientSecret(adminSupabase, clientId)` mints a
+  new secret, rehashes, and invalidates the old one. Live access +
+  refresh tokens are intentionally NOT revoked — rotation is about
+  the next token-endpoint call, not existing sessions. Operators who
+  need a "force-logout" semantic can chain a blanket revoke.
+- New action: `rotateDeveloperAppSecretAction` (owner-only, writes
+  `oauth.client.secret_rotated` audit).
+- UI: a RefreshCcw button on each confidential app row in Settings →
+  Developer apps opens a dialog showing the new secret once with a
+  clear unrecoverable-on-close warning.
+
 ## Remaining limitations
 
 - **Streamable HTTP transport (MCP spec)** is still not implemented.
   `/api/mcp` is request/response JSON-RPC, which every production
-  connector we target currently accepts. Streamable HTTP adds value
-  for long-running tools (incremental outputs) which Context Store
-  tools don't have today. Deferred with no user-visible impact.
-- **Confidential-client secret rotation** is not exposed. Current
-  workflow: delete the client (revokes all tokens) and register a
-  new one. A rotate-secret endpoint is a future-friendly addition.
-- **OAuth authorize CSRF**: we rely on the OAuth `state` parameter
-  (which the connector generates + verifies) plus Supabase session
-  cookie auth and exact-match redirect URIs. A double-submit CSRF
-  token on the approve action would be belt-and-suspenders; standard
-  OAuth doesn't require it.
-- **Per-box scope grants** for OAuth tokens. V1 OAuth tokens are
-  workspace-wide; legacy `connection_tokens` still support per-box
-  scoping. A `context:read:box:<id>` scope family is the natural
-  extension and doesn't require a migration.
+  connector we target accepts. Streamable HTTP adds value only for
+  long-running tools with incremental output, which Context Store's
+  read-and-propose tool set does not have. Documented deferral, not
+  a TODO.
+- **OAuth authorize CSRF** is NOT defended by a server-issued
+  double-submit token. Deliberate choice. The existing defenses are:
+  (a) the OAuth `state` parameter that connectors generate and
+  verify client-side, (b) Supabase session cookie auth on the approve
+  action so the request comes from the signed-in user, and (c)
+  exact-match `redirect_uri` validation before any consent UI
+  renders. A server-issued CSRF token would add surface area for
+  cookie/token coupling bugs without closing a real threat that
+  `state` + session + redirect validation don't already close.
+- **OAuth token revocation on client delete / secret rotation** is
+  partial. Client delete revokes all live tokens; secret rotation
+  does not. A "rotate and revoke" switch on the rotate dialog would
+  offer the strictest flow.

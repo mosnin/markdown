@@ -122,6 +122,38 @@ export interface RegisteredClient {
   client_secret?: string;
 }
 
+/**
+ * Rotate a confidential client's secret. Returns the new raw secret
+ * exactly once; the hash overwrites the stored one so the previous
+ * secret is immediately invalid. Returns null for public clients or
+ * unknown client_ids — callers surface that as a user-facing error.
+ *
+ * All live access + refresh tokens for the client are intentionally
+ * NOT revoked by this function: rotation is about the next outbound
+ * token request, not existing sessions. Callers can add a blanket
+ * revoke in the surface layer if they need a "force-logout every
+ * session" semantic.
+ */
+export async function rotateClientSecret(
+  adminSupabase: SupabaseClient,
+  clientId: string
+): Promise<string | null> {
+  const existing = await _internalGetClientWithSecret(adminSupabase, clientId);
+  if (!existing) return null;
+  if (!existing.is_confidential) return null;
+
+  const secret = randomBytes(32).toString("base64url");
+  const hash = createHash("sha256").update(secret).digest("hex");
+
+  const { error } = await adminSupabase
+    .from("oauth_clients")
+    .update({ client_secret_hash: hash })
+    .eq("client_id", clientId);
+  if (error) throw new Error(error.message);
+
+  return secret;
+}
+
 export async function registerClient(
   adminSupabase: SupabaseClient,
   input: RegisterClientInput

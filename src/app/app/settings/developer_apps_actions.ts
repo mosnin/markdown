@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireAuthenticatedUser } from "@/server/auth/require_authenticated_user";
-import { registerClient } from "@/server/services/oauth_client_service";
+import { registerClient, rotateClientSecret } from "@/server/services/oauth_client_service";
 import { ALL_SCOPES, type OAuthScope } from "@/server/services/oauth_scope_service";
 import { createAuditEvent } from "@/server/repositories/audit_event_repository";
 
@@ -123,6 +123,56 @@ export async function registerDeveloperAppAction(input: {
     };
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : "Registration failed" };
+  }
+}
+
+/**
+ * Rotate a confidential client's secret. Only the developer who
+ * registered the client can rotate it. Live access + refresh tokens
+ * are NOT revoked by rotation — existing sessions keep working until
+ * they naturally expire or are explicitly revoked. Rotation only
+ * invalidates the OLD secret so new token-endpoint calls must present
+ * the new one.
+ */
+export async function rotateDeveloperAppSecretAction(
+  clientId: string
+): Promise<ActionResult<{ client_secret: string }>> {
+  try {
+    const ctx = await requireAuthenticatedUser();
+    const admin = createAdminClient();
+    const { data: client } = await admin
+      .from("oauth_clients")
+      .select("id, created_by, is_first_party, is_confidential, status")
+      .eq("client_id", clientId)
+      .maybeSingle();
+    if (!client) return { ok: false, error: "Client not found" };
+    if (client.is_first_party) {
+      return { ok: false, error: "First-party client secrets cannot be rotated from this surface" };
+    }
+    if (client.created_by !== ctx.user.id) {
+      return { ok: false, error: "You did not register this client" };
+    }
+    if (!client.is_confidential) {
+      return { ok: false, error: "Public clients have no secret to rotate" };
+    }
+
+    const secret = await rotateClientSecret(admin, clientId);
+    if (!secret) return { ok: false, error: "Failed to rotate secret" };
+
+    await createAuditEvent(admin, {
+      workspace_id: ctx.workspace.id,
+      actor_type: "user",
+      actor_id: ctx.user.id,
+      object_type: "oauth_client",
+      object_id: client.id,
+      event_type: "oauth.client.secret_rotated",
+      metadata: { client_id: clientId },
+    });
+
+    revalidatePath("/app/settings");
+    return { ok: true, data: { client_secret: secret } };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Rotate failed" };
   }
 }
 
