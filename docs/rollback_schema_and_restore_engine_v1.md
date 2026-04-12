@@ -233,11 +233,41 @@ surface:
 - The detail body renders per-item checkboxes so partial restore is
   a one-click action.
 
+## Follow-ups landed (v1.4)
+
+### Branch-aware writes (notes)
+
+Draft branches now carry real write semantics.
+`updateNoteOnBranch(supabase, userId, workspaceId, branchId,
+noteId, …)` writes a new immutable `note_versions` row and upserts
+the branch's `branch_heads` pointer, without touching the canonical
+`notes` row. `getNoteForWorkspace` accepts an optional branch id
+and patches `title` / `markdown_content` / `current_version_id`
+from the branch head when one exists. `saveNoteAction` routes to
+the branch path whenever `ctx.activeBranchId` is set.
+
+Promote (`promoteBranch` / `promoteBranchAction`) walks every
+branch head and advances main's `current_version_id` to the branch
+version inside a single `origin: 'branch_promotion'` change set —
+restoreable end-to-end. Discard marks the branch discarded and
+clears the active-branch cookie if it was set. Both actions are
+role-gated.
+
+UI: `/app/branches` lists every branch with head counts, active
+indicator, switch/promote/discard buttons, and a "New branch"
+dialog. Sidebar nav link `Branches` opens it.
+
+Full design in
+[`docs/branch_aware_writes_v1.md`](branch_aware_writes_v1.md).
+
 ## Intentionally deferred (not TODOs)
 
-* **Branch-aware writes.** Editor actions don't consult `branch_heads`
-  yet. Adding requires threading a branch id through every mutation
-  and a UI for selecting branches. Schema + resolver are ready.
+* **File / skill / agent branch writes.** Schema + head resolver
+  already support them; promote reads heads by `object_type`. Once
+  `updateFileOnBranch` / `updateSkillOnBranch` /
+  `updateAgentOnBranch` are written against the `object_versions`
+  table and wired into their save actions, the promote loop picks
+  them up automatically.
 * **History timeline UI** beyond `/app/history`. The metadata surface
   is already wired; richer surfaces (graph view, cross-user filter)
   are layered surfaces that don't require engine changes.
@@ -246,6 +276,12 @@ surface:
   Current non-virtualised list is fine at those sizes; a change set
   with >1k items would need windowing, which is a pure client
   concern.
+* **Three-way merge for branches.** Context Store uses promote /
+  discard as its resolution mechanism, not merge. A branch whose main
+  head advanced ahead of promote simply overwrites those main changes
+  — the restore engine catches them as `dirtyAfter` warnings on the
+  promotion change set. Three-way merge semantics aren't on the
+  roadmap.
 
 ## Referenced docs
 

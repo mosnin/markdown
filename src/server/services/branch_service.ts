@@ -217,3 +217,140 @@ export async function resolveBranchVersion(
     .maybeSingle();
   return (data?.version_id as string | undefined) ?? null;
 }
+
+// ─── Promote ─────────────────────────────────────────────────────────────────
+
+export interface PromoteBranchResult {
+  branchId: string;
+  promotedObjects: Array<{ object_type: BranchHeadObjectType; object_id: string; new_version_id: string }>;
+  /** Change set that wrapped the promote, for history traceability. */
+  changeSetId: string;
+}
+
+/**
+ * Promote every branch head onto main.
+ *
+ * For each `branch_heads` row we advance the underlying canonical
+ * object's `current_version_id` to the branch's version. The target
+ * version is already an immutable row in `note_versions` (or
+ * `object_versions` for file/skill/agent), so no new content row is
+ * written — only the canonical pointer moves.
+ *
+ * The whole operation runs inside an `origin: 'branch_promotion'`
+ * change set so it shows up in history as one grouped restore-able
+ * unit. Restoring the change set reverts the pointer moves — it does
+ * not delete the branch heads.
+ *
+ * V1 scope: notes only. Files / skills / agents use the same
+ * mechanism but their write path isn't yet wired; once it is, this
+ * function extends by iterating their branch_heads rows with the
+ * same pattern.
+ */
+export async function promoteBranch(
+  supabase: SupabaseClient,
+  workspaceId: string,
+  actorId: string,
+  branchId: string
+): Promise<PromoteBranchResult> {
+  const branch = await getDraftBranch(supabase, branchId);
+  if (!branch) throw new Error("Branch not found");
+  if (branch.workspace_id !== workspaceId) throw new Error("Branch not in this workspace");
+  if (branch.status !== "open") throw new Error(`Branch is ${branch.status}, cannot promote`);
+
+  const heads = await listBranchHeads(supabase, branchId);
+  if (heads.length === 0) {
+    // Nothing to promote. Mark the branch promoted anyway so the
+    // draft state is cleaned up; the caller can report "nothing to
+    // promote" if useful.
+    await markBranchPromoted(supabase, branchId);
+    throw new Error("Branch has no heads to promote");
+  }
+
+  const { openChangeSet, commitChangeSet, abortChangeSet, recordChangeSetItem } =
+    await import("./change_set_service");
+  const cs = await openChangeSet(supabase, {
+    workspace_id: workspaceId,
+    origin: "branch_promotion",
+    actor_type: "user",
+    actor_id: actorId,
+    summary: `Promote branch "${branch.name}"`,
+    metadata: {
+      branch_id: branchId,
+      branch_name: branch.name,
+      head_count: heads.length,
+    },
+  });
+
+  const promoted: PromoteBranchResult["promotedObjects"] = [];
+
+  try {
+    for (const head of heads) {
+      if (head.object_type === "note") {
+        // Read the prior canonical head so we can record a correct
+        // before_snapshot for the change set item.
+        const { data: note } = await supabase
+          .from("notes")
+          .select("id, current_version_id, title, markdown_content, content_bytes, summary")
+          .eq("id", head.object_id)
+          .maybeSingle();
+        if (!note) continue;
+        const { data: branchVer } = await supabase
+          .from("note_versions")
+          .select("id, title, markdown_content, content_bytes")
+          .eq("id", head.version_id)
+          .maybeSingle();
+        if (!branchVer) continue;
+
+        await supabase
+          .from("notes")
+          .update({
+            current_version_id: branchVer.id,
+            title: branchVer.title,
+            markdown_content: branchVer.markdown_content,
+            content_bytes: branchVer.content_bytes,
+          })
+          .eq("id", head.object_id);
+
+        // Tag the promoted version with the change_set_id so history
+        // can walk from "branch_promotion change set" → versions.
+        await supabase
+          .from("note_versions")
+          .update({ change_set_id: cs.id })
+          .eq("id", branchVer.id);
+
+        await recordChangeSetItem(supabase, {
+          change_set_id: cs.id,
+          workspace_id: workspaceId,
+          operation: "update",
+          object_type: "note",
+          object_id: head.object_id,
+          version_id: branchVer.id,
+          before_snapshot: { version_id: note.current_version_id ?? null },
+          after_snapshot: { version_id: branchVer.id, branch_id: branchId },
+        });
+
+        promoted.push({
+          object_type: "note",
+          object_id: head.object_id,
+          new_version_id: branchVer.id,
+        });
+      }
+      // file / skill / agent branch writes aren't wired yet (see
+      // note in updateNoteOnBranch). When they land, add the same
+      // advance-the-current_version_id pattern against `files` /
+      // `skills` / `agents` here.
+    }
+
+    await commitChangeSet(supabase, cs.id);
+    await markBranchPromoted(supabase, branchId);
+
+    return { branchId, promotedObjects: promoted, changeSetId: cs.id };
+  } catch (err) {
+    await abortChangeSet(
+      supabase,
+      cs.id,
+      err instanceof Error ? err.message : "promote failed"
+    ).catch(() => {});
+    throw err;
+  }
+}

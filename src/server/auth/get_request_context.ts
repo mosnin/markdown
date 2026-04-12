@@ -30,11 +30,30 @@ export interface RequestContext {
    * `setActiveWorkspaceAction`.
    */
   workspace: WorkspaceContext | null;
-  // Future: permissions: PermissionContext | null;
+  /**
+   * The user's active draft branch, if any. Set via
+   * `setActiveBranchAction`; cleared when the user switches back to
+   * main. Null means the caller is operating against main. The
+   * editor-layer services honour this signal to route writes through
+   * `branch_heads` rather than advancing each object's canonical
+   * `current_version_id`. Any code path that does NOT want branch
+   * semantics (imports, lifecycle, restore engine itself) explicitly
+   * ignores this field.
+   */
+  activeBranchId: string | null;
 }
 
 /** Cookie key used to persist the user's active workspace across requests. */
 export const ACTIVE_WORKSPACE_COOKIE = "active_workspace_id";
+
+/**
+ * Cookie key used to persist the user's active draft branch. Optional —
+ * absence means "writing to main". When set, the editor layer routes
+ * content writes through branch_heads rather than advancing each
+ * object's canonical `current_version_id`. See
+ * `docs/branch_aware_writes_v1.md`.
+ */
+export const ACTIVE_BRANCH_COOKIE = "active_branch_id";
 
 // ─── Factory ──────────────────────────────────────────────────────────────────
 
@@ -63,20 +82,23 @@ export async function getRequestContext(): Promise<RequestContext> {
   } = await supabase.auth.getUser();
 
   if (!user) {
-    return { user: null, isAuthenticated: false, workspace: null };
+    return { user: null, isAuthenticated: false, workspace: null, activeBranchId: null };
   }
 
   // Read the preferred workspace from the cookie, if any. If the cookie
   // points at a workspace the user no longer owns, the bootstrap
   // function silently falls back to the first owned workspace.
   let preferredWorkspaceId: string | null = null;
+  let activeBranchId: string | null = null;
   try {
     const cookieStore = await cookies();
     preferredWorkspaceId = cookieStore.get(ACTIVE_WORKSPACE_COOKIE)?.value ?? null;
+    activeBranchId = cookieStore.get(ACTIVE_BRANCH_COOKIE)?.value ?? null;
   } catch {
     // cookies() throws in a handful of non-request contexts; fall back
     // to default workspace selection silently.
     preferredWorkspaceId = null;
+    activeBranchId = null;
   }
 
   const workspace = await getOrCreateDefaultWorkspace(
@@ -84,6 +106,21 @@ export async function getRequestContext(): Promise<RequestContext> {
     user.id,
     preferredWorkspaceId,
   );
+
+  // Validate the branch cookie: it must reference an OPEN draft branch
+  // inside the active workspace. A stale cookie (branch deleted /
+  // promoted / discarded / in another workspace) is silently cleared.
+  let resolvedBranchId: string | null = null;
+  if (activeBranchId) {
+    const { data: branch } = await supabase
+      .from("draft_branches")
+      .select("id, workspace_id, status")
+      .eq("id", activeBranchId)
+      .maybeSingle();
+    if (branch && branch.workspace_id === workspace.id && branch.status === "open") {
+      resolvedBranchId = activeBranchId;
+    }
+  }
 
   const workspaceContext: WorkspaceContext = {
     id: workspace.id,
@@ -97,5 +134,6 @@ export async function getRequestContext(): Promise<RequestContext> {
     user,
     isAuthenticated: true,
     workspace: workspaceContext,
+    activeBranchId: resolvedBranchId,
   };
 }

@@ -3,7 +3,11 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getRequestContext } from "@/server/auth/get_request_context";
-import { updateNote, getNoteForWorkspace } from "@/server/services/note_service";
+import {
+  updateNote,
+  updateNoteOnBranch,
+  getNoteForWorkspace,
+} from "@/server/services/note_service";
 import {
   assembleContextBundle,
   type AssembleBundleOptions,
@@ -32,7 +36,14 @@ async function requireContext() {
     throw new Error("Unauthenticated");
   }
   const supabase = await createClient();
-  return { supabase, userId: ctx.user.id, workspaceId: ctx.workspace.id };
+  return {
+    supabase,
+    userId: ctx.user.id,
+    workspaceId: ctx.workspace.id,
+    // Surface the active branch so the save action can route through
+    // the branch write path when set. Null means "writing to main".
+    activeBranchId: ctx.activeBranchId,
+  };
 }
 
 // ─── Note save action ─────────────────────────────────────────────────────────
@@ -88,14 +99,35 @@ export async function saveNoteAction(
   }
 
   try {
-    const { supabase, userId, workspaceId } = await requireContext();
-    await updateNote(supabase, userId, workspaceId, noteId, {
-      title: trimmedTitle,
-      markdownContent,
-      summary: summary?.trim() ?? null,
-      tags: tags ?? [],
-      readHint: readHint?.trim() ?? null,
-    });
+    const { supabase, userId, workspaceId, activeBranchId } = await requireContext();
+    if (activeBranchId) {
+      // Branch save — new immutable version lands on branch_heads;
+      // main's `notes.current_version_id` is untouched. Branch writes
+      // don't carry summary/tags/read_hint onto the notes row today;
+      // those fields stay on main until promote.
+      await updateNoteOnBranch(
+        supabase,
+        userId,
+        workspaceId,
+        activeBranchId,
+        noteId,
+        {
+          title: trimmedTitle,
+          markdownContent,
+          summary: summary?.trim() ?? null,
+          tags: tags ?? [],
+          readHint: readHint?.trim() ?? null,
+        }
+      );
+    } else {
+      await updateNote(supabase, userId, workspaceId, noteId, {
+        title: trimmedTitle,
+        markdownContent,
+        summary: summary?.trim() ?? null,
+        tags: tags ?? [],
+        readHint: readHint?.trim() ?? null,
+      });
+    }
     return { ok: true, data: {} };
   } catch (err) {
     const reason = err instanceof Error ? err.message : "Unknown error";

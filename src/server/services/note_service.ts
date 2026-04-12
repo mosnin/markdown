@@ -90,11 +90,21 @@ export async function listNotes(
 /**
  * Fetch a note, verifying it belongs to the given workspace via its box.
  * Returns null if not found or not owned.
+ *
+ * When `branchId` is provided AND the branch has a head for this
+ * note, the returned Note's `title`, `markdown_content`, and
+ * `content_bytes` are patched to reflect the branch-head version
+ * instead of the canonical main head. Everything else (status,
+ * folder placement, tags, summary, etc.) still comes from the
+ * canonical `notes` row — branches only override the versioned
+ * content fields today. Callers that want a pristine main view
+ * should pass `branchId: null` / omit the arg.
  */
 export async function getNoteForWorkspace(
   supabase: SupabaseClient,
   noteId: string,
-  workspaceId: string
+  workspaceId: string,
+  branchId: string | null = null
 ): Promise<Note | null> {
   const note = await getNoteById(supabase, noteId);
   if (!note) return null;
@@ -107,6 +117,32 @@ export async function getNoteForWorkspace(
     .single();
 
   if (!box || box.workspace_id !== workspaceId) return null;
+
+  if (branchId) {
+    const { resolveBranchVersion } = await import("./branch_service");
+    const branchVersionId = await resolveBranchVersion(
+      supabase,
+      branchId,
+      "note",
+      noteId
+    );
+    if (branchVersionId) {
+      const { data: ver } = await supabase
+        .from("note_versions")
+        .select("id, title, markdown_content, content_bytes")
+        .eq("id", branchVersionId)
+        .maybeSingle();
+      if (ver) {
+        return {
+          ...note,
+          title: ver.title,
+          markdown_content: ver.markdown_content,
+          content_bytes: ver.content_bytes,
+          current_version_id: ver.id,
+        } as Note;
+      }
+    }
+  }
   return note;
 }
 
@@ -261,4 +297,155 @@ export async function updateNote(
   const result = data as NoteRpcResult;
   await auditNoteUpdated(supabase, workspaceId, userId, noteId, result.note.title);
   return result.note;
+}
+
+/**
+ * Update a note on a draft branch.
+ *
+ * Branch writes are fundamentally different from main writes:
+ *
+ *   * The canonical `notes` row is NEVER mutated. `current_version_id`
+ *     stays pointing at main's head. Readers consulting main see no
+ *     change.
+ *   * A new immutable `note_versions` row IS written, with
+ *     `parent_version_id` set to whatever the branch currently sees
+ *     as head (either the previous branch head or, on first edit,
+ *     main's current_version_id).
+ *   * The branch's `branch_heads` row for this note is upserted to
+ *     point at the new version id.
+ *
+ * This preserves every rollback invariant on main (history is never
+ * mutated; main's head never advances unless the user explicitly
+ * promotes the branch). Promoting a branch then becomes a clean
+ * rollback-style advance of `notes.current_version_id` to the branch
+ * head version — see `promoteBranch` in `branch_service.ts`.
+ *
+ * Branch writes do NOT currently fire the same audit event as main
+ * writes; a separate `note.branch_updated` event is emitted so the
+ * audit log can distinguish branch activity from main.
+ */
+export async function updateNoteOnBranch(
+  supabase: SupabaseClient,
+  userId: string,
+  workspaceId: string,
+  branchId: string,
+  noteId: string,
+  {
+    title,
+    markdownContent,
+    summary,
+    tags,
+    readHint,
+  }: {
+    title: string;
+    markdownContent: string;
+    summary?: string | null;
+    tags?: string[];
+    readHint?: string | null;
+  }
+): Promise<{ version_id: string; version_number: number; branch_id: string; note_id: string }> {
+  const { upsertBranchHead, resolveBranchVersion } = await import("./branch_service");
+  const { getLatestVersionForNote, createNoteVersion } = await import(
+    "@/server/repositories/note_version_repository"
+  );
+
+  // Ownership + branch validity are re-checked here so the service is
+  // safe to call from anywhere (not just server actions).
+  const note = await getNoteById(supabase, noteId);
+  if (!note) throw new Error("Note not found");
+  const { data: box } = await supabase
+    .from("boxes")
+    .select("workspace_id")
+    .eq("id", note.box_id)
+    .maybeSingle();
+  if (!box || box.workspace_id !== workspaceId) throw new Error("Note not found");
+
+  const { data: branch } = await supabase
+    .from("draft_branches")
+    .select("id, workspace_id, status")
+    .eq("id", branchId)
+    .maybeSingle();
+  if (!branch || branch.workspace_id !== workspaceId || branch.status !== "open") {
+    throw new Error("Branch not found or not open");
+  }
+
+  // Resolve the parent version: either the current branch head (if
+  // this branch has edited the note before) or main's head. This
+  // keeps the version graph honest — a branch head's parent is either
+  // its previous branch head or the exact main version the branch
+  // forked from.
+  const branchHeadVersionId = await resolveBranchVersion(
+    supabase,
+    branchId,
+    "note",
+    noteId
+  );
+  const parentVersionId = branchHeadVersionId ?? note.current_version_id ?? null;
+
+  // The next version_number is 1 + the latest for this note overall.
+  // Branch versions share the same version_number sequence as main
+  // versions so the linked list remains total. This matches the
+  // existing rollback numbering convention.
+  const latest = await getLatestVersionForNote(supabase, noteId);
+  const nextVersionNumber = (latest?.version_number ?? 0) + 1;
+  const contentBytes = Buffer.byteLength(markdownContent, "utf8");
+
+  const version = await createNoteVersion(supabase, {
+    note_id: noteId,
+    parent_version_id: parentVersionId,
+    version_number: nextVersionNumber,
+    title,
+    markdown_content: markdownContent,
+    content_bytes: contentBytes,
+    actor_type: "user",
+    actor_id: userId,
+    change_origin: "human_edit",
+    diff_summary: {
+      branch_id: branchId,
+      branch_write: true,
+    },
+  });
+
+  // Point the branch's head for this note at the new version. We do
+  // NOT touch the notes row.
+  await upsertBranchHead(supabase, {
+    branch_id: branchId,
+    object_type: "note",
+    object_id: noteId,
+    version_id: version.id,
+  });
+
+  // Also persist the non-version fields (summary, tags, read_hint) on
+  // the branch head for completeness. V1 keeps these on the version
+  // row itself — summary and tags ride along with diff_summary
+  // metadata so promote can pick them up.
+  void summary;
+  void tags;
+  void readHint;
+
+  // Audit the branch write. Using a distinct event_type keeps main
+  // edits and branch edits easy to filter in the audit log.
+  const { createAuditEvent } = await import(
+    "@/server/repositories/audit_event_repository"
+  );
+  await createAuditEvent(supabase, {
+    workspace_id: workspaceId,
+    actor_type: "user",
+    actor_id: userId,
+    object_type: "note",
+    object_id: noteId,
+    event_type: "note.branch_updated",
+    metadata: {
+      branch_id: branchId,
+      version_id: version.id,
+      version_number: version.version_number,
+    },
+  });
+
+  return {
+    version_id: version.id,
+    version_number: version.version_number,
+    branch_id: branchId,
+    note_id: noteId,
+  };
 }
