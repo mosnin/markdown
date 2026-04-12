@@ -321,9 +321,9 @@ function EmptyState({ canWrite, onNew }: { canWrite: boolean; onNew: () => void 
       <GitBranch className="mx-auto mb-3 h-6 w-6 text-muted-foreground/40" aria-hidden="true" />
       <p className="text-sm font-medium text-foreground">No open branches</p>
       <p className="mx-auto mt-1 max-w-md text-xs text-muted-foreground">
-        Branches let you make exploratory edits that never touch main
-        until you promote them. Discard if the experiment doesn&apos;t
-        work.
+        Branches let you make exploratory edits to notes, files,
+        skills, and agents that never touch main until you promote them.
+        Discard if the experiment doesn&apos;t work.
       </p>
       {canWrite && (
         <Button size="sm" className="mt-4" onClick={onNew}>

@@ -8,7 +8,11 @@ import { getBoxById } from "@/server/repositories/box_repository";
 import { createLink, removeLink } from "@/server/services/object_link_service";
 import { createFolder } from "@/server/services/folder_service";
 import { createFile } from "@/server/services/file_service";
-import { updateSkillContent, getSkillForWorkspace } from "@/server/services/skill_service";
+import {
+  updateSkillContent,
+  updateSkillContentOnBranch,
+  getSkillForWorkspace,
+} from "@/server/services/skill_service";
 import {
   OBJECT_TYPE,
   SKILL_AGENT_FORMATS,
@@ -234,6 +238,14 @@ export async function saveSkillAction(
   try {
     const ctx = await requireAuthenticatedUser();
     const supabase = await createClient();
+    if (ctx.activeBranchId) {
+      // Branch save — canonical source only. Non-versioned fields
+      // (description, tags, summary) stay on main until promote.
+      await updateSkillContentOnBranch(
+        supabase, ctx.user.id, ctx.workspace.id, ctx.activeBranchId, skillId, params.sourceContent
+      );
+      return { ok: true, data: { id: skillId } };
+    }
     const updated = await updateSkillContent(supabase, ctx.user.id, ctx.workspace.id, skillId, params);
     return { ok: true, data: { id: updated.id } };
   } catch (err) {

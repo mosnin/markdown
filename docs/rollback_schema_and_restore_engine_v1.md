@@ -260,14 +260,27 @@ dialog. Sidebar nav link `Branches` opens it.
 Full design in
 [`docs/branch_aware_writes_v1.md`](branch_aware_writes_v1.md).
 
-## Intentionally deferred (not TODOs)
+### Follow-ups landed (v1.5): branch-aware writes for files / skills / agents
 
-* **File / skill / agent branch writes.** Schema + head resolver
-  already support them; promote reads heads by `object_type`. Once
-  `updateFileOnBranch` / `updateSkillOnBranch` /
-  `updateAgentOnBranch` are written against the `object_versions`
-  table and wired into their save actions, the promote loop picks
-  them up automatically.
+`updateObjectContentOnBranch` (in
+`src/server/services/object_branch_service.ts`) is the shared branch
+write helper for files / skills / agents. Service-level wrappers —
+`updateFileContentOnBranch`, `updateSkillContentOnBranch`,
+`updateAgentContentOnBranch` — expose it as the same shape
+`updateNoteOnBranch` offers for notes. Reads likewise accept a
+`branchId` across `getFileForWorkspace`, `getSkillForWorkspace`,
+`getAgentForWorkspace` and patch `source_content` / `content_bytes`
+/ `current_version_id` when a branch head exists, falling through
+to main otherwise.
+
+`promoteBranch` now dispatches on `object_type`: notes use
+`note_versions` + the `notes` row; files / skills / agents share
+`object_versions` + their canonical table. Every promoted version
+is tagged with `change_set_id` so the rollback engine traces
+`branch_promotion → versions`. Restoring a promotion change set
+reverses the pointer moves across all object types uniformly.
+
+## Intentionally deferred (not TODOs)
 * **History timeline UI** beyond `/app/history`. The metadata surface
   is already wired; richer surfaces (graph view, cross-user filter)
   are layered surfaces that don't require engine changes.

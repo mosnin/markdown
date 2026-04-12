@@ -6,6 +6,7 @@ import { getRequestContext } from "@/server/auth/get_request_context";
 import {
   createFile,
   updateFileContent,
+  updateFileContentOnBranch,
   getFileForWorkspace,
 } from "@/server/services/file_service";
 import {
@@ -30,7 +31,12 @@ async function requireContext() {
     throw new Error("Unauthenticated");
   }
   const supabase = await createClient();
-  return { supabase, userId: ctx.user.id, workspaceId: ctx.workspace.id };
+  return {
+    supabase,
+    userId: ctx.user.id,
+    workspaceId: ctx.workspace.id,
+    activeBranchId: ctx.activeBranchId,
+  };
 }
 
 // ─── Field guards ─────────────────────────────────────────────────────────────
@@ -60,7 +66,18 @@ export async function saveFileAction(
     };
   }
   try {
-    const { supabase, userId, workspaceId } = await requireContext();
+    const { supabase, userId, workspaceId, activeBranchId } = await requireContext();
+    if (activeBranchId) {
+      // Branch save — writes a new object_versions row and upserts
+      // branch_heads. Main's `files.current_version_id` is untouched.
+      // Non-versioned fields (description, tags, summary) are NOT
+      // persisted on the branch in V1 — they stay on main until
+      // promote. This keeps the branch contract narrow and honest.
+      await updateFileContentOnBranch(
+        supabase, userId, workspaceId, activeBranchId, fileId, params.sourceContent
+      );
+      return { ok: true, data: { id: fileId } };
+    }
     const file = await updateFileContent(supabase, userId, workspaceId, fileId, params);
     return { ok: true, data: { id: file.id } };
   } catch (err) {

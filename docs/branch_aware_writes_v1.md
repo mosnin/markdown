@@ -135,49 +135,73 @@ every server action call; the UI hides controls viewers can't use.
 
 ## Scope vs deferrals
 
-**V1 covers:**
+**V1.1 covers branch-aware writes for every content-bearing object:**
 
 - Active-branch resolution via cookie + request context
-- Branch writes on notes (content + title)
-- Branch-aware reads on notes
-- Promote (notes)
-- Discard
-- `/app/branches` page with full CRUD
+- **Notes** — `updateNoteOnBranch` + `getNoteForWorkspace(..,
+  branchId)` + promote + discard.
+- **Files** — `updateFileContentOnBranch` (in `file_service.ts`) +
+  `getFileForWorkspace(.., branchId)`.
+- **Skills** — `updateSkillContentOnBranch` + `getSkillForWorkspace(..,
+  branchId)`. Only the canonical editable source is branch-aware;
+  child files remain on main.
+- **Agents** — `updateAgentContentOnBranch` +
+  `getAgentForWorkspace(.., branchId)`. Same canonical-source-only
+  scope as Skills.
+- `promoteBranch` now walks every branch head, dispatching on
+  object_type: notes use `note_versions` + the notes row; files /
+  skills / agents share `object_versions` + their canonical table.
+  Every promoted version is tagged with `change_set_id` so the
+  rollback engine can walk `branch_promotion → versions`.
+- Shared UI: `ActiveBranchBannerServer` renders a compact "Editing
+  on draft branch X" banner at the top of every content-bearing
+  detail page (notes, files, skills, agents) when a branch is
+  active.
+- Save actions for each object type auto-route: if
+  `ctx.activeBranchId` is set → branch path; otherwise main path.
 
-**Deliberately deferred (no user-impact gap in V1):**
+**Deliberately deferred (no user-impact gap):**
 
-- **File / skill / agent branch writes.** The promote service reads
-  `branch_heads` rows by object_type; notes are wired, files /
-  skills / agents use the same mechanism once their save paths call
-  `updateFileOnBranch` / `updateSkillOnBranch` / `updateAgentOnBranch`
-  (parallel to `updateNoteOnBranch`). Schema + head resolver already
-  support them.
-- **Non-versioned field overrides on branch.** Summary, tags, and
-  `read_hint` stay on main until promote. Adding branch-side
-  overrides would need a companion `branch_head_metadata` table;
-  product-wise it's not obviously wanted yet.
-- **Three-way merge.** Still out of scope. The product's resolution
-  mechanism is promote (winner-takes-all) or discard. A branch
-  whose main head moved ahead before promote simply overwrites
-  those main changes — the restore engine catches them as
-  `dirtyAfter` warnings on the promotion change set.
+- **Non-versioned field overrides on branch.** Title / summary /
+  tags / description / `read_hint` / `agent_type` / `model_hint`
+  all stay on main until promote. Adding per-branch metadata would
+  need a companion `branch_head_metadata` table. The shared
+  editor-layer contract today is "branches own the canonical source
+  only"; notes are an apparent exception because `title` lives on
+  `note_versions`, but the structural semantic is identical.
+- **Child-file branching inside skills/agents.** A skill's or
+  agent's nested files are individual File objects and can be
+  branch-edited through their own `/app/files/<id>` page. The
+  skill/agent detail page itself edits only the canonical source.
+- **Three-way merge.** Still out of scope. Promote is the product's
+  resolution mechanism. The restore engine's `dirtyAfter` signal
+  flags overwrites on the promotion change set.
 - **Per-object branch switch.** You can only have one active branch
-  at a time. Editing note A on branch X and note B on branch Y
-  requires switching between them.
+  at a time.
 
 ## Tests
 
-`src/tests/unit/branch_semantics.test.ts` covers:
+Note semantics: `src/tests/unit/branch_semantics.test.ts` (5 cases)
 
-1. Branch write creates a new immutable version with the correct
-   parent pointer.
-2. Branch write upserts a `branch_heads` row.
-3. Branch write NEVER touches the `notes` row (the core invariant).
-4. Branch writes against a non-open branch are rejected.
-5. Cross-workspace branch writes are rejected.
-6. Branch reads fall back to main when no head exists.
+- branch write creates a new immutable `note_versions` row with the
+  correct parent pointer
+- branch write upserts a `branch_heads` row
+- **branch write NEVER touches the `notes` row** (core invariant)
+- non-open branches rejected
+- cross-workspace branches rejected
+- branch reads fall back to main when no head exists
 
-Full suite: 264 / 264 passing.
+File / skill / agent semantics:
+`src/tests/unit/object_branch_semantics.test.ts` (18 cases,
+parameterised across the three versioned object types)
+
+- same invariants applied against `object_versions` +
+  `files`/`skills`/`agents`
+- read-through returns branch head when present
+- read-through returns null to trigger main fallback when absent
+- null branchId short-circuits without a DB call
+
+Full suite: **282 / 282 passing**.
 
 ## Related docs
 

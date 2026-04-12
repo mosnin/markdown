@@ -35,6 +35,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 import { WorkspaceLiveRefresh } from "@/components/product/workspace_live_refresh";
+import { ActiveBranchBannerServer } from "@/components/product/active_branch_banner_server";
 
 function formatDate(dateStr: string): string {
   return new Date(dateStr).toLocaleDateString("en-US", {
@@ -500,7 +501,9 @@ export default async function NotePage({
   const isGuideNote = box.guide_note_id === note_id;
 
   return (
-    <div className="flex h-full overflow-hidden">
+    <div className="flex h-full flex-col overflow-hidden">
+      <ActiveBranchBannerServer objectType="note" objectId={note_id} />
+      <div className="flex flex-1 overflow-hidden">
       <WorkspaceLiveRefresh
         workspaceId={ctx.workspace.id}
         scope="object"
@@ -632,6 +635,7 @@ export default async function NotePage({
           defaultTab={defaultTab}
         />
       </aside>
+      </div>
     </div>
   );
 }

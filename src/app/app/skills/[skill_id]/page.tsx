@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { Calendar, File, Tag, Zap } from "lucide-react";
 import { requireAuthenticatedUser } from "@/server/auth/require_authenticated_user";
+import { ActiveBranchBannerServer } from "@/components/product/active_branch_banner_server";
 import { createClient } from "@/lib/supabase/server";
 import { getSkillById } from "@/server/repositories/skill_repository";
 import { getBoxById } from "@/server/repositories/box_repository";
@@ -49,8 +50,29 @@ export default async function SkillPage({
   const resolvedSearch = await searchParams;
   const boxContextId = typeof resolvedSearch.box_id === "string" ? resolvedSearch.box_id : null;
 
-  const skill = await getSkillById(supabase, skill_id);
+  let skill = await getSkillById(supabase, skill_id);
   if (!skill || skill.workspace_id !== ctx.workspace.id) notFound();
+
+  // Branch-aware read: when an active branch has a head for this
+  // skill's canonical source, patch the content fields from the
+  // branch version so the editor opens the branch's view. Non-
+  // versioned fields stay on main.
+  if (ctx.activeBranchId && skill) {
+    const { resolveBranchObjectVersion } = await import(
+      "@/server/services/object_branch_service"
+    );
+    const branchVer = await resolveBranchObjectVersion(
+      supabase, ctx.activeBranchId, "skill", skill_id
+    );
+    if (branchVer) {
+      skill = {
+        ...skill,
+        source_content: branchVer.source_content,
+        content_bytes: branchVer.content_bytes,
+        current_version_id: branchVer.id,
+      };
+    }
+  }
 
   const [versions, pendingProposals, attachments, links, boxFiles, boxFolders] = await Promise.all([
     listObjectVersions(supabase, "skill", skill_id, { limit: 50 }),
@@ -147,6 +169,7 @@ export default async function SkillPage({
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
+      <ActiveBranchBannerServer objectType="skill" objectId={skill_id} />
       <WorkspaceLiveRefresh
         workspaceId={ctx.workspace.id}
         scope="object"

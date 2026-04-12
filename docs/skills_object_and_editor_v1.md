@@ -196,3 +196,23 @@ surface. Key properties:
 5. Do not break the tab separation (Overview / Source / Files / History).
 6. Preserve immutable versioning, audit append-only, and the reusable
    attachment-by-reference model.
+
+## Branch-aware writes (v1.1)
+
+Skills are now branch-aware on their canonical editable source.
+When a draft branch is active, `saveSkillAction` routes through
+`updateSkillContentOnBranch`, which writes a new immutable
+`object_versions` row and upserts `branch_heads`. The canonical
+`skills` row is never touched until promote.
+
+Branch reads: `getSkillForWorkspace(.., branchId)` patches
+`source_content`, `content_bytes`, and `current_version_id` from
+the branch head when one exists. Non-versioned fields
+(name, description, tags, summary, status, is_reusable,
+canonical_format) remain on main.
+
+**Child files and child folders of a skill are NOT branch-aware via
+the skill itself.** They are individual File / Folder objects; a
+child file is branch-edited through its own `/app/files/<id>` page
+which wires the same pattern. See
+[`docs/branch_aware_writes_v1.md`](branch_aware_writes_v1.md).

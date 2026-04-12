@@ -263,3 +263,25 @@ File saves go through `update_object_and_create_version` RPC which atomically:
 This is the same RPC used for skill and agent edits. Note edits use a parallel `update_note_and_create_version` RPC.
 
 Maximum stored versions per file: determined by RPC implementation (currently uncapped, list is capped at 50 in the history panel).
+
+## Branch-aware writes (v1.1)
+
+Files are now branch-aware. When a draft branch is active,
+`saveFileAction` routes through `updateFileContentOnBranch` (a thin
+wrapper around the shared `updateObjectContentOnBranch` helper
+exported from `src/server/services/object_branch_service.ts`),
+which writes a new immutable `object_versions` row and upserts
+`branch_heads`. The canonical `files` row is never touched until
+promote.
+
+Branch reads: `getFileForWorkspace(.., branchId)` patches
+`source_content`, `content_bytes`, and `current_version_id` from
+the branch head when one exists. Non-versioned fields (name,
+description, tags, summary, status, canonical_format) remain on
+main — they are not carried on the branch in V1.
+
+A shared `ActiveBranchBannerServer` component at the top of the
+file page signals the branch context. Promote walks file heads
+inside the same change set the rollback engine already restores.
+See
+[`docs/branch_aware_writes_v1.md`](branch_aware_writes_v1.md).

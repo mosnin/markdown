@@ -24,6 +24,7 @@ import { type ResolvedObjectLink, type LinkTarget } from "@/components/product/f
 import { type ObjectLink } from "@/server/domain/types/object_link";
 import { cn } from "@/lib/utils";
 import { WorkspaceLiveRefresh } from "@/components/product/workspace_live_refresh";
+import { ActiveBranchBannerServer } from "@/components/product/active_branch_banner_server";
 
 // ─── Parent context types ─────────────────────────────────────────────────────
 
@@ -211,7 +212,12 @@ export default async function FilePage({
 
   // Load the file. getFileForWorkspace verifies ownership via workspace_id
   // directly — so this works for both box-local and workspace-level files.
-  const file = await getFileForWorkspace(supabase, file_id, ctx.workspace.id);
+  // When a draft branch is active, the getter patches source_content,
+  // content_bytes, and current_version_id from the branch head if one
+  // exists; main fallback otherwise.
+  const file = await getFileForWorkspace(
+    supabase, file_id, ctx.workspace.id, ctx.activeBranchId
+  );
   if (!file) notFound();
 
   // Resolve parent context. Precedence:
@@ -379,7 +385,12 @@ export default async function FilePage({
   const displayName = file.name + (ext.startsWith(".") ? ext : ext ? `.${ext}` : "");
 
   return (
-    <div className="flex h-full overflow-hidden">
+    <div className="flex h-full flex-col overflow-hidden">
+      {/* Branch indicator — appears only when the user is editing on
+          a draft branch. The server component fetches the branch name
+          and hides itself on main. */}
+      <ActiveBranchBannerServer objectType="file" objectId={file_id} />
+      <div className="flex flex-1 overflow-hidden">
       <WorkspaceLiveRefresh
         workspaceId={ctx.workspace.id}
         scope="object"
@@ -492,6 +503,7 @@ export default async function FilePage({
           defaultTab={defaultTab}
         />
       </aside>
+      </div>
     </div>
   );
 }

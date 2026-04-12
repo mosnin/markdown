@@ -172,11 +172,19 @@ export async function listReusableAgents(
 /**
  * Fetch an agent, verifying it belongs to the given workspace.
  * Returns null if not found or not owned.
+ *
+ * When `branchId` is provided AND a branch head exists for this
+ * agent's canonical source, the returned Agent's `source_content`,
+ * `content_bytes`, and `current_version_id` are patched from the
+ * branch version. Child files / child folders remain on main —
+ * only the canonical editable source is branch-aware in V1. See
+ * `docs/branch_aware_writes_v1.md`.
  */
 export async function getAgentForWorkspace(
   supabase: SupabaseClient,
   agentId: string,
-  workspaceId: string
+  workspaceId: string,
+  branchId: string | null = null
 ): Promise<Agent | null> {
   const { data, error } = await supabase
     .from("agents")
@@ -193,7 +201,39 @@ export async function getAgentForWorkspace(
     return null;
   }
 
+  if (branchId) {
+    const { resolveBranchObjectVersion } = await import("./object_branch_service");
+    const branchVer = await resolveBranchObjectVersion(supabase, branchId, "agent", agentId);
+    if (branchVer) {
+      return {
+        ...agent,
+        source_content: branchVer.source_content,
+        content_bytes: branchVer.content_bytes,
+        current_version_id: branchVer.id,
+      } as Agent;
+    }
+  }
+
   return agent;
+}
+
+/**
+ * Branch-aware write for an agent's canonical editable source.
+ * Reusable agents and workspace-local agents both route through
+ * here; the underlying `object_versions` row is identical.
+ */
+export async function updateAgentContentOnBranch(
+  supabase: SupabaseClient,
+  userId: string,
+  workspaceId: string,
+  branchId: string,
+  agentId: string,
+  sourceContent: string
+) {
+  const { updateObjectContentOnBranch } = await import("./object_branch_service");
+  return updateObjectContentOnBranch(
+    supabase, userId, workspaceId, branchId, "agent", agentId, { sourceContent }
+  );
 }
 
 /**

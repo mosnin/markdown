@@ -244,11 +244,16 @@ See type-specific documentation:
    - Branch-aware writes: see
      [docs/branch_aware_writes_v1.md](branch_aware_writes_v1.md).
      Active-branch cookie + `RequestContext.activeBranchId`
-     resolution; `updateNoteOnBranch` / `getNoteForWorkspace(..,
-     branchId)` for branch writes and reads that never touch main;
-     `promoteBranch` advances every head under an
-     `origin: 'branch_promotion'` change set. `/app/branches` UI for
-     create / switch / promote / discard.
+     resolution. Branch writes for every content-bearing object:
+     `updateNoteOnBranch`, `updateFileContentOnBranch`,
+     `updateSkillContentOnBranch`, `updateAgentContentOnBranch`.
+     Branch reads: `getNoteForWorkspace`, `getFileForWorkspace`,
+     `getSkillForWorkspace`, `getAgentForWorkspace` all accept an
+     optional `branchId`. `promoteBranch` advances every head
+     (notes + files + skills + agents) under one
+     `origin: 'branch_promotion'` change set, restoreable end-to-end.
+     Every detail page renders the shared `ActiveBranchBannerServer`
+     component so the branch context is unambiguous.
      `change_sets` + `change_set_items` group every mutation;
      `structural_events` capture tree-shape changes; `draft_branches` +
      `branch_heads` land the foundation for exploratory editing;

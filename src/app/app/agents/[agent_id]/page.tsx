@@ -38,6 +38,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { AgentTypeBadge } from "@/components/product/agent_type_badge";
 import { AgentReferenceBadge } from "@/components/product/agent_reference_badge";
 import { WorkspaceLiveRefresh } from "@/components/product/workspace_live_refresh";
+import { ActiveBranchBannerServer } from "@/components/product/active_branch_banner_server";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -169,7 +170,11 @@ export default async function AgentPage({
   const ctx = await requireAuthenticatedUser();
   const supabase = await createClient();
 
-  const agent = await getAgentForWorkspace(supabase, agent_id, ctx.workspace.id);
+  // Pass the active branch so the editor opens the branch's view of
+  // the agent's canonical source when one is selected.
+  const agent = await getAgentForWorkspace(
+    supabase, agent_id, ctx.workspace.id, ctx.activeBranchId
+  );
   if (!agent) notFound();
 
   // Canonical box: box-local agents use agent.box_id; reusable agents opened from a box use box_id param
@@ -282,7 +287,9 @@ export default async function AgentPage({
   );
 
   return (
-    <div className="flex h-full overflow-hidden">
+    <div className="flex h-full flex-col overflow-hidden">
+      <ActiveBranchBannerServer objectType="agent" objectId={agent_id} />
+      <div className="flex flex-1 overflow-hidden">
       <WorkspaceLiveRefresh
         workspaceId={ctx.workspace.id}
         scope="object"
@@ -523,6 +530,7 @@ export default async function AgentPage({
           defaultTab="info"
         />
       </aside>
+      </div>
     </div>
   );
 }

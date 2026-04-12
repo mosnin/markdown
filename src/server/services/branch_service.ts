@@ -334,11 +334,68 @@ export async function promoteBranch(
           object_id: head.object_id,
           new_version_id: branchVer.id,
         });
+      } else if (
+        head.object_type === "file" ||
+        head.object_type === "skill" ||
+        head.object_type === "agent"
+      ) {
+        // File / skill / agent heads share one shape — the canonical
+        // table's `current_version_id` advances to the branch head
+        // version and the versioned content fields mirror onto the
+        // row, matching the Notes promote path. Non-versioned
+        // columns (name, description, tags, status, is_reusable,
+        // canonical_format, …) stay as-is because branches never
+        // touched them.
+        const table =
+          head.object_type === "file" ? "files" :
+          head.object_type === "skill" ? "skills" : "agents";
+
+        const { data: row } = await supabase
+          .from(table)
+          .select("id, current_version_id, source_content, content_bytes")
+          .eq("id", head.object_id)
+          .maybeSingle();
+        if (!row) continue;
+        const { data: branchVer } = await supabase
+          .from("object_versions")
+          .select("id, source_content, content_bytes")
+          .eq("id", head.version_id)
+          .maybeSingle();
+        if (!branchVer) continue;
+
+        await supabase
+          .from(table)
+          .update({
+            current_version_id: branchVer.id,
+            source_content: branchVer.source_content,
+            content_bytes: branchVer.content_bytes,
+          })
+          .eq("id", head.object_id);
+
+        // Tag the promoted version with the change_set_id so the
+        // rollback engine can walk branch_promotion → versions.
+        await supabase
+          .from("object_versions")
+          .update({ change_set_id: cs.id })
+          .eq("id", branchVer.id);
+
+        await recordChangeSetItem(supabase, {
+          change_set_id: cs.id,
+          workspace_id: workspaceId,
+          operation: "update",
+          object_type: head.object_type,
+          object_id: head.object_id,
+          version_id: branchVer.id,
+          before_snapshot: { version_id: row.current_version_id ?? null },
+          after_snapshot: { version_id: branchVer.id, branch_id: branchId },
+        });
+
+        promoted.push({
+          object_type: head.object_type,
+          object_id: head.object_id,
+          new_version_id: branchVer.id,
+        });
       }
-      // file / skill / agent branch writes aren't wired yet (see
-      // note in updateNoteOnBranch). When they land, add the same
-      // advance-the-current_version_id pattern against `files` /
-      // `skills` / `agents` here.
     }
 
     await commitChangeSet(supabase, cs.id);

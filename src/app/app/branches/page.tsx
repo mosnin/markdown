@@ -35,7 +35,7 @@ export default async function BranchesPage() {
     <div className="flex h-full flex-col overflow-hidden">
       <PageHeader
         title="Draft branches"
-        description="Safe exploratory editing. Every change you make on a branch stays off main until you promote it. Discard to throw the branch away — main is untouched either way."
+        description="Safe exploratory editing for notes, files, skills, and agents. Every change you make on a branch stays off main until you promote it. Discard to throw the branch away — main is untouched either way."
       />
       <div className="flex-1 overflow-auto">
         <div className="mx-auto max-w-3xl px-4 py-6 md:px-6">

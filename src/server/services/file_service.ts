@@ -163,11 +163,19 @@ export async function listFiles(
 /**
  * Fetch a file, verifying it belongs to the given workspace via its box.
  * Returns null if not found or not owned.
+ *
+ * When `branchId` is provided AND a branch head exists for this
+ * file, the returned File's `source_content`, `content_bytes`, and
+ * `current_version_id` are patched to reflect the branch-head
+ * version. Non-versioned fields (name, description, tags, status,
+ * is_reusable, etc.) still come from the canonical `files` row.
+ * This mirrors the Notes branch-read contract exactly.
  */
 export async function getFileForWorkspace(
   supabase: SupabaseClient,
   fileId: string,
-  workspaceId: string
+  workspaceId: string,
+  branchId: string | null = null
 ): Promise<File | null> {
   const { data, error } = await supabase
     .from("files")
@@ -184,7 +192,39 @@ export async function getFileForWorkspace(
     return null;
   }
 
+  if (branchId) {
+    const { resolveBranchObjectVersion } = await import("./object_branch_service");
+    const branchVer = await resolveBranchObjectVersion(supabase, branchId, "file", fileId);
+    if (branchVer) {
+      return {
+        ...file,
+        source_content: branchVer.source_content,
+        content_bytes: branchVer.content_bytes,
+        current_version_id: branchVer.id,
+      } as File;
+    }
+  }
+
   return file;
+}
+
+/**
+ * Branch-aware write for a file's canonical source content. Thin
+ * wrapper around the shared `updateObjectContentOnBranch` helper so
+ * every File call site routes through one consistent path.
+ */
+export async function updateFileContentOnBranch(
+  supabase: SupabaseClient,
+  userId: string,
+  workspaceId: string,
+  branchId: string,
+  fileId: string,
+  sourceContent: string
+) {
+  const { updateObjectContentOnBranch } = await import("./object_branch_service");
+  return updateObjectContentOnBranch(
+    supabase, userId, workspaceId, branchId, "file", fileId, { sourceContent }
+  );
 }
 
 /**

@@ -171,11 +171,19 @@ export async function listReusableSkills(
 /**
  * Fetch a skill, verifying it belongs to the given workspace.
  * Returns null if not found or not owned.
+ *
+ * When `branchId` is provided AND a branch head exists for this
+ * skill's canonical source, the returned Skill's `source_content`,
+ * `content_bytes`, and `current_version_id` are patched from the
+ * branch version. Child files / child folders remain on main —
+ * only the canonical editable source is branch-aware in V1. See
+ * `docs/branch_aware_writes_v1.md`.
  */
 export async function getSkillForWorkspace(
   supabase: SupabaseClient,
   skillId: string,
-  workspaceId: string
+  workspaceId: string,
+  branchId: string | null = null
 ): Promise<Skill | null> {
   const { data, error } = await supabase
     .from("skills")
@@ -192,7 +200,39 @@ export async function getSkillForWorkspace(
     return null;
   }
 
+  if (branchId) {
+    const { resolveBranchObjectVersion } = await import("./object_branch_service");
+    const branchVer = await resolveBranchObjectVersion(supabase, branchId, "skill", skillId);
+    if (branchVer) {
+      return {
+        ...skill,
+        source_content: branchVer.source_content,
+        content_bytes: branchVer.content_bytes,
+        current_version_id: branchVer.id,
+      } as Skill;
+    }
+  }
+
   return skill;
+}
+
+/**
+ * Branch-aware write for a skill's canonical editable source.
+ * Reusable skills and workspace-local skills both route through
+ * here; the underlying `object_versions` row is identical.
+ */
+export async function updateSkillContentOnBranch(
+  supabase: SupabaseClient,
+  userId: string,
+  workspaceId: string,
+  branchId: string,
+  skillId: string,
+  sourceContent: string
+) {
+  const { updateObjectContentOnBranch } = await import("./object_branch_service");
+  return updateObjectContentOnBranch(
+    supabase, userId, workspaceId, branchId, "skill", skillId, { sourceContent }
+  );
 }
 
 /**

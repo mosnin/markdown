@@ -354,3 +354,24 @@ Box-local agents are accessed via `/app/agents/[agent_id]` regardless of where t
    with the current supported value set. Extending to additional
    formats requires both the constant update and a DB migration to
    update the CHECK constraint on `files.canonical_format`.
+
+## Branch-aware writes (v1.1)
+
+Agents are now branch-aware on their canonical editable source.
+When a draft branch is active, `saveAgentAction` routes through
+`updateAgentContentOnBranch`, which writes a new immutable
+`object_versions` row and upserts `branch_heads`. The canonical
+`agents` row is never touched until promote.
+
+Branch reads: `getAgentForWorkspace(.., branchId)` patches
+`source_content`, `content_bytes`, and `current_version_id` from
+the branch head when one exists. Agent-specific metadata
+(`agent_type`, `model_hint`, `system_prompt`, `description`,
+`tags`, `summary`, `status`, `is_reusable`) stays on main — the
+canonical source is the only versioned field and therefore the
+only branch-aware one.
+
+**Child files and child folders of an agent are NOT branch-aware
+via the agent itself.** They are individual File / Folder objects
+and branch-edited through their own routes. See
+[`docs/branch_aware_writes_v1.md`](branch_aware_writes_v1.md).

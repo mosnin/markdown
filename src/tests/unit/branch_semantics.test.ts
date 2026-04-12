@@ -65,7 +65,7 @@ function makeMockSupabaseForBranchWrite(
 
     builder.select = () => ({
       ...builder,
-      eq: (col: string, val: unknown) => { filters[col] = val; return builder.select(); },
+      eq: (col: string, val: unknown) => { filters[col] = val; return (builder.select as () => unknown)(); },
       maybeSingle: async () => {
         if (table === "boxes") return { data: { workspace_id: WORKSPACE_ID }, error: null };
         if (table === "draft_branches") {

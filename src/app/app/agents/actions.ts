@@ -3,7 +3,12 @@
 import { revalidatePath } from "next/cache";
 import { requireAuthenticatedUser } from "@/server/auth/require_authenticated_user";
 import { createClient } from "@/lib/supabase/server";
-import { getAgentForWorkspace, createAgent, updateAgentContent } from "@/server/services/agent_service";
+import {
+  getAgentForWorkspace,
+  createAgent,
+  updateAgentContent,
+  updateAgentContentOnBranch,
+} from "@/server/services/agent_service";
 import { updateAgent } from "@/server/repositories/agent_repository";
 import { getBoxById } from "@/server/repositories/box_repository";
 import { createLink, removeLink } from "@/server/services/object_link_service";
@@ -54,6 +59,18 @@ export async function saveAgentAction(
   try {
     const ctx = await requireAuthenticatedUser();
     const supabase = await createClient();
+
+    if (ctx.activeBranchId) {
+      // Branch save — canonical source only. Agent-specific fields
+      // (agentType, modelHint, systemPrompt, description, tags,
+      // summary) stay on main until promote. The agent's system
+      // prompt is part of the canonical source contract but not
+      // branch-aware in V1; see docs/branch_aware_writes_v1.md.
+      await updateAgentContentOnBranch(
+        supabase, ctx.user.id, ctx.workspace.id, ctx.activeBranchId, agentId, params.sourceContent
+      );
+      return { ok: true, data: { id: agentId } };
+    }
 
     const updated = await updateAgentContent(supabase, ctx.user.id, ctx.workspace.id, agentId, params);
     return { ok: true, data: { id: updated.id } };
