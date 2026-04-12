@@ -266,3 +266,14 @@ wrapped by `restoreNoteVersion` in
 `origin: 'rollback'` change set around the existing call and tags the
 new version with the change set id. Direct callers of
 `rollbackNoteToVersion` continue to work unchanged.
+
+## Extension: file / skill / agent rollback wrapped in change sets (v1.2)
+
+`restore_service.restoreObjectVersion(workspaceId, actorId,
+objectType, objectId, versionId)` wraps `rollbackObjectToVersion` in
+an `origin: 'rollback'` change set, records a single
+`change_set_item` with the before / after version ids, and tags the
+new `object_versions` row with `change_set_id`. Semantics are
+identical to `restoreNoteVersion`. See
+[`docs/rollback_schema_and_restore_engine_v1.md`](rollback_schema_and_restore_engine_v1.md)
+for the full story.

@@ -11,6 +11,10 @@ import {
   restoreNote,
 } from "@/server/services/lifecycle_service";
 import { promoteGeneratedNote } from "@/server/services/generated_note_service";
+import {
+  withLifecycleChangeSet,
+  lifecycleStatusFor,
+} from "@/server/services/lifecycle_change_set";
 import { log } from "@/lib/logger";
 
 type ActionResult<T = undefined> =
@@ -51,56 +55,74 @@ export async function rollbackNoteAction(
   }
 }
 
-/** Archive a note. Blocked if the note is the box's current guide note. */
-export async function archiveNoteAction(
-  noteId: string
+// Wrap each note lifecycle transition in a change set so it's grouped
+// and restorable. The lifecycle service still enforces all guards
+// (guide-note protection, status transition rules) — the wrapper is
+// pure bookkeeping.
+
+async function runNoteLifecycle(
+  noteId: string,
+  op: "archive" | "unarchive" | "trash" | "restore_lifecycle",
+  perform: (supabase: ReturnType<typeof createAdminClient>, userId: string, workspaceId: string) => Promise<void>,
+  beforeStatus: string
 ): Promise<ActionResult> {
   try {
     const ctx = await requireAuthenticatedUser();
-    await archiveNote(createAdminClient(), ctx.user!.id, ctx.workspace.id, noteId);
+    const supabase = createAdminClient();
+    await withLifecycleChangeSet(
+      supabase,
+      {
+        workspaceId: ctx.workspace.id,
+        userId: ctx.user!.id,
+        objectType: "note",
+        objectId: noteId,
+        operation: op,
+        beforeStatus,
+        afterStatus: lifecycleStatusFor(op),
+        summary: `${op} note ${noteId.slice(0, 8)}`,
+      },
+      () => perform(supabase, ctx.user!.id, ctx.workspace.id)
+    );
     return { success: true, data: undefined };
   } catch (err) {
     return { success: false, error: err instanceof Error ? err.message : "Failed" };
   }
+}
+
+/** Archive a note. Blocked if the note is the box's current guide note. */
+export async function archiveNoteAction(noteId: string): Promise<ActionResult> {
+  return runNoteLifecycle(
+    noteId, "archive",
+    async (sb, u, w) => { await archiveNote(sb, u, w, noteId); },
+    "active"
+  );
 }
 
 /** Unarchive a note, returning it to active. */
-export async function unarchiveNoteAction(
-  noteId: string
-): Promise<ActionResult> {
-  try {
-    const ctx = await requireAuthenticatedUser();
-    await unarchiveNote(createAdminClient(), ctx.user!.id, ctx.workspace.id, noteId);
-    return { success: true, data: undefined };
-  } catch (err) {
-    return { success: false, error: err instanceof Error ? err.message : "Failed" };
-  }
+export async function unarchiveNoteAction(noteId: string): Promise<ActionResult> {
+  return runNoteLifecycle(
+    noteId, "unarchive",
+    async (sb, u, w) => { await unarchiveNote(sb, u, w, noteId); },
+    "archived"
+  );
 }
 
 /** Move note to trash. Blocked if it is the box's current guide note. */
-export async function trashNoteAction(
-  noteId: string
-): Promise<ActionResult> {
-  try {
-    const ctx = await requireAuthenticatedUser();
-    await trashNote(createAdminClient(), ctx.user!.id, ctx.workspace.id, noteId);
-    return { success: true, data: undefined };
-  } catch (err) {
-    return { success: false, error: err instanceof Error ? err.message : "Failed" };
-  }
+export async function trashNoteAction(noteId: string): Promise<ActionResult> {
+  return runNoteLifecycle(
+    noteId, "trash",
+    async (sb, u, w) => { await trashNote(sb, u, w, noteId); },
+    "active"
+  );
 }
 
 /** Restore a trashed note to active. */
-export async function restoreNoteAction(
-  noteId: string
-): Promise<ActionResult> {
-  try {
-    const ctx = await requireAuthenticatedUser();
-    await restoreNote(createAdminClient(), ctx.user!.id, ctx.workspace.id, noteId);
-    return { success: true, data: undefined };
-  } catch (err) {
-    return { success: false, error: err instanceof Error ? err.message : "Failed" };
-  }
+export async function restoreNoteAction(noteId: string): Promise<ActionResult> {
+  return runNoteLifecycle(
+    noteId, "restore_lifecycle",
+    async (sb, u, w) => { await restoreNote(sb, u, w, noteId); },
+    "trashed"
+  );
 }
 
 /**

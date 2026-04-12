@@ -232,7 +232,15 @@ See type-specific documentation:
      transport at `/api/mcp` that requires a Bearer access token.
      Scopes map to workspace role; revoking a consent in Settings →
      Connected apps invalidates every live token.
-   - Rollback and restoration: see [docs/rollback_architecture_v1.md](rollback_architecture_v1.md).
+   - Rollback and restoration: see [docs/rollback_architecture_v1.md](rollback_architecture_v1.md)
+     for the conceptual model and
+     [docs/rollback_schema_and_restore_engine_v1.md](rollback_schema_and_restore_engine_v1.md)
+     for the concrete engine — change-set metadata surface
+     (`summarizeRestoreCandidate`, `compareVersionToCurrent`,
+     `compareChangeSetToCurrent`), file/skill/agent rollback
+     wrappers (`restoreObjectVersion`), lifecycle change-set helper
+     (`withLifecycleChangeSet`), attach/detach structural events, and
+     subtree `path_cascade` events recorded per descendant.
      `change_sets` + `change_set_items` group every mutation;
      `structural_events` capture tree-shape changes; `draft_branches` +
      `branch_heads` land the foundation for exploratory editing;

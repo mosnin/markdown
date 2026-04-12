@@ -14,7 +14,7 @@ import {
   type ChangeSetItem,
   type StructuralEvent,
 } from "./change_set_service";
-import { rollbackNoteToVersion } from "./version_history_service";
+import { rollbackNoteToVersion, rollbackObjectToVersion } from "./version_history_service";
 
 /**
  * Restore service.
@@ -290,6 +290,97 @@ export async function restoreNoteVersion(
       plan: {
         changeSetId: cs.id,
         items: [{ operation: "version_rollback", object_type: "note", object_id: noteId }],
+        structural: [],
+        blockers: [],
+      },
+      restoreChangeSetId: cs.id,
+      restoreRecordId: rr,
+    };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Rollback failed";
+    await abortChangeSet(supabase, cs.id, message);
+    return {
+      ok: false,
+      plan: { changeSetId: cs.id, items: [], structural: [], blockers: [message] },
+      error: message,
+    };
+  }
+}
+
+/**
+ * Restore a single file / skill / agent to a historical version.
+ *
+ * Wraps the existing `rollbackObjectToVersion` RPC (which already
+ * writes a new immutable object_versions row) inside a fresh
+ * `origin: 'rollback'` change set so the rollback is itself a
+ * first-class rollback-able event. Mirrors `restoreNoteVersion`
+ * for the note side; diverges only on the underlying RPC name and
+ * the change_set_item.object_type.
+ *
+ * The canonical object row on files / skills / agents is mutated
+ * in-place by the RPC to advance `current_version_id` — the version
+ * history itself stays immutable, identical to the note model.
+ */
+export async function restoreObjectVersion(
+  supabase: SupabaseClient,
+  workspaceId: string,
+  actorId: string,
+  objectType: "file" | "skill" | "agent",
+  objectId: string,
+  versionId: string
+): Promise<RestoreResult> {
+  const cs = await openChangeSet(supabase, {
+    workspace_id: workspaceId,
+    origin: "rollback",
+    actor_type: "user",
+    actor_id: actorId,
+    summary: `Rollback ${objectType} ${objectId.slice(0, 8)} to version ${versionId.slice(0, 8)}`,
+  });
+
+  try {
+    const rollbackResult = await rollbackObjectToVersion(
+      supabase,
+      actorId,
+      workspaceId,
+      objectType,
+      objectId,
+      versionId
+    );
+
+    await recordChangeSetItem(supabase, {
+      change_set_id: cs.id,
+      workspace_id: workspaceId,
+      operation: "rollback",
+      object_type: objectType,
+      object_id: objectId,
+      version_id: rollbackResult.new_version_id,
+      before_snapshot: { version_id: rollbackResult.restored_from_version_id },
+      after_snapshot: { version_id: rollbackResult.new_version_id },
+    });
+
+    // Tag the new version row with its change_set_id so planners can
+    // trace a version back to the change set that produced it.
+    await supabase
+      .from("object_versions")
+      .update({ change_set_id: cs.id })
+      .eq("id", rollbackResult.new_version_id);
+
+    await commitChangeSet(supabase, cs.id);
+
+    const rr = await recordRestore(supabase, {
+      workspace_id: workspaceId,
+      actor_id: actorId,
+      scope: "version",
+      source_version_id: versionId,
+      restored_change_set_id: cs.id,
+      status: "applied",
+    });
+
+    return {
+      ok: true,
+      plan: {
+        changeSetId: cs.id,
+        items: [{ operation: "version_rollback", object_type: objectType, object_id: objectId }],
         structural: [],
         blockers: [],
       },

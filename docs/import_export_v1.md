@@ -492,3 +492,20 @@ What is planned for future prompts:
 - Packaged export: traverse `object_links` to collect referenced objects; multi-type zip assembly.
 - Import UI: extend `ImportDialog` and `ImportSummaryReport` display to show file/skill/agent counts.
 - Import service: full collision mode handling for file/skill/agent entries (create, replace, remap, merge).
+
+## Extension: imports participate in rollback (v1.1)
+
+Every import runs inside an `origin: 'import'` change set opened by
+`importPackageAction`. The `ImportSummaryReport` now carries
+`change_set_id`. For each `ImportAction` with a `final_id` we write a
+`change_set_item` (operation: `create` / `update` / `restore_lifecycle`),
+and for every folder created during the import we also write a
+`folder_create` structural event so a later restore can soft-trash
+the folder as part of the same grouped operation.
+
+Restoring an import via
+`restoreFromChangeSet(workspaceId, actorId, changeSetId)` walks every
+item and every structural event in reverse and writes a fresh
+`origin: 'restore'` child change set that records the compensating
+operations. See
+[`docs/rollback_schema_and_restore_engine_v1.md`](rollback_schema_and_restore_engine_v1.md).

@@ -271,3 +271,19 @@ for the change set / item model and the full invariant list. Lifecycle
 services continue to own their own validation logic (guide-note
 protection, subtree cascade guards, etc.); the restore service
 delegates to them when it needs richer checks.
+
+## Extension: lifecycle change-set wrapper (v1.2)
+
+`src/server/services/lifecycle_change_set.ts` provides
+`withLifecycleChangeSet(supabase, args, perform)` — a generic
+wrapper that every lifecycle action adopts. It opens an
+`origin: 'lifecycle'` change set, runs the actual state transition,
+records a `change_set_item` with before/after `status`, and commits
+(or aborts on throw). Notes are wired as the reference
+implementation; folders / files / skills / agents / boxes adopt the
+same wrapper without further code changes.
+
+Restoring a lifecycle change set flips `status` back via the
+planner's `inverseOperation` map (`archive ↔ unarchive`, `trash ↔
+restore_lifecycle`). See
+[`docs/rollback_schema_and_restore_engine_v1.md`](rollback_schema_and_restore_engine_v1.md).

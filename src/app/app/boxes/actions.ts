@@ -499,6 +499,46 @@ export async function attachSkillToBoxAction(
       attached_by: userId,
     });
 
+    // Record the attachment as a structural event on a fresh change
+    // set so it can be reversed later. before_state = {} because an
+    // attach creates the attachment row; inverse is a detach that
+    // deletes by (box, object_type, object_id).
+    const { openChangeSet, commitChangeSet, recordStructuralEvent, recordChangeSetItem } =
+      await import("@/server/services/change_set_service");
+    const cs = await openChangeSet(supabase, {
+      workspace_id: workspaceId,
+      origin: "structural_move",
+      actor_type: "user",
+      actor_id: userId,
+      summary: `Attach skill ${skillId.slice(0, 8)} to box ${boxId.slice(0, 8)}`,
+      metadata: { box_id: boxId, object_type: "skill", object_id: skillId },
+    });
+    await recordChangeSetItem(supabase, {
+      change_set_id: cs.id,
+      workspace_id: workspaceId,
+      operation: "attach",
+      object_type: "box_object_attachment",
+      object_id: attachment.id,
+      after_snapshot: { box_id: boxId, object_type: "skill", object_id: skillId, folder_id: folderId ?? null },
+    });
+    await recordStructuralEvent(supabase, {
+      change_set_id: cs.id,
+      workspace_id: workspaceId,
+      box_id: boxId,
+      event_type: "attach",
+      object_type: "box_object_attachment",
+      object_id: attachment.id,
+      before_state: {},
+      after_state: {
+        box_id: boxId,
+        object_type: "skill",
+        object_id: skillId,
+        folder_id: folderId ?? null,
+        attached_by: userId,
+      },
+    });
+    await commitChangeSet(supabase, cs.id);
+
     revalidatePath(`/app/boxes/${boxId}`);
     return { ok: true, data: { id: attachment.id } };
   } catch (err) {
@@ -551,6 +591,42 @@ export async function attachAgentToBoxAction(
       attached_by: userId,
     });
 
+    const { openChangeSet, commitChangeSet, recordStructuralEvent, recordChangeSetItem } =
+      await import("@/server/services/change_set_service");
+    const cs = await openChangeSet(supabase, {
+      workspace_id: workspaceId,
+      origin: "structural_move",
+      actor_type: "user",
+      actor_id: userId,
+      summary: `Attach agent ${agentId.slice(0, 8)} to box ${boxId.slice(0, 8)}`,
+      metadata: { box_id: boxId, object_type: "agent", object_id: agentId },
+    });
+    await recordChangeSetItem(supabase, {
+      change_set_id: cs.id,
+      workspace_id: workspaceId,
+      operation: "attach",
+      object_type: "box_object_attachment",
+      object_id: attachment.id,
+      after_snapshot: { box_id: boxId, object_type: "agent", object_id: agentId, folder_id: folderId ?? null },
+    });
+    await recordStructuralEvent(supabase, {
+      change_set_id: cs.id,
+      workspace_id: workspaceId,
+      box_id: boxId,
+      event_type: "attach",
+      object_type: "box_object_attachment",
+      object_id: attachment.id,
+      before_state: {},
+      after_state: {
+        box_id: boxId,
+        object_type: "agent",
+        object_id: agentId,
+        folder_id: folderId ?? null,
+        attached_by: userId,
+      },
+    });
+    await commitChangeSet(supabase, cs.id);
+
     revalidatePath(`/app/boxes/${boxId}`);
     return { ok: true, data: { id: attachment.id } };
   } catch (err) {
@@ -569,14 +645,68 @@ export async function detachFromBoxAction(
   objectId: string
 ): Promise<ActionResult> {
   try {
-    const { supabase, workspaceId } = await requireContext();
+    const { supabase, userId, workspaceId } = await requireContext();
     const { getBoxById } = await import("@/server/repositories/box_repository");
-    const { deleteAttachmentForObject } = await import("@/server/repositories/box_object_attachment_repository");
+    const { deleteAttachmentForObject, listAttachmentsForBox } = await import("@/server/repositories/box_object_attachment_repository");
 
     const box = await getBoxById(supabase, boxId);
     if (!box || box.workspace_id !== workspaceId) return { ok: false, error: "Box not found" };
 
+    // Capture the attachment row before we delete it. before_state on
+    // the structural event carries everything the inverse needs to
+    // re-insert: box_id, folder_id, sort_order, attached_by.
+    const existing = await listAttachmentsForBox(supabase, boxId);
+    const priorRow = existing.find(
+      (a) => a.object_type === objectType && a.object_id === objectId
+    );
+
     await deleteAttachmentForObject(supabase, boxId, objectType, objectId);
+
+    if (priorRow) {
+      const { openChangeSet, commitChangeSet, recordStructuralEvent, recordChangeSetItem } =
+        await import("@/server/services/change_set_service");
+      const cs = await openChangeSet(supabase, {
+        workspace_id: workspaceId,
+        origin: "structural_move",
+        actor_type: "user",
+        actor_id: userId,
+        summary: `Detach ${objectType} ${objectId.slice(0, 8)} from box ${boxId.slice(0, 8)}`,
+        metadata: { box_id: boxId, object_type: objectType, object_id: objectId },
+      });
+      await recordChangeSetItem(supabase, {
+        change_set_id: cs.id,
+        workspace_id: workspaceId,
+        operation: "detach",
+        object_type: "box_object_attachment",
+        object_id: priorRow.id,
+        before_snapshot: {
+          box_id: priorRow.box_id,
+          folder_id: priorRow.folder_id,
+          object_type: priorRow.object_type,
+          object_id: priorRow.object_id,
+          sort_order: priorRow.sort_order,
+        },
+      });
+      await recordStructuralEvent(supabase, {
+        change_set_id: cs.id,
+        workspace_id: workspaceId,
+        box_id: boxId,
+        event_type: "detach",
+        object_type: "box_object_attachment",
+        object_id: priorRow.id,
+        before_state: {
+          box_id: priorRow.box_id,
+          folder_id: priorRow.folder_id,
+          object_type: priorRow.object_type,
+          object_id: priorRow.object_id,
+          sort_order: priorRow.sort_order,
+          attached_by: priorRow.attached_by,
+        },
+        after_state: {},
+      });
+      await commitChangeSet(supabase, cs.id);
+    }
+
     revalidatePath(`/app/boxes/${boxId}`);
     return { ok: true, data: undefined };
   } catch (err) {
@@ -935,7 +1065,17 @@ export async function moveTreeNodeAction(input: MoveTreeNodeInput): Promise<Acti
         .eq("object_type", "folder")
         .eq("object_id", draggedId);
 
-      // Cascade descendant folder paths.
+      // Cascade descendant folder paths. For every descendant we
+      // rewrite, record a `path_cascade` structural event on the
+      // open change set so a later restore can rebuild the exact
+      // prior topology, not just the dragged folder's row.
+      //
+      // This is bounded by the subtree size — typical folders have
+      // far fewer descendants than the per-request cost justifies.
+      const { recordStructuralEvent: recordCascadeEvent } = await import(
+        "@/server/services/change_set_service"
+      );
+
       if (oldPath !== newPath) {
         const { data: descendants } = await supabase
           .from("folders")
@@ -944,6 +1084,16 @@ export async function moveTreeNodeAction(input: MoveTreeNodeInput): Promise<Acti
         for (const d of descendants ?? []) {
           const patched = `${newPath}${d.path_cache.slice(oldPath.length)}`;
           await supabase.from("folders").update({ path_cache: patched }).eq("id", d.id);
+          await recordCascadeEvent(supabase, {
+            change_set_id: cs.id,
+            workspace_id: workspaceId,
+            box_id: boxId,
+            event_type: "path_cascade",
+            object_type: "folder",
+            object_id: d.id,
+            before_state: { path_cache: d.path_cache },
+            after_state: { path_cache: patched },
+          });
         }
         // Cascade descendant leaf paths in notes/files/skills/agents.
         for (const table of ["notes", "files", "skills", "agents"] as const) {
@@ -955,6 +1105,20 @@ export async function moveTreeNodeAction(input: MoveTreeNodeInput): Promise<Acti
           for (const row of rows ?? []) {
             const patched = `${newPath}${row.path_cache.slice(oldPath.length)}`;
             await supabase.from(table).update({ path_cache: patched }).eq("id", row.id);
+            await recordCascadeEvent(supabase, {
+              change_set_id: cs.id,
+              workspace_id: workspaceId,
+              box_id: boxId,
+              event_type: "path_cascade",
+              // object_type on structural_events is constrained to the
+              // leaf object types we version; notes are included.
+              object_type: table === "notes" ? "note"
+                : table === "files" ? "file"
+                : table === "skills" ? "skill" : "agent",
+              object_id: row.id,
+              before_state: { path_cache: row.path_cache },
+              after_state: { path_cache: patched },
+            });
           }
         }
       }
