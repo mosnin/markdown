@@ -5,6 +5,32 @@
 /* ─── Theme variant ─────────────────────────────────────────────────────── */
 @custom-variant dark (&:is(.dark *));
 
+/* ─── Primary accent: yellow (#FFDE21) ──────────────────────────────────── */
+/*
+ * The app's primary accent used to be violet. Every utility class using the
+ * Tailwind v4 violet scale (text-violet-600, bg-violet-500, border-violet-400,
+ * etc.) plus every in-CSS reference (glass button, blur blobs, pricing,
+ * sign-in, workspace list) now renders yellow because the `--color-violet-*`
+ * tokens are overridden here with a yellow oklch ramp centered on #FFDE21.
+ *
+ * The scale below was derived from #FFDE21 → oklch(0.912 0.177 99.4). The
+ * lighter stops hold hue/saturation near the center; darker stops drift
+ * toward a warm amber/brown so text and shadow usages stay readable.
+ */
+@theme {
+  --color-violet-50:  oklch(0.985 0.030 99);
+  --color-violet-100: oklch(0.970 0.060 99);
+  --color-violet-200: oklch(0.955 0.100 99);
+  --color-violet-300: oklch(0.940 0.140 99);
+  --color-violet-400: oklch(0.925 0.165 99);
+  --color-violet-500: oklch(0.912 0.177 99);
+  --color-violet-600: oklch(0.830 0.170 92);
+  --color-violet-700: oklch(0.700 0.155 85);
+  --color-violet-800: oklch(0.560 0.125 78);
+  --color-violet-900: oklch(0.430 0.095 75);
+  --color-violet-950: oklch(0.320 0.070 72);
+}
+
 /* ─── Design tokens (mapped to Tailwind utilities) ──────────────────────── */
 @theme inline {
   /* Color tokens */
@@ -508,7 +534,9 @@
   isolation: isolate;
   border-radius: 9999px;
   border: 1px solid color-mix(in oklch, var(--color-violet-700) 60%, transparent);
-  color: #ffffff;
+  /* Yellow primary needs dark text for contrast. Uses a warm near-black that
+     still reads against the bright yellow gradient in both modes. */
+  color: oklch(0.25 0.03 80);
   background:
     linear-gradient(
       180deg,
@@ -592,7 +620,9 @@
 .glass-button-text {
   position: relative;
   z-index: 1;
-  text-shadow: 0 1px 0 color-mix(in oklch, var(--color-violet-900) 35%, transparent);
+  /* Subtle upward white highlight on the dark text — reinforces the
+     glass look without reducing contrast. */
+  text-shadow: 0 1px 0 color-mix(in oklch, white 35%, transparent);
 }
 
 /* Dark mode tuning — the violet-500/700 gradient is already readable on

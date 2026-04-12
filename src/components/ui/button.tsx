@@ -20,7 +20,10 @@ const buttonVariants = cva(
         // (see globals.css). Works on a single <button> element, so every
         // existing <Button variant="default"> in the repo picks up the
         // glass look automatically without DOM restructuring.
-        default: "glass-button text-white dark:text-white",
+        // Text color is set inside the .glass-button CSS rule (dark for
+        // contrast against the yellow gradient) and carries through dark
+        // mode automatically — no Tailwind text override here.
+        default: "glass-button",
         outline:
           "border-border bg-background hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:border-input dark:bg-input/30 dark:hover:bg-input/50",
         // Secondary — visual unchanged. Only the shape is now fully round
