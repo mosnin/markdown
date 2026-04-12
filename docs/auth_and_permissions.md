@@ -147,3 +147,23 @@ alongside existing audit events and are immutable.
   surface cannot bypass the gate.
 - Viewers never see Create / Edit / Delete controls in the product UI,
   but the server is the authoritative gate.
+
+## OAuth for external connectors (v1.2)
+
+Human session auth (Supabase cookies) and role gating are the
+foundation. External integrations — Claude Desktop, OpenAI Apps,
+custom MCP connectors — authenticate via an OAuth 2.1 + PKCE server
+layered on top. Tokens are minted per `(user, client, workspace)` and
+bound to a scope set at consent time. The workspace role gate runs
+on every MCP request alongside the scope gate, so a token with
+`context:generate` cannot perform writes if the user's role is
+`viewer`. See
+[`docs/mcp_oauth_and_secure_connector_architecture_v1.md`](mcp_oauth_and_secure_connector_architecture_v1.md)
+for the full model; highlights:
+
+- `/oauth/authorize` — user-facing consent page
+- `/api/oauth/token` — `authorization_code` + `refresh_token` grants
+- `/api/oauth/revoke` — RFC 7009 revocation
+- `/api/mcp` — HTTP MCP transport that requires a Bearer access token
+- Revoking a consent in Settings → Connected apps immediately
+  invalidates every access + refresh token for that connector.

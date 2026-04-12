@@ -213,3 +213,32 @@ Network errors, auth failures, and 404s are caught and returned as `{ isError: t
 
 **stdio transport in V1.**
 Simple, universally supported, works with every MCP client. HTTP+SSE transport can be added later by swapping the transport in `index.ts` without touching the tools or server factory.
+
+## Extension: HTTP MCP transport with OAuth 2.1 (v1.1)
+
+A second, connector-facing transport now lives at `/api/mcp`. It
+speaks JSON-RPC 2.0 over HTTP POST, authenticates via an OAuth 2.1
+bearer token in the Authorization header (no token in URL), and is
+what Claude Desktop / OpenAI Apps / custom connectors should use.
+
+Key differences from the stdio transport:
+
+- **Per-request identity.** The bearer token is resolved to a
+  specific user + workspace + scope on every call, so audit
+  attribution names the real human who consented. The stdio transport
+  uses a workspace-wide connection token loaded from an env var.
+- **OAuth authorize + token endpoints.** Connectors walk the user
+  through a consent screen; tokens refresh every hour and rotate
+  every 30 days. The stdio transport has no such flow — the operator
+  pastes a bearer token into an env var.
+- **Scope-gated tool set.** `tools/list` returns only the tools the
+  token's scopes cover. Write tools additionally reject viewer role.
+- **Discoverable** via `/.well-known/oauth-authorization-server` and
+  RFC 9728 protected-resource metadata at `GET /api/mcp`.
+
+See
+[`docs/mcp_oauth_and_secure_connector_architecture_v1.md`](mcp_oauth_and_secure_connector_architecture_v1.md)
+for the full architecture, including the scope table, token model,
+and legacy migration guidance. The stdio transport is preserved for
+local development and deployments already using env-var auth; new
+connector-style integrations should use HTTP + OAuth.

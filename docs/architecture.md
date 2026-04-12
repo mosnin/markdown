@@ -224,6 +224,14 @@ See type-specific documentation:
    - Built-in drag-drop reparenting via react-dnd, virtualized rendering, keyboard navigation.
    - Inline rename: double-click a node to edit; `onRename` dispatches to type-specific server actions.
    - `BoxContentsTree` (tree tab) also uses react-arborist (read-only mode).
+   - MCP + OAuth secure connector surface: see
+     [docs/mcp_oauth_and_secure_connector_architecture_v1.md](mcp_oauth_and_secure_connector_architecture_v1.md).
+     OAuth 2.1 + PKCE authorization server (`oauth_clients`,
+     `oauth_authorization_codes`, `oauth_access_tokens`,
+     `oauth_refresh_tokens`, `oauth_consents`) plus an HTTP MCP
+     transport at `/api/mcp` that requires a Bearer access token.
+     Scopes map to workspace role; revoking a consent in Settings →
+     Connected apps invalidates every live token.
    - Rollback and restoration: see [docs/rollback_architecture_v1.md](rollback_architecture_v1.md).
      `change_sets` + `change_set_items` group every mutation;
      `structural_events` capture tree-shape changes; `draft_branches` +

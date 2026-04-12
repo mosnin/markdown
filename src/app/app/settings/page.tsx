@@ -32,6 +32,7 @@ import type { Theme, NotificationPreferences } from "./actions";
 import { DeleteAccountButton } from "./delete_account_button";
 import { MembersSection } from "./members_section";
 import { canAdmin } from "@/server/auth/require_role";
+import { ConnectedAppsSection } from "./connected_apps_section";
 
 // Settings section nav is rendered by SettingsSidebar (see
 // src/components/product/settings_sidebar.tsx). Keeping the sections
@@ -171,6 +172,16 @@ export default async function SettingsPage() {
                 boxes={boxes}
               />
             </div>
+
+            {/*
+              Connected apps (OAuth) — replaces the token-in-env-var
+              pattern for connector-style integrations. The legacy
+              Connections panel above is kept because /api/v1 callers
+              that already issued a bearer token continue to work
+              (marked deprecated in docs). New connector integrations
+              should use this surface.
+            */}
+            <ConnectedAppsSection />
 
             <SecuritySection />
 

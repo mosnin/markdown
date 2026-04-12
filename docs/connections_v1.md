@@ -188,3 +188,27 @@ Audit events are fire-and-forget — they do not block the primary operation if 
 | `src/lib/api/response.ts` | `apiOk`, `apiError`, and convenience error constructors |
 | `src/app/app/settings/connections_actions.ts` | Server actions for connection management UI |
 | `src/components/product/connections_panel.tsx` | Connection management UI (create, list, rotate, revoke) |
+
+## Status (v1.1): legacy vs OAuth
+
+The bearer-token connections described in this doc remain functional
+on `/api/v1/**` and are the auth mechanism for the stdio MCP server.
+They are now **legacy** for connector-style integrations.
+
+New third-party connectors (Claude Desktop, OpenAI Apps, custom
+integrations) should authenticate via OAuth 2.1 + PKCE against the
+endpoints documented in
+[`docs/mcp_oauth_and_secure_connector_architecture_v1.md`](mcp_oauth_and_secure_connector_architecture_v1.md).
+That path:
+
+- replaces pasted bearer secrets with a user-driven consent flow;
+- issues short-lived access tokens (1 hour) with rotating refresh
+  tokens (30 days);
+- binds access to a specific `(user, workspace)` rather than a
+  workspace-wide connection;
+- gates every call by both OAuth scope and workspace role.
+
+Connection tokens will not be removed in this release. Operators can
+continue using them; the Settings → Connections panel keeps them
+visible and manageable. A future release may retire them once all
+first-party surfaces have migrated.
