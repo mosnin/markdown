@@ -14,7 +14,6 @@ import { DashboardCard } from "@/components/product/dashboard_card";
 import { CreateBoxDialog } from "@/components/product/create_box_dialog";
 import { OnboardingCallout } from "@/components/product/onboarding_callout";
 import { QuickStartPanel } from "@/components/product/quick_start_panel";
-import { DashboardSearchPrompt } from "@/components/product/dashboard_search_prompt";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
@@ -83,13 +82,6 @@ export default async function AppHomePage() {
 
       <ScrollArea className="flex-1">
         <div className="mx-auto max-w-3xl space-y-8 px-6 py-6">
-
-          {/* Prompt / search — jumps to /app/search on Enter */}
-          {hasBoxes && (
-            <div className="pt-2">
-              <DashboardSearchPrompt />
-            </div>
-          )}
 
           {/* First-run: no boxes */}
           {!hasBoxes && <OnboardingCallout />}
