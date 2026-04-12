@@ -92,11 +92,13 @@ function GlitchTitle({
  */
 export function HeroSection() {
 	return (
-		<section className="relative mx-auto w-full max-w-5xl overflow-hidden pt-16">
-			{/* Animated blur blob background — purely decorative, sits behind content */}
+		<section className="relative w-full overflow-hidden pt-16">
+			{/* Animated blur blob background — full-viewport width behind the hero
+			    content. Sits at z-0; content below is z-10. */}
 			<AnimatedBackground />
-				{/* Content */}
-			<div className="relative z-10 flex max-w-2xl flex-col gap-5 px-4">
+			{/* Content — keeps its original max-w-5xl centered column */}
+			<div className="relative z-10 mx-auto w-full max-w-5xl">
+				<div className="flex max-w-2xl flex-col gap-5 px-4">
 				{/* Badge */}
 				<motion.a
 					initial={{ opacity: 0, y: 40 }}
@@ -202,6 +204,7 @@ export function HeroSection() {
 					</div>
 				</motion.div>
 			</div>
+		</div>
 		</section>
 	);
 }
