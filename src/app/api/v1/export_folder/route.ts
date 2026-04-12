@@ -62,9 +62,9 @@ export async function POST(request: NextRequest) {
 
   const folder = await getFolderById(adminClient, folder_id);
   if (!folder || folder.status === "trashed") return E_NOT_FOUND("Folder not found");
-  if (!ctx.allowedBoxIds.has(folder.box_id)) return E_FORBIDDEN();
+  if (!folder.box_id || !ctx.allowedBoxIds.has(folder.box_id)) return E_FORBIDDEN();
 
-  const box = await getBoxById(adminClient, folder.box_id);
+  const box = await getBoxById(adminClient, folder.box_id!);
   if (!box || box.workspace_id !== ctx.workspaceId) return E_FORBIDDEN();
 
   try {

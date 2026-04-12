@@ -20,6 +20,8 @@ export interface File {
   workspace_id: string;
   box_id: string | null;
   folder_id: string | null;
+  parent_skill_id: string | null;
+  parent_agent_id: string | null;
   name: string;
   slug: string;
   path_cache: string;

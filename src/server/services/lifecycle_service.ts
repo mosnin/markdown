@@ -83,8 +83,9 @@ async function resolveFolderWithOwnership(
 ): Promise<{ folder: Folder; box: Box }> {
   const folder = await getFolderById(supabase, folderId);
   if (!folder) throw new Error("Folder not found");
+  if (!folder.box_id) throw new Error("Folder has no box");
 
-  const box = await getBoxById(supabase, folder.box_id);
+  const box = await getBoxById(supabase, folder.box_id!);
   if (!box || box.workspace_id !== workspaceId) throw new Error("Folder not found");
 
   return { folder, box };

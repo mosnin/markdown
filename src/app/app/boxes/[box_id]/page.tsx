@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { Suspense } from "react";
+import { Suspense, type ReactNode } from "react";
 import {
   Archive,
   BookOpen,
@@ -47,7 +47,6 @@ import { type NoteLink } from "@/server/domain/types/note_link";
 import { BoxExportMenu } from "@/components/product/export_menu";
 import {
   ImportTriggerButton,
-  FolderImportButton,
 } from "@/components/product/import_dialog";
 import { FolderPolicyToggle } from "@/components/product/folder_policy_toggle";
 import { BoxEditDialog } from "@/components/product/box_edit_dialog";
@@ -73,6 +72,18 @@ function formatRelativeDate(dateStr: string): string {
   if (diffDays === 1) return "Yesterday";
   if (diffDays < 7) return `${diffDays} days ago`;
   return formatDate(dateStr);
+}
+
+// ─── Tab skeleton (generic loading state for heavy tabs) ─────────────────────
+
+function TabSkeleton() {
+  return (
+    <div className="mx-auto max-w-3xl px-6 py-6 space-y-4">
+      {[0, 1, 2].map((i) => (
+        <Skeleton key={i} className="h-20 w-full rounded-lg" />
+      ))}
+    </div>
+  );
 }
 
 // ─── Note list skeleton ───────────────────────────────────────────────────────
@@ -529,9 +540,11 @@ export default async function BoxPage({
           {/* ── Overview tab ── */}
           <TabsContent value="overview" className="flex-1 overflow-hidden">
             <ScrollArea className="h-full">
-              <div className="mx-auto max-w-3xl px-6 py-6">
-                <BoxOverviewPanel overview={overview} />
-              </div>
+              <Suspense fallback={<TabSkeleton />}>
+                <div className="mx-auto max-w-3xl px-6 py-6">
+                  <BoxOverviewPanel overview={overview} />
+                </div>
+              </Suspense>
             </ScrollArea>
           </TabsContent>
 
@@ -542,25 +555,6 @@ export default async function BoxPage({
                 <BoxContentsTree
                   folders={folders}
                   notes={notes}
-                  folderLifecycleMenu={(folder) => (
-                    <FolderLifecycleMenu
-                      folderId={folder.id}
-                      folderStatus={folder.status as "active" | "archived" | "trashed"}
-                    />
-                  )}
-                  folderActions={(folder) => (
-                    <FolderImportButton
-                      boxId={box.id}
-                      boxName={box.name}
-                      folderId={folder.id}
-                      folderPath={folder.path_cache}
-                      folders={folders.map((f) => ({
-                        id: f.id,
-                        name: f.name,
-                        path_cache: f.path_cache,
-                      }))}
-                    />
-                  )}
                 />
               </div>
             </ScrollArea>
@@ -584,9 +578,11 @@ export default async function BoxPage({
           {/* ── Graph tab ── */}
           <TabsContent value="graph" className="flex-1 overflow-hidden">
             <ScrollArea className="h-full">
-              <div className="mx-auto max-w-3xl px-6 py-6">
-                <GraphPanel overview={overview} />
-              </div>
+              <Suspense fallback={<TabSkeleton />}>
+                <div className="mx-auto max-w-3xl px-6 py-6">
+                  <GraphPanel overview={overview} />
+                </div>
+              </Suspense>
             </ScrollArea>
           </TabsContent>
 

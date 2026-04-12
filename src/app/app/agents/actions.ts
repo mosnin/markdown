@@ -323,11 +323,12 @@ export async function createAgentChildFolderAction(
     const ctx = await requireAuthenticatedUser();
     const supabase = await createClient();
     const agent = await getAgentForWorkspace(supabase, agentId, ctx.workspace.id);
-    if (!agent || !agent.box_id) return { ok: false, error: "Agent does not support children in this scope" };
+    if (!agent) return { ok: false, error: "Agent not found" };
     const folder = await createFolder(supabase, ctx.user.id, ctx.workspace.id, {
-      boxId: agent.box_id,
+      boxId: agent.box_id ?? null,
       name: name.trim(),
       parentFolderId: agent.folder_id ?? null,
+      parentAgentId: agentId,
     });
     await createLink(supabase, ctx.workspace.id, {
       sourceObjectType: OBJECT_TYPE.AGENT,
@@ -338,7 +339,8 @@ export async function createAgentChildFolderAction(
       relationshipNote: "Agent child folder",
     });
     revalidatePath(`/app/agents/${agentId}`);
-    revalidatePath(`/app/boxes/${agent.box_id}`);
+    if (agent.box_id) revalidatePath(`/app/boxes/${agent.box_id}`);
+    else revalidatePath("/app/agents");
     return { ok: true, data: { id: folder.id } };
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : "Failed to create child folder" };
@@ -368,6 +370,8 @@ export async function createAgentChildFileAction(
       fileExtension: null,
       mimeType: null,
     });
+    // Set direct FK containment
+    await supabase.from("files").update({ parent_agent_id: agentId }).eq("id", file.id);
     await createLink(supabase, ctx.workspace.id, {
       sourceObjectType: OBJECT_TYPE.AGENT,
       sourceObjectId: agentId,

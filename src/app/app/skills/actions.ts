@@ -249,11 +249,12 @@ export async function createSkillChildFolderAction(
     const ctx = await requireAuthenticatedUser();
     const supabase = await createClient();
     const skill = await getSkillForWorkspace(supabase, skillId, ctx.workspace.id);
-    if (!skill || !skill.box_id) return { ok: false, error: "Skill does not support children in this scope" };
+    if (!skill) return { ok: false, error: "Skill not found" };
     const folder = await createFolder(supabase, ctx.user.id, ctx.workspace.id, {
-      boxId: skill.box_id,
+      boxId: skill.box_id ?? null,
       name: name.trim(),
       parentFolderId: skill.folder_id ?? null,
+      parentSkillId: skillId,
     });
     await createLink(supabase, ctx.workspace.id, {
       sourceObjectType: OBJECT_TYPE.SKILL,
@@ -264,7 +265,8 @@ export async function createSkillChildFolderAction(
       relationshipNote: "Skill child folder",
     });
     revalidatePath(`/app/skills/${skillId}`);
-    revalidatePath(`/app/boxes/${skill.box_id}`);
+    if (skill.box_id) revalidatePath(`/app/boxes/${skill.box_id}`);
+    else revalidatePath("/app/skills");
     return { ok: true, data: { id: folder.id } };
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : "Failed to create child folder" };
@@ -294,6 +296,8 @@ export async function createSkillChildFileAction(
       fileExtension: null,
       mimeType: null,
     });
+    // Set direct FK containment
+    await supabase.from("files").update({ parent_skill_id: skillId }).eq("id", file.id);
     await createLink(supabase, ctx.workspace.id, {
       sourceObjectType: OBJECT_TYPE.SKILL,
       sourceObjectId: skillId,

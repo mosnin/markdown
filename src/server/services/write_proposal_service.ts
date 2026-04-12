@@ -253,12 +253,12 @@ async function _createNoteProposal(
     if (!folder || folder.status === "trashed") {
       throw new Error("Target folder not found");
     }
-    if (!ctx.allowedBoxIds.has(folder.box_id)) {
+    if (!folder.box_id || !ctx.allowedBoxIds.has(folder.box_id)) {
       throw new Error("Target folder is not in an allowed box");
     }
 
     target_folder_id = folder.id;
-    auditBoxId = folder.box_id;
+    auditBoxId = folder.box_id!;
     auditFolderId = folder.id;
   } else {
     throw new Error(`Unknown note proposal_type: ${proposal_type}`);
@@ -650,7 +650,7 @@ async function _uniqueSlugForProposal(
   let suffix = 2;
   let pathCache = `${folder.path_cache}/${slug}`;
 
-  while (await _notePathExists(adminClient, folder.box_id, pathCache)) {
+  while (await _notePathExists(adminClient, folder.box_id!, pathCache)) {
     slug = `${base}-${suffix++}`;
     pathCache = `${folder.path_cache}/${slug}`;
   }

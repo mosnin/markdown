@@ -94,11 +94,15 @@ export async function createFolder(
     name,
     description,
     parentFolderId,
+    parentSkillId,
+    parentAgentId,
   }: {
-    boxId: string;
+    boxId: string | null;
     name: string;
     description?: string | null;
     parentFolderId?: string | null;
+    parentSkillId?: string | null;
+    parentAgentId?: string | null;
   }
 ): Promise<Folder> {
   let parentPathCache = "";
@@ -111,20 +115,26 @@ export async function createFolder(
     effectiveBoxId = parent.box_id;
   }
 
-  // Generate a unique slug / path_cache within the box
+  // Generate slug
   const base = slugify(name);
   let slug = base;
   let suffix = 2;
   let pathCache = parentPathCache ? `${parentPathCache}/${slug}` : slug;
 
-  while (await pathCacheExists(supabase, effectiveBoxId, pathCache)) {
-    slug = `${base}-${suffix++}`;
-    pathCache = parentPathCache ? `${parentPathCache}/${slug}` : slug;
+  // Path uniqueness check only when inside a box
+  if (effectiveBoxId) {
+    while (await pathCacheExists(supabase, effectiveBoxId, pathCache)) {
+      slug = `${base}-${suffix++}`;
+      pathCache = parentPathCache ? `${parentPathCache}/${slug}` : slug;
+    }
   }
 
   const folder = await repoCreate(supabase, {
+    workspace_id: workspaceId,
     box_id: effectiveBoxId,
     parent_folder_id: parentFolderId ?? null,
+    parent_skill_id: parentSkillId ?? null,
+    parent_agent_id: parentAgentId ?? null,
     name,
     slug,
     path_cache: pathCache,
@@ -138,7 +148,7 @@ export async function createFolder(
     userId,
     folder.id,
     folder.name,
-    effectiveBoxId
+    effectiveBoxId ?? workspaceId
   );
   return folder;
 }
@@ -184,8 +194,8 @@ export async function renameFolder(
     }
   }
 
-  // Cascade to descendant folders and their notes
-  if (oldPathCache !== newPathCache) {
+  // Cascade to descendant folders and their notes (only when folder has box context)
+  if (oldPathCache !== newPathCache && folder.box_id) {
     await cascadePathCache(supabase, folder.box_id, oldPathCache, newPathCache);
   }
 
@@ -218,9 +228,13 @@ export async function setGeneratedFolderPolicy(
     throw new Error("Folder not found");
   }
 
-  // Verify box belongs to workspace
-  const box = await getBoxById(supabase, folder.box_id);
-  if (!box || box.workspace_id !== workspaceId) {
+  // Verify folder belongs to workspace (via box or direct workspace_id)
+  if (folder.box_id) {
+    const box = await getBoxById(supabase, folder.box_id);
+    if (!box || box.workspace_id !== workspaceId) {
+      throw new Error("Folder does not belong to this workspace");
+    }
+  } else if (folder.workspace_id !== workspaceId) {
     throw new Error("Folder does not belong to this workspace");
   }
 
@@ -230,7 +244,7 @@ export async function setGeneratedFolderPolicy(
   if (!updated) throw new Error("Failed to update folder policy");
 
   await auditGeneratedFolderPolicyChanged(supabase, workspaceId, userId, folderId, {
-    box_id: folder.box_id,
+    box_id: folder.box_id!,
     accepts_generated_notes: accepts,
   });
 

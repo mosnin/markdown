@@ -292,7 +292,7 @@ export default async function SkillPage({
                   The canonical source is edited in the Source tab — these are supporting artifacts.
                 </p>
               </div>
-              <SkillChildrenPanel skillId={skill_id} childrenItems={childrenItems} canCreateFolders={!!skill.box_id} />
+              <SkillChildrenPanel skillId={skill_id} childrenItems={childrenItems} canCreateFolders={true} />
             </div>
           </ScrollArea>
         </TabsContent>

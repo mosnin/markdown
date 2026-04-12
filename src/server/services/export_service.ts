@@ -229,8 +229,9 @@ export async function exportFolder(
 ): Promise<ExportPackage> {
   const rootFolder = await getFolderById(supabase, folderId);
   if (!rootFolder) throw new Error("Folder not found");
+  if (!rootFolder.box_id) throw new Error("Folder has no box");
 
-  const box = await getBoxById(supabase, rootFolder.box_id);
+  const box = await getBoxById(supabase, rootFolder.box_id!);
   if (!box || box.workspace_id !== workspaceId) throw new Error("Not found");
 
   const { includeArchived = false } = options;

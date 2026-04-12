@@ -400,6 +400,7 @@ async function applyManifest(
     }
     await applyFolder(
       supabase,
+      workspaceId,
       boxId,
       targetFolderId,
       mf,
@@ -604,6 +605,7 @@ async function applyManifest(
 
 async function applyFolder(
   supabase: SupabaseClient,
+  workspaceId: string,
   boxId: string,
   targetFolderId: string | null,
   mf: ManifestFolder,
@@ -670,6 +672,7 @@ async function applyFolder(
       const pathCache = parentFolder ? `${parentFolder.path_cache}/${slug}` : slug;
 
       const created = await createFolder(supabase, {
+        workspace_id: workspaceId,
         box_id: boxId,
         parent_folder_id: resolvedParentId,
         name: mf.name,
@@ -722,6 +725,7 @@ async function applyFolder(
 
   try {
     const created = await createFolder(supabase, {
+      workspace_id: workspaceId,
       box_id: boxId,
       parent_folder_id: resolvedParentId,
       name: mf.name,

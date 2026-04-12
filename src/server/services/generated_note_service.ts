@@ -131,9 +131,10 @@ export async function createGeneratedNote(
   }
 
   // Box scope check
-  if (!ctx.allowedBoxIds.has(folder.box_id)) {
+  if (!folder.box_id || !ctx.allowedBoxIds.has(folder.box_id)) {
     throw new Error("Folder is not in an allowed box");
   }
+  const boxId = folder.box_id!;
 
   // Policy check
   if (!folder.accepts_generated_notes) {
@@ -143,7 +144,7 @@ export async function createGeneratedNote(
   }
 
   // Verify box ownership (defense in depth)
-  const box = await getBoxById(adminClient, folder.box_id);
+  const box = await getBoxById(adminClient, boxId);
   if (!box || box.workspace_id !== ctx.connection.workspace_id || box.status === "trashed") {
     throw new Error("Box not found");
   }
@@ -156,7 +157,7 @@ export async function createGeneratedNote(
   // Unique slug / path_cache
   const { slug, pathCache } = await uniqueSlug(
     adminClient,
-    folder.box_id,
+    boxId,
     folder.path_cache,
     title
   );
@@ -168,7 +169,7 @@ export async function createGeneratedNote(
   const retrieval_priority = input.retrieval_priority ?? 0;
 
   const { data, error } = await adminClient.rpc("create_generated_note_with_version", {
-    p_box_id: folder.box_id,
+    p_box_id: boxId,
     p_folder_id: folder.id,
     p_title: title,
     p_slug: slug,
@@ -195,7 +196,7 @@ export async function createGeneratedNote(
     result.note.id,
     {
       title: result.note.title,
-      box_id: folder.box_id,
+      box_id: boxId,
       folder_id: folder.id,
     }
   );

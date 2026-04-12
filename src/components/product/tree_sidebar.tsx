@@ -524,16 +524,18 @@ function BoxTree({
     return false;
   };
 
-  // Calculate height based on total node count (root + all descendants)
-  // Each node gets rowHeight (28px) plus padding. No cap — ScrollArea handles overflow.
-  function countAllNodes(nodes: TreeNodeData[]): number {
+  // Calculate height based on initially visible nodes only.
+  // Nodes in closed folders are not counted since they won't be visible.
+  function countVisibleNodes(nodes: TreeNodeData[], openState: Record<string, boolean>): number {
     let count = nodes.length;
     for (const n of nodes) {
-      if (n.children) count += countAllNodes(n.children);
+      if (n.children && openState[n.id]) {
+        count += countVisibleNodes(n.children, openState);
+      }
     }
     return count;
   }
-  const estimatedHeight = Math.max(countAllNodes(treeData) * 28 + 20, 80);
+  const estimatedHeight = Math.max(countVisibleNodes(treeData, initialOpenState) * 28 + 20, 80);
 
   return (
     <Tree<TreeNodeData>

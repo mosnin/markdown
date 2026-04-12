@@ -3,8 +3,11 @@ import { type Folder } from "@/server/domain/types/folder";
 import { FOLDER_STATUS } from "@/server/domain/constants/content_status";
 
 export interface CreateFolderInput {
-  box_id: string;
+  workspace_id: string;
+  box_id: string | null;
   parent_folder_id?: string | null;
+  parent_skill_id?: string | null;
+  parent_agent_id?: string | null;
   name: string;
   slug: string;
   path_cache: string;

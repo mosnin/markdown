@@ -39,51 +39,61 @@ export default async function FolderPage({
   const folder = await getFolderById(supabase, folder_id);
   if (!folder) notFound();
 
-  const box = await getBoxById(supabase, folder.box_id);
-  if (!box || box.workspace_id !== ctx.workspace.id) notFound();
+  // Verify ownership: via box for box-level folders, via workspace_id for workspace-level
+  let box: Awaited<ReturnType<typeof getBoxById>> = null;
+  if (folder.box_id) {
+    box = await getBoxById(supabase, folder.box_id);
+    if (!box || box.workspace_id !== ctx.workspace.id) notFound();
+  } else if (folder.workspace_id !== ctx.workspace.id) {
+    notFound();
+  }
 
-  // Fetch all child content
+  // Fetch all child content — query by parent_folder_id (works for both box-level and workspace-level)
   const [childFolders, childNotes, childFiles, childSkills, childAgents] = await Promise.all([
     supabase
       .from("folders")
       .select("id, name, status, accepts_generated_notes")
-      .eq("box_id", folder.box_id)
       .eq("parent_folder_id", folder.id)
       .neq("status", "trashed")
       .order("name", { ascending: true })
       .then((r) => r.data ?? []),
-    supabase
-      .from("notes")
-      .select("id, title, kind, updated_at")
-      .eq("box_id", folder.box_id)
-      .eq("folder_id", folder.id)
-      .neq("status", "trashed")
-      .order("title", { ascending: true })
-      .then((r) => r.data ?? []),
+    folder.box_id
+      ? supabase
+          .from("notes")
+          .select("id, title, kind, updated_at")
+          .eq("box_id", folder.box_id)
+          .eq("folder_id", folder.id)
+          .neq("status", "trashed")
+          .order("title", { ascending: true })
+          .then((r) => r.data ?? [])
+      : Promise.resolve([]),
     supabase
       .from("files")
       .select("id, name, file_extension, updated_at")
-      .eq("box_id", folder.box_id)
       .eq("folder_id", folder.id)
       .neq("status", "trashed")
       .order("name", { ascending: true })
       .then((r) => r.data ?? []),
-    supabase
-      .from("skills")
-      .select("id, name, is_reusable, updated_at")
-      .eq("box_id", folder.box_id)
-      .eq("folder_id", folder.id)
-      .neq("status", "trashed")
-      .order("name", { ascending: true })
-      .then((r) => r.data ?? []),
-    supabase
-      .from("agents")
-      .select("id, name, is_reusable, updated_at")
-      .eq("box_id", folder.box_id)
-      .eq("folder_id", folder.id)
-      .neq("status", "trashed")
-      .order("name", { ascending: true })
-      .then((r) => r.data ?? []),
+    folder.box_id
+      ? supabase
+          .from("skills")
+          .select("id, name, is_reusable, updated_at")
+          .eq("box_id", folder.box_id)
+          .eq("folder_id", folder.id)
+          .neq("status", "trashed")
+          .order("name", { ascending: true })
+          .then((r) => r.data ?? [])
+      : Promise.resolve([]),
+    folder.box_id
+      ? supabase
+          .from("agents")
+          .select("id, name, is_reusable, updated_at")
+          .eq("box_id", folder.box_id)
+          .eq("folder_id", folder.id)
+          .neq("status", "trashed")
+          .order("name", { ascending: true })
+          .then((r) => r.data ?? [])
+      : Promise.resolve([]),
   ]);
 
   // Build breadcrumb path
@@ -108,7 +118,7 @@ export default async function FolderPage({
         <WorkspaceLiveRefresh
           workspaceId={ctx.workspace.id}
           scope="folder"
-          boxId={box.id}
+          boxId={box?.id ?? null}
           folderId={folder.id}
         />
 
@@ -118,9 +128,13 @@ export default async function FolderPage({
             <div className="min-w-0 flex-1">
               {/* Breadcrumbs */}
               <div className="flex items-center gap-1 text-xs text-muted-foreground flex-wrap">
-                <Link href={`/app/boxes/${box.id}`} className="hover:underline hover:text-foreground transition-fast">
-                  {box.name}
-                </Link>
+                {box ? (
+                  <Link href={`/app/boxes/${box.id}`} className="hover:underline hover:text-foreground transition-fast">
+                    {box.name}
+                  </Link>
+                ) : (
+                  <span>Workspace</span>
+                )}
                 {breadcrumbs.map((bc) => (
                   <span key={bc.id} className="flex items-center gap-1">
                     <ChevronRight className="h-3 w-3 shrink-0" aria-hidden="true" />
@@ -159,10 +173,14 @@ export default async function FolderPage({
                 folderId={folder.id}
                 folderStatus={folder.status as "active" | "archived" | "trashed"}
               />
-              <CreateFolderDialog boxId={box.id} parentFolderId={folder.id} />
-              <FileCreateDialog boxId={box.id} folderId={folder.id} />
-              <SkillCreateDialog boxId={box.id} folderId={folder.id} />
-              <AgentCreateDialog boxId={box.id} folderId={folder.id} />
+              {box && (
+                <>
+                  <CreateFolderDialog boxId={box.id} parentFolderId={folder.id} />
+                  <FileCreateDialog boxId={box.id} folderId={folder.id} />
+                  <SkillCreateDialog boxId={box.id} folderId={folder.id} />
+                  <AgentCreateDialog boxId={box.id} folderId={folder.id} />
+                </>
+              )}
             </div>
           </div>
         </div>
@@ -171,7 +189,9 @@ export default async function FolderPage({
         <ScrollArea className="flex-1">
           <div className="mx-auto max-w-4xl px-6 py-6 space-y-6">
             {/* Folder actions (rename + create note) */}
-            <FolderWorkspaceActions folderId={folder.id} boxId={box.id} initialName={folder.name} />
+            {box && (
+              <FolderWorkspaceActions folderId={folder.id} boxId={box.id} initialName={folder.name} />
+            )}
 
             {/* AI policy */}
             <div className="rounded-lg border border-border bg-card p-4">
@@ -290,14 +310,18 @@ export default async function FolderPage({
             {/* Containing box */}
             <div className="border-b border-border px-4 py-3">
               <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground/60">
-                Box
+                {box ? "Box" : "Scope"}
               </p>
-              <Link
-                href={`/app/boxes/${box.id}`}
-                className="mt-0.5 text-sm text-foreground hover:underline underline-offset-2 transition-fast"
-              >
-                {box.name}
-              </Link>
+              {box ? (
+                <Link
+                  href={`/app/boxes/${box.id}`}
+                  className="mt-0.5 text-sm text-foreground hover:underline underline-offset-2 transition-fast"
+                >
+                  {box.name}
+                </Link>
+              ) : (
+                <p className="mt-0.5 text-sm text-foreground">Workspace</p>
+              )}
             </div>
 
             {/* Stats */}
