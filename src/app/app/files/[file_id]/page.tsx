@@ -1,11 +1,13 @@
 import { notFound } from "next/navigation";
-import { Archive, ChevronRight, History, Trash2 } from "lucide-react";
+import { Archive, Bot, ChevronRight, History, Trash2, Zap } from "lucide-react";
 import Link from "next/link";
 import { requireAuthenticatedUser } from "@/server/auth/require_authenticated_user";
 import { createClient } from "@/lib/supabase/server";
 import { getFileForWorkspace } from "@/server/services/file_service";
 import { getBoxById } from "@/server/repositories/box_repository";
 import { getFolderById } from "@/server/repositories/folder_repository";
+import { getSkillById } from "@/server/repositories/skill_repository";
+import { getAgentById } from "@/server/repositories/agent_repository";
 import { getLinksForObject } from "@/server/services/object_link_service";
 import { listObjectVersions } from "@/server/repositories/object_version_repository";
 import { listNotesByBox } from "@/server/repositories/note_repository";
@@ -22,35 +24,70 @@ import { type ObjectLink } from "@/server/domain/types/object_link";
 import { cn } from "@/lib/utils";
 import { WorkspaceLiveRefresh } from "@/components/product/workspace_live_refresh";
 
+// ─── Parent context types ─────────────────────────────────────────────────────
+
+type ParentContext =
+  | { kind: "box"; boxId: string; boxName: string; folderName: string | null }
+  | { kind: "skill"; skillId: string; skillName: string; boxId: string | null; boxName: string | null }
+  | { kind: "agent"; agentId: string; agentName: string; boxId: string | null; boxName: string | null };
+
 // ─── Breadcrumb ───────────────────────────────────────────────────────────────
 
 function Breadcrumb({
   workspaceName,
-  boxId,
-  boxName,
-  folderName,
+  parent,
   filename,
 }: {
   workspaceName: string;
-  boxId: string;
-  boxName: string;
-  folderName: string | null;
+  parent: ParentContext;
   filename: string;
 }) {
-  const parts = [
+  const parts: Array<{ label: string; href: string | null; icon?: React.ReactNode }> = [
     { label: workspaceName, href: "/app" },
-    { label: boxName, href: `/app/boxes/${boxId}` },
-    ...(folderName ? [{ label: folderName, href: null as string | null }] : []),
-    { label: filename, href: null as string | null },
   ];
 
+  if (parent.kind === "box") {
+    parts.push({
+      label: parent.boxName,
+      href: `/app/boxes/${parent.boxId}`,
+    });
+    if (parent.folderName) {
+      parts.push({ label: parent.folderName, href: null });
+    }
+  } else if (parent.kind === "skill") {
+    if (parent.boxName && parent.boxId) {
+      parts.push({ label: parent.boxName, href: `/app/boxes/${parent.boxId}` });
+    } else {
+      parts.push({ label: "Skills", href: "/app/skills" });
+    }
+    parts.push({
+      label: parent.skillName,
+      href: `/app/skills/${parent.skillId}?tab=children`,
+      icon: <Zap className="h-3 w-3 shrink-0 text-yellow-600/70" aria-hidden="true" />,
+    });
+  } else if (parent.kind === "agent") {
+    if (parent.boxName && parent.boxId) {
+      parts.push({ label: parent.boxName, href: `/app/boxes/${parent.boxId}` });
+    } else {
+      parts.push({ label: "Agents", href: "/app/agents" });
+    }
+    parts.push({
+      label: parent.agentName,
+      href: `/app/agents/${parent.agentId}?tab=children`,
+      icon: <Bot className="h-3 w-3 shrink-0 text-blue-600/70" aria-hidden="true" />,
+    });
+  }
+
+  parts.push({ label: filename, href: null });
+
   return (
-    <nav aria-label="Breadcrumb" className="flex items-center gap-1 text-xs text-muted-foreground">
+    <nav aria-label="Breadcrumb" className="flex items-center gap-1 text-xs text-muted-foreground flex-wrap">
       {parts.map((part, i) => (
         <span key={`${part.label}-${i}`} className="flex items-center gap-1">
           {i > 0 && (
             <ChevronRight className="h-3 w-3 shrink-0" aria-hidden="true" />
           )}
+          {part.icon}
           {part.href ? (
             <Link
               href={part.href}
@@ -143,19 +180,77 @@ export default async function FilePage({
   const ctx = await requireAuthenticatedUser();
   const supabase = await createClient();
 
+  // Load the file. getFileForWorkspace verifies ownership via workspace_id
+  // directly — so this works for both box-local and workspace-level files.
   const file = await getFileForWorkspace(supabase, file_id, ctx.workspace.id);
   if (!file) notFound();
 
-  const box = file.box_id ? await getBoxById(supabase, file.box_id) : null;
-  if (!box || box.workspace_id !== ctx.workspace.id) notFound();
+  // Resolve parent context. Precedence:
+  //   1. parent_skill_id / parent_agent_id: file belongs to a Skill/Agent
+  //      (either box-local or workspace-level reusable)
+  //   2. box_id: file lives directly in a box (optionally in a folder)
+  //   3. workspace-level file with no parent — unusual but legal
+  let parent: ParentContext;
+  let boxForListing: { id: string; name: string; workspace_id: string } | null = null;
 
+  if (file.parent_skill_id) {
+    const skill = await getSkillById(supabase, file.parent_skill_id);
+    if (!skill || skill.workspace_id !== ctx.workspace.id) notFound();
+    const skillBox = skill.box_id ? await getBoxById(supabase, skill.box_id) : null;
+    if (skillBox) boxForListing = skillBox;
+    parent = {
+      kind: "skill",
+      skillId: skill.id,
+      skillName: skill.name,
+      boxId: skill.box_id,
+      boxName: skillBox?.name ?? null,
+    };
+  } else if (file.parent_agent_id) {
+    const agent = await getAgentById(supabase, file.parent_agent_id);
+    if (!agent || agent.workspace_id !== ctx.workspace.id) notFound();
+    const agentBox = agent.box_id ? await getBoxById(supabase, agent.box_id) : null;
+    if (agentBox) boxForListing = agentBox;
+    parent = {
+      kind: "agent",
+      agentId: agent.id,
+      agentName: agent.name,
+      boxId: agent.box_id,
+      boxName: agentBox?.name ?? null,
+    };
+  } else if (file.box_id) {
+    const box = await getBoxById(supabase, file.box_id);
+    if (!box || box.workspace_id !== ctx.workspace.id) notFound();
+    boxForListing = box;
+    const folder = file.folder_id
+      ? await getFolderById(supabase, file.folder_id)
+      : null;
+    parent = {
+      kind: "box",
+      boxId: box.id,
+      boxName: box.name,
+      folderName: folder?.name ?? null,
+    };
+  } else {
+    // Workspace-level file with no parent skill/agent — show a minimal box-less context.
+    parent = {
+      kind: "skill",
+      skillId: "",
+      skillName: "Workspace",
+      boxId: null,
+      boxName: null,
+    };
+  }
+
+  // Fetch supporting data. Notes and sibling files come from the box when
+  // one exists; workspace-level files skip box-scoped lookups gracefully.
   const [folder, rawLinks, versions, boxNotes, boxFiles] = await Promise.all([
     file.folder_id ? getFolderById(supabase, file.folder_id) : Promise.resolve(null),
     getLinksForObject(supabase, ctx.workspace.id, OBJECT_TYPE.FILE, file_id),
     listObjectVersions(supabase, "file", file_id, { limit: 50 }),
-    listNotesByBox(supabase, box.id),
-    listFilesByBox(supabase, box.id),
+    boxForListing ? listNotesByBox(supabase, boxForListing.id) : Promise.resolve([]),
+    boxForListing ? listFilesByBox(supabase, boxForListing.id) : Promise.resolve([]),
   ]);
+  void folder;
 
   // Build resolution maps
   const noteMap = new Map(boxNotes.map((n) => [n.id, { id: n.id, title: n.title }]));
@@ -173,7 +268,9 @@ export default async function FilePage({
     .map((l) => resolveLink(l, noteMap, fileMap))
     .filter((l): l is ResolvedObjectLink => l !== null);
 
-  // Build eligible link targets (notes + files in the same box, excluding self)
+  // Build eligible link targets (notes + files in the same box, excluding self).
+  // Workspace-level files without a box context have an empty pool — links
+  // between workspace-level files go through the Skill/Agent directly.
   const eligibleLinkTargets: LinkTarget[] = [
     ...boxNotes.map((n) => ({
       id: n.id,
@@ -206,13 +303,11 @@ export default async function FilePage({
       {/* Center — file editor */}
       <div className="flex flex-1 flex-col overflow-hidden min-w-0">
         {/* Top bar: breadcrumb + format badge + actions */}
-        <div className="flex items-center justify-between gap-3 border-b border-border px-6 py-2.5">
+        <div className="flex items-center justify-between gap-3 border-b border-border px-3 py-2.5 md:px-6">
           <div className="flex items-center gap-3 min-w-0">
             <Breadcrumb
               workspaceName={ctx.workspace.name}
-              boxId={box.id}
-              boxName={box.name}
-              folderName={folder?.name ?? null}
+              parent={parent}
               filename={displayName}
             />
           </div>
@@ -222,7 +317,7 @@ export default async function FilePage({
             {file.status === "archived" && (
               <Badge
                 variant="secondary"
-                className="flex items-center gap-1 text-[10px] font-normal"
+                className="hidden sm:flex items-center gap-1 text-[10px] font-normal"
               >
                 <Archive className="h-3 w-3" aria-hidden="true" />
                 Archived
@@ -231,7 +326,7 @@ export default async function FilePage({
             {file.status === "trashed" && (
               <Badge
                 variant="secondary"
-                className="flex items-center gap-1 text-[10px] font-normal text-destructive"
+                className="hidden sm:flex items-center gap-1 text-[10px] font-normal text-destructive"
               >
                 <Trash2 className="h-3 w-3" aria-hidden="true" />
                 Trash
@@ -288,16 +383,17 @@ export default async function FilePage({
         </div>
       </div>
 
-      {/* Right panel — file context */}
+      {/* Right panel — file context. Hidden on small screens; the file
+          metadata is accessible via the History link or the lifecycle menu. */}
       <aside
         aria-label="File context panel"
         className="hidden lg:flex lg:h-full lg:w-72 lg:shrink-0 lg:flex-col lg:border-l lg:border-border lg:bg-background"
       >
         <FileContextPanel
           file={file}
-          boxId={box.id}
-          boxName={box.name}
-          folderName={folder?.name ?? null}
+          boxId={boxForListing?.id ?? ""}
+          boxName={boxForListing?.name ?? (parent.kind === "skill" ? `Skill: ${parent.skillName}` : parent.kind === "agent" ? `Agent: ${parent.agentName}` : "")}
+          folderName={parent.kind === "box" ? parent.folderName : null}
           workspaceName={ctx.workspace.name}
           outgoingLinks={outgoingLinks}
           incomingLinks={incomingLinks}

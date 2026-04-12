@@ -156,7 +156,7 @@ export default async function SkillPage({
       />
 
       {/* Header */}
-      <div className="border-b border-border bg-background px-6 pt-6 pb-4">
+      <div className="border-b border-border bg-background px-4 pt-4 pb-4 md:px-6 md:pt-6">
         <div className="flex items-start gap-3">
           <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-muted mt-0.5">
             <Zap className="h-5 w-5 text-muted-foreground" aria-hidden="true" />

@@ -80,7 +80,7 @@ export default async function WorkspacesPage() {
       />
 
       <div className="flex-1 overflow-auto">
-        <div className="mx-auto max-w-3xl px-6 py-6 space-y-6">
+        <div className="mx-auto max-w-3xl px-4 py-6 md:px-6 space-y-6">
 
           {/* Workspace identity card */}
           <section

@@ -114,7 +114,7 @@ export default async function AgentsPage() {
     <div className="flex h-full flex-col overflow-hidden">
       <WorkspaceLiveRefresh workspaceId={ctx.workspace.id} scope="library" />
       {/* Header */}
-      <div className="border-b border-border bg-background px-6 pt-6 pb-4">
+      <div className="border-b border-border bg-background px-4 pt-4 pb-4 md:px-6 md:pt-6">
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-2.5">
             <Bot className="h-5 w-5 shrink-0 text-muted-foreground" aria-hidden="true" />

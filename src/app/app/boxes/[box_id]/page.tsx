@@ -369,8 +369,8 @@ export default async function BoxPage({
       <div className="flex flex-1 flex-col overflow-hidden min-w-0">
 
         {/* Box header */}
-        <div className="border-b border-border px-6 py-4">
-          <div className="flex items-start justify-between gap-4">
+        <div className="border-b border-border px-4 py-4 md:px-6">
+          <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between md:gap-4">
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2 mb-0.5">
                 <p className="text-xs text-muted-foreground">{ctx.workspace.name}</p>
@@ -432,7 +432,7 @@ export default async function BoxPage({
                 </div>
               )}
             </div>
-            <div className="flex shrink-0 items-center gap-2">
+            <div className="flex shrink-0 flex-wrap items-center gap-2">
               <ImportTriggerButton
                 boxId={box.id}
                 boxName={box.name}
