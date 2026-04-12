@@ -2,10 +2,12 @@ import { Building2 } from "lucide-react";
 import { requireAuthenticatedUser } from "@/server/auth/require_authenticated_user";
 import { createClient } from "@/lib/supabase/server";
 import { listBoxesByWorkspace } from "@/server/repositories/box_repository";
+import { listWorkspacesByOwner } from "@/server/repositories/workspace_repository";
 import { PageHeader } from "@/components/product/page_header";
 import { CreateBoxDialog } from "@/components/product/create_box_dialog";
 import { WorkspaceLiveRefresh } from "@/components/product/workspace_live_refresh";
-import { Badge } from "@/components/ui/badge";
+import { WorkspaceList } from "./workspace_list";
+import { CreateWorkspaceButton } from "./create_workspace_button";
 import { BoxList } from "./box_list";
 
 // ─── Loading skeleton (exported for Suspense boundary use) ────────────────────
@@ -13,7 +15,6 @@ import { BoxList } from "./box_list";
 export function WorkspacesPageSkeleton() {
   return (
     <div className="flex h-full flex-col overflow-hidden">
-      {/* Header skeleton */}
       <div className="bg-background px-6 pt-6 pb-4 border-b border-border">
         <div className="flex items-start justify-between gap-4">
           <div className="space-y-2">
@@ -23,8 +24,6 @@ export function WorkspacesPageSkeleton() {
           <div className="skeleton h-8 w-24 rounded" />
         </div>
       </div>
-
-      {/* Card skeletons */}
       <div className="flex-1 overflow-auto">
         <div className="mx-auto max-w-3xl px-6 py-6 space-y-3">
           {[0, 1, 2].map((i) => (
@@ -68,51 +67,61 @@ function EmptyBoxes() {
 export default async function WorkspacesPage() {
   const ctx = await requireAuthenticatedUser();
   const supabase = await createClient();
-  const boxes = await listBoxesByWorkspace(supabase, ctx.workspace.id);
+
+  const [boxes, ownedWorkspaces] = await Promise.all([
+    listBoxesByWorkspace(supabase, ctx.workspace.id),
+    listWorkspacesByOwner(supabase, ctx.user.id),
+  ]);
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
       <WorkspaceLiveRefresh workspaceId={ctx.workspace.id} scope="workspace" />
       <PageHeader
         title="Workspaces"
-        description="Manage your workspace and browse all boxes in your context store."
-        actions={<CreateBoxDialog />}
+        description="Manage your workspaces and browse the boxes inside the active one."
+        actions={
+          <div className="flex flex-wrap items-center gap-2">
+            <CreateWorkspaceButton />
+            <CreateBoxDialog />
+          </div>
+        }
       />
 
       <div className="flex-1 overflow-auto">
-        <div className="mx-auto max-w-3xl px-4 py-6 md:px-6 space-y-6">
+        <div className="mx-auto max-w-3xl px-4 py-6 md:px-6 space-y-8">
 
-          {/* Workspace identity card */}
-          <section
-            aria-label="Workspace details"
-            className="rounded-lg border border-border bg-card px-5 py-4 shadow-xs"
-          >
-            <div className="flex items-start justify-between gap-4">
-              <div className="min-w-0">
-                <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground mb-1">
-                  Active workspace
-                </p>
-                <h2 className="text-base font-semibold text-foreground truncate">
-                  {ctx.workspace.name}
+          {/* Your workspaces section */}
+          <section aria-label="Your workspaces" className="space-y-3">
+            <div className="flex items-end justify-between">
+              <div>
+                <h2 className="text-sm font-semibold text-foreground">
+                  Your workspaces
+                  <span className="ml-2 text-xs font-normal text-muted-foreground">
+                    {ownedWorkspaces.length}
+                  </span>
                 </h2>
                 <p className="mt-0.5 text-xs text-muted-foreground">
-                  Slug:{" "}
-                  <code className="font-mono text-[11px] bg-muted px-1 py-0.5 rounded">
-                    {ctx.workspace.slug}
-                  </code>
+                  Each workspace is an independent container for boxes,
+                  notes, files, skills, and agents. They never share content.
                 </p>
               </div>
-              <Badge variant="secondary" className="shrink-0 text-xs">
-                Active
-              </Badge>
             </div>
+            <WorkspaceList
+              workspaces={ownedWorkspaces.map((w) => ({
+                id: w.id,
+                name: w.name,
+                slug: w.slug,
+                created_at: w.created_at,
+              }))}
+              activeWorkspaceId={ctx.workspace.id}
+            />
           </section>
 
-          {/* Boxes section */}
+          {/* Boxes in the active workspace */}
           <section aria-label="Boxes">
-            <div className="flex items-center justify-between mb-3">
+            <div className="mb-3 flex items-center justify-between">
               <h2 className="text-sm font-semibold text-foreground">
-                Boxes
+                Boxes in {ctx.workspace.name}
                 <span className="ml-2 text-xs font-normal text-muted-foreground">
                   {boxes.length}
                 </span>
@@ -128,13 +137,14 @@ export default async function WorkspacesPage() {
             )}
           </section>
 
-          {/* V1 note */}
-          <aside className="rounded-lg border border-border-subtle bg-muted/40 px-4 py-3">
-            <p className="text-xs font-medium text-muted-foreground">About this workspace</p>
-            <p className="mt-1 text-xs text-muted-foreground/70 leading-relaxed">
-              In V1, Context Store uses a single workspace per account. Your workspace
-              contains all your boxes, folders, notes, and guides. Collaboration and
-              multiple workspaces are not yet supported.
+          <aside className="rounded-lg border border-border bg-muted/30 px-4 py-3">
+            <p className="text-xs font-medium text-muted-foreground">About workspaces</p>
+            <p className="mt-1 text-xs text-muted-foreground/80 leading-relaxed">
+              You can own multiple workspaces. Switch the active workspace using
+              the dropdown at the top of the sidebar. The active selection is
+              persisted across sessions. Each workspace has its own boxes,
+              folders, notes, files, skills, and agents — no content crosses a
+              workspace boundary.
             </p>
           </aside>
         </div>

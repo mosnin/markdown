@@ -27,6 +27,7 @@ import { UserMenu } from "@/components/product/user_menu";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { TreeSidebar } from "@/components/product/tree_sidebar";
+import { WorkspaceSwitcher } from "@/components/product/workspace_switcher";
 
 /**
  * Mobile navigation sidebar.
@@ -49,6 +50,7 @@ interface MobileSidebarProps {
   workspaceName?: string;
   workspaceId?: string;
   boxes?: BoxType[];
+  workspaces?: Array<{ id: string; name: string; slug: string }>;
 }
 
 export function MobileSidebar({
@@ -56,6 +58,7 @@ export function MobileSidebar({
   workspaceName = "My Workspace",
   workspaceId,
   boxes = [],
+  workspaces = [],
 }: MobileSidebarProps) {
   const [open, setOpen] = useState(false);
   const pathname = usePathname();
@@ -95,16 +98,11 @@ export function MobileSidebar({
         >
           {/* Header */}
           <SheetHeader className="flex-row items-center justify-between border-b border-sidebar-border px-4 py-3">
-            <div className="flex items-center gap-2">
-              <div className="h-5 w-5 rounded-md bg-foreground" aria-hidden="true" />
-              <SheetTitle className="text-sm font-semibold tracking-tight text-sidebar-foreground">
-                Context Store
-              </SheetTitle>
-            </div>
+            <SheetTitle className="sr-only">Navigation</SheetTitle>
             <button
               onClick={close}
               className={cn(
-                "flex items-center justify-center rounded-md p-1.5",
+                "ml-auto flex items-center justify-center rounded-md p-1.5",
                 "text-sidebar-foreground/60 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
                 "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               )}
@@ -113,6 +111,20 @@ export function MobileSidebar({
               <X className="h-4 w-4" />
             </button>
           </SheetHeader>
+
+          {/* Workspace switcher — same as desktop */}
+          <div className="px-3 pt-3 pb-2">
+            <WorkspaceSwitcher
+              workspaces={
+                workspaces.length > 0
+                  ? workspaces
+                  : workspaceId
+                    ? [{ id: workspaceId, name: workspaceName, slug: "" }]
+                    : []
+              }
+              activeWorkspaceId={workspaceId ?? ""}
+            />
+          </div>
 
           {/* Primary nav */}
           <nav aria-label="Primary navigation" className="px-2 pt-3 pb-1">

@@ -1,3 +1,4 @@
+import { cookies } from "next/headers";
 import { type User } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { type WorkspaceContext } from "@/server/domain/types/workspace";
@@ -21,13 +22,19 @@ export interface RequestContext {
   /** Convenience flag. Equivalent to `user !== null`. */
   isAuthenticated: boolean;
   /**
-   * The user's workspace. Populated for authenticated requests.
+   * The user's active workspace. Populated for authenticated requests.
    * Null only when the user is not authenticated.
-   * In V1, a workspace is bootstrapped on first access if none exists.
+   * A default workspace is bootstrapped on first access if none exists.
+   * When the user owns multiple workspaces, the active one is selected
+   * via the `active_workspace_id` cookie, set by
+   * `setActiveWorkspaceAction`.
    */
   workspace: WorkspaceContext | null;
   // Future: permissions: PermissionContext | null;
 }
+
+/** Cookie key used to persist the user's active workspace across requests. */
+export const ACTIVE_WORKSPACE_COOKIE = "active_workspace_id";
 
 // ─── Factory ──────────────────────────────────────────────────────────────────
 
@@ -39,8 +46,8 @@ export interface RequestContext {
  * Supabase server — safe to trust for authorization decisions.
  *
  * For authenticated users, the workspace is loaded (or bootstrapped on
- * first access). This ensures all downstream code can safely assume
- * `ctx.workspace` is non-null whenever `ctx.isAuthenticated` is true.
+ * first access). Multi-workspace users have their active workspace
+ * selection honored via the `active_workspace_id` cookie.
  *
  * @example
  * ```ts
@@ -59,7 +66,24 @@ export async function getRequestContext(): Promise<RequestContext> {
     return { user: null, isAuthenticated: false, workspace: null };
   }
 
-  const workspace = await getOrCreateDefaultWorkspace(supabase, user.id);
+  // Read the preferred workspace from the cookie, if any. If the cookie
+  // points at a workspace the user no longer owns, the bootstrap
+  // function silently falls back to the first owned workspace.
+  let preferredWorkspaceId: string | null = null;
+  try {
+    const cookieStore = await cookies();
+    preferredWorkspaceId = cookieStore.get(ACTIVE_WORKSPACE_COOKIE)?.value ?? null;
+  } catch {
+    // cookies() throws in a handful of non-request contexts; fall back
+    // to default workspace selection silently.
+    preferredWorkspaceId = null;
+  }
+
+  const workspace = await getOrCreateDefaultWorkspace(
+    supabase,
+    user.id,
+    preferredWorkspaceId,
+  );
 
   const workspaceContext: WorkspaceContext = {
     id: workspace.id,

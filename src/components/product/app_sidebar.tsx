@@ -1,9 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import Image from "next/image";
 import { usePathname } from "next/navigation";
-import { ChevronDown, LayoutGrid, Plus } from "lucide-react";
+import { Plus } from "lucide-react";
 import {
   AccountSetting01Icon,
   Alert01Icon,
@@ -23,17 +22,10 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { ThemeToggle } from "@/components/product/theme_toggle";
 import { UserMenu } from "@/components/product/user_menu";
 import { TreeSidebar } from "@/components/product/tree_sidebar";
+import { WorkspaceSwitcher } from "@/components/product/workspace_switcher";
 
 // ─── Nav items ────────────────────────────────────────────────────────────────
 
@@ -94,6 +86,8 @@ interface AppSidebarProps {
   workspaceName?: string;
   workspaceId?: string;
   boxes?: BoxType[];
+  /** All workspaces the user owns; enables the multi-workspace switcher. */
+  workspaces?: Array<{ id: string; name: string; slug: string }>;
 }
 
 export function AppSidebar({
@@ -101,6 +95,7 @@ export function AppSidebar({
   workspaceName = "My Workspace",
   workspaceId,
   boxes = [],
+  workspaces = [],
 }: AppSidebarProps) {
   const pathname = usePathname();
 
@@ -118,56 +113,18 @@ export function AppSidebar({
         "bg-white dark:bg-background border-r border-border/40"
       )}
     >
-      {/* Workspace selector pill */}
+      {/* Workspace switcher — multi-workspace dropdown with Create action */}
       <div className="px-3 pt-3 pb-2">
-        <DropdownMenu>
-          <DropdownMenuTrigger
-            className={cn(
-              "flex w-full items-center gap-2 rounded-lg px-2.5 py-2 transition-fast",
-              "hover:bg-accent/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            )}
-            aria-label={`Workspace: ${workspaceName}`}
-          >
-            {/* Poggle logo mark */}
-            <div className="flex h-6 w-6 shrink-0 items-center justify-center">
-              <Image
-                src="/logo-symbol-dark.png"
-                alt="Poggle"
-                width={24}
-                height={24}
-                className="rounded dark:hidden"
-                priority
-              />
-              <Image
-                src="/logo-symbol-light.png"
-                alt="Poggle"
-                width={24}
-                height={24}
-                className="rounded hidden dark:block"
-                priority
-              />
-            </div>
-            {/* Workspace name */}
-            <span className="min-w-0 flex-1 truncate text-sm font-semibold tracking-tight text-foreground text-left">
-              {workspaceName}
-            </span>
-            <ChevronDown className="h-3.5 w-3.5 shrink-0 text-foreground/40" aria-hidden="true" />
-          </DropdownMenuTrigger>
-          <DropdownMenuContent side="bottom" align="start">
-            <DropdownMenuLabel className="text-xs text-muted-foreground">
-              {workspaceName}
-            </DropdownMenuLabel>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem render={<Link href="/app/workspaces" />}>
-              <LayoutGrid className="h-3.5 w-3.5" aria-hidden="true" />
-              Manage boxes
-            </DropdownMenuItem>
-            <DropdownMenuItem render={<Link href="/app/settings" />}>
-              <AccountSetting01Icon className="h-3.5 w-3.5" aria-hidden="true" />
-              Workspace settings
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+        <WorkspaceSwitcher
+          workspaces={
+            workspaces.length > 0
+              ? workspaces
+              : workspaceId
+                ? [{ id: workspaceId, name: workspaceName, slug: "" }]
+                : []
+          }
+          activeWorkspaceId={workspaceId ?? ""}
+        />
       </div>
 
       <Separator className="mx-3 mb-1" />

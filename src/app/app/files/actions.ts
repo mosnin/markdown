@@ -71,6 +71,97 @@ export async function saveFileAction(
   }
 }
 
+// ─── File-level import (replace or append) ────────────────────────────────────
+
+/**
+ * Import content from an uploaded file into an existing File object.
+ *
+ * Modes:
+ *   - "replace": the uploaded content replaces the current source_content
+ *   - "append":  the uploaded content is appended to the current content,
+ *                preserving the original with a separator
+ *
+ * Either way, the write flows through updateFileContent → the
+ * update_object_and_create_version RPC, which creates a new immutable
+ * object_versions row and fires the audit event. Trust, lifecycle,
+ * versioning, and identity are preserved end-to-end.
+ *
+ * Works for every scope: box-local files, files in folders, child files
+ * of box-local Skills/Agents, and child files of reusable workspace-
+ * level Skills/Agents (because getFileForWorkspace / updateFileContent
+ * verify ownership via workspace_id when box_id is null).
+ */
+export async function importIntoFileAction(
+  fileId: string,
+  formData: FormData,
+): Promise<ActionResult<{ id: string }>> {
+  try {
+    const { supabase, userId, workspaceId } = await requireContext();
+
+    const uploaded = formData.get("file");
+    if (!(uploaded instanceof File)) {
+      return { ok: false, error: "No file uploaded" };
+    }
+
+    const modeRaw = formData.get("mode");
+    const mode = modeRaw === "append" ? "append" : "replace";
+
+    // Enforce a reasonable size limit. 5 MB is well over the editor's
+    // practical ceiling but below anything that would crash the server.
+    const MAX_UPLOAD_BYTES = 5 * 1024 * 1024;
+    if (uploaded.size > MAX_UPLOAD_BYTES) {
+      return { ok: false, error: "Upload must be 5MB or smaller" };
+    }
+
+    const rawText = await uploaded.text();
+    if (rawText.length > MAX_CONTENT_LENGTH) {
+      return {
+        ok: false,
+        error: `Uploaded content must not exceed ${MAX_CONTENT_LENGTH} characters`,
+      };
+    }
+
+    const existing = await getFileForWorkspace(supabase, fileId, workspaceId);
+    if (!existing) {
+      return { ok: false, error: "File not found" };
+    }
+
+    const nextContent =
+      mode === "append"
+        ? `${existing.source_content}\n\n${rawText}`
+        : rawText;
+
+    if (nextContent.length > MAX_CONTENT_LENGTH) {
+      return {
+        ok: false,
+        error: `Resulting content must not exceed ${MAX_CONTENT_LENGTH} characters`,
+      };
+    }
+
+    const updated = await updateFileContent(
+      supabase,
+      userId,
+      workspaceId,
+      fileId,
+      { sourceContent: nextContent },
+    );
+
+    // Revalidate the file page and any parent surface that might
+    // display the file's summary or size.
+    revalidatePath(`/app/files/${fileId}`);
+    if (existing.box_id) revalidatePath(`/app/boxes/${existing.box_id}`);
+    if (existing.parent_skill_id) revalidatePath(`/app/skills/${existing.parent_skill_id}`);
+    if (existing.parent_agent_id) revalidatePath(`/app/agents/${existing.parent_agent_id}`);
+
+    return { ok: true, data: { id: updated.id } };
+  } catch (err) {
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : "Failed to import into file",
+    };
+  }
+}
+
 // ─── File creation ────────────────────────────────────────────────────────────
 
 /**

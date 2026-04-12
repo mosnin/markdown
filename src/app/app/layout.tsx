@@ -2,6 +2,7 @@ import { type ReactNode } from "react";
 import { requireAuthenticatedUser } from "@/server/auth/require_authenticated_user";
 import { createClient } from "@/lib/supabase/server";
 import { listBoxesByWorkspace } from "@/server/repositories/box_repository";
+import { listWorkspacesByOwner } from "@/server/repositories/workspace_repository";
 import { AppSidebar } from "@/components/product/app_sidebar";
 import { MobileSidebar } from "@/components/product/mobile_sidebar";
 import { ThemeToggle } from "@/components/product/theme_toggle";
@@ -32,10 +33,18 @@ export default async function AppLayout({
 }) {
   const ctx = await requireAuthenticatedUser();
   const supabase = await createClient();
-  const boxes = await listBoxesByWorkspace(supabase, ctx.workspace.id);
+  const [boxes, ownedWorkspaces] = await Promise.all([
+    listBoxesByWorkspace(supabase, ctx.workspace.id),
+    listWorkspacesByOwner(supabase, ctx.user.id),
+  ]);
 
   const userEmail = ctx.user?.email ?? "";
   const workspaceName = ctx.workspace.name;
+  const workspaces = ownedWorkspaces.map((w) => ({
+    id: w.id,
+    name: w.name,
+    slug: w.slug,
+  }));
 
   return (
     <div className="flex h-full w-full overflow-hidden bg-background">
@@ -54,6 +63,7 @@ export default async function AppLayout({
           workspaceName={workspaceName}
           workspaceId={ctx.workspace.id}
           boxes={boxes}
+          workspaces={workspaces}
         />
       </div>
 
@@ -68,6 +78,7 @@ export default async function AppLayout({
               workspaceName={workspaceName}
               workspaceId={ctx.workspace.id}
               boxes={boxes}
+              workspaces={workspaces}
             />
             <span className="text-sm font-semibold tracking-tight truncate">
               {workspaceName ?? "Context Store"}

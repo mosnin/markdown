@@ -17,6 +17,7 @@ import { FileEditor } from "@/components/product/file_editor";
 import { FileContextPanel } from "@/components/product/file_context_panel";
 import { FileLanguageBadge } from "@/components/product/file_language_badge";
 import { FileLifecycleMenu } from "@/components/product/file_lifecycle_menu";
+import { FileImportButton } from "@/components/product/file_import_button";
 import { Badge } from "@/components/ui/badge";
 import { type SourceFormat } from "@/server/domain/constants/object_constants";
 import { type ResolvedObjectLink, type LinkTarget } from "@/components/product/file_object_links_panel";
@@ -81,32 +82,60 @@ function Breadcrumb({
   parts.push({ label: filename, href: null });
 
   return (
-    <nav aria-label="Breadcrumb" className="flex items-center gap-1 text-xs text-muted-foreground flex-wrap">
-      {parts.map((part, i) => (
-        <span key={`${part.label}-${i}`} className="flex items-center gap-1">
-          {i > 0 && (
-            <ChevronRight className="h-3 w-3 shrink-0" aria-hidden="true" />
-          )}
-          {part.icon}
-          {part.href ? (
-            <Link
-              href={part.href}
-              className="hover:text-foreground hover:underline underline-offset-2 transition-fast"
-            >
-              {part.label}
-            </Link>
-          ) : i === parts.length - 1 ? (
-            <span
-              className="max-w-[180px] truncate font-mono font-medium text-foreground/80"
-              title={part.label}
-            >
-              {part.label}
-            </span>
-          ) : (
-            <span>{part.label}</span>
-          )}
-        </span>
-      ))}
+    <nav
+      aria-label="Breadcrumb"
+      className="flex min-w-0 items-center gap-1 text-xs text-muted-foreground"
+    >
+      {parts.map((part, i) => {
+        const isLast = i === parts.length - 1;
+        return (
+          <span
+            key={`${part.label}-${i}`}
+            className={cn(
+              "flex min-w-0 items-center gap-1",
+              // Intermediate crumbs hide on very small screens so the
+              // current file name always remains visible. The first
+              // (workspace) and last (filename) crumbs are preserved
+              // so the user never loses sense of place on mobile.
+              !isLast && i > 0 && i < parts.length - 1 && "hidden sm:flex",
+            )}
+          >
+            {i > 0 && (
+              <ChevronRight
+                className={cn(
+                  "h-3 w-3 shrink-0",
+                  i > 0 && i < parts.length - 1 && "hidden sm:inline-block",
+                )}
+                aria-hidden="true"
+              />
+            )}
+            {part.icon}
+            {part.href ? (
+              <Link
+                href={part.href}
+                title={part.label}
+                className="truncate max-w-[80px] sm:max-w-[140px] lg:max-w-[200px] hover:text-foreground hover:underline underline-offset-2 transition-fast"
+              >
+                {part.label}
+              </Link>
+            ) : isLast ? (
+              <span
+                className="truncate max-w-[140px] sm:max-w-[200px] lg:max-w-[260px] font-mono font-medium text-foreground/80"
+                title={part.label}
+              >
+                {part.label}
+              </span>
+            ) : (
+              <span
+                className="truncate max-w-[80px] sm:max-w-[140px]"
+                title={part.label}
+              >
+                {part.label}
+              </span>
+            )}
+          </span>
+        );
+      })}
     </nav>
   );
 }
@@ -252,13 +281,55 @@ export default async function FilePage({
   ]);
   void folder;
 
-  // Build resolution maps
+  // Include the parent Skill/Agent's sibling child files as link targets.
+  // Workspace-level files previously had an empty link pool because they
+  // have no box context; siblings within the same package are the natural
+  // target pool for cross-file references.
+  let siblingFiles: Array<{
+    id: string;
+    name: string;
+    file_extension: string | null;
+  }> = [];
+  if (parent.kind === "skill" && file.parent_skill_id) {
+    const { data: skillSiblings } = await supabase
+      .from("files")
+      .select("id, name, file_extension")
+      .eq("workspace_id", ctx.workspace.id)
+      .eq("parent_skill_id", file.parent_skill_id)
+      .neq("id", file_id)
+      .neq("status", "trashed");
+    siblingFiles = (skillSiblings ?? []) as typeof siblingFiles;
+  } else if (parent.kind === "agent" && file.parent_agent_id) {
+    const { data: agentSiblings } = await supabase
+      .from("files")
+      .select("id, name, file_extension")
+      .eq("workspace_id", ctx.workspace.id)
+      .eq("parent_agent_id", file.parent_agent_id)
+      .neq("id", file_id)
+      .neq("status", "trashed");
+    siblingFiles = (agentSiblings ?? []) as typeof siblingFiles;
+  }
+
+  // Build resolution maps — include both the box-scoped files and
+  // any sibling files owned by the same Skill/Agent.
   const noteMap = new Map(boxNotes.map((n) => [n.id, { id: n.id, title: n.title }]));
-  const fileMap = new Map(
-    boxFiles
-      .filter((f) => f.id !== file_id)
-      .map((f) => [f.id, { id: f.id, name: f.name, file_extension: f.file_extension }])
-  );
+  const combinedFiles: Array<{
+    id: string;
+    name: string;
+    file_extension: string | null;
+  }> = [
+    ...boxFiles.filter((f) => f.id !== file_id).map((f) => ({
+      id: f.id,
+      name: f.name,
+      file_extension: f.file_extension,
+    })),
+    ...siblingFiles,
+  ];
+  // De-duplicate by id (a file could appear in both pools if it happens
+  // to be both box-local and linked via a parent FK).
+  const combinedFileMap = new Map<string, { id: string; name: string; file_extension: string | null }>();
+  for (const f of combinedFiles) combinedFileMap.set(f.id, f);
+  const fileMap = combinedFileMap;
 
   // Resolve links to display info
   const outgoingLinks: ResolvedObjectLink[] = rawLinks.outgoing
@@ -268,9 +339,26 @@ export default async function FilePage({
     .map((l) => resolveLink(l, noteMap, fileMap))
     .filter((l): l is ResolvedObjectLink => l !== null);
 
-  // Build eligible link targets (notes + files in the same box, excluding self).
-  // Workspace-level files without a box context have an empty pool — links
-  // between workspace-level files go through the Skill/Agent directly.
+  // Build eligible link targets (notes + files in the same box, excluding self,
+  // plus sibling child files inside the same parent Skill or Agent). This
+  // gives workspace-level files a real link pool — the package's siblings —
+  // instead of the empty pool they used to have.
+  const eligibleFileEntries = new Map<
+    string,
+    { id: string; name: string; file_extension: string | null }
+  >();
+  for (const f of boxFiles) {
+    if (f.id !== file_id) {
+      eligibleFileEntries.set(f.id, {
+        id: f.id,
+        name: f.name,
+        file_extension: f.file_extension,
+      });
+    }
+  }
+  for (const f of siblingFiles) {
+    eligibleFileEntries.set(f.id, f);
+  }
   const eligibleLinkTargets: LinkTarget[] = [
     ...boxNotes.map((n) => ({
       id: n.id,
@@ -278,8 +366,7 @@ export default async function FilePage({
       name: n.title,
       extension: ".md",
     })),
-    ...boxFiles
-      .filter((f) => f.id !== file_id)
+    ...Array.from(eligibleFileEntries.values())
       .map((f) => ({
         id: f.id,
         objectType: "file" as const,
@@ -332,6 +419,9 @@ export default async function FilePage({
                 Trash
               </Badge>
             )}
+
+            {/* Import-into-file — replace or append from an uploaded file */}
+            <FileImportButton fileId={file_id} />
 
             {/* History shortcut */}
             <Link
