@@ -120,6 +120,55 @@ export async function createFolderAction(
       name: name.trim(),
       parentFolderId: parentFolderId ?? null,
     });
+
+    // Record the creation in a change set so the folder is restorable.
+    // folder_create events are the input the restore executor needs to
+    // safely undo a folder creation — inverse is a soft-trash of the
+    // folder (preserving content for second-chance recovery).
+    const { openChangeSet, commitChangeSet, recordChangeSetItem, recordStructuralEvent } =
+      await import("@/server/services/change_set_service");
+    const cs = await openChangeSet(supabase, {
+      workspace_id: workspaceId,
+      origin: "manual_edit",
+      actor_type: "user",
+      actor_id: userId,
+      summary: `Create folder ${folder.name}`,
+      metadata: { box_id: boxId, folder_id: folder.id },
+    });
+    await recordChangeSetItem(supabase, {
+      change_set_id: cs.id,
+      workspace_id: workspaceId,
+      operation: "create",
+      object_type: "folder",
+      object_id: folder.id,
+      after_snapshot: {
+        name: folder.name,
+        slug: folder.slug,
+        path_cache: folder.path_cache,
+        parent_folder_id: folder.parent_folder_id,
+        box_id: folder.box_id,
+        status: folder.status,
+      },
+    });
+    await recordStructuralEvent(supabase, {
+      change_set_id: cs.id,
+      workspace_id: workspaceId,
+      box_id: folder.box_id ?? null,
+      event_type: "folder_create",
+      object_type: "folder",
+      object_id: folder.id,
+      before_state: {},
+      after_state: {
+        name: folder.name,
+        slug: folder.slug,
+        path_cache: folder.path_cache,
+        parent_folder_id: folder.parent_folder_id,
+        box_id: folder.box_id,
+        status: folder.status,
+      },
+    });
+    await commitChangeSet(supabase, cs.id);
+
     revalidatePath(`/app/boxes/${boxId}`);
     return { ok: true, data: { id: folder.id } };
   } catch (err) {

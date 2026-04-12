@@ -83,11 +83,20 @@ export async function createLink(
     targetNoteId,
     relationshipType,
     relationshipNote,
+    changeSetId,
   }: {
     sourceNoteId: string;
     targetNoteId: string;
     relationshipType: RelationshipType;
     relationshipNote?: string | null;
+    /**
+     * Optional change set correlation. When provided, the link
+     * creation is recorded as a change_set_item with
+     * operation='link_create' so restoring the change set reverses
+     * the link. Callers that don't care about rollback grouping can
+     * omit it.
+     */
+    changeSetId?: string | null;
   }
 ): Promise<NoteLink> {
   await resolveAndValidateNotes(supabase, sourceNoteId, targetNoteId);
@@ -98,6 +107,23 @@ export async function createLink(
     relationship_type: relationshipType,
     relationship_note: relationshipNote ?? null,
   });
+
+  if (changeSetId) {
+    const { recordChangeSetItem } = await import("./change_set_service");
+    await recordChangeSetItem(supabase, {
+      change_set_id: changeSetId,
+      workspace_id: workspaceId,
+      operation: "link_create",
+      object_type: "note_link",
+      object_id: link.id,
+      after_snapshot: {
+        source_note_id: sourceNoteId,
+        target_note_id: targetNoteId,
+        relationship_type: relationshipType,
+        relationship_note: relationshipNote ?? null,
+      },
+    });
+  }
 
   await auditNoteLinkCreated(
     supabase,
@@ -171,13 +197,33 @@ export async function deleteLink(
   supabase: SupabaseClient,
   userId: string,
   workspaceId: string,
-  linkId: string
+  linkId: string,
+  { changeSetId }: { changeSetId?: string | null } = {}
 ): Promise<void> {
   const link = await getNoteLinkById(supabase, linkId);
   if (!link) throw new Error("Link not found");
 
   const deleted = await deleteNoteLink(supabase, linkId);
   if (!deleted) throw new Error("Failed to delete link");
+
+  if (changeSetId) {
+    const { recordChangeSetItem } = await import("./change_set_service");
+    // before_snapshot carries the full link shape so the inverse can
+    // recreate it deterministically even after the row is gone.
+    await recordChangeSetItem(supabase, {
+      change_set_id: changeSetId,
+      workspace_id: workspaceId,
+      operation: "link_delete",
+      object_type: "note_link",
+      object_id: linkId,
+      before_snapshot: {
+        source_note_id: link.source_note_id,
+        target_note_id: link.target_note_id,
+        relationship_type: link.relationship_type,
+        relationship_note: link.relationship_note ?? null,
+      },
+    });
+  }
 
   await auditNoteLinkDeleted(
     supabase,

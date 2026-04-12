@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Plus } from "lucide-react";
+import { Plus, Undo2 } from "lucide-react";
 import {
   AccountSetting01Icon,
   Alert01Icon,
@@ -36,6 +36,7 @@ const primaryNav = [
   { label: "Agents", href: "/app/agents", icon: LaborIcon },
   { label: "Skills", href: "/app/skills", icon: ToolsIcon },
   { label: "Proposals", href: "/app/proposals", icon: Alert01Icon },
+  { label: "History", href: "/app/history", icon: Undo2 },
   { label: "Audit log", href: "/app/audit", icon: DashboardSpeed02Icon },
 ];
 

@@ -233,35 +233,59 @@ half-applied state.
 
 ## What is implemented now vs. later
 
-**In this migration:**
+**In this architecture:**
 
 * Schema, RLS, and indexes for every new table.
 * Change set service (open / commit / abort / record item / record
   structural / list).
 * Restore service (plan + execute from change set; wrapped note
-  rollback).
+  rollback). Folder create/delete inverses are implemented: creating a
+  folder records a `folder_create` event whose restore soft-trashes
+  the folder; trashing a folder records a `folder_delete` event whose
+  restore brings it back with name / slug / path_cache recovered from
+  the before-snapshot.
+* Link create/delete recording: `createLink` and `deleteLink` in
+  `link_service.ts` accept an optional `changeSetId` and emit a
+  `change_set_item` (`operation: link_create | link_delete`). The
+  restore executor inverts each: link_create inverse deletes the link,
+  link_delete inverse re-inserts from `before_snapshot`.
 * Draft branch service (CRUD + head upsert + branch version resolver).
-* Wiring: `importPackageAction`, `approveProposal`, and
-  `moveTreeNodeAction` all open, populate, and finalize change sets.
-* Unit tests for the planner primitives and inverse contracts
-  (`src/tests/unit/rollback_foundations.test.ts`).
+* Wiring: `importPackageAction`, `approveProposal`,
+  `createFolderAction`, and `moveTreeNodeAction` all open, populate,
+  and finalize change sets.
+* **RLS write gate** (migration `20260412000005_rls_write_role_gate.sql`):
+  every content-bearing INSERT / UPDATE / DELETE policy now calls
+  `can_write_workspace()` instead of `owns_workspace()`, so viewers are
+  rejected at the database layer even if they hold a valid Supabase
+  token. Read policies keep the membership-any-role gate.
+* **History UI** at `/app/history`: list view with per-entry "Undo"
+  action, detail drawer showing items and structural events, confirm
+  dialog, server action that calls `restoreFromChangeSet` via the
+  role-gated `requireWriteRoleResult`.
+* Snapshot type narrowing primitives in
+  `src/server/domain/types/change_set_snapshots.ts` — typed shapes
+  plus type guards for the common snapshot patterns. Adopting them
+  in readers is incremental and safe.
+* Unit tests for the planner primitives, inverse contracts, and the
+  folder_create / folder_delete plan (`src/tests/unit/rollback_foundations.test.ts`).
 
-**Explicitly deferred (out of scope for this prompt):**
+**Explicitly deferred — with reasoning:**
 
-* Human UI: history timeline, "Undo this import" button, draft-branch
-  compare view. All of these can be layered on top of the existing
-  data without further migrations.
-* Branch-aware read/write in the existing edit actions. The schema and
-  resolver are present; the editor layer doesn't consult a branch yet.
-* Merge semantics across branches. The graph allows divergent heads;
-  V1 only writes linear chains on main.
-* `folder_create` / `folder_delete` structural inverses. The executor
-  refuses these intentionally so the feature never silently
-  half-executes. The next iteration adds a safe implementation.
-* Per-box / per-folder permissions on restore. V1 uses the
-  workspace-level role model (`require_role.ts`); only workspace
-  members can view change sets, and restore is a write operation gated
-  by `canWrite`.
+* **Merge semantics.** Context Store is not a source-control product.
+  The product's resolution mechanism is restore, not merge. A draft
+  branch ends in exactly two ways — promote (winner-takes-all) or
+  discard — and any divergence between main and a draft is settled by
+  choosing one of those paths. We deliberately reject Git-style
+  three-way merge here; the schema can support divergent heads but the
+  service layer only writes linear chains on main.
+* **Branch-aware writes in editor actions.** Requires threading a
+  branch_id through every content edit path (note updates, file
+  saves, skill / agent updates) and a UI for selecting the active
+  branch. The schema, resolver, and head storage are in place; the
+  editor refactor is a follow-up release.
+* **Email-invite sign-up path.** V1 membership is add-by-existing-user.
+  `workspace_memberships.accepted_at` exists for the pending-invite
+  flow without another migration.
 
 ## Related documents
 

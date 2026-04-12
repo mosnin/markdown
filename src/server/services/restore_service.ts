@@ -509,14 +509,63 @@ async function applyStructuralInverse(
       }
       break;
     }
-    case "folder_create":
-    case "folder_delete":
-      // Folder create/delete inverses are significant and should be
-      // implemented before real import rollback is offered. V1 leaves
-      // this as a deliberate blocker so we never silently half-execute.
-      throw new Error(
-        `Inverse of ${event.event_type} is not yet implemented; abort restore to preserve trust.`
-      );
+    case "folder_create": {
+      // Inverse of creating a folder is to soft-trash it. We intentionally
+      // do NOT hard-delete because the folder may still hold content the
+      // user wants to recover (children are not cascade-trashed here; the
+      // existing folder lifecycle service handles cascades when the user
+      // explicitly trashes a subtree). After a restore the folder is
+      // hidden from all active views via the existing `status = 'trashed'`
+      // filters, which matches the product's reversibility contract.
+      //
+      // This is a deliberately conservative choice: a folder that was
+      // created by an operation we're now undoing becomes invisible, and
+      // a later restore-of-the-restore brings it back with status='active'.
+      await supabase
+        .from("folders")
+        .update({ status: "trashed" })
+        .eq("id", event.object_id);
+      // Also hide the registry row so tree renders drop the folder.
+      await supabase
+        .from("workspace_objects")
+        .update({ status: "trashed" })
+        .eq("object_type", "folder")
+        .eq("object_id", event.object_id);
+      break;
+    }
+    case "folder_delete": {
+      // Inverse of deleting (soft-trashing) a folder is to restore it.
+      // The before_state of the original event carries the folder's
+      // pre-delete name / slug / path_cache / parent — use them so we
+      // rebuild the row faithfully even if upstream columns were touched.
+      const snap = event.before_state as {
+        name?: string; slug?: string; path_cache?: string;
+        parent_folder_id?: string | null; box_id?: string;
+      };
+      await supabase
+        .from("folders")
+        .update({
+          status: "active",
+          ...(snap.name ? { name: snap.name } : {}),
+          ...(snap.slug ? { slug: snap.slug } : {}),
+          ...(typeof snap.path_cache === "string" ? { path_cache: snap.path_cache } : {}),
+          ...(typeof snap.parent_folder_id !== "undefined"
+            ? { parent_folder_id: snap.parent_folder_id }
+            : {}),
+        })
+        .eq("id", event.object_id);
+      await supabase
+        .from("workspace_objects")
+        .update({
+          status: "active",
+          ...(typeof snap.parent_folder_id !== "undefined"
+            ? { folder_id: snap.parent_folder_id }
+            : {}),
+        })
+        .eq("object_type", "folder")
+        .eq("object_id", event.object_id);
+      break;
+    }
   }
 
   await recordStructuralEvent(supabase, {
@@ -610,9 +659,58 @@ async function applyItemInverse(
     return;
   }
 
+  if (item.operation === "link_create" && item.object_type === "note_link") {
+    // Inverse of creating a link is deleting it. This is safe even if
+    // the link has already been deleted by other means — we treat the
+    // delete as idempotent. Record a compensating item on the restore
+    // change set so the lineage is traceable.
+    await supabase.from("note_links").delete().eq("id", item.object_id);
+    await recordChangeSetItem(supabase, {
+      change_set_id: restoreChangeSetId,
+      workspace_id: workspaceId,
+      operation: "link_delete",
+      object_type: "note_link",
+      object_id: item.object_id,
+      before_snapshot: item.after_snapshot,
+    });
+    return;
+  }
+
+  if (item.operation === "link_delete" && item.object_type === "note_link" && item.before_snapshot) {
+    // Inverse of deleting a link is recreating it from the before_snapshot.
+    // If the link cannot be recreated (e.g. source or target note
+    // trashed) we skip silently; the restore item record documents the
+    // intent and a future second-chance recovery could retry.
+    const snap = item.before_snapshot as {
+      source_note_id: string;
+      target_note_id: string;
+      relationship_type: string;
+      relationship_note: string | null;
+    };
+    const { error } = await supabase
+      .from("note_links")
+      .insert({
+        id: item.object_id,
+        source_note_id: snap.source_note_id,
+        target_note_id: snap.target_note_id,
+        relationship_type: snap.relationship_type,
+        relationship_note: snap.relationship_note,
+      });
+    if (!error) {
+      await recordChangeSetItem(supabase, {
+        change_set_id: restoreChangeSetId,
+        workspace_id: workspaceId,
+        operation: "link_create",
+        object_type: "note_link",
+        object_id: item.object_id,
+        after_snapshot: item.before_snapshot,
+      });
+    }
+    return;
+  }
+
   // For operations whose inverse is purely structural (move, attach,
   // detach) the structural_events replay has already done the work.
-  // Link create/delete inverses are deferred.
 }
 
 async function recordRestore(

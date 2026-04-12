@@ -23,6 +23,7 @@ import {
   commitChangeSet,
   abortChangeSet,
   recordChangeSetItem,
+  recordStructuralEvent,
 } from "@/server/services/change_set_service";
 import {
   auditNoteExported,
@@ -305,6 +306,27 @@ export async function importPackageAction(
           object_id: act.final_id,
           after_snapshot: { final_path: act.final_path, box_id: boxId },
         });
+
+        // For folders created by the import, also emit a structural
+        // `folder_create` event so the restore executor can safely
+        // invert the creation (soft-trash) on change-set restore. This
+        // is the mechanism that makes "Undo this import" safe when the
+        // import built nested folder structure.
+        if (mapped === "folder" && op === "create") {
+          await recordStructuralEvent(supabase, {
+            change_set_id: changeSet.id,
+            workspace_id: workspaceId,
+            box_id: boxId,
+            event_type: "folder_create",
+            object_type: "folder",
+            object_id: act.final_id,
+            before_state: {},
+            after_state: {
+              final_path: act.final_path,
+              box_id: boxId,
+            },
+          });
+        }
       }
 
       await auditImportCompleted(supabase, workspaceId, userId, boxId, {

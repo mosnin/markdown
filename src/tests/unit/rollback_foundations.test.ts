@@ -178,6 +178,60 @@ describe("planStructural", () => {
   });
 });
 
+describe("folder create/delete inverse planning", () => {
+  it("plans folder_create inverse as structural_undo (no blocker)", () => {
+    // Folder create events carry only after_state; the inverse is
+    // soft-trash of the created folder, which needs no path_cache. The
+    // planner must NOT block these.
+    const e: StructuralEvent = {
+      id: "e1",
+      change_set_id: "cs1",
+      workspace_id: "w1",
+      box_id: "b1",
+      event_type: "folder_create",
+      object_type: "folder",
+      object_id: "f1",
+      before_state: {},
+      after_state: {
+        name: "Research",
+        slug: "research",
+        path_cache: "research",
+        parent_folder_id: null,
+        box_id: "b1",
+      },
+      sequence: 0,
+      created_at: "2025-01-01T00:00:00Z",
+    };
+    const p = planStructural(e);
+    expect(p.operation).toBe("structural_undo");
+    expect(p.blocked).toBeFalsy();
+  });
+
+  it("plans folder_delete inverse as structural_undo when before_state has a path", () => {
+    const e: StructuralEvent = {
+      id: "e2",
+      change_set_id: "cs1",
+      workspace_id: "w1",
+      box_id: "b1",
+      event_type: "folder_delete",
+      object_type: "folder",
+      object_id: "f1",
+      before_state: {
+        name: "Research",
+        slug: "research",
+        path_cache: "research",
+        parent_folder_id: null,
+      },
+      after_state: { status: "trashed" },
+      sequence: 0,
+      created_at: "2025-01-01T00:00:00Z",
+    };
+    const p = planStructural(e);
+    expect(p.operation).toBe("structural_undo");
+    expect(p.blocked).toBeFalsy();
+  });
+});
+
 describe("trust invariants at the planning layer", () => {
   it("does not plan writes from an empty change set", () => {
     // No items, no structural events → no plan entries. The restore
