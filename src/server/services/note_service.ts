@@ -162,6 +162,34 @@ export async function createNote(
   }
 
   const result = data as NoteRpcResult;
+
+  // Register the note in workspace_objects so the tree-sidebar and any other
+  // cross-type view can see it and order it. Notes are not reusable, so
+  // box_id is always set and is_reusable = false. The RPC above does NOT
+  // touch workspace_objects — that's deliberate: the registry is maintained
+  // exclusively by the service layer so every cross-type invariant lives in
+  // one place.
+  //
+  // sort_order is a monotonically-increasing ordinal (ms since epoch). We
+  // want this to fit in a bigint, not int4 — see migration
+  // 20260412000002_tree_ordering_fix.sql.
+  const { error: regError } = await supabase
+    .from("workspace_objects")
+    .insert({
+      workspace_id: workspaceId,
+      box_id: boxId,
+      folder_id: folderId ?? null,
+      object_type: "note",
+      object_id: result.note.id,
+      display_name: result.note.title,
+      status: result.note.status ?? "active",
+      is_reusable: false,
+      sort_order: Date.now(),
+    });
+  if (regError) {
+    console.error("[note_service] Failed to register workspace object for note", result.note.id, regError);
+  }
+
   await auditNoteCreated(supabase, workspaceId, userId, result.note.id, result.note.title, boxId, kind);
   return result.note;
 }

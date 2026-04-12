@@ -25,6 +25,7 @@ import {
 } from "hugeicons-react";
 import { Tree, type NodeRendererProps, type NodeApi } from "react-arborist";
 import { cn } from "@/lib/utils";
+import { compareSiblings } from "@/server/domain/tree_ordering";
 import { Spinner } from "@/components/ui/spinner";
 import { createClient } from "@/lib/supabase/browser";
 import { FileCreateDialog } from "@/components/product/file_create_dialog";
@@ -183,16 +184,20 @@ function buildArboristTree(data: BoxTreeData): TreeNodeData[] {
     sortOrder: a.sort_order,
   }));
 
-  // Sort all children recursively
+  // Sort all children recursively using the shared tree-ordering
+  // comparator so client render order matches the server move action's
+  // sibling ordering. See src/server/domain/tree_ordering.ts.
+  // Previously this used name.localeCompare as the tiebreaker, which
+  // silently overrode structural sort_order whenever two siblings had
+  // equal sort_order (very common before the registry backfill) — that
+  // was one of the reasons drag reorder "didn't stick" on refresh.
   function sortChildren(nodes: TreeNodeData[]) {
-    nodes.sort((a, b) => {
-      // Folders first, then by sort_order, then alphabetically
-      const aIsFolder = a.nodeType === "folder" ? 0 : 1;
-      const bIsFolder = b.nodeType === "folder" ? 0 : 1;
-      if (aIsFolder !== bIsFolder) return aIsFolder - bIsFolder;
-      if (a.sortOrder !== b.sortOrder) return a.sortOrder - b.sortOrder;
-      return a.name.localeCompare(b.name);
-    });
+    nodes.sort((a, b) =>
+      compareSiblings(
+        { objectType: a.nodeType, objectId: a.objectId, sortOrder: a.sortOrder },
+        { objectType: b.nodeType, objectId: b.objectId, sortOrder: b.sortOrder }
+      )
+    );
     for (const node of nodes) {
       if (node.children) sortChildren(node.children);
     }
@@ -446,7 +451,14 @@ function BoxTree({
     );
   }
 
-  // Handle drag-and-drop moves via react-arborist
+  // Handle drag-and-drop moves via react-arborist.
+  //
+  // react-arborist's args.index is the 0-based position in the destination
+  // parent's visible sibling list after the drop completes. We forward it
+  // verbatim as targetIndex so the server action can re-spread sort_order
+  // across every sibling at that parent. Discarding this index — as earlier
+  // revisions of this handler did — is what made sibling reordering never
+  // persist.
   const handleMove = async (args: {
     dragIds: string[];
     dragNodes: NodeApi<TreeNodeData>[];
@@ -460,17 +472,23 @@ function BoxTree({
     if (!dragNode) return;
 
     const dragData = dragNode.data;
-    const targetFolderId = args.parentNode
-      ? args.parentNode.data.nodeType === "folder" ? args.parentNode.data.objectId : null
-      : null;
+
+    // parentNode is null when dragging to the root, or a tree node for
+    // drops into a folder. Only folders are valid containers — drops on
+    // leaves are rejected by disableDrop, so we only care about folder vs
+    // root here.
+    const targetFolderId =
+      args.parentNode && args.parentNode.data.nodeType === "folder"
+        ? args.parentNode.data.objectId
+        : null;
 
     startMove(async () => {
       await moveTreeNodeAction({
         boxId,
         draggedType: dragData.nodeType,
         draggedId: dragData.objectId,
-        position: targetFolderId ? "inside" : "root",
         targetFolderId,
+        targetIndex: args.index,
         isAttachment: dragData.isAttachment,
       });
       onTreeRefresh?.();

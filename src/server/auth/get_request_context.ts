@@ -90,6 +90,7 @@ export async function getRequestContext(): Promise<RequestContext> {
     name: workspace.name,
     slug: workspace.slug,
     owner_id: workspace.owner_id,
+    role: workspace.role,
   };
 
   return {

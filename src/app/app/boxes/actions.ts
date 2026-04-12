@@ -11,6 +11,11 @@ import { searchNotes, type NoteSearchResult } from "@/server/services/search_ser
 import { applyBoxTemplate } from "@/server/services/template_service";
 import { auditNoteCreatedFromTemplate } from "@/server/services/audit_service";
 import { checkNoteLimit, checkBoxLimit } from "@/server/services/subscription_service";
+import {
+  compareSiblings,
+  clampDropIndex,
+  isFolderCycle,
+} from "@/server/domain/tree_ordering";
 
 export type ActionResult<T = void> =
   | { ok: true; data: T }
@@ -18,13 +23,33 @@ export type ActionResult<T = void> =
 
 // ─── Auth helper ──────────────────────────────────────────────────────────────
 
-async function requireContext() {
+/**
+ * Resolves the request context for an action.
+ *
+ * By default this enforces a write-capable role (member / admin / owner).
+ * Viewers reaching a write-path action hit an early throw with a clear
+ * message rather than a cryptic RLS error farther down the stack.
+ *
+ * Pass `{ requireWrite: false }` to opt out for read-only actions
+ * (tree fetches, search, etc.). Read-only actions still require an
+ * authenticated user and an active workspace.
+ */
+async function requireContext(options: { requireWrite?: boolean } = {}) {
+  const { requireWrite = true } = options;
   const ctx = await getRequestContext();
   if (!ctx.isAuthenticated || !ctx.user || !ctx.workspace) {
     throw new Error("Unauthenticated");
   }
+  if (requireWrite && ctx.workspace.role === "viewer") {
+    throw new Error("Viewers cannot perform write actions in this workspace.");
+  }
   const supabase = await createClient();
-  return { supabase, userId: ctx.user.id, workspaceId: ctx.workspace.id };
+  return {
+    supabase,
+    userId: ctx.user.id,
+    workspaceId: ctx.workspace.id,
+    role: ctx.workspace.role,
+  };
 }
 
 // ─── Box actions ──────────────────────────────────────────────────────────────
@@ -216,7 +241,7 @@ export async function searchNotesAction(
   query: string
 ): Promise<ActionResult<NoteSearchResult[]>> {
   try {
-    const { supabase } = await requireContext();
+    const { supabase } = await requireContext({ requireWrite: false });
     const results = await searchNotes(supabase, boxId, query);
     return { ok: true, data: results };
   } catch (err) {
@@ -246,7 +271,7 @@ export async function getBoxTreeAction(boxId: string): Promise<ActionResult<{
   agents: Array<{ id: string; name: string; folder_id: string | null; status: string; is_reusable: boolean; is_attachment: boolean; sort_order: number }>;
 }>> {
   try {
-    const { supabase, workspaceId } = await requireContext();
+    const { supabase, workspaceId } = await requireContext({ requireWrite: false });
     const { getBoxById } = await import("@/server/repositories/box_repository");
     const box = await getBoxById(supabase, boxId);
     if (!box || box.workspace_id !== workspaceId) {
@@ -519,7 +544,7 @@ export async function getAttachablesToBoxAction(boxId: string): Promise<ActionRe
   agents: Array<{ id: string; name: string; description: string | null; canonical_format: string; agent_type: string | null; status: string }>;
 }>> {
   try {
-    const { supabase, workspaceId } = await requireContext();
+    const { supabase, workspaceId } = await requireContext({ requireWrite: false });
     const { getBoxById } = await import("@/server/repositories/box_repository");
     const { listReusableSkills } = await import("@/server/repositories/skill_repository");
     const { listReusableAgents } = await import("@/server/repositories/agent_repository");
@@ -577,11 +602,131 @@ interface MoveTreeNodeInput {
   boxId: string;
   draggedType: TreeObjectType;
   draggedId: string;
+  /** Folder id the dragged object should end up inside, or null for box root. */
+  targetFolderId?: string | null;
+  /** react-arborist drop index among siblings at the destination parent. */
+  targetIndex?: number;
+  /**
+   * Legacy fields kept for backwards-compatibility with callers that still
+   * use before/after/inside semantics. Prefer targetFolderId + targetIndex.
+   */
   targetType?: TreeObjectType;
   targetId?: string;
-  targetFolderId?: string | null;
-  position: MovePosition;
+  position?: MovePosition;
   isAttachment?: boolean;
+}
+
+/** A sibling entry at a given (box, parent folder) position. */
+interface SiblingEntry {
+  source: "workspace_object" | "box_attachment";
+  objectType: TreeObjectType;
+  objectId: string;
+  sortOrder: number;
+}
+
+/**
+ * Load every sibling at (boxId, folderId) — the union of native objects
+ * (workspace_objects) and reusable attachments (box_object_attachments) —
+ * and return them in the same order the tree sidebar displays:
+ *   folders first, then everything else by sort_order (ties broken by id).
+ *
+ * The dragged node is excluded from the list so callers can insert it at
+ * the desired target index deterministically.
+ */
+async function loadSiblings(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  boxId: string,
+  folderId: string | null,
+  exclude: { type: TreeObjectType; id: string; isAttachment: boolean }
+): Promise<SiblingEntry[]> {
+  const objectsQuery = supabase
+    .from("workspace_objects")
+    .select("object_type, object_id, sort_order")
+    .eq("box_id", boxId)
+    .neq("status", "trashed");
+  if (folderId === null) {
+    objectsQuery.is("folder_id", null);
+  } else {
+    objectsQuery.eq("folder_id", folderId);
+  }
+  const { data: objectRows } = await objectsQuery;
+
+  const attachmentsQuery = supabase
+    .from("box_object_attachments")
+    .select("object_type, object_id, sort_order")
+    .eq("box_id", boxId);
+  if (folderId === null) {
+    attachmentsQuery.is("folder_id", null);
+  } else {
+    attachmentsQuery.eq("folder_id", folderId);
+  }
+  const { data: attachmentRows } = await attachmentsQuery;
+
+  const entries: SiblingEntry[] = [];
+  for (const r of objectRows ?? []) {
+    if (
+      !exclude.isAttachment &&
+      r.object_type === exclude.type &&
+      r.object_id === exclude.id
+    ) continue;
+    entries.push({
+      source: "workspace_object",
+      objectType: r.object_type as TreeObjectType,
+      objectId: r.object_id,
+      sortOrder: Number(r.sort_order ?? 0),
+    });
+  }
+  for (const r of attachmentRows ?? []) {
+    if (
+      exclude.isAttachment &&
+      r.object_type === exclude.type &&
+      r.object_id === exclude.id
+    ) continue;
+    entries.push({
+      source: "box_attachment",
+      objectType: r.object_type as TreeObjectType,
+      objectId: r.object_id,
+      sortOrder: Number(r.sort_order ?? 0),
+    });
+  }
+
+  // Use the shared comparator so the server and the client tree agree on
+  // sibling order. See src/server/domain/tree_ordering.ts.
+  entries.sort(compareSiblings);
+  return entries;
+}
+
+/**
+ * Re-spread sort_order across every sibling in `order` using a gapped
+ * scheme so future single-item reorders don't need to rewrite every row.
+ *
+ * We use (i + 1) * 1000 as the ordinal. That leaves 999 slots between any
+ * two neighbours for future midpoint inserts if we ever want to avoid
+ * full re-spreading on every reorder.
+ */
+async function writeSiblingOrder(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  boxId: string,
+  order: SiblingEntry[]
+): Promise<void> {
+  for (let i = 0; i < order.length; i++) {
+    const sort = (i + 1) * 1000;
+    const entry = order[i];
+    if (entry.source === "workspace_object") {
+      await supabase
+        .from("workspace_objects")
+        .update({ sort_order: sort })
+        .eq("object_type", entry.objectType)
+        .eq("object_id", entry.objectId);
+    } else {
+      await supabase
+        .from("box_object_attachments")
+        .update({ sort_order: sort })
+        .eq("box_id", boxId)
+        .eq("object_type", entry.objectType)
+        .eq("object_id", entry.objectId);
+    }
+  }
 }
 
 async function computePathCache(
@@ -609,24 +754,34 @@ async function computePathCache(
 export async function moveTreeNodeAction(input: MoveTreeNodeInput): Promise<ActionResult> {
   try {
     const { supabase, workspaceId } = await requireContext();
-    const { boxId, draggedType, draggedId, targetType, targetId, targetFolderId, position, isAttachment } = input;
+    const { boxId, draggedType, draggedId, isAttachment = false } = input;
 
     const { data: box } = await supabase.from("boxes").select("id, workspace_id").eq("id", boxId).single();
     if (!box || box.workspace_id !== workspaceId) return { ok: false, error: "Box not found" };
 
-    let nextFolderId: string | null = null;
-    if (position === "inside") {
-      if (targetType !== "folder" || !targetId) return { ok: false, error: "Inside moves require a folder target" };
-      nextFolderId = targetId;
-    } else if (position === "root") {
+    // Resolve destination folder. Prefer explicit targetFolderId. Fall back
+    // to the legacy position/targetId contract so older callers keep working.
+    let nextFolderId: string | null;
+    if (input.targetFolderId !== undefined) {
+      nextFolderId = input.targetFolderId;
+    } else if (input.position === "inside") {
+      if (input.targetType !== "folder" || !input.targetId) {
+        return { ok: false, error: "Inside moves require a folder target" };
+      }
+      nextFolderId = input.targetId;
+    } else if (input.position === "root") {
       nextFolderId = null;
     } else {
-      nextFolderId = targetFolderId ?? null;
+      nextFolderId = null;
     }
 
-    // folder guardrails
+    // Folder guardrails — a folder cannot be moved into itself or any of
+    // its descendants. We check by looking at the target's path_cache
+    // starts with the source folder's path_cache.
     if (draggedType === "folder") {
-      if (nextFolderId === draggedId) return { ok: false, error: "Cannot move a folder into itself" };
+      if (nextFolderId === draggedId) {
+        return { ok: false, error: "Cannot move a folder into itself" };
+      }
       if (nextFolderId) {
         const { data: targetFolder } = await supabase
           .from("folders")
@@ -638,100 +793,137 @@ export async function moveTreeNodeAction(input: MoveTreeNodeInput): Promise<Acti
           .select("path_cache, box_id")
           .eq("id", draggedId)
           .single();
-        if (!targetFolder || !sourceFolder || targetFolder.box_id !== boxId || sourceFolder.box_id !== boxId) {
+        if (
+          !targetFolder || !sourceFolder ||
+          targetFolder.box_id !== boxId || sourceFolder.box_id !== boxId
+        ) {
           return { ok: false, error: "Folder not found" };
         }
-        if (targetFolder.path_cache.startsWith(`${sourceFolder.path_cache}/`)) {
+        if (isFolderCycle(sourceFolder.path_cache, targetFolder.path_cache)) {
           return { ok: false, error: "Cannot move a folder into its descendant" };
         }
       }
     }
 
-    const sortValue = Date.now();
+    // ── 1. Update dragged node placement (folder_id / path_cache) ──────────
     if (draggedType === "folder") {
       const { data: folder } = await supabase
         .from("folders")
         .select("id, box_id, slug, path_cache")
         .eq("id", draggedId)
         .single();
-      if (!folder || folder.box_id !== boxId) return { ok: false, error: "Folder not found" };
+      if (!folder || folder.box_id !== boxId) {
+        return { ok: false, error: "Folder not found" };
+      }
 
       let newPath = folder.slug;
       if (nextFolderId) {
-        const { data: parent } = await supabase.from("folders").select("path_cache").eq("id", nextFolderId).single();
+        const { data: parent } = await supabase
+          .from("folders")
+          .select("path_cache")
+          .eq("id", nextFolderId)
+          .single();
         if (!parent) return { ok: false, error: "Target folder not found" };
         newPath = `${parent.path_cache}/${folder.slug}`;
       }
       const oldPath = folder.path_cache;
-      await supabase.from("folders").update({ parent_folder_id: nextFolderId, path_cache: newPath }).eq("id", draggedId);
+
+      await supabase
+        .from("folders")
+        .update({ parent_folder_id: nextFolderId, path_cache: newPath })
+        .eq("id", draggedId);
       await supabase
         .from("workspace_objects")
-        .update({ folder_id: nextFolderId, sort_order: sortValue })
+        .update({ folder_id: nextFolderId })
         .eq("object_type", "folder")
         .eq("object_id", draggedId);
 
-      // cascade descendant folder path caches
-      const { data: descendants } = await supabase
-        .from("folders")
-        .select("id, path_cache")
-        .like("path_cache", `${oldPath}/%`);
-      for (const d of descendants ?? []) {
-        const patched = d.path_cache.replace(oldPath, newPath);
-        await supabase.from("folders").update({ path_cache: patched }).eq("id", d.id);
-      }
-      // cascade item path caches
-      for (const table of ["notes", "files", "skills", "agents"] as const) {
-        const { data: rows } = await supabase
-          .from(table)
+      // Cascade descendant folder paths.
+      if (oldPath !== newPath) {
+        const { data: descendants } = await supabase
+          .from("folders")
           .select("id, path_cache")
-          .eq("box_id", boxId)
           .like("path_cache", `${oldPath}/%`);
-        for (const row of rows ?? []) {
-          await supabase.from(table).update({ path_cache: row.path_cache.replace(oldPath, newPath) }).eq("id", row.id);
+        for (const d of descendants ?? []) {
+          const patched = `${newPath}${d.path_cache.slice(oldPath.length)}`;
+          await supabase.from("folders").update({ path_cache: patched }).eq("id", d.id);
+        }
+        // Cascade descendant leaf paths in notes/files/skills/agents.
+        for (const table of ["notes", "files", "skills", "agents"] as const) {
+          const { data: rows } = await supabase
+            .from(table)
+            .select("id, path_cache")
+            .eq("box_id", boxId)
+            .like("path_cache", `${oldPath}/%`);
+          for (const row of rows ?? []) {
+            const patched = `${newPath}${row.path_cache.slice(oldPath.length)}`;
+            await supabase.from(table).update({ path_cache: patched }).eq("id", row.id);
+          }
         }
       }
+    } else if (isAttachment && (draggedType === "skill" || draggedType === "agent")) {
+      // Reusable skill/agent attached into this box by reference. Placement
+      // lives in box_object_attachments only.
+      await supabase
+        .from("box_object_attachments")
+        .update({ folder_id: nextFolderId })
+        .eq("box_id", boxId)
+        .eq("object_type", draggedType)
+        .eq("object_id", draggedId);
     } else {
-      if (isAttachment && (draggedType === "skill" || draggedType === "agent")) {
-        await supabase
-          .from("box_object_attachments")
-          .update({ folder_id: nextFolderId, sort_order: sortValue })
-          .eq("box_id", boxId)
-          .eq("object_type", draggedType)
-          .eq("object_id", draggedId);
-      } else {
-        const table = draggedType === "note" ? "notes" : draggedType === "file" ? "files" : draggedType === "skill" ? "skills" : "agents";
-        const pathCache = await computePathCache(supabase, table, draggedId, nextFolderId);
-        await supabase.from(table).update({ folder_id: nextFolderId, path_cache: pathCache }).eq("id", draggedId).eq("box_id", boxId);
-        await supabase
-          .from("workspace_objects")
-          .update({ folder_id: nextFolderId, sort_order: sortValue })
-          .eq("object_type", draggedType)
-          .eq("object_id", draggedId);
-      }
+      const table =
+        draggedType === "note" ? "notes" :
+        draggedType === "file" ? "files" :
+        draggedType === "skill" ? "skills" : "agents";
+      const pathCache = await computePathCache(supabase, table, draggedId, nextFolderId);
+      await supabase
+        .from(table)
+        .update({ folder_id: nextFolderId, path_cache: pathCache })
+        .eq("id", draggedId)
+        .eq("box_id", boxId);
+      await supabase
+        .from("workspace_objects")
+        .update({ folder_id: nextFolderId })
+        .eq("object_type", draggedType)
+        .eq("object_id", draggedId);
     }
 
-    // lightweight sibling reorder support
-    if (position === "before" || position === "after") {
-      if (!targetType || !targetId) return { ok: false, error: "Missing target for reorder" };
-      const targetSort = isAttachment
-        ? (await supabase.from("box_object_attachments").select("sort_order").eq("box_id", boxId).eq("object_type", targetType).eq("object_id", targetId).maybeSingle()).data?.sort_order ?? sortValue
-        : (await supabase.from("workspace_objects").select("sort_order").eq("object_type", targetType).eq("object_id", targetId).maybeSingle()).data?.sort_order ?? sortValue;
-      const adjusted = position === "before" ? targetSort - 1 : targetSort + 1;
-      if (isAttachment && (draggedType === "skill" || draggedType === "agent")) {
-        await supabase
-          .from("box_object_attachments")
-          .update({ sort_order: adjusted })
-          .eq("box_id", boxId)
-          .eq("object_type", draggedType)
-          .eq("object_id", draggedId);
-      } else {
-        await supabase
-          .from("workspace_objects")
-          .update({ sort_order: adjusted })
-          .eq("object_type", draggedType)
-          .eq("object_id", draggedId);
-      }
-    }
+    // ── 2. Re-spread sibling sort_orders at the destination parent ─────────
+    //
+    // This is what makes reorder actually persist. We load every sibling
+    // at (boxId, nextFolderId) in the display order the tree renders,
+    // splice the dragged node into the requested position, and re-assign
+    // all sort_orders with a gapped scheme. That guarantees the drop lands
+    // exactly where the user released regardless of prior sort_order state.
+    const siblings = await loadSiblings(supabase, boxId, nextFolderId, {
+      type: draggedType,
+      id: draggedId,
+      isAttachment,
+    });
+
+    const draggedEntry: SiblingEntry = {
+      source: (isAttachment && (draggedType === "skill" || draggedType === "agent"))
+        ? "box_attachment"
+        : "workspace_object",
+      objectType: draggedType,
+      objectId: draggedId,
+      sortOrder: 0, // overwritten by writeSiblingOrder
+    };
+
+    // Clamp the drop index against the folder-first invariant. The shared
+    // helper keeps server and client behaviour in lock-step.
+    const targetIndex = clampDropIndex(
+      siblings,
+      draggedType,
+      input.targetIndex ?? siblings.length
+    );
+
+    const ordered = [
+      ...siblings.slice(0, targetIndex),
+      draggedEntry,
+      ...siblings.slice(targetIndex),
+    ];
+    await writeSiblingOrder(supabase, boxId, ordered);
 
     revalidatePath(`/app/boxes/${boxId}`);
     return { ok: true, data: undefined };

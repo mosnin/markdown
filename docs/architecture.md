@@ -224,6 +224,22 @@ See type-specific documentation:
    - Built-in drag-drop reparenting via react-dnd, virtualized rendering, keyboard navigation.
    - Inline rename: double-click a node to edit; `onRename` dispatches to type-specific server actions.
    - `BoxContentsTree` (tree tab) also uses react-arborist (read-only mode).
+   - Multi-user membership: see [docs/auth_and_permissions.md](auth_and_permissions.md)
+     and [docs/workspace_selector_search_and_membership_v1.md](workspace_selector_search_and_membership_v1.md).
+     `workspace_memberships` carries viewer/member/admin roles;
+     `WorkspaceContext.role` is the canonical signal at the
+     request-context seam. RLS reads through any membership; writes are
+     gated at the server-action layer via `require_role.ts`.
+   - Workspace-wide search: `src/server/services/workspace_search_service.ts`
+     covers notes, files, skills, agents, folders, and boxes via a unified
+     `WorkspaceSearchHit` shape. Rendered by `/app/search`.
+   - Ordering contract: `src/server/domain/tree_ordering.ts` is the single
+     source of truth shared by the client render (`buildArboristTree`) and
+     the server move action (`moveTreeNodeAction`). Folders sort before
+     leaves, then by `sort_order` (bigint, `Date.now()`-scaled), ties
+     broken by object id. Drops re-spread sibling `sort_order` with
+     `(i+1) * 1000` gaps so legal inserts between neighbours remain cheap.
+     See [docs/real_structural_drag_and_drop_fix_v1.md](real_structural_drag_and_drop_fix_v1.md).
 
 2. **Graph surface** — **Complete.**
    - Graph uses `@xyflow/react` with `@dagrejs/dagre` for automatic hierarchical layout.

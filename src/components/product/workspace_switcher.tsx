@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { Check, ChevronDown, LayoutGrid, Plus } from "lucide-react";
@@ -185,11 +184,25 @@ export function WorkspaceSwitcher({
             New workspace
           </DropdownMenuItem>
           <DropdownMenuSeparator />
-          <DropdownMenuItem render={<Link href="/app/workspaces" />}>
+          {/*
+            Use onClick + router.push instead of Base UI's `render={<Link>}`
+            pattern. Cloning a next/link element through the Menu.Item
+            render prop caused the dropdown to error on open because Link's
+            internals expect to own the element tree and don't play nicely
+            with Base UI's ref / children forwarding. The rest of the app
+            uses this same onClick pattern — see user_menu.tsx, tree_sidebar.
+          */}
+          <DropdownMenuItem
+            onClick={() => setTimeout(() => router.push("/app/workspaces"), 0)}
+            className="flex items-center gap-2"
+          >
             <LayoutGrid className="h-3.5 w-3.5" aria-hidden="true" />
-            Manage boxes
+            Manage workspaces
           </DropdownMenuItem>
-          <DropdownMenuItem render={<Link href="/app/settings" />}>
+          <DropdownMenuItem
+            onClick={() => setTimeout(() => router.push("/app/settings"), 0)}
+            className="flex items-center gap-2"
+          >
             <AccountSetting01Icon className="h-3.5 w-3.5" aria-hidden="true" />
             Workspace settings
           </DropdownMenuItem>

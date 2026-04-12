@@ -9,6 +9,7 @@ import {
   createWorkspace,
   listWorkspacesByOwner,
 } from "@/server/repositories/workspace_repository";
+import { listAccessibleWorkspaces } from "@/server/repositories/workspace_membership_repository";
 import { slugify } from "@/lib/slugify";
 
 export type ActionResult<T = void> =
@@ -99,8 +100,11 @@ export async function setActiveWorkspaceAction(
     }
 
     const supabase = await createClient();
-    const owned = await listWorkspacesByOwner(supabase, ctx.user.id);
-    if (!owned.some((w) => w.id === workspaceId)) {
+    // Accept any workspace the user has membership in — not just ones they
+    // own — so members and viewers can also set an invited workspace as
+    // their active selection.
+    const accessible = await listAccessibleWorkspaces(supabase, ctx.user.id);
+    if (!accessible.some((w) => w.id === workspaceId)) {
       return { ok: false, error: "Workspace not found" };
     }
 

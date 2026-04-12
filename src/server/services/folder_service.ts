@@ -142,6 +142,31 @@ export async function createFolder(
     accepts_generated_notes: false,
   });
 
+  // Register the folder in workspace_objects so tree ordering has a single
+  // source of truth. Folders are never reusable. For folder rows the
+  // registry's folder_id holds the *parent* folder (the container the
+  // folder lives inside), matching the convention used for notes/files.
+  //
+  // sort_order fits in a bigint — see migration 20260412000002.
+  if (effectiveBoxId) {
+    const { error: regError } = await supabase
+      .from("workspace_objects")
+      .insert({
+        workspace_id: workspaceId,
+        box_id: effectiveBoxId,
+        folder_id: parentFolderId ?? null,
+        object_type: "folder",
+        object_id: folder.id,
+        display_name: folder.name,
+        status: folder.status ?? "active",
+        is_reusable: false,
+        sort_order: Date.now(),
+      });
+    if (regError) {
+      console.error("[folder_service] Failed to register workspace object for folder", folder.id, regError);
+    }
+  }
+
   await auditFolderCreated(
     supabase,
     workspaceId,

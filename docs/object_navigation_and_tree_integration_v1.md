@@ -50,10 +50,33 @@ Reusable attached skills and agents link with `?box_id=` query param.
 
 ### Drag and drop
 
-- `onMove` handler dispatches to `moveTreeNodeAction` server action
-- `disableDrop` prevents drops onto non-folder nodes and circular folder moves
-- Root-level drops set `position: "root"` and `targetFolderId: null`
-- Folder drops set `position: "inside"` and `targetFolderId` to the folder's object ID
+- `onMove` handler dispatches to `moveTreeNodeAction` server action.
+- `disableDrop` prevents drops onto non-folder nodes and circular folder moves.
+- Destination is always specified via `targetFolderId` (`null` = box root)
+  plus `targetIndex` — the react-arborist drop index in the destination
+  parent's visible sibling list. `handleMove` forwards `args.index`
+  verbatim; dropping the index was the reason sibling reorders never
+  persisted in earlier revisions.
+- Ordering contract: folders sort before leaves, then by `sort_order`
+  ascending, ties broken by object id. The shared helper in
+  `src/server/domain/tree_ordering.ts` (`compareSiblings`,
+  `clampDropIndex`, `assignGappedOrder`, `isFolderCycle`) is used on both
+  the client render path and the server move action so the two agree on
+  sibling order and drop index clamping.
+- On drop, `moveTreeNodeAction` (a) updates the dragged object's
+  `folder_id` and `path_cache`, (b) enforces the folder cycle guardrail
+  via `isFolderCycle`, and (c) re-spreads sibling `sort_order` across
+  every row at the destination `(box_id, folder_id)` with gapped ordinals
+  `(i + 1) * 1000`. Gapping leaves room for future midpoint inserts
+  without re-writing every sibling.
+- Legacy callers that still pass `position: "inside" | "root" | "before"
+  | "after"` + `targetId` continue to work; the action resolves them to
+  `targetFolderId` internally.
+
+See [docs/real_structural_drag_and_drop_fix_v1.md](real_structural_drag_and_drop_fix_v1.md)
+for the full root-cause analysis and migration (widening `sort_order` to
+`bigint`, backfilling missing `workspace_objects` rows, assigning distinct
+initial ordinals to legacy data).
 
 ### Inline rename
 

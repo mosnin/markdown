@@ -30,6 +30,8 @@ import {
 } from "./settings_client";
 import type { Theme, NotificationPreferences } from "./actions";
 import { DeleteAccountButton } from "./delete_account_button";
+import { MembersSection } from "./members_section";
+import { canAdmin } from "@/server/auth/require_role";
 
 // Settings section nav is rendered by SettingsSidebar (see
 // src/components/product/settings_sidebar.tsx). Keeping the sections
@@ -127,6 +129,20 @@ export default async function SettingsPage() {
               initialName={workspace?.name ?? ctx.workspace.name}
               initialDescription={workspace?.description ?? null}
             />
+
+            {/*
+              Members management is admin-only. Viewers and members don't
+              see the surface at all (cleaner than rendering disabled
+              controls). Server actions re-verify role, so even if a
+              client managed to render this section, every mutation is
+              still rejected server-side.
+            */}
+            {canAdmin(ctx.workspace.role) && (
+              <MembersSection
+                workspaceName={ctx.workspace.name}
+                currentUserId={ctx.user.id}
+              />
+            )}
 
             <BillingSection
               plan={plan}

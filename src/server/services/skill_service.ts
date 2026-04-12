@@ -273,6 +273,7 @@ export async function createSkill(
       display_name: name,
       status: OBJECT_STATUS.ACTIVE,
       is_reusable: isReusable,
+      sort_order: Date.now(),
     });
 
   if (regError) {
