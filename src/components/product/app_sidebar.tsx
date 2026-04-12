@@ -197,7 +197,7 @@ export function AppSidebar({
       <Separator className="mx-2 my-1" />
 
       {/* Workspace label + boxes tree */}
-      <div className="flex min-h-0 flex-1 flex-col">
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
         <div className="flex items-center justify-between px-4 py-1.5">
           <Link
             href="/app/workspaces"

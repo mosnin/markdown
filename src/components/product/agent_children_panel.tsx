@@ -69,21 +69,10 @@ function AssociatedObjectCard({ link }: { link: ResolvedAgentLink }) {
 // ─── Panel ────────────────────────────────────────────────────────────────────
 
 interface AgentChildrenPanelProps {
-  /** Links where this agent is source and target is a file or note (structural associations) */
   structuralLinks: ResolvedAgentLink[];
   agentId: string;
 }
 
-/**
- * Children tab for the Agent workspace surface.
- *
- * Shows files and notes associated with this agent via semantic links.
- * "Parent of" and "child of" relationships are presented as structural containment.
- * Other relationship types are presented as associations.
- *
- * True database-level containment (agent_id FK on files) is a future database
- * migration. This panel uses the existing object_links system as a foundation.
- */
 export function AgentChildrenPanel({ structuralLinks, agentId }: AgentChildrenPanelProps) {
   const router = useRouter();
   const [folderOpen, setFolderOpen] = useState(false);
@@ -91,6 +80,7 @@ export function AgentChildrenPanel({ structuralLinks, agentId }: AgentChildrenPa
   const [folderName, setFolderName] = useState("");
   const [fileName, setFileName] = useState("");
   const [fileFormat, setFileFormat] = useState<SkillAgentFormat>("markdown");
+  const [error, setError] = useState<string | null>(null);
   const [isPending, start] = useTransition();
   const parentOf = structuralLinks.filter((l) => l.relationship_type === "parent_of");
   const childOf = structuralLinks.filter((l) => l.relationship_type === "child_of");
@@ -98,115 +88,125 @@ export function AgentChildrenPanel({ structuralLinks, agentId }: AgentChildrenPa
     (l) => l.relationship_type !== "parent_of" && l.relationship_type !== "child_of"
   );
 
-  if (structuralLinks.length === 0) {
-    return (
-      <ScrollArea className="h-full">
-        <div className="flex flex-col items-center justify-center gap-3 px-6 py-16 text-center">
-          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted">
-            <File className="h-5 w-5 text-muted-foreground" aria-hidden="true" />
-          </div>
-          <div className="space-y-1">
-            <p className="text-sm font-medium text-foreground">No associated objects</p>
-            <p className="text-xs text-muted-foreground max-w-xs">
-              Add a real child file or folder to make this agent structure concrete.
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
-            <Button size="sm" variant="outline" onClick={() => setFolderOpen(true)}>
-              <FolderPlus className="h-3.5 w-3.5" /> Folder
-            </Button>
-            <Button size="sm" variant="outline" onClick={() => setFileOpen(true)}>
-              <Plus className="h-3.5 w-3.5" /> File
-            </Button>
-          </div>
-        </div>
-      </ScrollArea>
-    );
-  }
-
   return (
-    <ScrollArea className="h-full">
-      <div className="flex flex-col gap-6 px-6 py-6">
-        <div className="flex items-center gap-2">
-          <Button size="sm" variant="outline" onClick={() => setFolderOpen(true)}>
-            <FolderPlus className="h-3.5 w-3.5" /> Folder
-          </Button>
-          <Button size="sm" variant="outline" onClick={() => setFileOpen(true)}>
-            <Plus className="h-3.5 w-3.5" /> File
-          </Button>
-        </div>
-        {parentOf.length > 0 && (
-          <section className="flex flex-col gap-3">
-            <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-              Contains
-            </h3>
-            <div className="flex flex-col gap-2">
-              {parentOf.map((l) => <AssociatedObjectCard key={l.id} link={l} />)}
+    <>
+      <ScrollArea className="h-full">
+        {structuralLinks.length === 0 ? (
+          <div className="flex flex-col items-center justify-center gap-3 px-6 py-16 text-center">
+            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted">
+              <File className="h-5 w-5 text-muted-foreground" aria-hidden="true" />
             </div>
-          </section>
-        )}
+            <div className="space-y-1">
+              <p className="text-sm font-medium text-foreground">No associated objects</p>
+              <p className="text-xs text-muted-foreground max-w-xs">
+                Add a child file or folder to build this agent&#39;s internal package structure.
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button size="sm" variant="outline" onClick={() => setFolderOpen(true)}>
+                <FolderPlus className="h-3.5 w-3.5" /> Folder
+              </Button>
+              <Button size="sm" variant="outline" onClick={() => setFileOpen(true)}>
+                <Plus className="h-3.5 w-3.5" /> File
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <div className="flex flex-col gap-6 px-6 py-6">
+            <div className="flex items-center gap-2">
+              <Button size="sm" variant="outline" onClick={() => setFolderOpen(true)}>
+                <FolderPlus className="h-3.5 w-3.5" /> Folder
+              </Button>
+              <Button size="sm" variant="outline" onClick={() => setFileOpen(true)}>
+                <Plus className="h-3.5 w-3.5" /> File
+              </Button>
+            </div>
+            {parentOf.length > 0 && (
+              <section className="flex flex-col gap-3">
+                <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  Contains
+                </h3>
+                <div className="flex flex-col gap-2">
+                  {parentOf.map((l) => <AssociatedObjectCard key={l.id} link={l} />)}
+                </div>
+              </section>
+            )}
 
-        {childOf.length > 0 && (
-          <section className="flex flex-col gap-3">
-            <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-              Contained by
-            </h3>
-            <div className="flex flex-col gap-2">
-              {childOf.map((l) => <AssociatedObjectCard key={l.id} link={l} />)}
-            </div>
-          </section>
-        )}
+            {childOf.length > 0 && (
+              <section className="flex flex-col gap-3">
+                <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  Contained by
+                </h3>
+                <div className="flex flex-col gap-2">
+                  {childOf.map((l) => <AssociatedObjectCard key={l.id} link={l} />)}
+                </div>
+              </section>
+            )}
 
-        {other.length > 0 && (
-          <section className="flex flex-col gap-3">
-            <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-              Associated objects
-            </h3>
-            <div className="flex flex-col gap-2">
-              {other.map((l) => <AssociatedObjectCard key={l.id} link={l} />)}
-            </div>
-          </section>
+            {other.length > 0 && (
+              <section className="flex flex-col gap-3">
+                <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  Associated objects
+                </h3>
+                <div className="flex flex-col gap-2">
+                  {other.map((l) => <AssociatedObjectCard key={l.id} link={l} />)}
+                </div>
+              </section>
+            )}
+          </div>
         )}
-      </div>
-      <Dialog open={folderOpen} onOpenChange={setFolderOpen}>
+      </ScrollArea>
+
+      {/* Dialogs rendered unconditionally so they work in both empty and populated states */}
+      <Dialog open={folderOpen} onOpenChange={(v) => { setFolderOpen(v); if (!v) { setFolderName(""); setError(null); } }}>
         <DialogContent>
           <DialogHeader><DialogTitle>New child folder</DialogTitle></DialogHeader>
-          <Input value={folderName} onChange={(e) => setFolderName(e.target.value)} placeholder="Folder name" />
+          <Input value={folderName} onChange={(e) => setFolderName(e.target.value)} placeholder="Folder name" autoFocus />
+          {error && <p className="text-xs text-destructive">{error}</p>}
           <DialogFooter showCloseButton>
             <Button
               size="sm"
               disabled={isPending || !folderName.trim()}
-              onClick={() => start(async () => {
-                const res = await createAgentChildFolderAction(agentId, folderName.trim());
-                if (res.ok) { setFolderOpen(false); setFolderName(""); router.refresh(); }
-              })}
+              onClick={() => {
+                setError(null);
+                start(async () => {
+                  const res = await createAgentChildFolderAction(agentId, folderName.trim());
+                  if (res.ok) { setFolderOpen(false); setFolderName(""); router.refresh(); }
+                  else { setError(res.error); }
+                });
+              }}
             >
-              Create
+              {isPending ? "Creating…" : "Create"}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
-      <Dialog open={fileOpen} onOpenChange={setFileOpen}>
+      <Dialog open={fileOpen} onOpenChange={(v) => { setFileOpen(v); if (!v) { setFileName(""); setError(null); } }}>
         <DialogContent>
           <DialogHeader><DialogTitle>New child file</DialogTitle></DialogHeader>
-          <Input value={fileName} onChange={(e) => setFileName(e.target.value)} placeholder="File name" />
+          <Input value={fileName} onChange={(e) => setFileName(e.target.value)} placeholder="File name" autoFocus />
           <select value={fileFormat} onChange={(e) => setFileFormat(e.target.value as SkillAgentFormat)} className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm">
             {SKILL_AGENT_FORMATS.map((f) => <option key={f} value={f}>{f}</option>)}
           </select>
+          {error && <p className="text-xs text-destructive">{error}</p>}
           <DialogFooter showCloseButton>
             <Button
               size="sm"
               disabled={isPending || !fileName.trim()}
-              onClick={() => start(async () => {
-                const res = await createAgentChildFileAction(agentId, { filename: fileName.trim(), canonicalFormat: fileFormat });
-                if (res.ok) { setFileOpen(false); setFileName(""); router.refresh(); }
-              })}
+              onClick={() => {
+                setError(null);
+                start(async () => {
+                  const res = await createAgentChildFileAction(agentId, { filename: fileName.trim(), canonicalFormat: fileFormat });
+                  if (res.ok) { setFileOpen(false); setFileName(""); router.refresh(); }
+                  else { setError(res.error); }
+                });
+              }}
             >
-              Create
+              {isPending ? "Creating…" : "Create"}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </ScrollArea>
+    </>
   );
 }

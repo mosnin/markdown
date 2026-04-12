@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { Calendar, Tag, Zap } from "lucide-react";
+import { Calendar, File, Tag, Zap } from "lucide-react";
 import { requireAuthenticatedUser } from "@/server/auth/require_authenticated_user";
 import { createClient } from "@/lib/supabase/server";
 import { getSkillById } from "@/server/repositories/skill_repository";
@@ -19,6 +19,9 @@ import { SkillSourceEditor } from "@/components/product/skill_source_editor";
 import { SkillChildrenPanel } from "@/components/product/skill_children_panel";
 import { OBJECT_TYPE } from "@/server/domain/constants/object_constants";
 import { WorkspaceLiveRefresh } from "@/components/product/workspace_live_refresh";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Badge } from "@/components/ui/badge";
 
 // ─── Meta row ─────────────────────────────────────────────────────────────────
 
@@ -49,7 +52,6 @@ export default async function SkillPage({
   const skill = await getSkillById(supabase, skill_id);
   if (!skill || skill.workspace_id !== ctx.workspace.id) notFound();
 
-  // Fetch version history, pending proposals, and attachment count in parallel
   const [versions, pendingProposals, attachments, links, boxFiles, boxFolders] = await Promise.all([
     listObjectVersions(supabase, "skill", skill_id, { limit: 50 }),
     listPendingProposalsForObject(supabase, ctx.workspace.id, "skill", skill_id),
@@ -60,14 +62,21 @@ export default async function SkillPage({
     skill.box_id ? listFilesByBox(supabase, skill.box_id, { includeArchived: true }) : Promise.resolve([]),
     skill.box_id ? listFoldersByBox(supabase, skill.box_id, { includeArchived: true }) : Promise.resolve([]),
   ]);
+
   const childLinkIds = new Set(
     links.outgoing
       .filter((l) => l.relationship_type === "parent_of")
       .map((l) => `${l.target_object_type}:${l.target_object_id}`)
   );
+
+  // Load reusable linked files for workspace-level skills (no box_id)
   const linkedFileIds = links.outgoing
     .filter((l) => l.relationship_type === "parent_of" && l.target_object_type === OBJECT_TYPE.FILE)
     .map((l) => l.target_object_id);
+  const linkedFolderIds = links.outgoing
+    .filter((l) => l.relationship_type === "parent_of" && l.target_object_type === OBJECT_TYPE.FOLDER)
+    .map((l) => l.target_object_id);
+
   const reusableLinkedFiles = (!skill.box_id && linkedFileIds.length > 0)
     ? await supabase
         .from("files")
@@ -76,12 +85,28 @@ export default async function SkillPage({
         .eq("workspace_id", ctx.workspace.id)
         .then((res) => res.data ?? [])
     : [];
+
+  const reusableLinkedFolders = (!skill.box_id && linkedFolderIds.length > 0)
+    ? await supabase
+        .from("folders")
+        .select("id, name")
+        .in("id", linkedFolderIds)
+        .eq("workspace_id", ctx.workspace.id)
+        .then((res) => res.data ?? [])
+    : [];
+
   const childrenItems = [
     ...boxFolders.filter((f) => childLinkIds.has(`folder:${f.id}`)).map((f) => ({
       id: f.id,
       type: "folder" as const,
       name: f.name,
-      href: "#",
+      href: `/app/folders/${f.id}`,
+    })),
+    ...reusableLinkedFolders.map((f) => ({
+      id: f.id,
+      type: "folder" as const,
+      name: f.name,
+      href: `/app/folders/${f.id}`,
     })),
     ...boxFiles.filter((f) => childLinkIds.has(`file:${f.id}`)).map((f) => ({
       id: f.id,
@@ -129,6 +154,7 @@ export default async function SkillPage({
         objectId={skill_id}
         protectWhileEditing
       />
+
       {/* Header */}
       <div className="border-b border-border bg-background px-6 pt-6 pb-4">
         <div className="flex items-start gap-3">
@@ -159,87 +185,132 @@ export default async function SkillPage({
         </div>
       )}
 
-      {/* Content */}
-      <div className="flex-1 overflow-auto">
-        <div className="mx-auto max-w-3xl px-6 py-6 space-y-4">
-
-          {/* Trust header */}
-          <ObjectTrustHeader
-            objectType="skill"
-            objectName={skill.name}
-            isReusable={skill.is_reusable}
-            attachedBoxCount={attachments.length}
-            pendingProposalCount={pendingProposals.length}
-            lifecycleStatus={skill.status as "draft" | "active" | "archived" | "trashed"}
-            isGenerated={skill.origin_type === "generated"}
-            canonicalFormat={skill.canonical_format}
-          />
-
-          {/* Machine provenance */}
-          <MachineProvenancePanel
-            originType={skill.origin_type as "user_created" | "imported" | "generated"}
-            createdAt={skill.created_at}
-            pendingProposalCount={pendingProposals.length}
-            objectName={skill.name}
-          />
-
-          {/* Metadata */}
-          <section className="rounded-lg border border-border bg-card p-4 space-y-2.5">
-            <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Details</h2>
-            <MetaRow label="Format">{skill.canonical_format}</MetaRow>
-            <MetaRow label="Status">{skill.status}</MetaRow>
-            <MetaRow label="Created">
-              <span className="flex items-center gap-1">
-                <Calendar className="h-3 w-3" aria-hidden="true" />
-                {createdDate}
-              </span>
-            </MetaRow>
-            {skill.tags.length > 0 && (
-              <MetaRow label="Tags">
-                <span className="flex flex-wrap gap-1">
-                  {skill.tags.map((tag) => (
-                    <span key={tag} className="flex items-center gap-0.5 rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
-                      <Tag className="h-2.5 w-2.5" aria-hidden="true" />
-                      {tag}
-                    </span>
-                  ))}
-                </span>
-              </MetaRow>
-            )}
-          </section>
-
-          {/* Canonical source */}
-          <section className="space-y-2">
-            <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-              Canonical source <span className="font-normal normal-case text-muted-foreground/60">({skill.canonical_format})</span>
-            </h2>
-            <SkillSourceEditor skill={skill} />
-          </section>
-
-          {/* Child structure */}
-          {!skill.is_reusable && skill.box_id && (
-            <SkillChildrenPanel skillId={skill_id} childrenItems={childrenItems} />
-          )}
-
-          {/* Version history */}
-          <SkillHistoryPanel
-            skillId={skill_id}
-            versions={versionsWithCurrent}
-            currentVersionId={skill.current_version_id ?? null}
-            rollbackDisabled={rollbackDisabled}
-          />
-
-          {/* Lifecycle controls */}
-          <section className="rounded-lg border border-border bg-card p-4">
-            <SkillLifecycleControls
-              skillId={skill_id}
-              currentStatus={skill.status as "draft" | "active" | "archived" | "trashed"}
-              skillName={skill.name}
-            />
-          </section>
-
+      {/* Tabbed content */}
+      <Tabs defaultValue="overview" className="flex flex-1 flex-col overflow-hidden">
+        <div className="border-b border-border px-6">
+          <TabsList variant="line" className="h-auto pb-0">
+            <TabsTrigger value="overview" className="pb-3">Overview</TabsTrigger>
+            <TabsTrigger value="source" className="pb-3">Source</TabsTrigger>
+            <TabsTrigger value="children" className="pb-3">
+              Files
+              {childrenItems.length > 0 && (
+                <Badge variant="secondary" className="ml-1.5 h-4 px-1.5 text-[10px] font-normal">
+                  {childrenItems.length}
+                </Badge>
+              )}
+            </TabsTrigger>
+            <TabsTrigger value="history" className="pb-3">History</TabsTrigger>
+          </TabsList>
         </div>
-      </div>
+
+        {/* ── Overview tab ── */}
+        <TabsContent value="overview" className="flex-1 overflow-hidden">
+          <ScrollArea className="h-full">
+            <div className="mx-auto max-w-3xl px-6 py-6 space-y-4">
+              <ObjectTrustHeader
+                objectType="skill"
+                objectName={skill.name}
+                isReusable={skill.is_reusable}
+                attachedBoxCount={attachments.length}
+                pendingProposalCount={pendingProposals.length}
+                lifecycleStatus={skill.status as "draft" | "active" | "archived" | "trashed"}
+                isGenerated={skill.origin_type === "generated"}
+                canonicalFormat={skill.canonical_format}
+              />
+
+              <MachineProvenancePanel
+                originType={skill.origin_type as "user_created" | "imported" | "generated"}
+                createdAt={skill.created_at}
+                pendingProposalCount={pendingProposals.length}
+                objectName={skill.name}
+              />
+
+              <section className="rounded-lg border border-border bg-card p-4 space-y-2.5">
+                <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Details</h2>
+                <MetaRow label="Format">{skill.canonical_format}</MetaRow>
+                <MetaRow label="Status">{skill.status}</MetaRow>
+                <MetaRow label="Scope">{skill.is_reusable ? "Workspace reusable" : "Box local"}</MetaRow>
+                <MetaRow label="Created">
+                  <span className="flex items-center gap-1">
+                    <Calendar className="h-3 w-3" aria-hidden="true" />
+                    {createdDate}
+                  </span>
+                </MetaRow>
+                {skill.tags.length > 0 && (
+                  <MetaRow label="Tags">
+                    <span className="flex flex-wrap gap-1">
+                      {skill.tags.map((tag) => (
+                        <span key={tag} className="flex items-center gap-0.5 rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
+                          <Tag className="h-2.5 w-2.5" aria-hidden="true" />
+                          {tag}
+                        </span>
+                      ))}
+                    </span>
+                  </MetaRow>
+                )}
+              </section>
+
+              <section className="rounded-lg border border-border bg-card p-4">
+                <SkillLifecycleControls
+                  skillId={skill_id}
+                  currentStatus={skill.status as "draft" | "active" | "archived" | "trashed"}
+                  skillName={skill.name}
+                />
+              </section>
+            </div>
+          </ScrollArea>
+        </TabsContent>
+
+        {/* ── Source tab ── */}
+        <TabsContent value="source" className="flex-1 overflow-hidden">
+          <ScrollArea className="h-full">
+            <div className="mx-auto max-w-3xl px-6 py-6 space-y-4">
+              <section className="space-y-2">
+                <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  Canonical source <span className="font-normal normal-case text-muted-foreground/60">({skill.canonical_format})</span>
+                </h2>
+                <p className="text-xs text-muted-foreground">
+                  This is the single canonical editable source file for this skill.
+                  Supporting files can be added in the Files tab.
+                </p>
+                <SkillSourceEditor skill={skill} />
+              </section>
+            </div>
+          </ScrollArea>
+        </TabsContent>
+
+        {/* ── Children / Files tab ── */}
+        <TabsContent value="children" className="flex-1 overflow-hidden">
+          <ScrollArea className="h-full">
+            <div className="mx-auto max-w-3xl px-6 py-6">
+              <div className="mb-4 space-y-1">
+                <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  Supporting files and folders
+                </h2>
+                <p className="text-xs text-muted-foreground">
+                  Child files and nested folders that make up this skill&#39;s internal package structure.
+                  The canonical source is edited in the Source tab — these are supporting artifacts.
+                </p>
+              </div>
+              <SkillChildrenPanel skillId={skill_id} childrenItems={childrenItems} canCreateFolders={!!skill.box_id} />
+            </div>
+          </ScrollArea>
+        </TabsContent>
+
+        {/* ── History tab ── */}
+        <TabsContent value="history" className="flex-1 overflow-hidden">
+          <ScrollArea className="h-full">
+            <div className="mx-auto max-w-3xl px-6 py-6">
+              <SkillHistoryPanel
+                skillId={skill_id}
+                versions={versionsWithCurrent}
+                currentVersionId={skill.current_version_id ?? null}
+                rollbackDisabled={rollbackDisabled}
+              />
+            </div>
+          </ScrollArea>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }
