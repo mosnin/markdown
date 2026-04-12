@@ -1,23 +1,23 @@
 import type { Metadata } from "next";
 import { PageHeroSection } from "@/components/marketing/hero";
-import { PrivacyContent } from "@/components/legal/privacy_content";
+import { CookieContent } from "@/components/legal/cookie_content";
 
 export const metadata: Metadata = {
-  title: "Privacy Policy — Poggle",
+  title: "Cookie Policy — Poggle",
   description:
-    "How Poggle collects, uses, and protects your personal information.",
+    "How Poggle uses cookies and similar technologies.",
 };
 
-export default function PrivacyPage() {
+export default function CookiePolicyPage() {
   return (
     <div className="min-h-screen bg-background">
       <PageHeroSection
         eyebrow="Legal"
-        title="Privacy Policy"
-        description="We respect your data. Read how we collect, use, and protect it."
+        title="Cookie Policy"
+        description="How we use cookies and similar technologies."
       />
       <section className="mx-auto w-full max-w-3xl px-6 py-16">
-        <PrivacyContent />
+        <CookieContent />
       </section>
     </div>
   );

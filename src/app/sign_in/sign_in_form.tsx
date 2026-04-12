@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useActionState, useState } from "react";
 import { Eye, EyeOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -228,6 +229,7 @@ function LoginForm({
 
 function SignUpForm({ onSwitch }: { onSwitch: () => void }) {
   const [state, formAction, pending] = useActionState(signUp, INITIAL);
+  const [agreed, setAgreed] = useState(false);
 
   if (state.status === "confirm") {
     return <ConfirmView message={state.message} />;
@@ -281,6 +283,60 @@ function SignUpForm({ onSwitch }: { onSwitch: () => void }) {
         />
       </div>
 
+      {/* Terms & Privacy agreement — required */}
+      <div className="mt-1 flex items-start gap-2 rounded-md border border-border bg-muted/20 p-3">
+        <input
+          id="signup-agree"
+          name="agreeToTerms"
+          type="checkbox"
+          value="yes"
+          required
+          checked={agreed}
+          disabled={pending}
+          onChange={(e) => setAgreed(e.target.checked)}
+          className="mt-0.5 h-4 w-4 shrink-0 cursor-pointer rounded border-border accent-violet-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        />
+        <label htmlFor="signup-agree" className="cursor-pointer text-xs leading-relaxed text-muted-foreground">
+          I am at least 16 years old and I agree to the{" "}
+          <Link
+            href="/terms"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-medium text-foreground underline underline-offset-2 hover:text-violet-500"
+          >
+            Terms of Service
+          </Link>
+          ,{" "}
+          <Link
+            href="/privacy"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-medium text-foreground underline underline-offset-2 hover:text-violet-500"
+          >
+            Privacy Policy
+          </Link>
+          ,{" "}
+          <Link
+            href="/acceptable-use"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-medium text-foreground underline underline-offset-2 hover:text-violet-500"
+          >
+            Acceptable Use Policy
+          </Link>
+          , and{" "}
+          <Link
+            href="/cookies"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-medium text-foreground underline underline-offset-2 hover:text-violet-500"
+          >
+            Cookie Policy
+          </Link>
+          .
+        </label>
+      </div>
+
       {/* Error */}
       {state.status === "error" && (
         <p role="alert" className="text-xs text-destructive">
@@ -288,7 +344,7 @@ function SignUpForm({ onSwitch }: { onSwitch: () => void }) {
         </p>
       )}
 
-      <Button type="submit" disabled={pending} className="mt-1 w-full">
+      <Button type="submit" disabled={pending || !agreed} className="mt-1 w-full">
         {pending ? "Creating account…" : "Create account"}
       </Button>
 

@@ -6,6 +6,7 @@ import { AppSidebar } from "@/components/product/app_sidebar";
 import { MobileSidebar } from "@/components/product/mobile_sidebar";
 import { ThemeToggle } from "@/components/product/theme_toggle";
 import { AppBreadcrumbs } from "@/components/product/app_breadcrumbs";
+import { LegalStickyFooter } from "@/components/legal/legal_modal";
 
 /**
  * Authenticated app layout.
@@ -104,6 +105,9 @@ export default async function AppLayout({
         >
           {children}
         </main>
+
+        {/* Sticky legal footer — clicking any link opens the full document in a modal */}
+        <LegalStickyFooter />
       </div>
     </div>
   );

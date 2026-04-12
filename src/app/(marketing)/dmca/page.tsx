@@ -1,23 +1,23 @@
 import type { Metadata } from "next";
 import { PageHeroSection } from "@/components/marketing/hero";
-import { PrivacyContent } from "@/components/legal/privacy_content";
+import { DMCAContent } from "@/components/legal/dmca_content";
 
 export const metadata: Metadata = {
-  title: "Privacy Policy — Poggle",
+  title: "DMCA Policy — Poggle",
   description:
-    "How Poggle collects, uses, and protects your personal information.",
+    "How to submit copyright infringement notices and counter-notices.",
 };
 
-export default function PrivacyPage() {
+export default function DMCAPage() {
   return (
     <div className="min-h-screen bg-background">
       <PageHeroSection
         eyebrow="Legal"
-        title="Privacy Policy"
-        description="We respect your data. Read how we collect, use, and protect it."
+        title="DMCA Policy"
+        description="How we handle copyright complaints and counter-notices."
       />
       <section className="mx-auto w-full max-w-3xl px-6 py-16">
-        <PrivacyContent />
+        <DMCAContent />
       </section>
     </div>
   );

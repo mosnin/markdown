@@ -120,13 +120,21 @@ export default async function SignInPage({
           <AuthPanel defaultMode={defaultMode} />
 
           <p className="text-center text-[11px] leading-relaxed text-muted-foreground">
-            By continuing, you agree to our{" "}
+            By signing in, you agree to our{" "}
             <Link href="/terms" className="underline underline-offset-2 hover:text-foreground">
-              Terms
-            </Link>{" "}
-            and{" "}
+              Terms of Service
+            </Link>
+            ,{" "}
             <Link href="/privacy" className="underline underline-offset-2 hover:text-foreground">
               Privacy Policy
+            </Link>
+            ,{" "}
+            <Link href="/acceptable-use" className="underline underline-offset-2 hover:text-foreground">
+              Acceptable Use Policy
+            </Link>
+            , and{" "}
+            <Link href="/cookies" className="underline underline-offset-2 hover:text-foreground">
+              Cookie Policy
             </Link>
             .
           </p>

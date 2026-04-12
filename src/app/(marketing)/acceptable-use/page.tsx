@@ -1,23 +1,23 @@
 import type { Metadata } from "next";
 import { PageHeroSection } from "@/components/marketing/hero";
-import { PrivacyContent } from "@/components/legal/privacy_content";
+import { AcceptableUseContent } from "@/components/legal/aup_content";
 
 export const metadata: Metadata = {
-  title: "Privacy Policy — Poggle",
+  title: "Acceptable Use Policy — Poggle",
   description:
-    "How Poggle collects, uses, and protects your personal information.",
+    "Prohibited uses of the Poggle service.",
 };
 
-export default function PrivacyPage() {
+export default function AcceptableUsePage() {
   return (
     <div className="min-h-screen bg-background">
       <PageHeroSection
         eyebrow="Legal"
-        title="Privacy Policy"
-        description="We respect your data. Read how we collect, use, and protect it."
+        title="Acceptable Use Policy"
+        description="What you can and cannot do with Poggle."
       />
       <section className="mx-auto w-full max-w-3xl px-6 py-16">
-        <PrivacyContent />
+        <AcceptableUseContent />
       </section>
     </div>
   );

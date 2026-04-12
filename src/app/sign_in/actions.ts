@@ -126,6 +126,7 @@ export async function signUp(
   const email = (formData.get("email") as string | null)?.trim();
   const password = formData.get("password") as string | null;
   const confirmPassword = formData.get("confirmPassword") as string | null;
+  const agreeToTerms = formData.get("agreeToTerms") as string | null;
 
   if (!email || !password || !confirmPassword) {
     return { status: "error", message: "All fields are required." };
@@ -146,12 +147,27 @@ export async function signUp(
     return { status: "error", message: "Passwords do not match." };
   }
 
+  // Require explicit agreement to legal terms before account creation.
+  // This is enforced server-side even if the client bypasses the checkbox UI.
+  if (agreeToTerms !== "yes") {
+    return {
+      status: "error",
+      message:
+        "You must agree to the Terms of Service, Privacy Policy, Acceptable Use Policy, and Cookie Policy to create an account.",
+    };
+  }
+
   const supabase = await createClient();
   const { error } = await supabase.auth.signUp({
     email,
     password,
     options: {
       emailRedirectTo: `${process.env.NEXT_PUBLIC_APP_URL}/auth/callback`,
+      data: {
+        // Record the user's consent for audit purposes.
+        agreed_to_terms_at: new Date().toISOString(),
+        agreed_to_terms_version: "2026-04-12",
+      },
     },
   });
 

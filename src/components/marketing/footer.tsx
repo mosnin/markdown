@@ -4,21 +4,30 @@ import Image from "next/image";
 const LINKS = {
   Product: [
     { href: "/features", label: "Features" },
+    { href: "/notes-and-files", label: "Notes & Files" },
+    { href: "/skills-and-agents", label: "Skills & Agents" },
+    { href: "/connections", label: "Connections" },
     { href: "/pricing", label: "Pricing" },
-    { href: "/about", label: "About" },
   ],
   Developers: [
-    { href: "/docs", label: "Documentation" },
-    { href: "/api", label: "API Reference" },
+    { href: "https://docs.poggle.app", label: "Documentation" },
+    { href: "/api", label: "API & MCP" },
+    { href: "/portability", label: "Import & Export" },
     { href: "/changelog", label: "Changelog" },
   ],
   Company: [
     { href: "/about", label: "About" },
-    { href: "/contact", label: "Contact" },
+    { href: "/how-it-works", label: "How It Works" },
+    { href: "/blog", label: "Blog" },
+    { href: "/help", label: "Help Center" },
   ],
   Legal: [
-    { href: "/privacy", label: "Privacy" },
-    { href: "/terms", label: "Terms" },
+    { href: "/terms", label: "Terms of Service" },
+    { href: "/privacy", label: "Privacy Policy" },
+    { href: "/cookies", label: "Cookie Policy" },
+    { href: "/acceptable-use", label: "Acceptable Use" },
+    { href: "/refund-policy", label: "Refund Policy" },
+    { href: "/dmca", label: "DMCA" },
   ],
 };
 
@@ -62,13 +71,29 @@ export function MarketingFooter() {
           ))}
         </div>
 
-        <div className="mt-12 flex flex-col items-start justify-between gap-3 border-t border-border/50 pt-8 sm:flex-row sm:items-center">
+        <div className="mt-12 flex flex-col items-start justify-between gap-4 border-t border-border/50 pt-8 sm:flex-row sm:items-center">
           <p className="text-xs text-muted-foreground">
             © {new Date().getFullYear()} Poggle. All rights reserved.
           </p>
-          <p className="text-xs text-muted-foreground">
-            Built for knowledge workers and AI-native teams.
-          </p>
+          <ul className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
+            {[
+              { href: "/terms", label: "Terms" },
+              { href: "/privacy", label: "Privacy" },
+              { href: "/cookies", label: "Cookies" },
+              { href: "/acceptable-use", label: "Acceptable Use" },
+              { href: "/refund-policy", label: "Refunds" },
+              { href: "/dmca", label: "DMCA" },
+            ].map((l) => (
+              <li key={l.href}>
+                <Link
+                  href={l.href}
+                  className="transition-colors hover:text-foreground"
+                >
+                  {l.label}
+                </Link>
+              </li>
+            ))}
+          </ul>
         </div>
       </div>
     </footer>
