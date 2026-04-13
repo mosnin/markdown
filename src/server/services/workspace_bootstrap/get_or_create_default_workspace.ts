@@ -1,6 +1,9 @@
 import { type SupabaseClient } from "@supabase/supabase-js";
 import { type Workspace } from "@/server/domain/types/workspace";
-import { createWorkspace } from "@/server/repositories/workspace_repository";
+import {
+  createWorkspace,
+  getWorkspaceByOwnerAndSlug,
+} from "@/server/repositories/workspace_repository";
 import {
   listAccessibleWorkspaces,
   type WorkspaceRole,
@@ -44,24 +47,34 @@ export async function getOrCreateDefaultWorkspace(
   const slugSuffix = user_id.replace(/-/g, "").slice(0, 8);
   const slug = `ws-${slugSuffix}`;
 
-  const ws = await createWorkspace(supabase, {
-    owner_id: user_id,
-    name: "My Workspace",
-    slug,
-  });
+  // Repair path: if listAccessibleWorkspaces returned empty but the
+  // canonical (owner_id, slug) row already exists, the user is
+  // missing a membership. Reattach it rather than retrying an insert
+  // that's guaranteed to hit `workspaces_owner_id_slug_key`.
+  const existing = await getWorkspaceByOwnerAndSlug(supabase, user_id, slug);
+  const ws =
+    existing ??
+    (await createWorkspace(supabase, {
+      owner_id: user_id,
+      name: "My Workspace",
+      slug,
+    }));
 
-  // Ensure the owner has a matching admin membership. Under normal
-  // operation this is also covered by the backfill migration, but new
-  // workspaces created after the migration land here.
+  // Ensure the owner has a matching admin membership. Upsert on the
+  // composite key so the repair path (workspace already exists, row
+  // missing) and the fresh-create path are both idempotent.
   await supabase
     .from("workspace_memberships")
-    .insert({
-      workspace_id: ws.id,
-      user_id,
-      role: "admin",
-      invited_by: user_id,
-      accepted_at: new Date().toISOString(),
-    });
+    .upsert(
+      {
+        workspace_id: ws.id,
+        user_id,
+        role: "admin",
+        invited_by: user_id,
+        accepted_at: new Date().toISOString(),
+      },
+      { onConflict: "workspace_id,user_id" }
+    );
 
   return { ...ws, role: "owner" };
 }
