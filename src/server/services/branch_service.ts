@@ -241,10 +241,11 @@ export interface PromoteBranchResult {
  * unit. Restoring the change set reverts the pointer moves — it does
  * not delete the branch heads.
  *
- * V1 scope: notes only. Files / skills / agents use the same
- * mechanism but their write path isn't yet wired; once it is, this
- * function extends by iterating their branch_heads rows with the
- * same pattern.
+ * Promotes every branch_heads row: notes advance via `note_versions`,
+ * and files / skills / agents advance via the shared `object_versions`
+ * table (see the per-object-type branch below). Package metadata
+ * overlays in `branch_package_metadata` are also merged onto their
+ * canonical skills / agents rows in the same change set.
  */
 export async function promoteBranch(
   supabase: SupabaseClient,

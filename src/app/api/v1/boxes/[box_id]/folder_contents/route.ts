@@ -52,7 +52,8 @@ export async function GET(
     }
   }
 
-  // Fetch child folders and notes at this level
+  // Fetch child folders and notes at this level.
+  // Canonical API: main-only view. Connection contexts don't carry a branch.
   const [folders, notes] = await Promise.all([
     folder_id
       ? listFoldersByParent(adminClient, folder_id)

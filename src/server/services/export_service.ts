@@ -237,7 +237,8 @@ export async function exportFolder(
 
   const { includeArchived = false } = options;
 
-  // Collect all folders in the box, then filter to this subtree
+  // Collect all folders in the box, then filter to this subtree.
+  // Exports are canonical (main-only) by design — no branchId threaded.
   const allBoxFolders = await listAllFoldersByBox(supabase, box.id, { includeArchived });
   const exportFolders = collectDescendantFolders(allBoxFolders, folderId);
   const exportFolderIds = new Set(exportFolders.map((f) => f.id));
@@ -383,6 +384,7 @@ export async function exportBox(
 
   const { includeArchived = false } = options;
 
+  // Exports are canonical (main-only) by design — no branchId threaded.
   const [allFolders, allNotes, allFiles, allSkills, allAgents] = await Promise.all([
     listAllFoldersByBox(supabase, boxId, { includeArchived }),
     listAllNotesByBox(supabase, boxId, { includeArchived }),

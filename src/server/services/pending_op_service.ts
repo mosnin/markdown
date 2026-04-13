@@ -204,6 +204,18 @@ export async function applyPendingOp(
     case "trash":
     case "archive":
     case "unarchive": {
+      // box_object_attachment rows are reference-only — they have no
+      // lifecycle of their own (detach is the only meaningful op).
+      // object_link rows are the same. Refuse the nonsensical combo
+      // rather than silently corrupting state.
+      if (
+        op.object_type === "box_object_attachment" ||
+        op.object_type === "object_link"
+      ) {
+        throw new Error(
+          `Unsupported pending op: cannot ${op.op_type} a ${op.object_type}; use detach instead.`
+        );
+      }
       const targetStatus =
         op.op_type === "trash" ? "trashed" :
         op.op_type === "archive" ? "archived" : "active";
@@ -259,8 +271,10 @@ export async function applyPendingOp(
       return { ok: true, before: (before ?? {}) as Record<string, unknown>, after: patch };
     }
     case "detach": {
-      // Only applies to object_link and box_object_attachment —
-      // delete the row outright on promote.
+      // Applies to object_link and box_object_attachment — both are
+      // pure reference rows; promoting the intent means deleting the
+      // row from the canonical table (`object_links` or
+      // `box_object_attachments`).
       await supabase.from(table).delete().eq("id", op.object_id);
       await supabase
         .from("branch_pending_ops")

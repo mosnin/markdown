@@ -48,6 +48,9 @@ async function cascadePathCache(
   oldPrefix: string,
   newPrefix: string
 ): Promise<void> {
+  // Main-only by design: folder renames cascade only through main
+  // rows; branch-local folders aren't touched (that's the branch
+  // overrides path, owned by another worktree).
   const allFolders = await listFoldersByBox(supabase, boxId);
 
   for (const folder of allFolders) {

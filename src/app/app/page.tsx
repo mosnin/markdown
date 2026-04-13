@@ -40,7 +40,9 @@ export default async function AppHomePage() {
 
   const [notesByBox, connections, pendingProposals] = await Promise.all([
     Promise.all(
-      boxes.slice(0, 6).map((box) => listNotesByBox(supabase, box.id, { limit: 6 }))
+      boxes.slice(0, 6).map((box) =>
+        listNotesByBox(supabase, box.id, { limit: 6, branchId: ctx.activeBranchId })
+      )
     ),
     listConnectionsByWorkspace(adminClient, ctx.workspace.id),
     listPendingProposals(adminClient, ctx.workspace.id, { limit: 20 }),

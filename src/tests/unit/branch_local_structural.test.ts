@@ -17,7 +17,12 @@ import { describe, it, expect, vi } from "vitest";
  *      work beyond the existing read).
  */
 
-import { listFilesByBox } from "@/server/repositories/file_repository";
+import { listFilesByBox, listAllFilesByBox } from "@/server/repositories/file_repository";
+import {
+  listFoldersByParent,
+  listAllFoldersByBox,
+} from "@/server/repositories/folder_repository";
+import { listAllNotesByBox } from "@/server/repositories/note_repository";
 import { getLinksForObject } from "@/server/services/object_link_service";
 
 // ─── File list filter tests ──────────────────────────────────────────────────
@@ -42,6 +47,7 @@ function makeFilesMockSupabase(rows: Array<Record<string, unknown>>) {
     },
     range: () => query,
     order: () => query,
+    limit: () => query,
     then: async (resolve: (v: { data: unknown[]; error: null }) => void) => {
       const out = rows.filter((r) => {
         // Main-only read: branch_id:is === null.
@@ -81,6 +87,78 @@ describe("listFilesByBox branch filter", () => {
     const sb = makeFilesMockSupabase([mainFile, draftFileOnBranch, draftFileOnOtherBranch]);
     const result = await listFilesByBox(sb, "b", { branchId: "branch-1" });
     expect(result.find((r) => r.id === "f-other")).toBeUndefined();
+  });
+});
+
+describe("listAllFilesByBox branch filter", () => {
+  const mainFile = { id: "f-main", branch_id: null, box_id: "b", name: "main.py" };
+  const draftFileOnBranch = { id: "f-draft", branch_id: "branch-1", box_id: "b", name: "draft.py" };
+  const draftFileOnOtherBranch = { id: "f-other", branch_id: "branch-2", box_id: "b", name: "other.py" };
+
+  it("returns only main rows when no branchId is passed", async () => {
+    const sb = makeFilesMockSupabase([mainFile, draftFileOnBranch, draftFileOnOtherBranch]);
+    const result = await listAllFilesByBox(sb, "b");
+    expect(result.map((r) => r.id)).toEqual(["f-main"]);
+  });
+
+  it("returns main + active-branch rows when branchId is passed", async () => {
+    const sb = makeFilesMockSupabase([mainFile, draftFileOnBranch, draftFileOnOtherBranch]);
+    const result = await listAllFilesByBox(sb, "b", { branchId: "branch-1" });
+    expect(result.map((r) => r.id).sort()).toEqual(["f-draft", "f-main"]);
+  });
+});
+
+describe("listAllNotesByBox branch filter", () => {
+  const mainNote = { id: "n-main", branch_id: null, box_id: "b", title: "main" };
+  const draftNote = { id: "n-draft", branch_id: "branch-1", box_id: "b", title: "draft" };
+  const draftOther = { id: "n-other", branch_id: "branch-2", box_id: "b", title: "other" };
+
+  it("returns only main rows when no branchId is passed", async () => {
+    const sb = makeFilesMockSupabase([mainNote, draftNote, draftOther]);
+    const result = await listAllNotesByBox(sb, "b");
+    expect(result.map((r) => r.id)).toEqual(["n-main"]);
+  });
+
+  it("returns main + active-branch rows when branchId is passed", async () => {
+    const sb = makeFilesMockSupabase([mainNote, draftNote, draftOther]);
+    const result = await listAllNotesByBox(sb, "b", { branchId: "branch-1" });
+    expect(result.map((r) => r.id).sort()).toEqual(["n-draft", "n-main"]);
+  });
+});
+
+describe("listAllFoldersByBox branch filter", () => {
+  const mainFolder = { id: "f-main", branch_id: null, box_id: "b", name: "main" };
+  const draftFolder = { id: "f-draft", branch_id: "branch-1", box_id: "b", name: "draft" };
+  const draftOther = { id: "f-other", branch_id: "branch-2", box_id: "b", name: "other" };
+
+  it("returns only main rows when no branchId is passed", async () => {
+    const sb = makeFilesMockSupabase([mainFolder, draftFolder, draftOther]);
+    const result = await listAllFoldersByBox(sb, "b");
+    expect(result.map((r) => r.id)).toEqual(["f-main"]);
+  });
+
+  it("returns main + active-branch rows when branchId is passed", async () => {
+    const sb = makeFilesMockSupabase([mainFolder, draftFolder, draftOther]);
+    const result = await listAllFoldersByBox(sb, "b", { branchId: "branch-1" });
+    expect(result.map((r) => r.id).sort()).toEqual(["f-draft", "f-main"]);
+  });
+});
+
+describe("listFoldersByParent branch filter", () => {
+  const mainChild = { id: "c-main", branch_id: null, parent_folder_id: "p", name: "main" };
+  const draftChild = { id: "c-draft", branch_id: "branch-1", parent_folder_id: "p", name: "draft" };
+  const draftOther = { id: "c-other", branch_id: "branch-2", parent_folder_id: "p", name: "other" };
+
+  it("returns only main rows when no branchId is passed", async () => {
+    const sb = makeFilesMockSupabase([mainChild, draftChild, draftOther]);
+    const result = await listFoldersByParent(sb, "p");
+    expect(result.map((r) => r.id)).toEqual(["c-main"]);
+  });
+
+  it("returns main + active-branch rows when branchId is passed", async () => {
+    const sb = makeFilesMockSupabase([mainChild, draftChild, draftOther]);
+    const result = await listFoldersByParent(sb, "p", { branchId: "branch-1" });
+    expect(result.map((r) => r.id).sort()).toEqual(["c-draft", "c-main"]);
   });
 });
 

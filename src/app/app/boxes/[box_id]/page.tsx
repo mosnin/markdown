@@ -324,8 +324,8 @@ export default async function BoxPage({
     archivedFolders,
     trashedFolders,
   ] = await Promise.all([
-    listFoldersByBox(supabase, box.id, { branchId: ctx.activeBranchId ?? null }),
-    listNotesByBox(supabase, box.id),
+    listFoldersByBox(supabase, box.id, { branchId: ctx.activeBranchId }),
+    listNotesByBox(supabase, box.id, { branchId: ctx.activeBranchId }),
     listArchivedNotesByBox(supabase, box.id),
     listTrashedNotesByBox(supabase, box.id),
     listArchivedFoldersByBox(supabase, box.id),
@@ -341,7 +341,9 @@ export default async function BoxPage({
   );
   const allLinks: NoteLink[] = linkArrays.flat();
 
-  const overview = await getBoxOverview(supabase, box);
+  const overview = await getBoxOverview(supabase, box, {
+    branchId: ctx.activeBranchId,
+  });
 
   const sortedNotes = [...notes].sort((a, b) =>
     b.updated_at.localeCompare(a.updated_at)

@@ -282,8 +282,12 @@ export default async function FilePage({
     file.folder_id ? getFolderById(supabase, file.folder_id) : Promise.resolve(null),
     getLinksForObject(supabase, ctx.workspace.id, OBJECT_TYPE.FILE, file_id),
     listObjectVersions(supabase, "file", file_id, { limit: 50 }),
-    boxForListing ? listNotesByBox(supabase, boxForListing.id) : Promise.resolve([]),
-    boxForListing ? listFilesByBox(supabase, boxForListing.id) : Promise.resolve([]),
+    boxForListing
+      ? listNotesByBox(supabase, boxForListing.id, { branchId: ctx.activeBranchId })
+      : Promise.resolve([]),
+    boxForListing
+      ? listFilesByBox(supabase, boxForListing.id, { branchId: ctx.activeBranchId })
+      : Promise.resolve([]),
   ]);
   void folder;
 

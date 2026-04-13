@@ -82,12 +82,22 @@ const EDGE_LIMIT = 2000;
 
 export async function getBoxOverview(
   supabase: SupabaseClient,
-  box: Box
+  box: Box,
+  {
+    branchId = null,
+  }: {
+    /**
+     * When set, the overview includes rows whose branch_id matches the
+     * given branch in addition to the main (branch_id IS NULL) rows.
+     * Default null → canonical main-only view (what MCP / API paths want).
+     */
+    branchId?: string | null;
+  } = {}
 ): Promise<BoxOverview> {
   const [folders, notes, files, skills, agents] = await Promise.all([
-    listFoldersByBox(supabase, box.id),
-    listNotesByBox(supabase, box.id),
-    listFilesByBox(supabase, box.id),
+    listFoldersByBox(supabase, box.id, { branchId }),
+    listNotesByBox(supabase, box.id, { branchId }),
+    listFilesByBox(supabase, box.id, { branchId }),
     listSkillsByBox(supabase, box.id),
     listAgentsByBox(supabase, box.id),
   ]);

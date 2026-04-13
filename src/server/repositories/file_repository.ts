@@ -138,13 +138,32 @@ export async function listFilesByBox(
 export async function listAllFilesByBox(
   supabase: SupabaseClient,
   box_id: string,
-  { includeArchived = false }: { includeArchived?: boolean } = {}
+  {
+    includeArchived = false,
+    branchId = null,
+  }: {
+    includeArchived?: boolean;
+    /**
+     * Branch context for the read:
+     *   - null → main-only view (files with branch_id IS NULL)
+     *   - uuid → main + rows whose branch_id matches the given branch
+     * Used by export assembly; no pending-op hide overlay is applied
+     * here — bulk export overlays are a separate concern.
+     */
+    branchId?: string | null;
+  } = {}
 ): Promise<File[]> {
   let query = supabase
     .from("files")
     .select("*")
     .eq("box_id", box_id)
     .neq("status", OBJECT_STATUS.TRASHED);
+
+  if (branchId) {
+    query = query.or(`branch_id.is.null,branch_id.eq.${branchId}`);
+  } else {
+    query = query.is("branch_id", null);
+  }
 
   if (!includeArchived) {
     query = query.neq("status", OBJECT_STATUS.ARCHIVED);

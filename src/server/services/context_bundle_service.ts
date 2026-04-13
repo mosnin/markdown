@@ -241,7 +241,9 @@ async function resolveAncestorSummary(
   let level = 0;
 
   while (currentFolderId && level < FOLDER_WALK_LIMIT) {
-    // Fetch all notes in this specific folder
+    // Fetch all notes in this specific folder.
+    // Context bundles are the canonical retrieval surface; no branchId
+    // is threaded here — bundles always reflect the main-only view.
     const notesInFolder = await listNotesByBox(supabase, boxId, {
       folder_id: currentFolderId,
       includeArchived,

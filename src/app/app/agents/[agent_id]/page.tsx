@@ -202,7 +202,9 @@ export default async function AgentPage({
         ? listAttachmentsForObject(supabase, ctx.workspace.id, "agent", agent_id)
         : Promise.resolve([]),
       listPendingProposalsForObject(supabase, ctx.workspace.id, "agent", agent_id),
-      agent.box_id ? listNotesByBox(supabase, agent.box_id) : Promise.resolve([]),
+      agent.box_id
+        ? listNotesByBox(supabase, agent.box_id, { branchId: ctx.activeBranchId })
+        : Promise.resolve([]),
       agent.box_id
         ? listFilesByBox(supabase, agent.box_id, { branchId: ctx.activeBranchId })
         : Promise.resolve([]),
@@ -213,7 +215,12 @@ export default async function AgentPage({
         ? listReusableAgents(supabase, ctx.workspace.id)
         : Promise.resolve([]),
       listReusableSkills(supabase, ctx.workspace.id),
-      agent.box_id ? listFoldersByBox(supabase, agent.box_id, { includeArchived: true }) : Promise.resolve([]),
+      agent.box_id
+        ? listFoldersByBox(supabase, agent.box_id, {
+            includeArchived: true,
+            branchId: ctx.activeBranchId,
+          })
+        : Promise.resolve([]),
     ]);
 
   const versionsWithCurrent = versions.map((v) => ({

@@ -472,7 +472,7 @@ export default async function NotePage({
       note.folder_id
         ? getFolderById(supabase, note.folder_id)
         : Promise.resolve(null),
-      listNotesByBox(supabase, note.box_id),
+      listNotesByBox(supabase, note.box_id, { branchId: ctx.activeBranchId }),
       listLinksForNote(supabase, note_id),
       listVersionsForNote(adminClient, ctx.workspace.id, note_id, {
         limit: 100,

@@ -348,4 +348,35 @@ describe("applyPendingOp", () => {
       )
     ).rejects.toThrow(/Unsupported pending op target/);
   });
+
+  it("detach on box_object_attachment deletes the row from box_object_attachments", async () => {
+    const { res, calls } = await runApply(
+      makeOp({
+        op_type: "detach",
+        object_type: "box_object_attachment",
+        object_id: "att-1",
+      })
+    );
+    expect(res.after).toEqual({ deleted: true });
+    const del = calls.find(
+      (c) => c.table === "box_object_attachments" && c.op === "delete"
+    )!;
+    expect(del).toBeDefined();
+    expect(del.filters).toContainEqual({ col: "id", val: "att-1" });
+    const appliedUpdate = calls.find(
+      (c) => c.table === "branch_pending_ops" && c.op === "update"
+    );
+    expect(appliedUpdate).toBeDefined();
+  });
+
+  it("rejects trash/archive/unarchive on box_object_attachment with a clear error", async () => {
+    for (const opType of ["trash", "archive", "unarchive"] as const) {
+      await expect(
+        applyPendingOp(
+          {} as never,
+          makeOp({ op_type: opType, object_type: "box_object_attachment" })
+        )
+      ).rejects.toThrow(/Unsupported pending op/);
+    }
+  });
 });

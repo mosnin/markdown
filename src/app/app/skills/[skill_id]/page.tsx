@@ -84,7 +84,12 @@ export default async function SkillPage({
     skill.box_id
       ? listFilesByBox(supabase, skill.box_id, { includeArchived: true, branchId: ctx.activeBranchId })
       : Promise.resolve([]),
-    skill.box_id ? listFoldersByBox(supabase, skill.box_id, { includeArchived: true }) : Promise.resolve([]),
+    skill.box_id
+      ? listFoldersByBox(supabase, skill.box_id, {
+          includeArchived: true,
+          branchId: ctx.activeBranchId,
+        })
+      : Promise.resolve([]),
   ]);
 
   const childLinkIds = new Set(

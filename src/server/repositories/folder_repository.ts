@@ -115,14 +115,32 @@ export async function listFoldersByBox(
 
 export async function listFoldersByParent(
   supabase: SupabaseClient,
-  parent_folder_id: string
+  parent_folder_id: string,
+  {
+    branchId = null,
+  }: {
+    /**
+     * Branch context for the read:
+     *   - null → main-only view (folders with branch_id IS NULL)
+     *   - uuid → main + rows whose branch_id matches the given branch
+     * Mirrors the same contract as listFoldersByBox / listFilesByBox.
+     */
+    branchId?: string | null;
+  } = {}
 ): Promise<Folder[]> {
-  const { data, error } = await supabase
+  let query = supabase
     .from("folders")
     .select("*")
     .eq("parent_folder_id", parent_folder_id)
-    .neq("status", FOLDER_STATUS.TRASHED)
-    .order("name", { ascending: true });
+    .neq("status", FOLDER_STATUS.TRASHED);
+
+  if (branchId) {
+    query = query.or(`branch_id.is.null,branch_id.eq.${branchId}`);
+  } else {
+    query = query.is("branch_id", null);
+  }
+
+  const { data, error } = await query.order("name", { ascending: true });
 
   if (error || !data) return [];
   return data as Folder[];
@@ -135,13 +153,32 @@ export async function listFoldersByParent(
 export async function listAllFoldersByBox(
   supabase: SupabaseClient,
   box_id: string,
-  { includeArchived = false }: { includeArchived?: boolean } = {}
+  {
+    includeArchived = false,
+    branchId = null,
+  }: {
+    includeArchived?: boolean;
+    /**
+     * Branch context for the read:
+     *   - null → main-only view (folders with branch_id IS NULL)
+     *   - uuid → main + rows whose branch_id matches the given branch
+     * Used by export assembly; pass the caller's active branch so
+     * branch-created folders are included in the export tree.
+     */
+    branchId?: string | null;
+  } = {}
 ): Promise<Folder[]> {
   let query = supabase
     .from("folders")
     .select("*")
     .eq("box_id", box_id)
     .neq("status", FOLDER_STATUS.TRASHED);
+
+  if (branchId) {
+    query = query.or(`branch_id.is.null,branch_id.eq.${branchId}`);
+  } else {
+    query = query.is("branch_id", null);
+  }
 
   if (!includeArchived) {
     query = query.neq("status", FOLDER_STATUS.ARCHIVED);

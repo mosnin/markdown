@@ -398,7 +398,7 @@ export async function getBoxTreeAction(boxId: string): Promise<ActionResult<{
   agents: Array<{ id: string; name: string; folder_id: string | null; status: string; is_reusable: boolean; is_attachment: boolean; sort_order: number }>;
 }>> {
   try {
-    const { supabase, workspaceId } = await requireContext({ requireWrite: false });
+    const { supabase, workspaceId, activeBranchId } = await requireContext({ requireWrite: false });
     const { getBoxById } = await import("@/server/repositories/box_repository");
     const box = await getBoxById(supabase, boxId);
     if (!box || box.workspace_id !== workspaceId) {
@@ -411,10 +411,12 @@ export async function getBoxTreeAction(boxId: string): Promise<ActionResult<{
     const { listAgentsByBox, getAgentsByIds } = await import("@/server/repositories/agent_repository");
     const { listAttachmentsForBox } = await import("@/server/repositories/box_object_attachment_repository");
 
+    // Thread the active branch so the tree shows the caller's own
+    // branch-local folders/notes/files overlaid on main.
     const [folders, notes, files, localSkills, localAgents, attachments] = await Promise.all([
-      listFoldersByBox(supabase, boxId),
-      listNotesByBox(supabase, boxId),
-      listFilesByBox(supabase, boxId),
+      listFoldersByBox(supabase, boxId, { branchId: activeBranchId }),
+      listNotesByBox(supabase, boxId, { branchId: activeBranchId }),
+      listFilesByBox(supabase, boxId, { branchId: activeBranchId }),
       listSkillsByBox(supabase, boxId, { includeArchived: true }),
       listAgentsByBox(supabase, boxId, { includeArchived: true }),
       listAttachmentsForBox(supabase, boxId),
