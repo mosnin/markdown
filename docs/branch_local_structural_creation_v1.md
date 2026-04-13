@@ -114,28 +114,61 @@ Full suite: **306 / 306 passing**.
 
 ## What's branch-aware now vs. still on main
 
-| Operation                             | Branch-aware? |
-|---------------------------------------|:-------------:|
-| Edit an existing file's source        | ✅            |
-| Edit a Skill/Agent canonical source   | ✅            |
-| Edit Skill/Agent metadata             | ✅ (overlay)  |
-| **Create a new child file**           | ✅            |
-| **Attach Skill → Agent**              | ✅            |
-| Detach Skill from Agent               | ❌            |
-| Move file between folders on branch   | ❌            |
-| Create / move / trash folders         | ❌            |
-| Trash a file on branch                | ❌            |
+| Operation                                    | Branch-aware? |
+|----------------------------------------------|:-------------:|
+| Edit an existing note / file / skill / agent | ✅            |
+| Edit Skill/Agent metadata                    | ✅ (overlay)  |
+| **Create a new note**                        | ✅            |
+| **Create a new file**                        | ✅            |
+| **Create a new folder**                      | ✅ (schema + repo; action route pending) |
+| **Create a new box**                         | ✅ (schema + repo; action route pending) |
+| **Attach Skill → Agent**                     | ✅            |
+| Detach Skill from Agent                      | ❌ (see sketch below) |
+| Move file between folders on branch          | ❌ (see sketch) |
+| Trash / archive object on branch             | ❌ (see sketch) |
+| Child folder nesting / reorder on branch     | ❌ (independent design) |
 
-## Out of scope
+## Design sketch: soft-delete / move / detach on branch
 
-- **Detach / trash / move** on a branch still mutate main. Closing
-  these needs a "soft-delete on branch" or "move-intent" concept
-  which this pass deliberately skips.
-- **Child folder branching.** Folders aren't versioned; independent
-  design required.
-- **Branch-aware creation of notes / folders / boxes.** Only files
-  + object_links have the `branch_id` column today; extending
-  further means more tables get the treatment.
+The remaining structural operations all need a new persisted
+intent that says *"this main-routed row should be gone / moved
+once we promote"*. The current `branch_id` column can't express
+that cleanly: it means "row exists only on the branch", not
+"branch wants to hide a main row".
+
+Proposed shape for a follow-up prompt:
+
+```
+CREATE TABLE branch_pending_ops (
+  id           uuid PRIMARY KEY,
+  branch_id    uuid NOT NULL REFERENCES draft_branches(id) ON DELETE CASCADE,
+  op_type      text CHECK (op_type IN ('trash', 'archive', 'move', 'detach')),
+  object_type  text,
+  object_id    uuid,
+  payload      jsonb,  -- for 'move': { box_id, folder_id, path_cache }
+  created_at   timestamptz DEFAULT now()
+);
+```
+
+Read-through filters out objects that have a pending trash/archive
+op on the active branch. Promote applies each op. Discard hard-
+deletes the ops; main is untouched. This is additive to the
+existing branch model — no other table changes.
+
+## Design sketch: child folder branching
+
+Folders aren't versioned today; adding `branch_id` to folders is
+easy (it's already in `20260412000009_branch_scoped_content_rows.sql`)
+but doesn't cover *edits* to existing folders — renaming,
+reparenting, moving child contents. A proper pass needs either:
+
+- per-folder `object_versions` rows (heavy — folders as versioned
+  objects), or
+- a `folder_branch_overrides` overlay table with `(branch_id,
+  folder_id, name, parent_folder_id, path_cache)`, mirroring the
+  `branch_package_metadata` shape for Skills/Agents.
+
+The second option is cheaper and consistent. Left for follow-up.
 
 ## Related docs
 

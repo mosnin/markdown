@@ -40,6 +40,13 @@ export interface Note {
   origin_type: NoteOriginType;
   is_generated: boolean;
   generated_by_connection_id: string | null;
+  /**
+   * Non-null when the note exists only on a draft branch (created
+   * while the user was on a branch via `createNoteOnBranch`).
+   * Cleared on promote; hard-deleted on discard. See
+   * docs/branch_local_structural_creation_v1.md.
+   */
+  branch_id: string | null;
   created_at: string;
   updated_at: string;
 }

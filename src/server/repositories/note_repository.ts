@@ -56,11 +56,19 @@ export async function listNotesByBox(
     includeArchived = false,
     limit = 100,
     offset = 0,
+    branchId = null,
   }: {
     folder_id?: string | null;
     includeArchived?: boolean;
     limit?: number;
     offset?: number;
+    /**
+     * Branch context for the read:
+     *   - null → main-only view (notes with branch_id IS NULL)
+     *   - uuid → main + rows whose branch_id matches the given branch
+     * Mirrors the same contract as listFilesByBox.
+     */
+    branchId?: string | null;
   } = {}
 ): Promise<Note[]> {
   let query = supabase
@@ -68,6 +76,12 @@ export async function listNotesByBox(
     .select("*")
     .eq("box_id", box_id)
     .neq("status", NOTE_STATUS.TRASHED);
+
+  if (branchId) {
+    query = query.or(`branch_id.is.null,branch_id.eq.${branchId}`);
+  } else {
+    query = query.is("branch_id", null);
+  }
 
   if (!includeArchived) {
     query = query.neq("status", NOTE_STATUS.ARCHIVED);

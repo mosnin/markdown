@@ -238,14 +238,18 @@ export async function discardBranchAction(
       return { ok: false, error: `Branch is already ${branch.status}` };
     }
 
-    // Hard-delete branch-scoped structural rows (files + object_links
-    // created on the branch). They never reached main so there is no
-    // audit history to preserve — the branch_heads rows that point at
-    // them are left intact as record of intent, but the data itself
-    // is dropped. This matches the "discard = throw away" semantic
-    // for branch-local creation.
+    // Hard-delete every branch-scoped row (files, object_links,
+    // notes, folders, boxes) created against this branch. They never
+    // reached main so there is no audit history to preserve — the
+    // branch_heads rows that point at them stay intact as record of
+    // intent, but the data itself is dropped. This matches the
+    // "discard = throw away" semantic for branch-local creation
+    // across every object type with a `branch_id` column.
     await supabase.from("files").delete().eq("branch_id", branchId);
     await supabase.from("object_links").delete().eq("branch_id", branchId);
+    await supabase.from("notes").delete().eq("branch_id", branchId);
+    await supabase.from("folders").delete().eq("branch_id", branchId);
+    await supabase.from("boxes").delete().eq("branch_id", branchId);
 
     await discardDraftBranch(supabase, branchId);
 

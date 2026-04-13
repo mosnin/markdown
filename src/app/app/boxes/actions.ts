@@ -5,7 +5,8 @@ import { createClient } from "@/lib/supabase/server";
 import { getRequestContext } from "@/server/auth/get_request_context";
 import { createBox, updateBox } from "@/server/services/box_service";
 import { createFolder, renameFolder } from "@/server/services/folder_service";
-import { createNote } from "@/server/services/note_service";
+// createNote + createNoteOnBranch are imported lazily in the note
+// create action below so the top of the module stays bundler-light.
 import { assignGuideNote, clearGuideNote } from "@/server/services/guide_service";
 import { searchNotes, type NoteSearchResult } from "@/server/services/search_service";
 import { applyBoxTemplate } from "@/server/services/template_service";
@@ -49,6 +50,10 @@ async function requireContext(options: { requireWrite?: boolean } = {}) {
     userId: ctx.user.id,
     workspaceId: ctx.workspace.id,
     role: ctx.workspace.role,
+    // Surface the active draft branch so write paths can route new
+    // rows to `createXOnBranch` variants when set. Null means the
+    // user is editing main.
+    activeBranchId: ctx.activeBranchId,
   };
 }
 
@@ -202,7 +207,7 @@ export async function createNoteAction(
   templateId?: string
 ): Promise<ActionResult<{ id: string }>> {
   try {
-    const { supabase, userId, workspaceId } = await requireContext();
+    const { supabase, userId, workspaceId, activeBranchId } = await requireContext();
 
     const noteLimit = await checkNoteLimit(supabase, workspaceId);
     if (!noteLimit.allowed) {
@@ -212,13 +217,23 @@ export async function createNoteAction(
       };
     }
 
-    const note = await createNote(supabase, userId, workspaceId, {
+    // Route to the branch-local create variant when a draft branch is
+    // active. The note lands with `branch_id` stamped, invisible to
+    // main readers until promote. Main readers (box pages, search,
+    // listNotesByBox without branchId) filter it out.
+    const { createNote, createNoteOnBranch } = await import(
+      "@/server/services/note_service"
+    );
+    const createParams = {
       boxId,
       folderId: folderId ?? null,
       title: title.trim(),
       kind,
       markdownContent: markdownContent ?? "",
-    });
+    };
+    const note = activeBranchId
+      ? await createNoteOnBranch(supabase, userId, workspaceId, activeBranchId, createParams)
+      : await createNote(supabase, userId, workspaceId, createParams);
     if (templateId) {
       auditNoteCreatedFromTemplate(supabase, workspaceId, userId, note.id, {
         template_id: templateId,

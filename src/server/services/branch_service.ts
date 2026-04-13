@@ -513,6 +513,33 @@ export async function promoteBranch(
       });
     }
 
+    // Promote branch-scoped notes, folders, and boxes. Same pattern
+    // as files / object_links: clear branch_id so the row becomes
+    // main, and record a change_set_item so the rollback engine can
+    // revert. Structural identity (box_id, folder_id, etc.) survives
+    // the promotion unchanged.
+    for (const table of ["notes", "folders", "boxes"] as const) {
+      const { data: rows } = await supabase
+        .from(table)
+        .select("id")
+        .eq("branch_id", branchId);
+      for (const row of rows ?? []) {
+        await supabase
+          .from(table)
+          .update({ branch_id: null })
+          .eq("id", row.id);
+        await recordChangeSetItem(supabase, {
+          change_set_id: cs.id,
+          workspace_id: workspaceId,
+          operation: "create",
+          object_type: table === "notes" ? "note" : table === "folders" ? "folder" : "box",
+          object_id: row.id,
+          before_snapshot: { branch_id: branchId },
+          after_snapshot: { branch_id: null, promoted_from_branch: branchId },
+        });
+      }
+    }
+
     await commitChangeSet(supabase, cs.id);
     await markBranchPromoted(supabase, branchId);
 

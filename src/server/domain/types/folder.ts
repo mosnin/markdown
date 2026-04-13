@@ -26,6 +26,12 @@ export interface Folder {
   description: string | null;
   accepts_generated_notes: boolean;
   status: FolderStatus;
+  /**
+   * Non-null when the folder exists only on a draft branch. Cleared
+   * on promote; hard-deleted on discard. See
+   * docs/branch_local_structural_creation_v1.md.
+   */
+  branch_id: string | null;
   created_at: string;
   updated_at: string;
 }

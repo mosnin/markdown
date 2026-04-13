@@ -48,13 +48,24 @@ export async function getFolderById(
 export async function listFoldersByBox(
   supabase: SupabaseClient,
   box_id: string,
-  { includeArchived = false }: { includeArchived?: boolean } = {}
+  {
+    includeArchived = false,
+    branchId = null,
+  }: { includeArchived?: boolean; branchId?: string | null } = {}
 ): Promise<Folder[]> {
   let query = supabase
     .from("folders")
     .select("*")
     .eq("box_id", box_id)
     .neq("status", FOLDER_STATUS.TRASHED);
+
+  // Branch filter: null → main-only (branch_id IS NULL); uuid → main
+  // + that branch's draft folders. Mirrors listFilesByBox.
+  if (branchId) {
+    query = query.or(`branch_id.is.null,branch_id.eq.${branchId}`);
+  } else {
+    query = query.is("branch_id", null);
+  }
 
   if (!includeArchived) {
     query = query.neq("status", FOLDER_STATUS.ARCHIVED);

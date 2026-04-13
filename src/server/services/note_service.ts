@@ -324,6 +324,61 @@ export async function updateNote(
  * writes; a separate `note.branch_updated` event is emitted so the
  * audit log can distinguish branch activity from main.
  */
+/**
+ * Create a note whose existence is scoped to a draft branch.
+ *
+ * Mirrors `createFileOnBranch`: the normal `createNote` path runs
+ * (RPC + workspace_objects register + audit), then we stamp
+ * `branch_id` on the resulting row. Until promote, main-scoped
+ * readers filter out notes with `branch_id IS NOT NULL`; branch
+ * readers see main + their active branch's draft notes.
+ *
+ * Discard of the owning branch hard-deletes these rows because they
+ * never reached main and have no audit history to preserve.
+ */
+export async function createNoteOnBranch(
+  supabase: SupabaseClient,
+  userId: string,
+  workspaceId: string,
+  branchId: string,
+  params: Parameters<typeof createNote>[3]
+): Promise<Note> {
+  const { data: branch } = await supabase
+    .from("draft_branches")
+    .select("id, workspace_id, status")
+    .eq("id", branchId)
+    .maybeSingle();
+  if (!branch || branch.workspace_id !== workspaceId || branch.status !== "open") {
+    throw new Error("Branch not found or not open");
+  }
+
+  const note = await createNote(supabase, userId, workspaceId, params);
+
+  await supabase
+    .from("notes")
+    .update({ branch_id: branchId })
+    .eq("id", note.id);
+
+  const { createAuditEvent } = await import(
+    "@/server/repositories/audit_event_repository"
+  );
+  await createAuditEvent(supabase, {
+    workspace_id: workspaceId,
+    actor_type: "user",
+    actor_id: userId,
+    object_type: "note",
+    object_id: note.id,
+    event_type: "note.branch_created",
+    metadata: {
+      branch_id: branchId,
+      box_id: note.box_id,
+      folder_id: note.folder_id,
+    },
+  });
+
+  return { ...note, branch_id: branchId } as Note;
+}
+
 export async function updateNoteOnBranch(
   supabase: SupabaseClient,
   userId: string,
