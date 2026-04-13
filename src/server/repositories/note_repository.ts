@@ -77,6 +77,8 @@ export async function listNotesByBox(
     .eq("box_id", box_id)
     .neq("status", NOTE_STATUS.TRASHED);
 
+  // Branch filter: either show only main rows (branch_id is null) or
+  // show main + rows belonging to the specified branch.
   if (branchId) {
     query = query.or(`branch_id.is.null,branch_id.eq.${branchId}`);
   } else {
@@ -102,6 +104,18 @@ export async function listNotesByBox(
     .range(offset, offset + limit - 1);
 
   if (error || !data) return [];
+
+  // Pending-op overlay: if the active branch has a `trash` pending
+  // op for any of these notes, hide them. This is the read-side of
+  // the soft-delete-on-branch contract — `docs/branch_pending_ops_v1.md`.
+  if (branchId && (data as Note[]).length > 0) {
+    const { getHiddenByPendingOps } = await import(
+      "@/server/services/pending_op_service"
+    );
+    const hidden = await getHiddenByPendingOps(supabase, branchId);
+    return (data as Note[]).filter((n) => !hidden.has(`note:${n.id}`));
+  }
+
   return data as Note[];
 }
 

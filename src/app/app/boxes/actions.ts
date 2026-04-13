@@ -64,7 +64,7 @@ export async function createBoxAction(
   description?: string | null
 ): Promise<ActionResult<{ id: string }>> {
   try {
-    const { supabase, userId, workspaceId } = await requireContext();
+    const { supabase, userId, workspaceId, activeBranchId } = await requireContext();
 
     const boxLimit = await checkBoxLimit(supabase, workspaceId);
     if (!boxLimit.allowed) {
@@ -78,6 +78,19 @@ export async function createBoxAction(
       name: name.trim(),
       description: description?.trim() ?? null,
     });
+
+    // Branch-local box creation: stamp branch_id so the box is
+    // invisible to main readers until promote. Mirrors the pattern
+    // used by createFolderAction / createFileOnBranch. Discard
+    // hard-deletes via `.delete().eq("branch_id", branchId)` in
+    // discardBranchAction.
+    if (activeBranchId) {
+      await supabase
+        .from("boxes")
+        .update({ branch_id: activeBranchId })
+        .eq("id", box.id);
+      box.branch_id = activeBranchId;
+    }
 
     // Revalidation strategy after box creation:
     //   /app          — home dashboard (stats tiles) + app layout (sidebar box list).
@@ -119,12 +132,25 @@ export async function createFolderAction(
   parentFolderId?: string | null
 ): Promise<ActionResult<{ id: string }>> {
   try {
-    const { supabase, userId, workspaceId } = await requireContext();
+    const { supabase, userId, workspaceId, activeBranchId } = await requireContext();
     const folder = await createFolder(supabase, userId, workspaceId, {
       boxId,
       name: name.trim(),
       parentFolderId: parentFolderId ?? null,
     });
+
+    // Branch-local folder creation: stamp branch_id so the folder
+    // is invisible to main readers until promote. Same pattern as
+    // createFileOnBranch. The canonical `folders` row still carries
+    // every other field (parent, path_cache, slug) so membership
+    // derivation continues to work.
+    if (activeBranchId) {
+      await supabase
+        .from("folders")
+        .update({ branch_id: activeBranchId })
+        .eq("id", folder.id);
+      folder.branch_id = activeBranchId;
+    }
 
     // Record the creation in a change set so the folder is restorable.
     // folder_create events are the input the restore executor needs to

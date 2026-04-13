@@ -4,11 +4,16 @@ import { useState, useTransition } from "react";
 import Link from "next/link";
 import {
   AlertCircle,
+  Archive,
+  ArchiveRestore,
   ChevronDown,
   ChevronRight,
   ExternalLink,
   FileText,
   File as FileIcon,
+  Folder,
+  Link2Off,
+  Move,
   Zap,
   Bot,
   PackageOpen,
@@ -39,6 +44,7 @@ import type {
   BranchDiffRow,
   PackageDiffGroup,
   PackageMetadataChange,
+  PendingOpDiffRow,
 } from "@/server/services/branch_diff_service";
 
 /**
@@ -180,8 +186,8 @@ export function BranchDetailClient({
             <Button
               size="sm"
               onClick={() => setConfirmAction("promote")}
-              disabled={pending || diff.headCount === 0}
-              title={diff.headCount === 0 ? "Nothing to promote" : undefined}
+              disabled={pending || (diff.headCount === 0 && diff.pendingOps.length === 0)}
+              title={(diff.headCount === 0 && diff.pendingOps.length === 0) ? "Nothing to promote" : undefined}
             >
               <PackageOpen className="h-3.5 w-3.5 mr-1" aria-hidden="true" />
               Promote
@@ -205,7 +211,7 @@ export function BranchDetailClient({
           branch has only standalone rows the grouped block is
           skipped; when a branch has only package changes (e.g. a
           metadata-only edit) the standalone block is skipped. */}
-      {diff.rows.length === 0 && diff.packages.length === 0 ? (
+      {diff.rows.length === 0 && diff.packages.length === 0 && diff.pendingOps.length === 0 ? (
         <div className="rounded-lg border border-dashed border-border bg-card/50 px-6 py-10 text-center">
           <p className="text-sm font-medium text-foreground">No edits yet</p>
           <p className="mx-auto mt-1 max-w-md text-xs text-muted-foreground">
@@ -246,6 +252,21 @@ export function BranchDetailClient({
               </ul>
             </section>
           )}
+          {diff.pendingOps.length > 0 && (
+            <section>
+              <h2 className="mb-2 px-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                Pending structural ops
+                <span className="ml-2 text-[10px] font-normal">{diff.pendingOps.length}</span>
+              </h2>
+              <ul className="flex flex-col gap-1 list-none">
+                {diff.pendingOps.map((op) => (
+                  <li key={op.id}>
+                    <PendingOpRow op={op} />
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
         </div>
       )}
 
@@ -260,9 +281,13 @@ export function BranchDetailClient({
           </DialogHeader>
           <p className="text-sm text-muted-foreground">
             This advances {diff.headCount} object{diff.headCount === 1 ? "" : "s"}
-            {" "}on main to their branch-head state as one grouped history
-            entry. The promotion is itself a restore-able change set — you
-            can undo it from History if something goes wrong.
+            {" "}on main to their branch-head state
+            {diff.pendingOps.length > 0 && (
+              <> and applies {diff.pendingOps.length} pending structural op{diff.pendingOps.length === 1 ? "" : "s"}</>
+            )}
+            {" "}as one grouped history entry. The promotion is itself a
+            restore-able change set — you can undo it from History if
+            something goes wrong.
           </p>
           {diff.rows.some((r) => r.mainMovedAhead) && (
             <div className="rounded-md border border-warning/30 bg-warning/5 px-3 py-2 text-xs text-warning">
@@ -678,6 +703,105 @@ function formatMetaValue(v: unknown): string {
   if (v === null || v === undefined) return "—";
   if (Array.isArray(v)) return v.length === 0 ? "[]" : v.join(", ");
   return String(v);
+}
+
+function PendingOpRow({ op }: { op: PendingOpDiffRow }) {
+  // Icon + copy keyed off op_type. Trash uses destructive palette so
+  // the "will delete on promote" intent is visible at a glance; other
+  // ops use muted styling since they're non-destructive status
+  // transitions or moves.
+  const meta: Record<
+    PendingOpDiffRow["opType"],
+    {
+      label: string;
+      Icon: React.ComponentType<{ className?: string }>;
+      tone: "muted" | "destructive" | "warning";
+    }
+  > = {
+    trash: { label: "Trash", Icon: Trash2, tone: "destructive" },
+    archive: { label: "Archive", Icon: Archive, tone: "muted" },
+    unarchive: { label: "Unarchive", Icon: ArchiveRestore, tone: "muted" },
+    move: { label: "Move", Icon: Move, tone: "warning" },
+    detach: { label: "Detach", Icon: Link2Off, tone: "warning" },
+  };
+  const m = meta[op.opType];
+  const objectTypeLabel: Record<PendingOpDiffRow["objectType"], string> = {
+    note: "Note",
+    file: "File",
+    folder: "Folder",
+    skill: "Skill",
+    agent: "Agent",
+    object_link: "Object link",
+    box_object_attachment: "Box attachment",
+  };
+  const ObjectIcon =
+    op.objectType === "note"
+      ? FileText
+      : op.objectType === "file"
+      ? FileIcon
+      : op.objectType === "folder"
+      ? Folder
+      : op.objectType === "skill"
+      ? Zap
+      : op.objectType === "agent"
+      ? Bot
+      : Link2Off;
+
+  return (
+    <div className="flex items-center gap-3 rounded-md border border-border bg-card px-3 py-2">
+      <Badge
+        variant="outline"
+        className={cn(
+          "gap-1 text-[10px] font-normal",
+          m.tone === "destructive" && "border-destructive/40 text-destructive",
+          m.tone === "warning" && "border-warning/40 text-warning",
+        )}
+      >
+        <m.Icon className="h-3 w-3" aria-hidden="true" />
+        {m.label}
+      </Badge>
+      <ObjectIcon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-xs font-medium">{op.displayName}</p>
+        <p className="text-[10px] text-muted-foreground">
+          {objectTypeLabel[op.objectType]}
+          {op.opType === "move" && hasMovePayload(op.payload) && (
+            <> · {describeMovePayload(op.payload)}</>
+          )}
+        </p>
+      </div>
+      {op.href && (
+        <Link
+          href={op.href}
+          className="shrink-0 inline-flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground transition-fast"
+        >
+          Open
+          <ExternalLink className="h-3 w-3" aria-hidden="true" />
+        </Link>
+      )}
+    </div>
+  );
+}
+
+function hasMovePayload(p: Record<string, unknown>): boolean {
+  return (
+    p.box_id !== undefined ||
+    p.folder_id !== undefined ||
+    p.sort_order !== undefined ||
+    p.path_cache !== undefined
+  );
+}
+
+function describeMovePayload(p: Record<string, unknown>): string {
+  // Compact, id-based summary. The branch detail page doesn't need a
+  // fully-resolved pretty path — the user can open the object to see
+  // where it's going. This keeps the diff cheap to render.
+  const parts: string[] = [];
+  if (typeof p.path_cache === "string") parts.push(`→ ${p.path_cache}`);
+  if (typeof p.folder_id === "string") parts.push(`folder ${p.folder_id.slice(0, 8)}`);
+  else if (p.folder_id === null) parts.push("to root");
+  if (typeof p.box_id === "string") parts.push(`box ${p.box_id.slice(0, 8)}`);
+  return parts.join(" · ");
 }
 
 function PreviewColumn({

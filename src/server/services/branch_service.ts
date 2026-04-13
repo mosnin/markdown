@@ -540,6 +540,36 @@ export async function promoteBranch(
       }
     }
 
+    // Apply pending structural ops (trash / archive / unarchive /
+    // move / detach against main rows). Each op becomes a
+    // change_set_item so the rollback engine can revert. Ops are
+    // applied in the order they were recorded — later ops override
+    // earlier ones on the same target.
+    const { listPendingOps, applyPendingOp } = await import(
+      "./pending_op_service"
+    );
+    const pending = await listPendingOps(supabase, branchId);
+    for (const op of pending) {
+      const result = await applyPendingOp(supabase, op);
+      const opToItemOp =
+        op.op_type === "trash" ? "trash" as const :
+        op.op_type === "archive" ? "archive" as const :
+        op.op_type === "unarchive" ? "unarchive" as const :
+        op.op_type === "detach" ? "detach" as const :
+        "move" as const;
+      await recordChangeSetItem(supabase, {
+        change_set_id: cs.id,
+        workspace_id: workspaceId,
+        operation: opToItemOp,
+        object_type: op.object_type === "object_link" || op.object_type === "box_object_attachment"
+          ? op.object_type
+          : op.object_type,
+        object_id: op.object_id,
+        before_snapshot: { ...result.before, branch_id: branchId, pending_op: op.op_type },
+        after_snapshot: { ...result.after, promoted_from_branch: branchId },
+      });
+    }
+
     await commitChangeSet(supabase, cs.id);
     await markBranchPromoted(supabase, branchId);
 

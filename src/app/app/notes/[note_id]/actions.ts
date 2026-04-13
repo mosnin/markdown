@@ -69,6 +69,51 @@ async function runNoteLifecycle(
   try {
     const ctx = await requireAuthenticatedUser();
     const supabase = createAdminClient();
+
+    // Branch-aware lifecycle: when the user is editing on a draft
+    // branch, record the operation as a pending op instead of
+    // applying it to main. Promote applies the op; discard drops
+    // it. Main stays untouched either way.
+    if (ctx.activeBranchId) {
+      const { recordPendingOp, dropPendingOps } = await import(
+        "@/server/services/pending_op_service"
+      );
+      // If the user unarchives on a branch, drop any previously
+      // recorded archive op (swap semantics) rather than stacking.
+      if (op === "unarchive") {
+        await dropPendingOps(supabase, {
+          branchId: ctx.activeBranchId,
+          objectType: "note",
+          objectId: noteId,
+          opType: "archive",
+        });
+      } else if (op === "restore_lifecycle") {
+        await dropPendingOps(supabase, {
+          branchId: ctx.activeBranchId,
+          objectType: "note",
+          objectId: noteId,
+          opType: "trash",
+        });
+      }
+      const branchOpType = op === "restore_lifecycle"
+        ? null  // handled by the drop above — no positive op to record
+        : op === "archive" ? "archive" as const
+        : op === "trash" ? "trash" as const
+        : op === "unarchive" ? "unarchive" as const
+        : null;
+      if (branchOpType) {
+        await recordPendingOp(supabase, {
+          branchId: ctx.activeBranchId,
+          actorId: ctx.user!.id,
+          opType: branchOpType,
+          objectType: "note",
+          objectId: noteId,
+          payload: {},
+        });
+      }
+      return { success: true, data: undefined };
+    }
+
     await withLifecycleChangeSet(
       supabase,
       {

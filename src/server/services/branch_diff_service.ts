@@ -1,5 +1,11 @@
 import { type SupabaseClient } from "@supabase/supabase-js";
 import { listBranchHeads, type BranchHeadObjectType } from "./branch_service";
+import {
+  listPendingOps,
+  type PendingOp,
+  type PendingOpObjectType,
+  type PendingOpType,
+} from "./pending_op_service";
 
 /**
  * Branch preview / diff service.
@@ -84,6 +90,37 @@ export interface BranchDiff {
    */
   packages: PackageDiffGroup[];
   standalone: BranchDiffRow[];
+  /**
+   * Pending structural ops recorded against main rows (trash,
+   * archive, unarchive, move, detach). These don't have branch_heads
+   * rows — they live in `branch_pending_ops` — but they're part of
+   * what promote will apply to main so the diff view has to surface
+   * them. See `docs/branch_local_structural_creation_v1.md`.
+   */
+  pendingOps: PendingOpDiffRow[];
+}
+
+/**
+ * Display-ready row for a `branch_pending_ops` entry. `displayName`
+ * is resolved from the canonical main row when possible and falls
+ * back to a "(missing)" label.
+ */
+export interface PendingOpDiffRow {
+  id: string;
+  opType: PendingOpType;
+  objectType: PendingOpObjectType;
+  objectId: string;
+  displayName: string;
+  /** Route to the canonical object, when one exists for this type. */
+  href: string | null;
+  /**
+   * Move ops carry a payload describing the target location — we
+   * preserve the raw JSON so the UI can render a "from → to"
+   * representation if it wants. For trash / archive / unarchive /
+   * detach the payload is typically empty.
+   */
+  payload: Record<string, unknown>;
+  createdAt: string;
 }
 
 /**
@@ -202,6 +239,8 @@ export async function getBranchDiff(
     nonNull
   );
 
+  const pendingOps = await loadPendingOpRows(supabase, branchId);
+
   return {
     branchId,
     branchName: branch.name,
@@ -211,7 +250,85 @@ export async function getBranchDiff(
     totalBytesRemoved,
     packages,
     standalone,
+    pendingOps,
   };
+}
+
+/**
+ * Resolve every pending op on the branch into a UI-friendly row.
+ * Bulk-fetches display names per object type so rendering doesn't
+ * round-trip once per op.
+ */
+async function loadPendingOpRows(
+  supabase: SupabaseClient,
+  branchId: string
+): Promise<PendingOpDiffRow[]> {
+  const ops = await listPendingOps(supabase, branchId);
+  if (ops.length === 0) return [];
+
+  const byType = new Map<PendingOpObjectType, string[]>();
+  for (const op of ops) {
+    const ids = byType.get(op.object_type) ?? [];
+    ids.push(op.object_id);
+    byType.set(op.object_type, ids);
+  }
+
+  const nameMap = new Map<string, string>();
+  const tableFor: Record<PendingOpObjectType, { table: string; nameCol: string } | null> = {
+    note: { table: "notes", nameCol: "title" },
+    file: { table: "files", nameCol: "name" },
+    folder: { table: "folders", nameCol: "name" },
+    skill: { table: "skills", nameCol: "name" },
+    agent: { table: "agents", nameCol: "name" },
+    object_link: null,
+    box_object_attachment: null,
+  };
+  for (const [type, ids] of byType) {
+    const spec = tableFor[type];
+    if (!spec || ids.length === 0) continue;
+    const { data } = await supabase
+      .from(spec.table)
+      .select(`id, ${spec.nameCol}`)
+      .in("id", ids);
+    for (const row of ((data ?? []) as unknown) as Array<Record<string, unknown>>) {
+      const id = String(row.id);
+      const name = row[spec.nameCol];
+      nameMap.set(`${type}:${id}`, typeof name === "string" ? name : "");
+    }
+  }
+
+  return ops.map((op: PendingOp): PendingOpDiffRow => {
+    const key = `${op.object_type}:${op.object_id}`;
+    const name = nameMap.get(key);
+    const href = hrefForPendingOp(op.object_type, op.object_id);
+    return {
+      id: op.id,
+      opType: op.op_type,
+      objectType: op.object_type,
+      objectId: op.object_id,
+      displayName: name && name.length > 0 ? name : `(missing ${op.object_type})`,
+      href,
+      payload: op.payload,
+      createdAt: op.created_at,
+    };
+  });
+}
+
+function hrefForPendingOp(type: PendingOpObjectType, id: string): string | null {
+  switch (type) {
+    case "note":
+      return `/app/notes/${id}`;
+    case "file":
+      return `/app/files/${id}`;
+    case "skill":
+      return `/app/skills/${id}`;
+    case "agent":
+      return `/app/agents/${id}`;
+    case "folder":
+    case "object_link":
+    case "box_object_attachment":
+      return null;
+  }
 }
 
 /**

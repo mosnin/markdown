@@ -251,6 +251,14 @@ export async function discardBranchAction(
     await supabase.from("folders").delete().eq("branch_id", branchId);
     await supabase.from("boxes").delete().eq("branch_id", branchId);
 
+    // Drop every pending structural op. These only ever recorded
+    // intent — they never mutated main — so there's nothing to
+    // preserve for audit.
+    const { dropAllPendingOpsForBranch } = await import(
+      "@/server/services/pending_op_service"
+    );
+    await dropAllPendingOpsForBranch(supabase, branchId);
+
     await discardDraftBranch(supabase, branchId);
 
     await createAuditEvent(supabase, {

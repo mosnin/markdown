@@ -117,6 +117,17 @@ export async function listFilesByBox(
     .range(offset, offset + limit - 1);
 
   if (error || !data) return [];
+
+  // Pending-op overlay: hide files with a `trash` pending op on the
+  // active branch. See pending_op_service.getHiddenByPendingOps.
+  if (branchId && (data as File[]).length > 0) {
+    const { getHiddenByPendingOps } = await import(
+      "@/server/services/pending_op_service"
+    );
+    const hidden = await getHiddenByPendingOps(supabase, branchId);
+    return (data as File[]).filter((f) => !hidden.has(`file:${f.id}`));
+  }
+
   return data as File[];
 }
 

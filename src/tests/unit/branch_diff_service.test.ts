@@ -77,6 +77,12 @@ function makeMockSupabase(overrides: {
     // it so the grouper doesn't blow up even when the test case
     // doesn't exercise grouping.
     builder.in = () => builder;
+    // New in v1.5: branch_diff surfaces pending ops via
+    // `listPendingOps`, which chains `.is("applied_at", null)` and
+    // `.order("created_at", …)`. Both return the builder so the
+    // empty-result `.then` still fires.
+    builder.is = () => builder;
+    builder.order = () => builder;
     builder.then = async (resolve: (v: { data: unknown[]; error: null }) => void) => {
       // Only the files `.in()` branch + the overlays query reach
       // here. Both are safe to return empty for these tests; the
