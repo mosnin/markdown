@@ -267,6 +267,14 @@ export async function discardBranchAction(
     );
     await dropAllFolderOverridesForBranch(supabase, branchId);
 
+    // Drop every placement override (drag-and-drop reorder / move
+    // intents against main rows). Same trust contract — no canonical
+    // mutation happened, nothing to audit.
+    const { dropAllPlacementOverridesForBranch } = await import(
+      "@/server/services/placement_branch_service"
+    );
+    await dropAllPlacementOverridesForBranch(supabase, branchId);
+
     await discardDraftBranch(supabase, branchId);
 
     await createAuditEvent(supabase, {

@@ -53,6 +53,13 @@ export async function getWorkspaceObject(
  * List all workspace_objects belonging to a box.
  * By default excludes archived and trashed entries.
  * Pass folder_id to scope to a specific folder; null scopes to the box root.
+ *
+ * Branch-aware: when `branchId` is supplied, every row is overlaid
+ * with its per-branch placement override (sort_order, folder_id) via
+ * `applyPlacementOverridesToList` before the folder filter runs. The
+ * overlay is loaded once per call and keyed by `workspace_objects.id`
+ * so readers see a branch-local view without canonical mutation.
+ * Main readers (no branchId) never touch the overrides table.
  */
 export async function listWorkspaceObjectsByBox(
   supabase: SupabaseClient,
@@ -60,11 +67,21 @@ export async function listWorkspaceObjectsByBox(
   {
     folder_id,
     includeArchived = false,
+    branchId = null,
   }: {
     folder_id?: string | null;
     includeArchived?: boolean;
+    /**
+     * Branch context for the read:
+     *   - null → main-only view (no placement overlay applied)
+     *   - uuid → overlay the given branch's placement overrides
+     */
+    branchId?: string | null;
   } = {}
 ): Promise<WorkspaceObject[]> {
+  // When a branch is active, defer the folder_id filter to the
+  // post-overlay step so rows moved into / out of the target folder
+  // via the overlay still resolve correctly.
   let query = supabase
     .from("workspace_objects")
     .select("*")
@@ -75,8 +92,7 @@ export async function listWorkspaceObjectsByBox(
     query = query.neq("status", OBJECT_STATUS.ARCHIVED);
   }
 
-  // null means root level; undefined means all folders
-  if (folder_id !== undefined) {
+  if (!branchId && folder_id !== undefined) {
     if (folder_id === null) {
       query = query.is("folder_id", null);
     } else {
@@ -85,9 +101,37 @@ export async function listWorkspaceObjectsByBox(
   }
 
   const { data, error } = await query.order("sort_order", { ascending: true });
-
   if (error || !data) return [];
-  return data as WorkspaceObject[];
+  let rows = data as WorkspaceObject[];
+
+  if (branchId) {
+    const {
+      applyPlacementOverridesToList,
+      listPlacementOverridesForBox,
+    } = await import("@/server/services/placement_branch_service");
+    const overrides = await listPlacementOverridesForBox(
+      supabase,
+      branchId,
+      box_id
+    );
+    const map = new Map<string, (typeof overrides)[number]>();
+    for (const ov of overrides) {
+      if (ov.target_type !== "workspace_object") continue;
+      map.set(ov.target_id, ov);
+    }
+    rows = applyPlacementOverridesToList(rows, (r) => r.id, map);
+
+    if (folder_id !== undefined) {
+      rows = rows.filter((r) =>
+        folder_id === null ? r.folder_id === null : r.folder_id === folder_id
+      );
+    }
+
+    // Re-sort after overlay so sort_order overrides take effect.
+    rows.sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
+  }
+
+  return rows;
 }
 
 /**

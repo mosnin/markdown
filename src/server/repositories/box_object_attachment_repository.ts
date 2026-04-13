@@ -27,10 +27,18 @@ export interface CreateBoxObjectAttachmentInput {
 /**
  * List all attachments for a given box, ordered by sort_order ascending.
  * Includes all attached skills and agents regardless of folder placement.
+ *
+ * Branch-aware: when `branchId` is supplied, every attachment row is
+ * overlaid with its per-branch placement override (sort_order,
+ * folder_id) before being returned. Main readers (no branchId) never
+ * touch the overrides table.
  */
 export async function listAttachmentsForBox(
   supabase: SupabaseClient,
-  box_id: string
+  box_id: string,
+  {
+    branchId = null,
+  }: { branchId?: string | null } = {}
 ): Promise<BoxObjectAttachment[]> {
   const { data, error } = await supabase
     .from("box_object_attachments")
@@ -39,7 +47,28 @@ export async function listAttachmentsForBox(
     .order("sort_order", { ascending: true });
 
   if (error || !data) return [];
-  return data as BoxObjectAttachment[];
+  let rows = data as BoxObjectAttachment[];
+
+  if (branchId) {
+    const {
+      applyPlacementOverridesToList,
+      listPlacementOverridesForBox,
+    } = await import("@/server/services/placement_branch_service");
+    const overrides = await listPlacementOverridesForBox(
+      supabase,
+      branchId,
+      box_id
+    );
+    const map = new Map<string, (typeof overrides)[number]>();
+    for (const ov of overrides) {
+      if (ov.target_type !== "box_object_attachment") continue;
+      map.set(ov.target_id, ov);
+    }
+    rows = applyPlacementOverridesToList(rows, (r) => r.id, map);
+    rows.sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
+  }
+
+  return rows;
 }
 
 /**

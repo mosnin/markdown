@@ -572,6 +572,58 @@ export async function promoteBranch(
       });
     }
 
+    // Apply placement overrides — sort_order + folder_id intents
+    // recorded by drag-and-drop reorder/move on the branch. Each
+    // promoted overlay becomes a change_set_item with operation
+    // 'move' when folder_id changed and 'update' when only the
+    // sort_order changed. See `placement_branch_service`.
+    const { promotePlacementOverrides } = await import(
+      "./placement_branch_service"
+    );
+    const placementChanges = await promotePlacementOverrides(supabase, branchId);
+    for (const ch of placementChanges) {
+      if (
+        Object.keys(ch.before).length === 0 &&
+        Object.keys(ch.after).length === 0
+      ) {
+        continue;
+      }
+      const hadFolderChange = Object.prototype.hasOwnProperty.call(
+        ch.after,
+        "folder_id"
+      );
+      const op = hadFolderChange ? ("move" as const) : ("update" as const);
+      // Placement overlays for native objects address the
+      // workspace_objects PK as `target_id`, but the change_set_item
+      // object_type CHECK only accepts leaf types + `folder`, `box`,
+      // `box_object_attachment`. Map workspace_object overlays to
+      // their inner object_type (note/file/folder/skill/agent) when
+      // we have it; fall back to `box_object_attachment` otherwise.
+      const itemObjectType =
+        ch.targetType === "box_object_attachment"
+          ? "box_object_attachment"
+          : (ch.objectType ?? "box_object_attachment");
+      const itemObjectId = ch.objectId ?? ch.targetId;
+      await recordChangeSetItem(supabase, {
+        change_set_id: cs.id,
+        workspace_id: workspaceId,
+        operation: op,
+        object_type: itemObjectType as
+          | "note"
+          | "file"
+          | "skill"
+          | "agent"
+          | "folder"
+          | "box"
+          | "note_link"
+          | "object_link"
+          | "box_object_attachment",
+        object_id: itemObjectId,
+        before_snapshot: { ...ch.before, branch_id: branchId },
+        after_snapshot: { ...ch.after, promoted_from_branch: branchId },
+      });
+    }
+
     // Apply pending structural ops (trash / archive / unarchive /
     // move / detach against main rows). Each op becomes a
     // change_set_item so the rollback engine can revert. Ops are

@@ -229,10 +229,25 @@ Full suite: 299 / 299 passing.
   promote (overwrite) or discard. The `mainMovedAhead` signal + the
   restore engine's `dirtyAfter` cover the overwrite-awareness need.
 
+## v1.7 — Package placement is overlay-routed
+
+The package-metadata overlay shipped in v1 covered description /
+tags / summary / agent_type / model_hint / system_prompt edits.
+What still mutated main: dragging a Skill or Agent to a new
+folder inside its owning box, or reordering it among siblings,
+wrote `workspace_objects.folder_id` and
+`workspace_objects.sort_order` directly. v1.7 closes that via
+`branch_placement_overrides` — the same overlay used for notes /
+files / folders / attachments. Drag-and-drop reorder and
+cross-folder move now never touch main while a branch is active.
+See [branch_local_sort_order_and_reorder_isolation_v1.md](branch_local_sort_order_and_reorder_isolation_v1.md).
+
 ## Related docs
 
 - [branch_aware_writes_v1.md](branch_aware_writes_v1.md) — the
   per-object write / read / promote contract.
+- [branch_local_sort_order_and_reorder_isolation_v1.md](branch_local_sort_order_and_reorder_isolation_v1.md)
+  — the placement (sort_order + folder_id) overlay contract.
 - [rollback_schema_and_restore_engine_v1.md](rollback_schema_and_restore_engine_v1.md)
   — restores of package promotions flow through the existing
   engine unchanged.

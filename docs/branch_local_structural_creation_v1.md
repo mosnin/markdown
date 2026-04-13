@@ -342,8 +342,43 @@ branch detail client renders a "Folder changes" section with one
 card per folder; fields reuse the existing `MetadataChangeRow`
 component so the UI shape matches package metadata changes.
 
+## v1.7 — Placement overrides close the reorder + cross-folder leak
+
+The folder-overlay table closed renames and folder-tree edits, but
+drag-and-drop reorder and cross-folder move (notes / files / skills /
+agents / attachments inside the box tree) were still writing
+canonical state on every drag. v1.7 introduces a sibling overlay
+table — `branch_placement_overrides` — that captures `sort_order`
++ `folder_id` intent for any draggable tree entry while a branch
+is active.
+
+- Migration `20260413000002_branch_placement_overrides.sql` ships
+  the table, indexes, and `FOR ALL` RLS policy modeled after
+  `folder_branch_overrides`.
+- Service `placement_branch_service.ts` exposes
+  `upsertPlacementOverride`, `applyPlacementOverridesToList`,
+  `promotePlacementOverrides`, and the per-branch / per-target
+  drops.
+- `loadSiblings` and `writeSiblingOrder` in
+  `src/app/app/boxes/actions.ts` route through the overlay when
+  `ctx.activeBranchId` is set; the cross-folder move and
+  attachment folder-move arms of `moveTreeNodeAction` route the
+  same way.
+- Reader overlay in `listWorkspaceObjectsByBox` and
+  `listAttachmentsForBox` keeps tree-page renders branch-aware
+  without touching canonical rows.
+- `promoteBranch` records each placement override as a
+  `change_set_item` with `operation: "move"` (folder change) or
+  `"update"` (sort-only); discard drops every overlay row.
+- `getBranchDiff` returns `placementChanges`; the branch detail
+  client renders a "Placement changes" section reusing
+  `MetadataChangeRow`.
+
+Full details: [branch_local_sort_order_and_reorder_isolation_v1.md](branch_local_sort_order_and_reorder_isolation_v1.md).
+
 ## Related docs
 
 - [branch_aware_writes_v1.md](branch_aware_writes_v1.md)
+- [branch_local_sort_order_and_reorder_isolation_v1.md](branch_local_sort_order_and_reorder_isolation_v1.md)
 - [package_branch_state_for_skills_and_agents_v1.md](package_branch_state_for_skills_and_agents_v1.md)
 - [rollback_schema_and_restore_engine_v1.md](rollback_schema_and_restore_engine_v1.md)

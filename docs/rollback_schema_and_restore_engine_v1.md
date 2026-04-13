@@ -318,6 +318,22 @@ reverses the pointer moves across all object types uniformly.
   promotion change set. Three-way merge semantics aren't on the
   roadmap.
 
+## v1.7 — Placement promotions land as `move` / `update` items
+
+Promote now also iterates `branch_placement_overrides` and writes
+each overlay back to the canonical `workspace_objects` /
+`box_object_attachments` row. Each promoted overlay produces a
+`change_set_item` whose `operation` is `'move'` when the overlay
+changed `folder_id` and `'update'` when only `sort_order`
+changed. `before_snapshot` carries the canonical pre-state plus
+`branch_id`; `after_snapshot` carries the overlay's effective
+fields plus `promoted_from_branch`. Restores of placement
+promotions flow through the existing `update`-arm of the engine
+unchanged — the snapshots have everything the planner needs to
+revert sort + folder back to the canonical pre-state.
+
+See [`docs/branch_local_sort_order_and_reorder_isolation_v1.md`](branch_local_sort_order_and_reorder_isolation_v1.md).
+
 ## Referenced docs
 
 * [`docs/rollback_architecture_v1.md`](rollback_architecture_v1.md) — conceptual model
@@ -325,3 +341,4 @@ reverses the pointer moves across all object types uniformly.
 * [`docs/machine_write_v1.md`](machine_write_v1.md) — proposals as change sets
 * [`docs/lifecycle_controls_v1.md`](lifecycle_controls_v1.md) — lifecycle transitions are restorable
 * [`docs/import_export_v1.md`](import_export_v1.md) — imports as grouped restore units
+* [`docs/branch_local_sort_order_and_reorder_isolation_v1.md`](branch_local_sort_order_and_reorder_isolation_v1.md) — placement overlay

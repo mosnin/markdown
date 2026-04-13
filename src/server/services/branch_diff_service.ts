@@ -105,6 +105,31 @@ export interface BranchDiff {
    * `folder_branch_service`.
    */
   folderOverrides: FolderOverrideDiffRow[];
+  /**
+   * Drag-and-drop placement overrides — sort_order / folder_id
+   * intents recorded against main `workspace_objects` and
+   * `box_object_attachments` rows. Each row carries before/after
+   * snapshots of the two overlaid fields plus a resolved display
+   * name. See `placement_branch_service`.
+   */
+  placementChanges: PlacementChangeRow[];
+}
+
+/**
+ * Diff row for a single placement-branch override. `before` shows
+ * the canonical sort_order / folder_id; `after` shows the overlay
+ * values that promote will write. Either side may be `null`. Rows
+ * where the overlay matches main exactly are dropped before this
+ * shape is emitted.
+ */
+export interface PlacementChangeRow {
+  targetType: "workspace_object" | "box_object_attachment";
+  targetId: string;
+  objectType: string | null;
+  objectId: string | null;
+  displayName: string;
+  before: { sortOrder: number | null; folderId: string | null };
+  after: { sortOrder: number | null; folderId: string | null };
 }
 
 /**
@@ -259,6 +284,7 @@ export async function getBranchDiff(
 
   const pendingOps = await loadPendingOpRows(supabase, branchId);
   const folderOverrides = await loadFolderOverrideRows(supabase, branchId);
+  const placementChanges = await loadPlacementChangeRows(supabase, branchId);
 
   return {
     branchId,
@@ -271,7 +297,164 @@ export async function getBranchDiff(
     standalone,
     pendingOps,
     folderOverrides,
+    placementChanges,
   };
+}
+
+/**
+ * Resolve every branch_placement_overrides row into a UI-friendly
+ * `PlacementChangeRow`. Joins the canonical `workspace_objects` /
+ * `box_object_attachments` row to get the original sort_order and
+ * folder_id for the diff, and looks up a display name through the
+ * leaf table when the object_type is known.
+ *
+ * Rows whose effective overlay matches main exactly are filtered
+ * out — they would render as a no-op in the diff and aren't worth
+ * showing.
+ */
+async function loadPlacementChangeRows(
+  supabase: SupabaseClient,
+  branchId: string
+): Promise<PlacementChangeRow[]> {
+  const { data: overrides } = await supabase
+    .from("branch_placement_overrides")
+    .select("*")
+    .eq("branch_id", branchId);
+  const rows = (overrides ?? []) as Array<{
+    target_type: "workspace_object" | "box_object_attachment";
+    target_id: string;
+    object_type: string | null;
+    object_id: string | null;
+    sort_order: number | null;
+    folder_id: string | null;
+    folder_id_overridden: boolean;
+  }>;
+  if (rows.length === 0) return [];
+
+  // Bulk-load canonical rows for before-state.
+  const woIds = rows
+    .filter((r) => r.target_type === "workspace_object")
+    .map((r) => r.target_id);
+  const attIds = rows
+    .filter((r) => r.target_type === "box_object_attachment")
+    .map((r) => r.target_id);
+
+  const woById = new Map<
+    string,
+    { id: string; sort_order: number | null; folder_id: string | null; display_name: string | null }
+  >();
+  if (woIds.length > 0) {
+    const { data } = await supabase
+      .from("workspace_objects")
+      .select("id, sort_order, folder_id, display_name")
+      .in("id", woIds);
+    for (const r of (data ?? []) as Array<{
+      id: string;
+      sort_order: number | null;
+      folder_id: string | null;
+      display_name: string | null;
+    }>) {
+      woById.set(r.id, r);
+    }
+  }
+
+  const attById = new Map<
+    string,
+    { id: string; sort_order: number | null; folder_id: string | null; object_type: string; object_id: string }
+  >();
+  if (attIds.length > 0) {
+    const { data } = await supabase
+      .from("box_object_attachments")
+      .select("id, sort_order, folder_id, object_type, object_id")
+      .in("id", attIds);
+    for (const r of (data ?? []) as Array<{
+      id: string;
+      sort_order: number | null;
+      folder_id: string | null;
+      object_type: string;
+      object_id: string;
+    }>) {
+      attById.set(r.id, r);
+    }
+  }
+
+  // Resolve attachment display names through the leaf table once
+  // per type so the diff doesn't issue per-row reads.
+  const attLeafIds = new Map<string, string[]>();
+  for (const r of rows) {
+    if (r.target_type !== "box_object_attachment") continue;
+    const att = attById.get(r.target_id);
+    if (!att) continue;
+    const ids = attLeafIds.get(att.object_type) ?? [];
+    ids.push(att.object_id);
+    attLeafIds.set(att.object_type, ids);
+  }
+  const attLeafName = new Map<string, string>();
+  for (const [t, ids] of attLeafIds) {
+    if (ids.length === 0) continue;
+    const table = t === "skill" ? "skills" : t === "agent" ? "agents" : null;
+    if (!table) continue;
+    const { data } = await supabase.from(table).select("id, name").in("id", ids);
+    for (const r of (data ?? []) as Array<{ id: string; name: string }>) {
+      attLeafName.set(`${t}:${r.id}`, r.name);
+    }
+  }
+
+  const out: PlacementChangeRow[] = [];
+  for (const ov of rows) {
+    if (ov.target_type === "workspace_object") {
+      const main = woById.get(ov.target_id);
+      const beforeSort = main?.sort_order ?? null;
+      const beforeFolder = main?.folder_id ?? null;
+      const afterSort = ov.sort_order;
+      const afterFolder = ov.folder_id_overridden ? ov.folder_id : beforeFolder;
+      const sortChanged = afterSort !== null && afterSort !== beforeSort;
+      const folderChanged = ov.folder_id_overridden && afterFolder !== beforeFolder;
+      if (!sortChanged && !folderChanged) continue;
+      out.push({
+        targetType: ov.target_type,
+        targetId: ov.target_id,
+        objectType: ov.object_type,
+        objectId: ov.object_id,
+        displayName: main?.display_name && main.display_name.length > 0
+          ? main.display_name
+          : `(${ov.object_type ?? "object"} ${ov.target_id.slice(0, 8)})`,
+        before: { sortOrder: beforeSort, folderId: beforeFolder },
+        after: {
+          sortOrder: sortChanged ? afterSort : beforeSort,
+          folderId: afterFolder,
+        },
+      });
+    } else {
+      const main = attById.get(ov.target_id);
+      const beforeSort = main?.sort_order ?? null;
+      const beforeFolder = main?.folder_id ?? null;
+      const afterSort = ov.sort_order;
+      const afterFolder = ov.folder_id_overridden ? ov.folder_id : beforeFolder;
+      const sortChanged = afterSort !== null && afterSort !== beforeSort;
+      const folderChanged = ov.folder_id_overridden && afterFolder !== beforeFolder;
+      if (!sortChanged && !folderChanged) continue;
+      const leafName = main
+        ? attLeafName.get(`${main.object_type}:${main.object_id}`)
+        : undefined;
+      out.push({
+        targetType: ov.target_type,
+        targetId: ov.target_id,
+        objectType: ov.object_type ?? main?.object_type ?? null,
+        objectId: ov.object_id ?? main?.object_id ?? null,
+        displayName: leafName && leafName.length > 0
+          ? leafName
+          : `(attachment ${ov.target_id.slice(0, 8)})`,
+        before: { sortOrder: beforeSort, folderId: beforeFolder },
+        after: {
+          sortOrder: sortChanged ? afterSort : beforeSort,
+          folderId: afterFolder,
+        },
+      });
+    }
+  }
+
+  return out;
 }
 
 /**

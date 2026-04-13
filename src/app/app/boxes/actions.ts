@@ -419,14 +419,44 @@ export async function getBoxTreeAction(boxId: string): Promise<ActionResult<{
       listFilesByBox(supabase, boxId, { branchId: activeBranchId }),
       listSkillsByBox(supabase, boxId, { includeArchived: true }),
       listAgentsByBox(supabase, boxId, { includeArchived: true }),
-      listAttachmentsForBox(supabase, boxId),
+      listAttachmentsForBox(supabase, boxId, { branchId: activeBranchId }),
     ]);
     const { data: registryRows } = await supabase
       .from("workspace_objects")
-      .select("object_type, object_id, sort_order")
+      .select("id, object_type, object_id, sort_order")
       .eq("box_id", boxId);
+    // Apply per-branch placement overlay so the sidebar tree's
+    // sort_order map agrees with `loadSiblings` while a branch is
+    // active. Without this the tree would render canonical sort_order
+    // and a freshly reordered branch row would visually snap back.
+    let overlaidRegistry = (registryRows ?? []) as Array<{
+      id: string;
+      object_type: string;
+      object_id: string;
+      sort_order: number | null;
+    }>;
+    if (activeBranchId) {
+      const { listPlacementOverridesForBox } = await import(
+        "@/server/services/placement_branch_service"
+      );
+      const ovs = await listPlacementOverridesForBox(
+        supabase,
+        activeBranchId,
+        boxId
+      );
+      const byTarget = new Map(
+        ovs
+          .filter((o) => o.target_type === "workspace_object")
+          .map((o) => [o.target_id, o])
+      );
+      overlaidRegistry = overlaidRegistry.map((row) => {
+        const ov = byTarget.get(row.id);
+        if (!ov) return row;
+        return { ...row, sort_order: ov.sort_order ?? row.sort_order };
+      });
+    }
     const sortOrder = new Map<string, number>();
-    for (const row of registryRows ?? []) {
+    for (const row of overlaidRegistry) {
       sortOrder.set(`${row.object_type}:${row.object_id}`, row.sort_order ?? 0);
     }
 
@@ -880,7 +910,15 @@ interface SiblingEntry {
   source: "workspace_object" | "box_attachment";
   objectType: TreeObjectType;
   objectId: string;
+  /** PK of the workspace_objects / box_object_attachments row.
+   *  Required so branch-aware writes can address placement overrides
+   *  by row id instead of re-deriving the lookup every tick. */
+  targetId: string;
   sortOrder: number;
+  /** Folder placement (null = root). Reflects the overlay when a
+   *  branch is active and an override exists, otherwise the canonical
+   *  row's folder_id. */
+  folderId: string | null;
 }
 
 /**
@@ -891,61 +929,109 @@ interface SiblingEntry {
  *
  * The dragged node is excluded from the list so callers can insert it at
  * the desired target index deterministically.
+ *
+ * Branch-aware: when `branchId` is set, every row is passed through
+ * `applyPlacementOverrideToRow` before the (folderId, sort_order)
+ * filter / comparator runs. That makes the comparator see the
+ * overlaid state, so prior branch-local reorders and moves stack
+ * correctly when the user drags again on the same branch. Main
+ * readers (no branchId) keep the original direct-filter behaviour.
  */
 async function loadSiblings(
   supabase: Awaited<ReturnType<typeof createClient>>,
   boxId: string,
   folderId: string | null,
-  exclude: { type: TreeObjectType; id: string; isAttachment: boolean }
+  exclude: { type: TreeObjectType; id: string; isAttachment: boolean },
+  branchId: string | null = null
 ): Promise<SiblingEntry[]> {
+  // When on a branch, overlay the full box (not just the folder) and
+  // filter by overlaid folder_id — otherwise a row moved into the
+  // target folder via overlay would be missing from the sibling list.
   const objectsQuery = supabase
     .from("workspace_objects")
-    .select("object_type, object_id, sort_order")
+    .select("id, object_type, object_id, sort_order, folder_id")
     .eq("box_id", boxId)
     .neq("status", "trashed");
-  if (folderId === null) {
-    objectsQuery.is("folder_id", null);
-  } else {
-    objectsQuery.eq("folder_id", folderId);
+  if (!branchId) {
+    if (folderId === null) objectsQuery.is("folder_id", null);
+    else objectsQuery.eq("folder_id", folderId);
   }
   const { data: objectRows } = await objectsQuery;
 
   const attachmentsQuery = supabase
     .from("box_object_attachments")
-    .select("object_type, object_id, sort_order")
+    .select("id, object_type, object_id, sort_order, folder_id")
     .eq("box_id", boxId);
-  if (folderId === null) {
-    attachmentsQuery.is("folder_id", null);
-  } else {
-    attachmentsQuery.eq("folder_id", folderId);
+  if (!branchId) {
+    if (folderId === null) attachmentsQuery.is("folder_id", null);
+    else attachmentsQuery.eq("folder_id", folderId);
   }
   const { data: attachmentRows } = await attachmentsQuery;
 
+  // Pull every placement override for the box once so we don't
+  // round-trip per row. Keyed by `${target_type}:${target_id}`.
+  const { applyPlacementOverrideToRow, listPlacementOverridesForBox } =
+    await import("@/server/services/placement_branch_service");
+  const overridesByKey = new Map<
+    string,
+    Awaited<ReturnType<typeof listPlacementOverridesForBox>>[number]
+  >();
+  if (branchId) {
+    const ovs = await listPlacementOverridesForBox(supabase, branchId, boxId);
+    for (const ov of ovs) {
+      overridesByKey.set(`${ov.target_type}:${ov.target_id}`, ov);
+    }
+  }
+
+  interface RawRow {
+    id: string;
+    object_type: string;
+    object_id: string;
+    sort_order: number | null;
+    folder_id: string | null;
+  }
+
   const entries: SiblingEntry[] = [];
-  for (const r of objectRows ?? []) {
+  for (const raw of (objectRows ?? []) as RawRow[]) {
+    const overlaid = applyPlacementOverrideToRow(
+      { ...raw },
+      overridesByKey.get(`workspace_object:${raw.id}`)
+    );
+    const effectiveFolderId = overlaid.folder_id ?? null;
+    if (effectiveFolderId !== folderId) continue;
     if (
       !exclude.isAttachment &&
-      r.object_type === exclude.type &&
-      r.object_id === exclude.id
+      raw.object_type === exclude.type &&
+      raw.object_id === exclude.id
     ) continue;
     entries.push({
       source: "workspace_object",
-      objectType: r.object_type as TreeObjectType,
-      objectId: r.object_id,
-      sortOrder: Number(r.sort_order ?? 0),
+      objectType: raw.object_type as TreeObjectType,
+      objectId: raw.object_id,
+      targetId: raw.id,
+      sortOrder: Number(overlaid.sort_order ?? 0),
+      folderId: effectiveFolderId,
     });
   }
-  for (const r of attachmentRows ?? []) {
+  for (const raw of (attachmentRows ?? []) as RawRow[]) {
+    const overlaid = applyPlacementOverrideToRow(
+      { ...raw },
+      overridesByKey.get(`box_object_attachment:${raw.id}`)
+    );
+    const effectiveFolderId = overlaid.folder_id ?? null;
+    if (effectiveFolderId !== folderId) continue;
     if (
       exclude.isAttachment &&
-      r.object_type === exclude.type &&
-      r.object_id === exclude.id
+      raw.object_type === exclude.type &&
+      raw.object_id === exclude.id
     ) continue;
     entries.push({
       source: "box_attachment",
-      objectType: r.object_type as TreeObjectType,
-      objectId: r.object_id,
-      sortOrder: Number(r.sort_order ?? 0),
+      objectType: raw.object_type as TreeObjectType,
+      objectId: raw.object_id,
+      targetId: raw.id,
+      sortOrder: Number(overlaid.sort_order ?? 0),
+      folderId: effectiveFolderId,
     });
   }
 
@@ -962,12 +1048,42 @@ async function loadSiblings(
  * We use (i + 1) * 1000 as the ordinal. That leaves 999 slots between any
  * two neighbours for future midpoint inserts if we ever want to avoid
  * full re-spreading on every reorder.
+ *
+ * Branch-aware: when a branch is active, every write routes through
+ * `upsertPlacementOverride` so the canonical row stays untouched.
+ * Without a branch we fall back to the direct update on
+ * `workspace_objects` / `box_object_attachments`.
  */
 async function writeSiblingOrder(
   supabase: Awaited<ReturnType<typeof createClient>>,
   boxId: string,
-  order: SiblingEntry[]
+  order: SiblingEntry[],
+  opts: { branchId?: string | null; actorId?: string } = {}
 ): Promise<void> {
+  const branchId = opts.branchId ?? null;
+  if (branchId) {
+    const { upsertPlacementOverride } = await import(
+      "@/server/services/placement_branch_service"
+    );
+    for (let i = 0; i < order.length; i++) {
+      const sort = (i + 1) * 1000;
+      const entry = order[i];
+      await upsertPlacementOverride(supabase, {
+        branchId,
+        actorId: opts.actorId ?? "",
+        targetType: entry.source === "workspace_object"
+          ? "workspace_object"
+          : "box_object_attachment",
+        targetId: entry.targetId,
+        objectType: entry.objectType,
+        objectId: entry.objectId,
+        boxId,
+        patch: { sortOrder: sort },
+      });
+    }
+    return;
+  }
+
   for (let i = 0; i < order.length; i++) {
     const sort = (i + 1) * 1000;
     const entry = order[i];
@@ -1228,28 +1344,93 @@ export async function moveTreeNodeAction(input: MoveTreeNodeInput): Promise<Acti
     } else if (isAttachment && (draggedType === "skill" || draggedType === "agent")) {
       // Reusable skill/agent attached into this box by reference. Placement
       // lives in box_object_attachments only.
-      await supabase
-        .from("box_object_attachments")
-        .update({ folder_id: nextFolderId })
-        .eq("box_id", boxId)
-        .eq("object_type", draggedType)
-        .eq("object_id", draggedId);
+      if (activeBranchId) {
+        // Branch-routed: record the folder_id move as an overlay
+        // row against the attachment PK. Main untouched until
+        // promote. See `placement_branch_service.ts`.
+        const { data: att } = await supabase
+          .from("box_object_attachments")
+          .select("id")
+          .eq("box_id", boxId)
+          .eq("object_type", draggedType)
+          .eq("object_id", draggedId)
+          .maybeSingle();
+        if (att?.id) {
+          const { upsertPlacementOverride } = await import(
+            "@/server/services/placement_branch_service"
+          );
+          await upsertPlacementOverride(supabase, {
+            branchId: activeBranchId,
+            actorId: userId,
+            targetType: "box_object_attachment",
+            targetId: att.id,
+            objectType: draggedType,
+            objectId: draggedId,
+            boxId,
+            patch: {
+              folderId: nextFolderId,
+              folderIdOverridden: true,
+            },
+          });
+        }
+      } else {
+        await supabase
+          .from("box_object_attachments")
+          .update({ folder_id: nextFolderId })
+          .eq("box_id", boxId)
+          .eq("object_type", draggedType)
+          .eq("object_id", draggedId);
+      }
     } else {
       const table =
         draggedType === "note" ? "notes" :
         draggedType === "file" ? "files" :
         draggedType === "skill" ? "skills" : "agents";
-      const pathCache = await computePathCache(supabase, table, draggedId, nextFolderId);
-      await supabase
-        .from(table)
-        .update({ folder_id: nextFolderId, path_cache: pathCache })
-        .eq("id", draggedId)
-        .eq("box_id", boxId);
-      await supabase
-        .from("workspace_objects")
-        .update({ folder_id: nextFolderId })
-        .eq("object_type", draggedType)
-        .eq("object_id", draggedId);
+
+      if (activeBranchId) {
+        // Branch-routed cross-folder move for native objects.
+        // Folder intent lands on branch_placement_overrides, addressed
+        // by the workspace_objects row PK so promote can rewrite both
+        // the index and the leaf table authoritatively. path_cache
+        // recompute is deferred to promote since the canonical folder
+        // tree is unchanged on the branch until then.
+        const { data: wo } = await supabase
+          .from("workspace_objects")
+          .select("id")
+          .eq("object_type", draggedType)
+          .eq("object_id", draggedId)
+          .maybeSingle();
+        if (wo?.id) {
+          const { upsertPlacementOverride } = await import(
+            "@/server/services/placement_branch_service"
+          );
+          await upsertPlacementOverride(supabase, {
+            branchId: activeBranchId,
+            actorId: userId,
+            targetType: "workspace_object",
+            targetId: wo.id,
+            objectType: draggedType,
+            objectId: draggedId,
+            boxId,
+            patch: {
+              folderId: nextFolderId,
+              folderIdOverridden: true,
+            },
+          });
+        }
+      } else {
+        const pathCache = await computePathCache(supabase, table, draggedId, nextFolderId);
+        await supabase
+          .from(table)
+          .update({ folder_id: nextFolderId, path_cache: pathCache })
+          .eq("id", draggedId)
+          .eq("box_id", boxId);
+        await supabase
+          .from("workspace_objects")
+          .update({ folder_id: nextFolderId })
+          .eq("object_type", draggedType)
+          .eq("object_id", draggedId);
+      }
     }
 
     // ── 2. Re-spread sibling sort_orders at the destination parent ─────────
@@ -1259,11 +1440,35 @@ export async function moveTreeNodeAction(input: MoveTreeNodeInput): Promise<Acti
     // splice the dragged node into the requested position, and re-assign
     // all sort_orders with a gapped scheme. That guarantees the drop lands
     // exactly where the user released regardless of prior sort_order state.
-    const siblings = await loadSiblings(supabase, boxId, nextFolderId, {
-      type: draggedType,
-      id: draggedId,
-      isAttachment,
-    });
+    const siblings = await loadSiblings(
+      supabase,
+      boxId,
+      nextFolderId,
+      { type: draggedType, id: draggedId, isAttachment },
+      activeBranchId ?? null
+    );
+
+    // Resolve the dragged row's PK — required by writeSiblingOrder
+    // when routing through branch_placement_overrides.
+    let draggedTargetId = "";
+    if (isAttachment && (draggedType === "skill" || draggedType === "agent")) {
+      const { data: att } = await supabase
+        .from("box_object_attachments")
+        .select("id")
+        .eq("box_id", boxId)
+        .eq("object_type", draggedType)
+        .eq("object_id", draggedId)
+        .maybeSingle();
+      draggedTargetId = (att as { id?: string } | null)?.id ?? "";
+    } else {
+      const { data: wo } = await supabase
+        .from("workspace_objects")
+        .select("id")
+        .eq("object_type", draggedType)
+        .eq("object_id", draggedId)
+        .maybeSingle();
+      draggedTargetId = (wo as { id?: string } | null)?.id ?? "";
+    }
 
     const draggedEntry: SiblingEntry = {
       source: (isAttachment && (draggedType === "skill" || draggedType === "agent"))
@@ -1271,7 +1476,9 @@ export async function moveTreeNodeAction(input: MoveTreeNodeInput): Promise<Acti
         : "workspace_object",
       objectType: draggedType,
       objectId: draggedId,
+      targetId: draggedTargetId,
       sortOrder: 0, // overwritten by writeSiblingOrder
+      folderId: nextFolderId,
     };
 
     // Clamp the drop index against the folder-first invariant. The shared
@@ -1287,7 +1494,10 @@ export async function moveTreeNodeAction(input: MoveTreeNodeInput): Promise<Acti
       draggedEntry,
       ...siblings.slice(targetIndex),
     ];
-    await writeSiblingOrder(supabase, boxId, ordered);
+    await writeSiblingOrder(supabase, boxId, ordered, {
+      branchId: activeBranchId ?? null,
+      actorId: userId,
+    });
 
     // Record the structural event on the change set we opened above.
     // The before_state is the pre-move placement; after_state is where

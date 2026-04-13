@@ -272,8 +272,21 @@ Diff / preview service: `src/tests/unit/branch_diff_service.test.ts`
 
 Full suite: **288 / 288 passing**.
 
+## v1.7 — Placement (sort_order + cross-folder move) is overlay-routed
+
+The branch-aware write surface in v1 covered note / file / skill /
+agent versioned content. v1.7 finishes the placement story for
+the same object set: `sort_order` on `workspace_objects` and
+`box_object_attachments`, plus `folder_id` cross-folder moves on
+notes / files / skills / agents and on attachments, are now
+captured in `branch_placement_overrides` instead of mutating the
+canonical row. `loadSiblings` overlays before comparing; promote
+writes the overlay back; discard drops the overlay. See
+[branch_local_sort_order_and_reorder_isolation_v1.md](branch_local_sort_order_and_reorder_isolation_v1.md).
+
 ## Related docs
 
 - `docs/rollback_architecture_v1.md` — conceptual rollback model
 - `docs/rollback_schema_and_restore_engine_v1.md` — engine surface
 - `docs/version_history_v1.md` — immutable version invariant
+- `docs/branch_local_sort_order_and_reorder_isolation_v1.md` — placement overlay
