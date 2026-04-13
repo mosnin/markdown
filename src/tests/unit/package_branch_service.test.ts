@@ -119,9 +119,9 @@ function makeMockSupabase(opts: {
 
 describe("branchable metadata fields", () => {
   it("exposes skill vs agent field lists", () => {
-    expect(branchableMetadataFieldsFor("skill")).toEqual(["description", "tags", "summary"]);
+    expect(branchableMetadataFieldsFor("skill")).toEqual(["name", "description", "tags", "summary"]);
     expect(branchableMetadataFieldsFor("agent")).toEqual([
-      "description", "tags", "summary", "agent_type", "model_hint", "system_prompt",
+      "name", "description", "tags", "summary", "agent_type", "model_hint", "system_prompt",
     ]);
   });
 });
@@ -255,6 +255,7 @@ describe("applyPackageMetadataOverlay", () => {
       branch_id: BRANCH_ID,
       package_type: "skill" as const,
       package_id: SKILL_ID,
+      name: null,
       description: "drafted",
       tags: ["drafted"],
       summary: null, // null means "keep main" in our semantics; unchanged below
@@ -271,7 +272,7 @@ describe("applyPackageMetadataOverlay", () => {
     // source goes through object_versions / branch_heads, not the
     // overlay table.
     expect(patched.source_content).toBe("canonical source unchanged");
-    // name is not a branchable metadata field for skills; main value preserved.
+    // name overlay was null (no override); main value preserved.
     expect(patched.name).toBe("My Skill");
   });
 });

@@ -31,15 +31,31 @@ export async function listBoxes(
 /**
  * Fetch a box by id, verifying it belongs to the given workspace.
  * Returns null if the box does not exist or belongs to a different workspace.
+ *
+ * When `branchId` is provided AND a branch metadata overlay exists
+ * for this box, the overlay's `name` / `description` fields patch
+ * the returned row. Branch-created boxes (branch_id already stamped
+ * on the row) are returned as-is — they do not need an overlay
+ * because they never hit main.
  */
 export async function getBoxForWorkspace(
   supabase: SupabaseClient,
   boxId: string,
-  workspaceId: string
+  workspaceId: string,
+  branchId: string | null = null
 ): Promise<Box | null> {
   const box = await getBoxById(supabase, boxId);
   if (!box || box.workspace_id !== workspaceId) return null;
-  return box;
+  if (!branchId) return box;
+  const { getBoxMetadataOverlay, applyBoxMetadataOverlay } = await import(
+    "./box_branch_metadata_service"
+  );
+  const overlay = await getBoxMetadataOverlay(supabase, branchId, boxId);
+  if (!overlay) return box;
+  return applyBoxMetadataOverlay(
+    box as unknown as Record<string, unknown>,
+    overlay
+  ) as unknown as Box;
 }
 
 export async function createBox(

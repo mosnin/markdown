@@ -259,6 +259,13 @@ export async function discardBranchAction(
     );
     await dropAllPendingOpsForBranch(supabase, branchId);
 
+    // Drop every box metadata overlay for the branch. Same contract
+    // as pending ops — nothing reached main so nothing to audit.
+    const { dropAllBoxOverlaysForBranch } = await import(
+      "@/server/services/box_branch_metadata_service"
+    );
+    await dropAllBoxOverlaysForBranch(supabase, branchId);
+
     // Drop every folder-branch override row. Same reasoning —
     // overrides only represented intent; promote never fired so
     // main is untouched and there's no audit trail to preserve.

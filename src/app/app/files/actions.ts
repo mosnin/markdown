@@ -248,9 +248,42 @@ export async function updateFileStatusAction(
   status: "draft" | "active" | "archived" | "trashed"
 ): Promise<ActionResult> {
   try {
-    const { supabase, workspaceId } = await requireContext();
+    const { supabase, userId, workspaceId, activeBranchId } = await requireContext();
     const existing = await getFileForWorkspace(supabase, fileId, workspaceId);
     if (!existing) return { ok: false, error: "File not found" };
+
+    // Branch-aware lifecycle: when the user is editing on a draft
+    // branch we must not mutate the canonical files row directly.
+    // Branch-created files (branch_id matches the active branch)
+    // can still be updated in place — they are not on main yet. For
+    // a canonical (main) row, record a pending op instead so promote
+    // applies the transition and discard drops it.
+    if (activeBranchId && existing.branch_id !== activeBranchId) {
+      // Only archive / unarchive / trash / restore are modelled as
+      // pending ops. `draft` isn't a lifecycle op we branch-route —
+      // it falls through to main as before.
+      if (status === "archived" || status === "trashed" ||
+          (status === "active" &&
+            (existing.status === "archived" || existing.status === "trashed"))) {
+        const { runLifecycleOnBranchOrMain } = await import(
+          "@/server/services/lifecycle_branch_router"
+        );
+        const op =
+          status === "archived" ? "archive" as const :
+          status === "trashed" ? "trash" as const :
+          existing.status === "archived" ? "unarchive" as const :
+          "restore_lifecycle" as const;
+        await runLifecycleOnBranchOrMain({
+          supabase,
+          branchId: activeBranchId,
+          actorId: userId,
+          objectType: "file",
+          objectId: fileId,
+          op,
+        });
+        return { ok: true, data: undefined };
+      }
+    }
 
     const { updateFile } = await import("@/server/repositories/file_repository");
     await updateFile(supabase, fileId, { status });

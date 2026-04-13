@@ -46,6 +46,26 @@ async function runAgentLifecycle(
   try {
     const ctx = await requireAuthenticatedUser();
     const supabase = await createClient();
+
+    // Branch-aware lifecycle: record intent as a pending op instead
+    // of mutating the canonical agents row. Main stays untouched
+    // until promote. See `runLifecycleOnBranchOrMain`.
+    if (ctx.activeBranchId) {
+      const { runLifecycleOnBranchOrMain } = await import(
+        "@/server/services/lifecycle_branch_router"
+      );
+      await runLifecycleOnBranchOrMain({
+        supabase,
+        branchId: ctx.activeBranchId,
+        actorId: ctx.user.id,
+        objectType: "agent",
+        objectId: agentId,
+        op,
+      });
+      revalidatePath(`/app/agents/${agentId}`);
+      return { ok: true, data: undefined };
+    }
+
     await withLifecycleChangeSet(
       supabase,
       {

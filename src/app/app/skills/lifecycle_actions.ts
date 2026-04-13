@@ -46,6 +46,27 @@ async function runSkillLifecycle(
   try {
     const ctx = await requireAuthenticatedUser();
     const supabase = await createClient();
+
+    // Branch-aware lifecycle: record intent as a pending op instead
+    // of mutating the canonical skills row. See
+    // `runLifecycleOnBranchOrMain`.
+    if (ctx.activeBranchId) {
+      const { runLifecycleOnBranchOrMain } = await import(
+        "@/server/services/lifecycle_branch_router"
+      );
+      await runLifecycleOnBranchOrMain({
+        supabase,
+        branchId: ctx.activeBranchId,
+        actorId: ctx.user.id,
+        objectType: "skill",
+        objectId: skillId,
+        op,
+      });
+      revalidatePath(`/app/skills/${skillId}`);
+      revalidatePath("/app/skills");
+      return { ok: true, data: undefined };
+    }
+
     await withLifecycleChangeSet(
       supabase,
       {

@@ -113,6 +113,20 @@ export interface BranchDiff {
    * name. See `placement_branch_service`.
    */
   placementChanges: PlacementChangeRow[];
+  /**
+   * Box metadata overlay rows — renames / description edits on main
+   * boxes recorded on the branch. Each row carries per-field
+   * before/after pairs derived against the canonical box. Empty
+   * arrays are dropped before this reaches the caller.
+   */
+  boxMetadataChanges: BoxMetadataChangeRow[];
+}
+
+export interface BoxMetadataChangeRow {
+  boxId: string;
+  boxName: string;
+  boxHref: string;
+  changes: Array<{ field: "name" | "description"; mainValue: unknown; branchValue: unknown }>;
 }
 
 /**
@@ -285,6 +299,7 @@ export async function getBranchDiff(
   const pendingOps = await loadPendingOpRows(supabase, branchId);
   const folderOverrides = await loadFolderOverrideRows(supabase, branchId);
   const placementChanges = await loadPlacementChangeRows(supabase, branchId);
+  const boxMetadataChanges = await loadBoxMetadataChangeRows(supabase, branchId);
 
   return {
     branchId,
@@ -298,7 +313,46 @@ export async function getBranchDiff(
     pendingOps,
     folderOverrides,
     placementChanges,
+    boxMetadataChanges,
   };
+}
+
+/**
+ * Resolve every `box_branch_metadata_overlay` row into a UI-friendly
+ * row with a before/after diff and a display name. Rows whose overlay
+ * exactly matches main (no-op) are filtered out.
+ */
+async function loadBoxMetadataChangeRows(
+  supabase: SupabaseClient,
+  branchId: string
+): Promise<BoxMetadataChangeRow[]> {
+  const {
+    listBoxMetadataOverlaysForBranch,
+    deriveBoxMetadataChanges,
+  } = await import("./box_branch_metadata_service");
+  const overlays = await listBoxMetadataOverlaysForBranch(supabase, branchId);
+  if (overlays.length === 0) return [];
+  const boxIds = overlays.map((o) => o.box_id);
+  const { data: boxRows } = await supabase
+    .from("boxes")
+    .select("id, name")
+    .in("id", boxIds);
+  const nameMap = new Map<string, string>();
+  for (const r of (boxRows ?? []) as Array<{ id: string; name: string }>) {
+    nameMap.set(r.id, r.name);
+  }
+  const out: BoxMetadataChangeRow[] = [];
+  for (const ov of overlays) {
+    const changes = await deriveBoxMetadataChanges(supabase, ov);
+    if (changes.length === 0) continue;
+    out.push({
+      boxId: ov.box_id,
+      boxName: nameMap.get(ov.box_id) ?? "(deleted box)",
+      boxHref: `/app/boxes/${ov.box_id}`,
+      changes,
+    });
+  }
+  return out;
 }
 
 /**
@@ -770,6 +824,7 @@ async function deriveMetadataChanges(
   overlay: {
     package_type: string;
     package_id: string;
+    name: string | null;
     description: string | null;
     tags: string[] | null;
     summary: string | null;
@@ -780,8 +835,8 @@ async function deriveMetadataChanges(
 ): Promise<PackageMetadataChange[]> {
   const table = overlay.package_type === "skill" ? "skills" : "agents";
   const cols = overlay.package_type === "skill"
-    ? "id, description, tags, summary"
-    : "id, description, tags, summary, agent_type, model_hint, system_prompt";
+    ? "id, name, description, tags, summary"
+    : "id, name, description, tags, summary, agent_type, model_hint, system_prompt";
   const { data: main } = await supabase
     .from(table)
     .select(cols)
@@ -791,8 +846,8 @@ async function deriveMetadataChanges(
   const mainObj = (main ?? {}) as Record<string, unknown>;
 
   const fields = overlay.package_type === "skill"
-    ? (["description", "tags", "summary"] as const)
-    : (["description", "tags", "summary", "agent_type", "model_hint", "system_prompt"] as const);
+    ? (["name", "description", "tags", "summary"] as const)
+    : (["name", "description", "tags", "summary", "agent_type", "model_hint", "system_prompt"] as const);
 
   const out: PackageMetadataChange[] = [];
   for (const f of fields) {

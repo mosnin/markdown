@@ -154,12 +154,34 @@ export async function renameSkillAction(
 
     const { data: skill, error: fetchError } = await supabase
       .from("skills")
-      .select("id, box_id, workspace_id")
+      .select("id, box_id, branch_id, workspace_id")
       .eq("id", skillId)
       .single();
 
     if (fetchError || !skill) return { ok: false, error: "Skill not found" };
     if (skill.workspace_id !== ctx.workspace.id) return { ok: false, error: "Skill not found" };
+
+    // Branch-aware rename: when the user renames on a draft branch
+    // we write the new name to the branch_package_metadata overlay
+    // rather than mutating `skills.name`. Branch reads apply the
+    // overlay, promote patches the canonical row AND the denormalized
+    // `workspace_objects.display_name`. A branch-local skill
+    // (`branch_id = activeBranchId`) is still updated directly — the
+    // whole row belongs to the branch.
+    if (ctx.activeBranchId && skill.branch_id !== ctx.activeBranchId) {
+      const { upsertPackageMetadataOverlay } = await import(
+        "@/server/services/package_branch_service"
+      );
+      await upsertPackageMetadataOverlay(supabase, {
+        branchId: ctx.activeBranchId,
+        packageType: "skill",
+        packageId: skillId,
+        name: trimmedName,
+      });
+      revalidatePath("/app/skills");
+      if (skill.box_id) revalidatePath(`/app/boxes/${skill.box_id}`);
+      return { ok: true, data: undefined };
+    }
 
     const { error: updateError } = await supabase
       .from("skills")

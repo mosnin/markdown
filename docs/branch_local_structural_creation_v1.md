@@ -445,6 +445,121 @@ through untouched when the branch has no conflicting op.
 
 Baseline 358 → 364 tests after the batch.
 
+## v1.9 — Close the lifecycle + rename + box-update leaks
+
+Four narrow but load-bearing mutation paths still wrote straight to
+main when a draft branch was active, leaking draft intent into every
+other reader:
+
+1. **`updateAgentStatusAction`** and the per-op
+   `archive/unarchive/trash/restoreAgentAction` helpers — flipped
+   `agents.status` directly.
+2. **`updateFileStatusAction`** and the per-op
+   `archive/unarchive/trash/restoreFileAction` helpers — flipped
+   `files.status` directly.
+3. **`archive/unarchive/trash/restoreSkillAction`** — flipped
+   `skills.status` directly. (`updateSkillStatusAction` does not
+   exist; the lifecycle endpoints are the only lifecycle surface.)
+4. **`renameSkillAction`** — wrote `skills.name` and
+   `workspace_objects.display_name` directly.
+5. **`updateBoxAction`** — wrote `boxes.name` / `boxes.description`
+   directly.
+
+### Shared lifecycle router
+
+`src/server/services/lifecycle_branch_router.ts` factors the
+branch-routing shape that `runNoteLifecycle` inlined: when
+`branchId` is set, record a `branch_pending_ops` intent and bail.
+When no branch is active, return `{ appliedToMain: true }` and let
+the caller run its existing main-mutating code. Swap semantics
+preserved: `unarchive` drops a prior `archive` op, `restore_lifecycle`
+drops a prior `trash` op — neither ever records a positive
+unarchive / restore intent, matching the note pattern.
+
+Wired into:
+- `updateAgentStatusAction` (boxes/agents/actions.ts)
+- `updateFileStatusAction` (files/actions.ts)
+- `archiveAgentAction` / `unarchiveAgentAction` / `trashAgentAction` / `restoreAgentAction`
+- `archiveFileAction` / `unarchiveFileAction` / `trashFileAction` / `restoreFileAction`
+- `archiveSkillAction` / `unarchiveSkillAction` / `trashSkillAction` / `restoreSkillAction`
+
+Branch-local files (rows whose `branch_id` already points at the
+active branch) fall through to the in-place lifecycle path — the
+whole row belongs to the branch, no intent needed.
+
+### Skill rename via the package overlay
+
+`branch_package_metadata` gained a `name` column (migration
+`20260413000004_branch_metadata_overlays_v2.sql`).
+`renameSkillAction` routes through `upsertPackageMetadataOverlay`
+with `name` set when a branch is active. Branch reads already
+overlay the package metadata; with `name` added to
+`branchableMetadataFieldsFor`, the new name surfaces on every
+skill read on the branch without touching main.
+
+Promote (`branch_service.promoteBranch`) patches the overlay onto
+`skills` / `agents` AND syncs the denormalized
+`workspace_objects.display_name` when the overlay renamed the
+package. Discard hard-deletes the overlay row as before (the
+overlay purge was already wired).
+
+### Box metadata overlay
+
+Boxes needed the same treatment for name / description but
+`branch_package_metadata` is skill/agent-specific (the
+`package_type` CHECK blocks `'box'`; the agent-only columns are
+dead weight). We stand up a dedicated overlay:
+
+- Table: `box_branch_metadata_overlay` with columns
+  `(id, branch_id, box_id, name, description, created_at, updated_at)`
+  and a unique `(branch_id, box_id)` constraint.
+- Service: `src/server/services/box_branch_metadata_service.ts` —
+  upsert / get / list / applyOnRead / derive-diff-changes /
+  promote / drop-all-for-branch. API mirrors the package overlay.
+- Write path: `updateBoxAction` branches on `ctx.activeBranchId`;
+  branch-created boxes (`branch_id` = active branch) still update
+  in place, only main rows route to the overlay.
+- Read path: `getBoxForWorkspace` takes an optional `branchId` and
+  applies the overlay via `applyBoxMetadataOverlay`.
+- Promote: `promoteBoxOverlays(supabase, branchId)` patches main
+  and syncs `workspace_objects.display_name` on rename, returning
+  before/after pairs for `change_set_items`.
+- Discard: `dropAllBoxOverlaysForBranch(supabase, branchId)` in the
+  `discardBranchAction` sequence.
+- Diff surface: `BranchDiff.boxMetadataChanges` resolves every
+  overlay into a before/after row with a display name.
+
+Design note: a dedicated table keeps the schema honest. Extending
+`branch_package_metadata` to include boxes would have required
+loosening the `package_type` CHECK, broadening the RLS policies,
+and threading "box" through the agent-only promote branches — all
+for two shared columns.
+
+### Null semantics on overlays
+
+Both overlays (`branch_package_metadata` and
+`box_branch_metadata_overlay`) treat `NULL` on a column as "no
+override": the overlay row stores null for every column the user
+hasn't explicitly set, and reads must treat null symmetrically with
+"inherit from main" so a partial upsert (e.g. only `name`) doesn't
+wipe `description`. `applyPackageMetadataOverlay` was slightly
+stricter before v1.9 — it treated explicit null as "clear" — but
+the write surface had no way to express "explicit clear" and the
+only caller that set multiple fields at once did so transactionally,
+so the change is a correction rather than a break.
+
+### Tests
+
+- `src/tests/unit/lifecycle_branch_router.test.ts` — five invariants
+  covering main fall-through, archive + trash intent-recording,
+  unarchive / restore swap semantics.
+- `src/tests/unit/box_branch_metadata_service.test.ts` — upsert
+  shape, apply-on-read, null = no override.
+- `src/tests/unit/package_rename_overlay.test.ts` — name overlay
+  shape for skills, agent-only field drop, name applied on read.
+
+Baseline 364 → 377 tests after the batch.
+
 ## Related docs
 
 - [branch_aware_writes_v1.md](branch_aware_writes_v1.md)

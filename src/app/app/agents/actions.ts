@@ -300,6 +300,30 @@ export async function updateAgentStatusAction(
     const existing = await getAgentForWorkspace(supabase, agentId, ctx.workspace.id);
     if (!existing) return { ok: false, error: "Agent not found" };
 
+    // Branch-aware lifecycle: when the user is editing on a draft
+    // branch we must not mutate the canonical agents row. Record the
+    // transition as a pending op so promote applies it and discard
+    // drops it. See `runLifecycleOnBranchOrMain`.
+    if (ctx.activeBranchId) {
+      const { runLifecycleOnBranchOrMain } = await import(
+        "@/server/services/lifecycle_branch_router"
+      );
+      const op =
+        status === "archived" ? "archive" as const :
+        status === "trashed" ? "trash" as const :
+        existing.status === "archived" ? "unarchive" as const :
+        "restore_lifecycle" as const;
+      await runLifecycleOnBranchOrMain({
+        supabase,
+        branchId: ctx.activeBranchId,
+        actorId: ctx.user.id,
+        objectType: "agent",
+        objectId: agentId,
+        op,
+      });
+      return { ok: true, data: undefined };
+    }
+
     await updateAgent(supabase, agentId, { status });
     return { ok: true, data: undefined };
   } catch (err) {

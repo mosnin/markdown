@@ -114,7 +114,39 @@ export async function updateBoxAction(
   changes: { name?: string; description?: string | null }
 ): Promise<ActionResult> {
   try {
-    const { supabase, userId, workspaceId } = await requireContext();
+    const { supabase, userId, workspaceId, activeBranchId } = await requireContext();
+
+    // Branch-aware update: when the user is editing on a draft branch
+    // AND the target box is a main row, route the write to the
+    // `box_branch_metadata_overlay`. Branch-local boxes (branch_id
+    // matches the active branch) are updated in place because the
+    // whole row belongs to the branch. See v1.9 design note in
+    // docs/branch_local_structural_creation_v1.md.
+    if (activeBranchId) {
+      const { data: boxRow } = await supabase
+        .from("boxes")
+        .select("workspace_id, branch_id")
+        .eq("id", boxId)
+        .maybeSingle();
+      if (!boxRow || boxRow.workspace_id !== workspaceId) {
+        return { ok: false, error: "Box not found" };
+      }
+      if (boxRow.branch_id !== activeBranchId) {
+        const { upsertBoxMetadataOverlay } = await import(
+          "@/server/services/box_branch_metadata_service"
+        );
+        await upsertBoxMetadataOverlay(supabase, {
+          branchId: activeBranchId,
+          boxId,
+          name: changes.name !== undefined ? changes.name : undefined,
+          description: changes.description !== undefined ? changes.description : undefined,
+        });
+        revalidatePath(`/app/boxes/${boxId}`);
+        revalidatePath("/app");
+        return { ok: true, data: undefined };
+      }
+    }
+
     await updateBox(supabase, userId, boxId, workspaceId, changes);
     revalidatePath(`/app/boxes/${boxId}`);
     revalidatePath("/app");

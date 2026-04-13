@@ -38,6 +38,7 @@ export interface PackageMetadataOverlay {
   branch_id: string;
   package_type: PackageType;
   package_id: string;
+  name: string | null;
   description: string | null;
   tags: string[] | null;
   summary: string | null;
@@ -48,10 +49,12 @@ export interface PackageMetadataOverlay {
   updated_at: string;
 }
 
-/** Fields we track as "branch-aware metadata" for each package type. */
+/** Fields we track as "branch-aware metadata" for each package type.
+ *  `name` is branch-overrideable on both skills and agents — that's
+ *  what closes the `renameSkillAction` leak. */
 const METADATA_FIELDS_BY_TYPE: Record<PackageType, readonly string[]> = {
-  skill: ["description", "tags", "summary"],
-  agent: ["description", "tags", "summary", "agent_type", "model_hint", "system_prompt"],
+  skill: ["name", "description", "tags", "summary"],
+  agent: ["name", "description", "tags", "summary", "agent_type", "model_hint", "system_prompt"],
 };
 
 export function branchableMetadataFieldsFor(type: PackageType): readonly string[] {
@@ -83,6 +86,7 @@ export interface UpsertOverlayInput {
   /** Only declared fields are written; undefined means "leave whatever
    *  the overlay row already had". Pass null to explicitly clear a
    *  previously-set override. */
+  name?: string | null;
   description?: string | null;
   tags?: string[] | null;
   summary?: string | null;
@@ -107,6 +111,7 @@ export async function upsertPackageMetadataOverlay(
     package_type: input.packageType,
     package_id: input.packageId,
   };
+  if (legal.has("name") && input.name !== undefined) patch.name = input.name;
   if (legal.has("description") && input.description !== undefined) patch.description = input.description;
   if (legal.has("tags") && input.tags !== undefined) patch.tags = input.tags;
   if (legal.has("summary") && input.summary !== undefined) patch.summary = input.summary;
@@ -313,13 +318,13 @@ export function applyPackageMetadataOverlay<T extends Record<string, unknown>>(
   const fields = branchableMetadataFieldsFor(overlay.package_type);
   for (const f of fields) {
     const v = (overlay as unknown as Record<string, unknown>)[f];
-    if (v !== null) {
-      // Explicit null means "clear override" — we DO replace with null so
-      // the UI reflects the branch's intent. `undefined` never shows up
-      // here because the upsert only writes declared fields.
+    // Null means "no override" (the overlay row stores null for every
+    // column the user hasn't set yet). Only non-null values patch the
+    // returned row. Callers that need "explicit clear" semantics can
+    // wait for a future extension — the write surface currently has
+    // no way to express it anyway (upserts only land declared fields).
+    if (v !== null && v !== undefined) {
       (out as Record<string, unknown>)[f] = v;
-    } else if (v === null && (overlay as unknown as Record<string, unknown>)[f] !== undefined) {
-      (out as Record<string, unknown>)[f] = null;
     }
   }
   return out;

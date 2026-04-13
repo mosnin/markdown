@@ -49,6 +49,37 @@ async function runFileLifecycle(
   try {
     const ctx = await requireAuthenticatedUser();
     const supabase = await createClient();
+
+    // Branch-aware lifecycle: record intent as a pending op instead
+    // of mutating the canonical files row. Branch-local files
+    // (`branch_id = activeBranchId`) fall through to the main
+    // lifecycle path because they are not yet on main — in-place
+    // edits on a draft row are legal. Only main rows get routed to
+    // pending ops.
+    if (ctx.activeBranchId) {
+      const { data: fileRow } = await supabase
+        .from("files")
+        .select("branch_id")
+        .eq("id", fileId)
+        .maybeSingle();
+      const isBranchLocal = fileRow?.branch_id === ctx.activeBranchId;
+      if (!isBranchLocal) {
+        const { runLifecycleOnBranchOrMain } = await import(
+          "@/server/services/lifecycle_branch_router"
+        );
+        await runLifecycleOnBranchOrMain({
+          supabase,
+          branchId: ctx.activeBranchId,
+          actorId: ctx.user.id,
+          objectType: "file",
+          objectId: fileId,
+          op,
+        });
+        revalidatePath(`/app/files/${fileId}`);
+        return { ok: true, data: undefined };
+      }
+    }
+
     await withLifecycleChangeSet(
       supabase,
       {

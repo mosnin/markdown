@@ -407,14 +407,14 @@ export async function promoteBranch(
     // reads.
     const { data: overlays } = await supabase
       .from("branch_package_metadata")
-      .select("package_type, package_id, description, tags, summary, agent_type, model_hint, system_prompt")
+      .select("package_type, package_id, name, description, tags, summary, agent_type, model_hint, system_prompt")
       .eq("branch_id", branchId);
 
     for (const ov of overlays ?? []) {
       const table = ov.package_type === "skill" ? "skills" : "agents";
       const legalFields = ov.package_type === "skill"
-        ? ["description", "tags", "summary"]
-        : ["description", "tags", "summary", "agent_type", "model_hint", "system_prompt"];
+        ? ["name", "description", "tags", "summary"]
+        : ["name", "description", "tags", "summary", "agent_type", "model_hint", "system_prompt"];
       const patch: Record<string, unknown> = {};
       for (const f of legalFields) {
         const v = (ov as Record<string, unknown>)[f];
@@ -434,6 +434,23 @@ export async function promoteBranch(
         .from(table)
         .update(patch)
         .eq("id", ov.package_id);
+
+      // Keep the denormalized `workspace_objects.display_name` in sync
+      // when the overlay renamed the package. Without this sync the
+      // workspace-wide listing would keep showing the pre-promote
+      // name even though the canonical row is updated.
+      if (
+        "name" in patch &&
+        patch.name !== null &&
+        patch.name !== undefined &&
+        typeof patch.name === "string"
+      ) {
+        await supabase
+          .from("workspace_objects")
+          .update({ display_name: patch.name })
+          .eq("object_type", ov.package_type)
+          .eq("object_id", ov.package_id);
+      }
 
       await recordChangeSetItem(supabase, {
         change_set_id: cs.id,
@@ -539,6 +556,26 @@ export async function promoteBranch(
           after_snapshot: { branch_id: null, promoted_from_branch: branchId },
         });
       }
+    }
+
+    // Apply box metadata overlays — renames / description edits
+    // recorded against main box rows. Mirrors the package metadata
+    // overlay path; promoteBoxOverlays also keeps the denormalized
+    // workspace_objects.display_name in sync on rename.
+    const { promoteBoxOverlays } = await import(
+      "./box_branch_metadata_service"
+    );
+    const boxOverlayChanges = await promoteBoxOverlays(supabase, branchId);
+    for (const ch of boxOverlayChanges) {
+      await recordChangeSetItem(supabase, {
+        change_set_id: cs.id,
+        workspace_id: workspaceId,
+        operation: "update",
+        object_type: "box",
+        object_id: ch.boxId,
+        before_snapshot: { metadata: ch.before, branch_id: branchId },
+        after_snapshot: { metadata: ch.after },
+      });
     }
 
     // Apply folder-branch overrides — rename / reparent / reorder
