@@ -1,0 +1,420 @@
+"use client";
+
+import { useState, useTransition } from "react";
+import Link from "next/link";
+import {
+  AlertCircle,
+  ChevronDown,
+  ChevronRight,
+  ExternalLink,
+  FileText,
+  File as FileIcon,
+  Zap,
+  Bot,
+  PackageOpen,
+  Trash2,
+  GitBranch,
+  Check,
+  Minus,
+  Plus,
+} from "lucide-react";
+import { cn } from "@/lib/utils";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  promoteBranchAction,
+  discardBranchAction,
+  setActiveBranchAction,
+} from "../actions";
+import type { DraftBranch } from "@/server/services/branch_service";
+import type {
+  BranchDiff,
+  BranchDiffRow,
+} from "@/server/services/branch_diff_service";
+
+/**
+ * Branch detail + diff preview.
+ *
+ * Primary trust surface for branch promotion. Each head renders in
+ * an expandable card showing:
+ *   - object type + name + byte delta
+ *   - "Main moved ahead" warning when applicable
+ *   - side-by-side content preview (main | branch)
+ *   - "Open in editor" link (which routes through the active branch
+ *     cookie, so the editor opens branch content automatically)
+ *
+ * Promote / discard / switch-active buttons live in the sticky action
+ * bar above the head list. Role gating is enforced on the server;
+ * viewers see the page but don't see the write controls.
+ */
+
+const typeMeta: Record<
+  BranchDiffRow["objectType"],
+  { label: string; Icon: React.ComponentType<{ className?: string }> }
+> = {
+  note: { label: "Note", Icon: FileText },
+  file: { label: "File", Icon: FileIcon },
+  skill: { label: "Skill", Icon: Zap },
+  agent: { label: "Agent", Icon: Bot },
+};
+
+export function BranchDetailClient({
+  branch,
+  diff,
+  canWrite,
+  isActive,
+}: {
+  branch: DraftBranch;
+  diff: BranchDiff;
+  canWrite: boolean;
+  isActive: boolean;
+}) {
+  const [confirmAction, setConfirmAction] = useState<"promote" | "discard" | null>(null);
+  const [toast, setToast] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
+  const [pending, startTransition] = useTransition();
+
+  const closed = branch.status !== "open";
+
+  function run(kind: "promote" | "discard") {
+    startTransition(async () => {
+      if (kind === "promote") {
+        const res = await promoteBranchAction(branch.id);
+        setConfirmAction(null);
+        if (res.ok) {
+          setToast({
+            kind: "ok",
+            text: `Promoted ${res.data.promotedObjects.length} object${res.data.promotedObjects.length === 1 ? "" : "s"} to main.`,
+          });
+          // Send user back to the list since this branch is now
+          // promoted and this detail view will just read as "closed".
+          window.location.href = "/app/branches";
+        } else {
+          setToast({ kind: "err", text: res.error });
+        }
+      } else {
+        const res = await discardBranchAction(branch.id);
+        setConfirmAction(null);
+        if (res.ok) {
+          setToast({ kind: "ok", text: "Branch discarded." });
+          window.location.href = "/app/branches";
+        } else {
+          setToast({ kind: "err", text: res.error });
+        }
+      }
+    });
+  }
+
+  async function switchActive() {
+    const res = await setActiveBranchAction(isActive ? null : branch.id);
+    if (res.ok) window.location.reload();
+    else setToast({ kind: "err", text: res.error });
+  }
+
+  return (
+    <div className="space-y-5">
+      {toast && (
+        <div
+          className={cn(
+            "flex items-start gap-3 rounded-lg border px-4 py-3 text-sm",
+            toast.kind === "ok"
+              ? "border-border bg-card"
+              : "border-destructive/30 bg-destructive/5 text-destructive"
+          )}
+          role={toast.kind === "ok" ? "status" : "alert"}
+        >
+          {toast.kind === "err" && (
+            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+          )}
+          <p className="flex-1">{toast.text}</p>
+        </div>
+      )}
+
+      {/* Meta + action bar */}
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-card px-4 py-3">
+        <div className="flex items-center gap-3 text-sm">
+          <GitBranch className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+          <div>
+            <p className="font-medium text-foreground">{branch.name}</p>
+            <p className="text-[11px] text-muted-foreground">
+              {diff.headCount} head{diff.headCount === 1 ? "" : "s"}
+              {diff.totalBytesAdded > 0 && (
+                <> · <span className="text-emerald-600">+{diff.totalBytesAdded} bytes</span></>
+              )}
+              {diff.totalBytesRemoved > 0 && (
+                <> · <span className="text-destructive">-{diff.totalBytesRemoved} bytes</span></>
+              )}
+            </p>
+          </div>
+          {closed && (
+            <Badge variant="outline" className="capitalize text-[10px]">
+              {branch.status}
+            </Badge>
+          )}
+          {isActive && !closed && (
+            <Badge variant="secondary" className="gap-1 text-[10px]">
+              <Check className="h-3 w-3" aria-hidden="true" />
+              active
+            </Badge>
+          )}
+        </div>
+
+        {canWrite && !closed && (
+          <div className="flex flex-wrap gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={switchActive}
+              disabled={pending}
+            >
+              {isActive ? "Switch to main" : "Switch to this branch"}
+            </Button>
+            <Button
+              size="sm"
+              onClick={() => setConfirmAction("promote")}
+              disabled={pending || diff.headCount === 0}
+              title={diff.headCount === 0 ? "Nothing to promote" : undefined}
+            >
+              <PackageOpen className="h-3.5 w-3.5 mr-1" aria-hidden="true" />
+              Promote
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setConfirmAction("discard")}
+              disabled={pending}
+              className="text-muted-foreground hover:text-destructive"
+            >
+              <Trash2 className="h-4 w-4" aria-hidden="true" />
+            </Button>
+          </div>
+        )}
+      </div>
+
+      {/* Head list */}
+      {diff.rows.length === 0 ? (
+        <div className="rounded-lg border border-dashed border-border bg-card/50 px-6 py-10 text-center">
+          <p className="text-sm font-medium text-foreground">No edits yet</p>
+          <p className="mx-auto mt-1 max-w-md text-xs text-muted-foreground">
+            Switch to this branch and edit any note, file, skill, or
+            agent. Every save lands here as a head you can review before
+            promoting.
+          </p>
+        </div>
+      ) : (
+        <ul className="flex flex-col gap-2 list-none">
+          {diff.rows.map((row) => (
+            <li key={row.branchHeadId}>
+              <HeadCard row={row} />
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {/* Confirm dialogs */}
+      <Dialog
+        open={confirmAction === "promote"}
+        onOpenChange={(v) => !v && setConfirmAction(null)}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Promote this branch?</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            This advances {diff.headCount} object{diff.headCount === 1 ? "" : "s"}
+            {" "}on main to their branch-head state as one grouped history
+            entry. The promotion is itself a restore-able change set — you
+            can undo it from History if something goes wrong.
+          </p>
+          {diff.rows.some((r) => r.mainMovedAhead) && (
+            <div className="rounded-md border border-warning/30 bg-warning/5 px-3 py-2 text-xs text-warning">
+              Main has moved ahead for at least one of these objects
+              since you started editing. Promoting will overwrite those
+              newer main edits. Any overwritten work remains reachable
+              via version history.
+            </div>
+          )}
+          <DialogFooter>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setConfirmAction(null)}
+              disabled={pending}
+            >
+              Cancel
+            </Button>
+            <Button size="sm" onClick={() => run("promote")} disabled={pending}>
+              {pending ? "Promoting…" : "Promote"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={confirmAction === "discard"}
+        onOpenChange={(v) => !v && setConfirmAction(null)}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Discard this branch?</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            The branch is marked discarded and disappears from the open
+            list. The version rows written on the branch stay as
+            permanent audit trail — nothing is deleted.
+          </p>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setConfirmAction(null)}
+              disabled={pending}
+            >
+              Cancel
+            </Button>
+            <Button
+              size="sm"
+              onClick={() => run("discard")}
+              disabled={pending}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {pending ? "Discarding…" : "Discard"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
+function HeadCard({ row }: { row: BranchDiffRow }) {
+  const meta = typeMeta[row.objectType];
+  const Icon = meta.Icon;
+  const [open, setOpen] = useState(false);
+  const delta = row.branchBytes - row.mainBytes;
+
+  return (
+    <div className="rounded-lg border border-border bg-card">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className="flex w-full items-start gap-3 px-4 py-3 text-left"
+      >
+        {open ? (
+          <ChevronDown className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+        ) : (
+          <ChevronRight className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+        )}
+        <Icon className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2">
+            <p className="truncate text-sm font-medium">{row.displayName}</p>
+            {row.mainTrashed && (
+              <Badge variant="outline" className="shrink-0 text-[10px] font-normal border-destructive/40 text-destructive">
+                trashed on main
+              </Badge>
+            )}
+            {row.mainMovedAhead && !row.mainTrashed && (
+              <Badge variant="outline" className="shrink-0 text-[10px] font-normal border-warning/40 text-warning">
+                main moved ahead
+              </Badge>
+            )}
+          </div>
+          <p className="mt-0.5 text-[11px] text-muted-foreground">
+            {meta.label} · branch version #{row.branchVersionNumber}
+            {delta !== 0 && (
+              <>
+                {" · "}
+                {delta > 0 ? (
+                  <span className="inline-flex items-center gap-0.5 text-emerald-600">
+                    <Plus className="h-2.5 w-2.5" aria-hidden="true" />
+                    {delta} bytes
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-0.5 text-destructive">
+                    <Minus className="h-2.5 w-2.5" aria-hidden="true" />
+                    {Math.abs(delta)} bytes
+                  </span>
+                )}
+              </>
+            )}
+          </p>
+        </div>
+        <Link
+          href={row.href}
+          onClick={(e) => e.stopPropagation()}
+          className="shrink-0 inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground transition-fast"
+        >
+          Open editor
+          <ExternalLink className="h-3 w-3" aria-hidden="true" />
+        </Link>
+      </button>
+
+      {open && (
+        <div className="border-t border-border">
+          <div className="grid grid-cols-1 gap-0 md:grid-cols-2 md:divide-x md:divide-border">
+            <PreviewColumn
+              heading="Main"
+              subheading={row.mainVersionId ? `version id ${row.mainVersionId.slice(0, 8)}` : "no version"}
+              content={row.mainContent}
+              bytes={row.mainBytes}
+            />
+            <PreviewColumn
+              heading="Branch"
+              subheading={`version id ${row.branchVersionId.slice(0, 8)}`}
+              content={row.branchContent}
+              bytes={row.branchBytes}
+              highlight
+            />
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function PreviewColumn({
+  heading,
+  subheading,
+  content,
+  bytes,
+  highlight,
+}: {
+  heading: string;
+  subheading: string;
+  content: string | null;
+  bytes: number;
+  highlight?: boolean;
+}) {
+  return (
+    <div className={cn("px-4 py-3", highlight && "bg-accent/20")}>
+      <div className="mb-2 flex items-center justify-between">
+        <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+          {heading}
+        </p>
+        <p className="text-[10px] text-muted-foreground">
+          {subheading} · {bytes}b
+        </p>
+      </div>
+      {content === null ? (
+        <p className="rounded-md border border-dashed border-border bg-muted/30 px-3 py-2 text-xs text-muted-foreground italic">
+          No content (object not present on main).
+        </p>
+      ) : content === "" ? (
+        <p className="rounded-md border border-dashed border-border bg-muted/30 px-3 py-2 text-xs text-muted-foreground italic">
+          Empty.
+        </p>
+      ) : (
+        <pre className="max-h-80 overflow-auto rounded-md border border-border bg-muted/30 px-3 py-2 font-mono text-[11px] leading-relaxed whitespace-pre-wrap break-words">
+          {content}
+        </pre>
+      )}
+    </div>
+  );
+}

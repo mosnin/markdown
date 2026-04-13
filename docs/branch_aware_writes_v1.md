@@ -179,6 +179,38 @@ every server action call; the UI hides controls viewers can't use.
 - **Per-object branch switch.** You can only have one active branch
   at a time.
 
+## Branch detail + diff preview (v1.2)
+
+`/app/branches/[branch_id]` is the trust surface for promotion. It
+renders every head on the branch with a per-head expandable card
+showing:
+
+- object type + display name + branch version number
+- byte delta (`+N` / `-N` bytes)
+- "Main moved ahead" badge when `mainMovedAhead` is true — warns the
+  user that promoting will overwrite main edits made after the branch
+  forked
+- "Trashed on main" badge when the canonical row was trashed since
+  the branch wrote to it
+- side-by-side Main | Branch content preview on expand
+- "Open editor" link per head (editor opens branch content because
+  the active-branch cookie routes reads through `branch_heads`)
+
+Action bar at the top offers Promote / Discard / Switch-to-branch.
+Promote confirm dialog surfaces the `mainMovedAhead` warning
+aggregated across heads so users see it before they click.
+
+Data comes from `getBranchDiff(supabase, branchId, workspaceId)` in
+`src/server/services/branch_diff_service.ts`. The service returns
+`BranchDiff { branchId, branchName, headCount, rows, totalBytesAdded,
+totalBytesRemoved }`. Each row carries full `mainContent` +
+`branchContent` so the UI can render any diff style without a second
+round trip. Missing canonical rows (trashed or deleted) are surfaced
+explicitly rather than silently dropped.
+
+Branches list at `/app/branches` links each row's name through to
+this detail page.
+
 ## Tests
 
 Note semantics: `src/tests/unit/branch_semantics.test.ts` (5 cases)
@@ -201,7 +233,17 @@ parameterised across the three versioned object types)
 - read-through returns null to trigger main fallback when absent
 - null branchId short-circuits without a DB call
 
-Full suite: **282 / 282 passing**.
+Diff / preview service: `src/tests/unit/branch_diff_service.test.ts`
+(6 cases)
+
+- wrong-workspace branch returns null
+- zero-head branch returns empty rows + zero byte totals
+- note + file rows return full main + branch content verbatim
+- `mainMovedAhead` flag fires when main's current_version_id is
+  neither the branch head's parent nor the branch head itself
+- `mainTrashed` flag fires when the canonical row is trashed
+
+Full suite: **288 / 288 passing**.
 
 ## Related docs
 

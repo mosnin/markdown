@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import Link from "next/link";
 import {
   Check,
   GitBranch,
@@ -248,7 +249,14 @@ function BranchRow({
       <GitBranch className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
-          <p className="truncate text-sm font-medium text-foreground">{row.name}</p>
+          {/* Name links through to the detail / preview page so users
+              can inspect heads + diffs before promoting. */}
+          <Link
+            href={`/app/branches/${row.id}`}
+            className="truncate text-sm font-medium text-foreground hover:underline"
+          >
+            {row.name}
+          </Link>
           {active && (
             <Badge variant="secondary" className="shrink-0 text-[10px] font-normal">
               <Check className="h-3 w-3 mr-1" aria-hidden="true" />
