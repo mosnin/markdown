@@ -1,8 +1,10 @@
 import { requireAuthenticatedUser } from "@/server/auth/require_authenticated_user";
 import { createClient } from "@/lib/supabase/server";
 import { listDraftBranches, listBranchHeads } from "@/server/services/branch_service";
+import { canAdmin } from "@/server/auth/require_role";
 import { PageHeader } from "@/components/product/page_header";
 import { BranchesClient } from "./branches_client";
+import { PurgeOverlaysPanel } from "./purge_overlays_panel";
 
 /**
  * Draft branches management page.
@@ -30,6 +32,28 @@ export default async function BranchesPage() {
   }
 
   const canWrite = ctx.workspace.role !== "viewer";
+  const isAdmin = canAdmin(ctx.workspace.role);
+
+  // For admins, count the purgeable overlay rows so the button label is
+  // accurate without requiring a client-side fetch.
+  let overlayCount = 0;
+  if (isAdmin) {
+    // Collect terminal branch IDs in this workspace.
+    const { data: terminalBranches } = await supabase
+      .from("draft_branches")
+      .select("id")
+      .eq("workspace_id", ctx.workspace.id)
+      .in("status", ["discarded", "promoted"]);
+
+    if (terminalBranches && terminalBranches.length > 0) {
+      const ids = terminalBranches.map((b: { id: string }) => b.id);
+      const { data: overlays } = await supabase
+        .from("branch_package_metadata")
+        .select("id")
+        .in("branch_id", ids);
+      overlayCount = (overlays ?? []).length;
+    }
+  }
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
@@ -44,6 +68,7 @@ export default async function BranchesPage() {
             activeBranchId={ctx.activeBranchId}
             canWrite={canWrite}
           />
+          {isAdmin && <PurgeOverlaysPanel overlayCount={overlayCount} />}
         </div>
       </div>
     </div>

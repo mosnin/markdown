@@ -246,6 +246,55 @@ async function resolveCanonicalSourceHead(
   return (data?.version_id as string | undefined) ?? null;
 }
 
+// ─── Admin purge ─────────────────────────────────────────────────────────────
+
+/**
+ * Delete every `branch_package_metadata` overlay row whose parent branch
+ * has reached a terminal status (`discarded` or `promoted`) within the
+ * given workspace.
+ *
+ * SECURITY: rows whose parent branch is still `open` are NEVER deleted —
+ * they belong to live drafts and must survive until that branch is either
+ * promoted or discarded.
+ *
+ * The function is intentionally pure: it accepts a supabase client and a
+ * workspaceId and performs no authentication or role checks itself. The
+ * server action wrapper is responsible for access control.
+ *
+ * Implementation uses a two-step approach compatible with the Supabase JS
+ * client: first fetch the eligible branch IDs, then delete overlays for
+ * those IDs. This is equivalent to a single-pass
+ *   DELETE … WHERE branch_id IN (SELECT id FROM draft_branches WHERE …)
+ * at the query level, just split across two round-trips.
+ */
+export async function purgeDiscardedOverlays(
+  supabase: SupabaseClient,
+  workspaceId: string
+): Promise<{ deletedCount: number }> {
+  // Step 1: collect branch IDs in this workspace that are terminal.
+  const { data: branches, error: fetchError } = await supabase
+    .from("draft_branches")
+    .select("id")
+    .eq("workspace_id", workspaceId)
+    .in("status", ["discarded", "promoted"]);
+
+  if (fetchError) throw new Error(fetchError.message);
+
+  const branchIds = (branches ?? []).map((b: { id: string }) => b.id);
+  if (branchIds.length === 0) return { deletedCount: 0 };
+
+  // Step 2: delete overlays for those branches and count the rows.
+  const { data: deleted, error: deleteError } = await supabase
+    .from("branch_package_metadata")
+    .delete()
+    .in("branch_id", branchIds)
+    .select("id");
+
+  if (deleteError) throw new Error(deleteError.message);
+
+  return { deletedCount: (deleted ?? []).length };
+}
+
 // ─── Apply overlay on read ───────────────────────────────────────────────────
 
 /**
