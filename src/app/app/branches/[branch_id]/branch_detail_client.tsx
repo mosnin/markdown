@@ -42,6 +42,8 @@ import type { DraftBranch } from "@/server/services/branch_service";
 import type {
   BranchDiff,
   BranchDiffRow,
+  CreatedAttachmentRow,
+  CreatedNoteLinkRow,
   FolderOverrideDiffRow,
   PackageDiffGroup,
   PackageMetadataChange,
@@ -188,8 +190,8 @@ export function BranchDetailClient({
             <Button
               size="sm"
               onClick={() => setConfirmAction("promote")}
-              disabled={pending || (diff.headCount === 0 && diff.pendingOps.length === 0 && diff.folderOverrides.length === 0 && diff.placementChanges.length === 0)}
-              title={(diff.headCount === 0 && diff.pendingOps.length === 0 && diff.folderOverrides.length === 0 && diff.placementChanges.length === 0) ? "Nothing to promote" : undefined}
+              disabled={pending || (diff.headCount === 0 && diff.pendingOps.length === 0 && diff.folderOverrides.length === 0 && diff.placementChanges.length === 0 && diff.createdNoteLinks.length === 0 && diff.createdAttachments.length === 0)}
+              title={(diff.headCount === 0 && diff.pendingOps.length === 0 && diff.folderOverrides.length === 0 && diff.placementChanges.length === 0 && diff.createdNoteLinks.length === 0 && diff.createdAttachments.length === 0) ? "Nothing to promote" : undefined}
             >
               <PackageOpen className="h-3.5 w-3.5 mr-1" aria-hidden="true" />
               Promote
@@ -213,7 +215,7 @@ export function BranchDetailClient({
           branch has only standalone rows the grouped block is
           skipped; when a branch has only package changes (e.g. a
           metadata-only edit) the standalone block is skipped. */}
-      {diff.rows.length === 0 && diff.packages.length === 0 && diff.pendingOps.length === 0 && diff.folderOverrides.length === 0 && diff.placementChanges.length === 0 ? (
+      {diff.rows.length === 0 && diff.packages.length === 0 && diff.pendingOps.length === 0 && diff.folderOverrides.length === 0 && diff.placementChanges.length === 0 && diff.createdNoteLinks.length === 0 && diff.createdAttachments.length === 0 ? (
         <div className="rounded-lg border border-dashed border-border bg-card/50 px-6 py-10 text-center">
           <p className="text-sm font-medium text-foreground">No edits yet</p>
           <p className="mx-auto mt-1 max-w-md text-xs text-muted-foreground">
@@ -299,6 +301,36 @@ export function BranchDetailClient({
               </ul>
             </section>
           )}
+          {diff.createdNoteLinks.length > 0 && (
+            <section>
+              <h2 className="mb-2 px-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                New note links
+                <span className="ml-2 text-[10px] font-normal">{diff.createdNoteLinks.length}</span>
+              </h2>
+              <ul className="flex flex-col gap-1 list-none">
+                {diff.createdNoteLinks.map((row) => (
+                  <li key={row.id}>
+                    <CreatedNoteLinkRowCard row={row} />
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+          {diff.createdAttachments.length > 0 && (
+            <section>
+              <h2 className="mb-2 px-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                New attachments
+                <span className="ml-2 text-[10px] font-normal">{diff.createdAttachments.length}</span>
+              </h2>
+              <ul className="flex flex-col gap-1 list-none">
+                {diff.createdAttachments.map((row) => (
+                  <li key={row.id}>
+                    <CreatedAttachmentRowCard row={row} />
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
         </div>
       )}
 
@@ -322,6 +354,12 @@ export function BranchDetailClient({
             )}
             {diff.placementChanges.length > 0 && (
               <> and {diff.placementChanges.length} placement change{diff.placementChanges.length === 1 ? "" : "s"}</>
+            )}
+            {diff.createdNoteLinks.length > 0 && (
+              <> and {diff.createdNoteLinks.length} new note link{diff.createdNoteLinks.length === 1 ? "" : "s"}</>
+            )}
+            {diff.createdAttachments.length > 0 && (
+              <> and {diff.createdAttachments.length} new attachment{diff.createdAttachments.length === 1 ? "" : "s"}</>
             )}
             {" "}as one grouped history entry. The promotion is itself a
             restore-able change set — you can undo it from History if
@@ -771,6 +809,7 @@ function PendingOpRow({ op }: { op: PendingOpDiffRow }) {
     agent: "Agent",
     object_link: "Object link",
     box_object_attachment: "Box attachment",
+    note_link: "Note link",
   };
   const ObjectIcon =
     op.objectType === "note"
@@ -884,6 +923,60 @@ function PlacementChangeCard({ row }: { row: PlacementChangeRow }) {
           </li>
         ))}
       </ul>
+    </div>
+  );
+}
+
+function CreatedNoteLinkRowCard({ row }: { row: CreatedNoteLinkRow }) {
+  return (
+    <div className="rounded-lg border border-border bg-card px-4 py-2">
+      <div className="flex flex-wrap items-center gap-2 text-sm">
+        <Link
+          href={row.sourceHref}
+          className="truncate font-medium hover:underline"
+        >
+          {row.sourceTitle ?? "(missing note)"}
+        </Link>
+        <Badge variant="outline" className="shrink-0 text-[10px] font-normal">
+          {row.relationshipType}
+        </Badge>
+        <Link
+          href={row.targetHref}
+          className="truncate font-medium hover:underline"
+        >
+          {row.targetTitle ?? "(missing note)"}
+        </Link>
+      </div>
+      {row.relationshipNote && (
+        <p className="mt-1 text-xs text-muted-foreground">{row.relationshipNote}</p>
+      )}
+    </div>
+  );
+}
+
+function CreatedAttachmentRowCard({ row }: { row: CreatedAttachmentRow }) {
+  const Icon = row.objectType === "skill" ? Zap : Bot;
+  return (
+    <div className="rounded-lg border border-border bg-card px-4 py-2">
+      <div className="flex flex-wrap items-center gap-2 text-sm">
+        <Icon className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+        <Link
+          href={row.objectHref}
+          className="truncate font-medium hover:underline"
+        >
+          {row.objectName ?? `(missing ${row.objectType})`}
+        </Link>
+        <span className="text-muted-foreground">attached to</span>
+        <Link
+          href={row.boxHref}
+          className="truncate font-medium hover:underline"
+        >
+          {row.boxName ?? "(missing box)"}
+        </Link>
+        <Badge variant="outline" className="shrink-0 text-[10px] font-normal">
+          {row.objectType}
+        </Badge>
+      </div>
     </div>
   );
 }

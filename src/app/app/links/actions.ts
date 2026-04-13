@@ -17,7 +17,12 @@ async function requireContext() {
     throw new Error("Unauthenticated");
   }
   const supabase = await createClient();
-  return { supabase, userId: ctx.user.id, workspaceId: ctx.workspace.id };
+  return {
+    supabase,
+    userId: ctx.user.id,
+    workspaceId: ctx.workspace.id,
+    activeBranchId: ctx.activeBranchId,
+  };
 }
 
 // ─── Link actions ─────────────────────────────────────────────────────────────
@@ -29,12 +34,13 @@ export async function createLinkAction(
   relationshipNote?: string | null
 ): Promise<ActionResult<{ id: string }>> {
   try {
-    const { supabase, userId, workspaceId } = await requireContext();
+    const { supabase, userId, workspaceId, activeBranchId } = await requireContext();
     const link = await createLink(supabase, userId, workspaceId, {
       sourceNoteId,
       targetNoteId,
       relationshipType,
       relationshipNote: relationshipNote ?? null,
+      branchId: activeBranchId ?? null,
     });
     return { ok: true, data: { id: link.id } };
   } catch (err) {
@@ -51,7 +57,7 @@ export async function updateLinkAction(
   newRelationshipNote?: string | null
 ): Promise<ActionResult<{ id: string }>> {
   try {
-    const { supabase, userId, workspaceId } = await requireContext();
+    const { supabase, userId, workspaceId, activeBranchId } = await requireContext();
     const link = await updateLink(
       supabase,
       userId,
@@ -60,6 +66,7 @@ export async function updateLinkAction(
       {
         newRelationshipType,
         newRelationshipNote,
+        branchId: activeBranchId ?? null,
       }
     );
     return { ok: true, data: { id: link.id } };
@@ -75,8 +82,10 @@ export async function deleteLinkAction(
   linkId: string
 ): Promise<ActionResult> {
   try {
-    const { supabase, userId, workspaceId } = await requireContext();
-    await deleteLink(supabase, userId, workspaceId, linkId);
+    const { supabase, userId, workspaceId, activeBranchId } = await requireContext();
+    await deleteLink(supabase, userId, workspaceId, linkId, {
+      branchId: activeBranchId ?? null,
+    });
     return { ok: true, data: undefined };
   } catch (err) {
     return {

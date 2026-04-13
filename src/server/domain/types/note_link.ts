@@ -18,5 +18,13 @@ export interface NoteLink {
   relationship_type: RelationshipType;
   /** Optional annotation describing the specific nature of this link. */
   relationship_note: string | null;
+  /**
+   * Non-null when the link exists only on a draft branch. Cleared on
+   * promote; hard-deleted on discard. Main readers filter to
+   * `branch_id IS NULL`; branch readers keep main + matching-branch
+   * rows. Mirrors `object_links.branch_id`. See
+   * docs/branch_local_structural_creation_v1.md (v1.10).
+   */
+  branch_id: string | null;
   created_at: string;
 }

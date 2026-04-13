@@ -314,7 +314,7 @@ export async function createFileObjectLinkAction(
   relationshipNote?: string | null
 ): Promise<ActionResult<{ id: string }>> {
   try {
-    const { supabase, workspaceId } = await requireContext();
+    const { supabase, workspaceId, activeBranchId } = await requireContext();
     const link = await createLink(supabase, workspaceId, {
       sourceObjectType: OBJECT_TYPE.FILE,
       sourceObjectId: fileId,
@@ -322,6 +322,7 @@ export async function createFileObjectLinkAction(
       targetObjectId,
       relationshipType,
       relationshipNote: relationshipNote ?? null,
+      branchId: activeBranchId ?? null,
     });
     return { ok: true, data: { id: link.id } };
   } catch (err) {
@@ -340,7 +341,34 @@ export async function deleteFileObjectLinkAction(
   linkId: string
 ): Promise<ActionResult> {
   try {
-    const { supabase, workspaceId } = await requireContext();
+    const { supabase, userId, workspaceId, activeBranchId } = await requireContext();
+    if (activeBranchId) {
+      const { data: existing } = await supabase
+        .from("object_links")
+        .select("id, branch_id, workspace_id")
+        .eq("id", linkId)
+        .maybeSingle();
+      if (!existing || existing.workspace_id !== workspaceId) {
+        return { ok: false, error: "Link not found" };
+      }
+      if (existing.branch_id === activeBranchId) {
+        await removeLink(supabase, workspaceId, linkId);
+      } else if (existing.branch_id === null) {
+        const { recordPendingOp } = await import(
+          "@/server/services/pending_op_service"
+        );
+        await recordPendingOp(supabase, {
+          branchId: activeBranchId,
+          actorId: userId,
+          opType: "detach",
+          objectType: "object_link",
+          objectId: linkId,
+        });
+      } else {
+        return { ok: false, error: "Link belongs to another branch" };
+      }
+      return { ok: true, data: undefined };
+    }
     await removeLink(supabase, workspaceId, linkId);
     return { ok: true, data: undefined };
   } catch (err) {

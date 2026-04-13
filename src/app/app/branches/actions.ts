@@ -247,6 +247,11 @@ export async function discardBranchAction(
     // across every object type with a `branch_id` column.
     await supabase.from("files").delete().eq("branch_id", branchId);
     await supabase.from("object_links").delete().eq("branch_id", branchId);
+    await supabase.from("note_links").delete().eq("branch_id", branchId);
+    await supabase
+      .from("box_object_attachments")
+      .delete()
+      .eq("branch_id", branchId);
     await supabase.from("notes").delete().eq("branch_id", branchId);
     await supabase.from("folders").delete().eq("branch_id", branchId);
     await supabase.from("boxes").delete().eq("branch_id", branchId);

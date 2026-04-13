@@ -59,14 +59,19 @@ async function resolveAndValidateNotes(
 
 /**
  * List all links for a note — both directions.
+ *
+ * Branch-aware: when `branchId` is supplied, each direction returns
+ * main rows AND rows stamped with the given branch. Main-only readers
+ * (no branchId) filter to `branch_id IS NULL`.
  */
 export async function listLinksForNote(
   supabase: SupabaseClient,
-  noteId: string
+  noteId: string,
+  { branchId = null }: { branchId?: string | null } = {}
 ): Promise<LinkedNoteSet> {
   const [outgoing, incoming] = await Promise.all([
-    listLinksFromNote(supabase, noteId),
-    listLinksToNote(supabase, noteId),
+    listLinksFromNote(supabase, noteId, { branchId }),
+    listLinksToNote(supabase, noteId, { branchId }),
   ]);
   return { outgoing, incoming };
 }
@@ -84,6 +89,7 @@ export async function createLink(
     relationshipType,
     relationshipNote,
     changeSetId,
+    branchId = null,
   }: {
     sourceNoteId: string;
     targetNoteId: string;
@@ -97,6 +103,13 @@ export async function createLink(
      * omit it.
      */
     changeSetId?: string | null;
+    /**
+     * Optional branch ownership. When set, the link row is stamped
+     * with `branch_id` so main readers never see it until promote.
+     * Mirrors object_links' branch_id semantics. See
+     * docs/branch_local_structural_creation_v1.md (v1.10).
+     */
+    branchId?: string | null;
   }
 ): Promise<NoteLink> {
   await resolveAndValidateNotes(supabase, sourceNoteId, targetNoteId);
@@ -106,6 +119,7 @@ export async function createLink(
     target_note_id: targetNoteId,
     relationship_type: relationshipType,
     relationship_note: relationshipNote ?? null,
+    branch_id: branchId ?? null,
   });
 
   if (changeSetId) {
@@ -151,9 +165,18 @@ export async function updateLink(
   {
     newRelationshipType,
     newRelationshipNote,
+    branchId = null,
   }: {
     newRelationshipType?: RelationshipType;
     newRelationshipNote?: string | null;
+    /**
+     * Optional branch ownership for the replacement row. Updates on
+     * a branch create a new branch-local link and route the original
+     * (main) row's deletion through a pending detach op — so the
+     * main link survives until promote. Updates against a link whose
+     * branch_id already matches `branchId` replace in place.
+     */
+    branchId?: string | null;
   }
 ): Promise<NoteLink> {
   const existing = await getNoteLinkById(supabase, linkId);
@@ -166,15 +189,48 @@ export async function updateLink(
       ? newRelationshipNote
       : existing.relationship_note;
 
+  const existingBranchId = (existing as NoteLink).branch_id ?? null;
+  if (branchId && existingBranchId === null) {
+    // Update against a main-routed link on a branch. Record a detach
+    // pending op so promote removes the main row, then insert a new
+    // branch-local row reflecting the user's intent.
+    const { recordPendingOp } = await import("./pending_op_service");
+    await recordPendingOp(supabase, {
+      branchId,
+      actorId: userId,
+      opType: "detach",
+      objectType: "note_link",
+      objectId: linkId,
+    });
+    const replacement = await createNoteLink(supabase, {
+      source_note_id: existing.source_note_id,
+      target_note_id: existing.target_note_id,
+      relationship_type: resolvedType,
+      relationship_note: resolvedNote,
+      branch_id: branchId,
+    });
+    await auditNoteLinkCreated(
+      supabase,
+      workspaceId,
+      userId,
+      replacement.id,
+      existing.source_note_id,
+      existing.target_note_id,
+      resolvedType
+    );
+    return replacement;
+  }
+
   // Delete old link
   await deleteNoteLink(supabase, linkId);
 
-  // Re-insert with updated fields
+  // Re-insert with updated fields, preserving branch ownership.
   const replacement = await createNoteLink(supabase, {
     source_note_id: existing.source_note_id,
     target_note_id: existing.target_note_id,
     relationship_type: resolvedType,
     relationship_note: resolvedNote,
+    branch_id: existingBranchId,
   });
 
   await auditNoteLinkCreated(
@@ -192,16 +248,51 @@ export async function updateLink(
 
 /**
  * Delete a note link by id.
+ *
+ * Branch-aware: when `branchId` is set and the link is a main row,
+ * the deletion is recorded as a `branch_pending_ops` detach so main
+ * survives until promote. Branch-local links (branch_id matches
+ * `branchId`) are hard-deleted in place.
  */
 export async function deleteLink(
   supabase: SupabaseClient,
   userId: string,
   workspaceId: string,
   linkId: string,
-  { changeSetId }: { changeSetId?: string | null } = {}
+  {
+    changeSetId,
+    branchId = null,
+  }: { changeSetId?: string | null; branchId?: string | null } = {}
 ): Promise<void> {
   const link = await getNoteLinkById(supabase, linkId);
   if (!link) throw new Error("Link not found");
+
+  const linkBranchId = (link as NoteLink).branch_id ?? null;
+
+  if (branchId && linkBranchId === null) {
+    // Main-routed link deleted on a branch. Route through pending ops.
+    const { recordPendingOp } = await import("./pending_op_service");
+    await recordPendingOp(supabase, {
+      branchId,
+      actorId: userId,
+      opType: "detach",
+      objectType: "note_link",
+      objectId: linkId,
+    });
+    await auditNoteLinkDeleted(
+      supabase,
+      workspaceId,
+      userId,
+      linkId,
+      link.source_note_id,
+      link.target_note_id
+    );
+    return;
+  }
+
+  if (branchId && linkBranchId !== branchId) {
+    throw new Error("Link belongs to another branch");
+  }
 
   const deleted = await deleteNoteLink(supabase, linkId);
   if (!deleted) throw new Error("Failed to delete link");

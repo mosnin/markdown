@@ -356,6 +356,7 @@ export async function createAgentObjectLinkAction(
       targetObjectId,
       relationshipType,
       relationshipNote: relationshipNote ?? null,
+      branchId: ctx.activeBranchId ?? null,
     });
 
     return { ok: true, data: { id: link.id } };
@@ -371,6 +372,38 @@ export async function deleteAgentObjectLinkAction(
   try {
     const ctx = await requireAuthenticatedUser();
     const supabase = await createClient();
+
+    // Branch-aware delete: a main-routed object_link deletion on a
+    // draft branch routes through `branch_pending_ops` so the row
+    // survives until promote. A branch-local link (branch_id matches
+    // the active branch) is hard-deleted in place.
+    if (ctx.activeBranchId) {
+      const { data: existing } = await supabase
+        .from("object_links")
+        .select("id, branch_id, workspace_id")
+        .eq("id", linkId)
+        .maybeSingle();
+      if (!existing || existing.workspace_id !== ctx.workspace.id) {
+        return { ok: false, error: "Link not found" };
+      }
+      if (existing.branch_id === ctx.activeBranchId) {
+        await removeLink(supabase, ctx.workspace.id, linkId);
+      } else if (existing.branch_id === null) {
+        const { recordPendingOp } = await import(
+          "@/server/services/pending_op_service"
+        );
+        await recordPendingOp(supabase, {
+          branchId: ctx.activeBranchId,
+          actorId: ctx.user.id,
+          opType: "detach",
+          objectType: "object_link",
+          objectId: linkId,
+        });
+      } else {
+        return { ok: false, error: "Link belongs to another branch" };
+      }
+      return { ok: true, data: undefined };
+    }
 
     await removeLink(supabase, ctx.workspace.id, linkId);
     return { ok: true, data: undefined };
@@ -402,6 +435,7 @@ export async function createAgentChildFolderAction(
       targetObjectId: folder.id,
       relationshipType: RELATIONSHIP_TYPE.PARENT_OF,
       relationshipNote: "Agent child folder",
+      branchId: ctx.activeBranchId ?? null,
     });
     revalidatePath(`/app/agents/${agentId}`);
     if (agent.box_id) revalidatePath(`/app/boxes/${agent.box_id}`);
@@ -453,6 +487,7 @@ export async function createAgentChildFileAction(
       targetObjectId: file.id,
       relationshipType: RELATIONSHIP_TYPE.PARENT_OF,
       relationshipNote: "Agent child file",
+      branchId: ctx.activeBranchId ?? null,
     });
     revalidatePath(`/app/agents/${agentId}`);
     if (agent.box_id) revalidatePath(`/app/boxes/${agent.box_id}`);
@@ -476,6 +511,11 @@ export async function attachSkillToAgentAction(
     ]);
     if (!agent) return { ok: false, error: "Agent not found" };
     if (!skill) return { ok: false, error: "Skill not found" };
+    // Branch-local reference: if the user is attaching this Skill to
+    // the Agent while a draft branch is active, stamp `branch_id` on
+    // the newly-written object_links row so it stays invisible to
+    // main readers until promote. Main-only attach (no active branch)
+    // continues unchanged.
     const link = await createLink(supabase, ctx.workspace.id, {
       sourceObjectType: OBJECT_TYPE.AGENT,
       sourceObjectId: agentId,
@@ -483,19 +523,8 @@ export async function attachSkillToAgentAction(
       targetObjectId: skillId,
       relationshipType: RELATIONSHIP_TYPE.DEPENDS_ON,
       relationshipNote: "Agent skill dependency",
+      branchId: ctx.activeBranchId ?? null,
     });
-
-    // Branch-local reference: if the user is attaching this Skill to
-    // the Agent while a draft branch is active, stamp `branch_id` on
-    // the newly-written object_links row so it stays invisible to
-    // main readers until promote. Main-only attach (no active branch)
-    // continues unchanged.
-    if (ctx.activeBranchId) {
-      await supabase
-        .from("object_links")
-        .update({ branch_id: ctx.activeBranchId })
-        .eq("id", link.id);
-    }
     revalidatePath(`/app/agents/${agentId}`);
     return { ok: true, data: { id: link.id } };
   } catch (err) {

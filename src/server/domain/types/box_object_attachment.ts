@@ -24,4 +24,12 @@ export interface BoxObjectAttachment {
   sort_order: number;
   attached_at: string;
   attached_by: string | null;
+  /**
+   * Non-null when the attachment exists only on a draft branch.
+   * Cleared on promote; hard-deleted on discard. Main readers filter
+   * to `branch_id IS NULL`; branch readers keep main + matching-
+   * branch rows. See docs/branch_local_structural_creation_v1.md
+   * (v1.10).
+   */
+  branch_id: string | null;
 }

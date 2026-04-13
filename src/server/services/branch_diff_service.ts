@@ -120,6 +120,54 @@ export interface BranchDiff {
    * arrays are dropped before this reaches the caller.
    */
   boxMetadataChanges: BoxMetadataChangeRow[];
+  /**
+   * Branch-created note_links. Each entry is a row whose
+   * `branch_id` matches the branch, with source/target note labels
+   * resolved against the canonical `notes` row so the UI can render
+   * "A — related to — B" without a second round trip.
+   */
+  createdNoteLinks: CreatedNoteLinkRow[];
+  /**
+   * Branch-created box_object_attachments. Attach intents recorded
+   * on the branch: the row carries the box display name and the
+   * attached object's display name.
+   */
+  createdAttachments: CreatedAttachmentRow[];
+}
+
+/**
+ * Diff row for a branch-created note_link. `branchId` matches the
+ * current diff's branch. Source / target names are resolved against
+ * main; either may be `null` if the endpoint note was deleted since
+ * the link was written.
+ */
+export interface CreatedNoteLinkRow {
+  id: string;
+  sourceNoteId: string;
+  targetNoteId: string;
+  sourceTitle: string | null;
+  targetTitle: string | null;
+  relationshipType: string;
+  relationshipNote: string | null;
+  sourceHref: string;
+  targetHref: string;
+}
+
+/**
+ * Diff row for a branch-created box_object_attachment. The box and
+ * attached object are resolved against the canonical tables so the
+ * UI can show meaningful names.
+ */
+export interface CreatedAttachmentRow {
+  id: string;
+  boxId: string;
+  boxName: string | null;
+  objectType: "skill" | "agent";
+  objectId: string;
+  objectName: string | null;
+  folderId: string | null;
+  boxHref: string;
+  objectHref: string;
 }
 
 export interface BoxMetadataChangeRow {
@@ -300,6 +348,8 @@ export async function getBranchDiff(
   const folderOverrides = await loadFolderOverrideRows(supabase, branchId);
   const placementChanges = await loadPlacementChangeRows(supabase, branchId);
   const boxMetadataChanges = await loadBoxMetadataChangeRows(supabase, branchId);
+  const createdNoteLinks = await loadBranchCreatedNoteLinks(supabase, branchId);
+  const createdAttachments = await loadBranchCreatedAttachments(supabase, branchId);
 
   return {
     branchId,
@@ -314,7 +364,119 @@ export async function getBranchDiff(
     folderOverrides,
     placementChanges,
     boxMetadataChanges,
+    createdNoteLinks,
+    createdAttachments,
   };
+}
+
+/**
+ * Load every branch-created note_link for the branch. Returns each
+ * row with its source / target titles resolved against `notes` so
+ * the UI can render them without a second round-trip.
+ */
+async function loadBranchCreatedNoteLinks(
+  supabase: SupabaseClient,
+  branchId: string
+): Promise<CreatedNoteLinkRow[]> {
+  const { data } = await supabase
+    .from("note_links")
+    .select(
+      "id, source_note_id, target_note_id, relationship_type, relationship_note"
+    )
+    .eq("branch_id", branchId);
+  const rows = (data ?? []) as Array<{
+    id: string;
+    source_note_id: string;
+    target_note_id: string;
+    relationship_type: string;
+    relationship_note: string | null;
+  }>;
+  if (rows.length === 0) return [];
+  const ids = Array.from(
+    new Set(rows.flatMap((r) => [r.source_note_id, r.target_note_id]))
+  );
+  const { data: noteRows } = await supabase
+    .from("notes")
+    .select("id, title")
+    .in("id", ids);
+  const titleById = new Map<string, string>();
+  for (const n of (noteRows ?? []) as Array<{ id: string; title: string }>) {
+    titleById.set(n.id, n.title);
+  }
+  return rows.map((r) => ({
+    id: r.id,
+    sourceNoteId: r.source_note_id,
+    targetNoteId: r.target_note_id,
+    sourceTitle: titleById.get(r.source_note_id) ?? null,
+    targetTitle: titleById.get(r.target_note_id) ?? null,
+    relationshipType: r.relationship_type,
+    relationshipNote: r.relationship_note,
+    sourceHref: `/app/notes/${r.source_note_id}`,
+    targetHref: `/app/notes/${r.target_note_id}`,
+  }));
+}
+
+/**
+ * Load every branch-created box_object_attachment. Resolves box +
+ * leaf display names through the canonical tables so the UI can
+ * render "skill X attached to box Y" without per-row fetches.
+ */
+async function loadBranchCreatedAttachments(
+  supabase: SupabaseClient,
+  branchId: string
+): Promise<CreatedAttachmentRow[]> {
+  const { data } = await supabase
+    .from("box_object_attachments")
+    .select("id, box_id, folder_id, object_type, object_id")
+    .eq("branch_id", branchId);
+  const rows = (data ?? []) as Array<{
+    id: string;
+    box_id: string;
+    folder_id: string | null;
+    object_type: "skill" | "agent";
+    object_id: string;
+  }>;
+  if (rows.length === 0) return [];
+
+  const boxIds = Array.from(new Set(rows.map((r) => r.box_id)));
+  const { data: boxRows } = await supabase
+    .from("boxes")
+    .select("id, name")
+    .in("id", boxIds);
+  const boxNameById = new Map<string, string>();
+  for (const b of (boxRows ?? []) as Array<{ id: string; name: string }>) {
+    boxNameById.set(b.id, b.name);
+  }
+
+  const skillIds = rows.filter((r) => r.object_type === "skill").map((r) => r.object_id);
+  const agentIds = rows.filter((r) => r.object_type === "agent").map((r) => r.object_id);
+  const nameByKey = new Map<string, string>();
+  if (skillIds.length > 0) {
+    const { data: s } = await supabase.from("skills").select("id, name").in("id", skillIds);
+    for (const r of (s ?? []) as Array<{ id: string; name: string }>) {
+      nameByKey.set(`skill:${r.id}`, r.name);
+    }
+  }
+  if (agentIds.length > 0) {
+    const { data: a } = await supabase.from("agents").select("id, name").in("id", agentIds);
+    for (const r of (a ?? []) as Array<{ id: string; name: string }>) {
+      nameByKey.set(`agent:${r.id}`, r.name);
+    }
+  }
+
+  return rows.map((r) => ({
+    id: r.id,
+    boxId: r.box_id,
+    boxName: boxNameById.get(r.box_id) ?? null,
+    objectType: r.object_type,
+    objectId: r.object_id,
+    objectName: nameByKey.get(`${r.object_type}:${r.object_id}`) ?? null,
+    folderId: r.folder_id,
+    boxHref: `/app/boxes/${r.box_id}`,
+    objectHref: r.object_type === "skill"
+      ? `/app/skills/${r.object_id}`
+      : `/app/agents/${r.object_id}`,
+  }));
 }
 
 /**
@@ -628,6 +790,7 @@ async function loadPendingOpRows(
     agent: { table: "agents", nameCol: "name" },
     object_link: null,
     box_object_attachment: null,
+    note_link: null,
   };
   for (const [type, ids] of byType) {
     const spec = tableFor[type];
@@ -673,6 +836,7 @@ function hrefForPendingOp(type: PendingOpObjectType, id: string): string | null 
     case "folder":
     case "object_link":
     case "box_object_attachment":
+    case "note_link":
       return null;
   }
 }

@@ -317,6 +317,7 @@ export async function createSkillChildFolderAction(
       targetObjectId: folder.id,
       relationshipType: RELATIONSHIP_TYPE.PARENT_OF,
       relationshipNote: "Skill child folder",
+      branchId: ctx.activeBranchId ?? null,
     });
     revalidatePath(`/app/skills/${skillId}`);
     if (skill.box_id) revalidatePath(`/app/boxes/${skill.box_id}`);
@@ -373,6 +374,7 @@ export async function createSkillChildFileAction(
       targetObjectId: file.id,
       relationshipType: RELATIONSHIP_TYPE.PARENT_OF,
       relationshipNote: "Skill child file",
+      branchId: ctx.activeBranchId ?? null,
     });
     revalidatePath(`/app/skills/${skillId}`);
     if (skill.box_id) revalidatePath(`/app/boxes/${skill.box_id}`);
@@ -407,6 +409,7 @@ export async function createSkillObjectLinkAction(
       targetObjectId,
       relationshipType,
       relationshipNote: relationshipNote ?? null,
+      branchId: ctx.activeBranchId ?? null,
     });
 
     return { ok: true, data: { id: link.id } };
@@ -422,6 +425,37 @@ export async function deleteSkillObjectLinkAction(
   try {
     const ctx = await requireAuthenticatedUser();
     const supabase = await createClient();
+
+    // Branch-aware delete: route a main-routed object_link deletion
+    // through `branch_pending_ops` so main survives until promote.
+    // Branch-local links are hard-deleted in place.
+    if (ctx.activeBranchId) {
+      const { data: existing } = await supabase
+        .from("object_links")
+        .select("id, branch_id, workspace_id")
+        .eq("id", linkId)
+        .maybeSingle();
+      if (!existing || existing.workspace_id !== ctx.workspace.id) {
+        return { ok: false, error: "Link not found" };
+      }
+      if (existing.branch_id === ctx.activeBranchId) {
+        await removeLink(supabase, ctx.workspace.id, linkId);
+      } else if (existing.branch_id === null) {
+        const { recordPendingOp } = await import(
+          "@/server/services/pending_op_service"
+        );
+        await recordPendingOp(supabase, {
+          branchId: ctx.activeBranchId,
+          actorId: ctx.user.id,
+          opType: "detach",
+          objectType: "object_link",
+          objectId: linkId,
+        });
+      } else {
+        return { ok: false, error: "Link belongs to another branch" };
+      }
+      return { ok: true, data: undefined };
+    }
 
     await removeLink(supabase, ctx.workspace.id, linkId);
     return { ok: true, data: undefined };

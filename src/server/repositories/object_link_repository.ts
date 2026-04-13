@@ -24,6 +24,12 @@ export interface CreateObjectLinkInput {
   target_object_id: string;
   relationship_type: RelationshipType;
   relationship_note?: string | null;
+  /**
+   * Optional branch ownership. `null` (or omitted) writes a main
+   * row; a uuid lands the link on a draft branch. See
+   * docs/branch_local_structural_creation_v1.md (v1.10).
+   */
+  branch_id?: string | null;
 }
 
 /**

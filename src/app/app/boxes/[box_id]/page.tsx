@@ -337,7 +337,7 @@ export default async function BoxPage({
     : null;
 
   const linkArrays = await Promise.all(
-    notes.map((n) => listLinksFromNote(supabase, n.id))
+    notes.map((n) => listLinksFromNote(supabase, n.id, { branchId: ctx.activeBranchId }))
   );
   const allLinks: NoteLink[] = linkArrays.flat();
 

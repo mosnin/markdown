@@ -36,6 +36,7 @@ export async function createLink(
     targetObjectId,
     relationshipType,
     relationshipNote,
+    branchId = null,
   }: {
     sourceObjectType: ObjectType;
     sourceObjectId: string;
@@ -43,6 +44,14 @@ export async function createLink(
     targetObjectId: string;
     relationshipType: RelationshipType;
     relationshipNote?: string | null;
+    /**
+     * Optional branch ownership. When set, the link row is stamped
+     * with `branch_id` on insert so main readers never see it until
+     * promote. Detach on a branch-local row is a hard-delete; detach
+     * on a main row routes through `branch_pending_ops` at the
+     * action layer.
+     */
+    branchId?: string | null;
   }
 ): Promise<ObjectLink> {
   if (sourceObjectType === targetObjectType && sourceObjectId === targetObjectId) {
@@ -69,6 +78,7 @@ export async function createLink(
     target_object_id: targetObjectId,
     relationship_type: relationshipType,
     relationship_note: relationshipNote ?? null,
+    branch_id: branchId ?? null,
   });
 }
 

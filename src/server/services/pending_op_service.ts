@@ -37,7 +37,8 @@ export type PendingOpObjectType =
   | "skill"
   | "agent"
   | "object_link"
-  | "box_object_attachment";
+  | "box_object_attachment"
+  | "note_link";
 
 export interface PendingOp {
   id: string;
@@ -196,6 +197,7 @@ export async function applyPendingOp(
     agent: "agents",
     object_link: "object_links",
     box_object_attachment: "box_object_attachments",
+    note_link: "note_links",
   };
   const table = tableMap[op.object_type];
   if (!table) throw new Error(`Unsupported pending op target: ${op.object_type}`);
@@ -210,7 +212,8 @@ export async function applyPendingOp(
       // rather than silently corrupting state.
       if (
         op.object_type === "box_object_attachment" ||
-        op.object_type === "object_link"
+        op.object_type === "object_link" ||
+        op.object_type === "note_link"
       ) {
         throw new Error(
           `Unsupported pending op: cannot ${op.op_type} a ${op.object_type}; use detach instead.`

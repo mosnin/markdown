@@ -531,6 +531,67 @@ export async function promoteBranch(
       });
     }
 
+    // Promote branch-scoped note_links — same shape as object_links.
+    // Main readers ignore non-null branch_id; clearing it lands the
+    // row onto main. Records a link_create change_set_item so the
+    // rollback engine can revert to a branch-state row.
+    const { data: branchNoteLinks } = await supabase
+      .from("note_links")
+      .select("id, source_note_id, target_note_id, relationship_type")
+      .eq("branch_id", branchId);
+    for (const nl of branchNoteLinks ?? []) {
+      await supabase
+        .from("note_links")
+        .update({ branch_id: null })
+        .eq("id", nl.id);
+      await recordChangeSetItem(supabase, {
+        change_set_id: cs.id,
+        workspace_id: workspaceId,
+        operation: "link_create",
+        object_type: "note_link",
+        object_id: nl.id,
+        before_snapshot: { branch_id: branchId },
+        after_snapshot: {
+          source_note_id: nl.source_note_id,
+          target_note_id: nl.target_note_id,
+          relationship_type: nl.relationship_type,
+          promoted_from_branch: branchId,
+        },
+      });
+    }
+
+    // Promote branch-scoped box_object_attachments. Attachment rows
+    // are reference-only (no lifecycle / versioning), so a promote
+    // just clears branch_id so main readers see the row. The
+    // change_set_item uses operation='attach' to match the main
+    // attach path's audit.
+    const { data: branchAttachments } = await supabase
+      .from("box_object_attachments")
+      .select("id, box_id, folder_id, object_type, object_id, sort_order")
+      .eq("branch_id", branchId);
+    for (const att of branchAttachments ?? []) {
+      await supabase
+        .from("box_object_attachments")
+        .update({ branch_id: null })
+        .eq("id", att.id);
+      await recordChangeSetItem(supabase, {
+        change_set_id: cs.id,
+        workspace_id: workspaceId,
+        operation: "attach",
+        object_type: "box_object_attachment",
+        object_id: att.id,
+        before_snapshot: { branch_id: branchId },
+        after_snapshot: {
+          box_id: att.box_id,
+          folder_id: att.folder_id,
+          object_type: att.object_type,
+          object_id: att.object_id,
+          sort_order: att.sort_order,
+          promoted_from_branch: branchId,
+        },
+      });
+    }
+
     // Promote branch-scoped notes, folders, and boxes. Same pattern
     // as files / object_links: clear branch_id so the row becomes
     // main, and record a change_set_item so the rollback engine can

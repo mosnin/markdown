@@ -95,6 +95,7 @@ function makeLink(id: string, sourceId: string, targetId: string, type = "relate
     target_note_id: targetId,
     relationship_type: type as import("@/server/domain/constants/note_constants").RelationshipType,
     relationship_note: null,
+    branch_id: null,
     created_at: "2024-01-01T00:00:00.000Z",
   };
 }

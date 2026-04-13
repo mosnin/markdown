@@ -105,9 +105,11 @@ export async function getBoxOverview(
   // Build note id set for edge filtering (only include intra-box edges)
   const noteIdSet = new Set(notes.map((n) => n.id));
 
-  // Collect all outgoing links for notes in this box
+  // Collect all outgoing links for notes in this box. Branch-aware
+  // so a branch-local note_link surfaces to the caller's overview
+  // view without leaking to main readers.
   const linkArrays = await Promise.all(
-    notes.map((n) => listLinksFromNote(supabase, n.id))
+    notes.map((n) => listLinksFromNote(supabase, n.id, { branchId }))
   );
   const allLinks: NoteLink[] = linkArrays.flat();
   const uniqueLinks = [...new Map(allLinks.map((l) => [l.id, l])).values()];

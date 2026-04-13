@@ -606,7 +606,7 @@ export async function attachSkillToBoxAction(
   folderId?: string | null
 ): Promise<ActionResult<{ id: string }>> {
   try {
-    const { supabase, userId, workspaceId } = await requireContext();
+    const { supabase, userId, workspaceId, activeBranchId } = await requireContext();
     const { getBoxById } = await import("@/server/repositories/box_repository");
     const { getSkillById } = await import("@/server/repositories/skill_repository");
     const {
@@ -624,14 +624,23 @@ export async function attachSkillToBoxAction(
     if (!skill.is_reusable) return { ok: false, error: "Only workspace-level reusable skills can be attached" };
     if (skill.status === "trashed") return { ok: false, error: "Cannot attach a trashed skill" };
 
-    // Return existing attachment silently if already present
-    const alreadyAttached = await isObjectAttachedToBox(supabase, boxId, "skill", skillId);
+    // Return existing attachment silently if already present in the
+    // caller's branch context. Main-only attach paths use the main
+    // partition (branch_id IS NULL); a branch caller considers main
+    // + matching-branch rows.
+    const alreadyAttached = await isObjectAttachedToBox(
+      supabase, boxId, "skill", skillId, { branchId: activeBranchId }
+    );
     if (alreadyAttached) {
-      const existing = await listAttachmentsForBox(supabase, boxId);
+      const existing = await listAttachmentsForBox(supabase, boxId, { branchId: activeBranchId });
       const row = existing.find((a) => a.object_type === "skill" && a.object_id === skillId);
       return { ok: true, data: { id: row?.id ?? skillId } };
     }
 
+    // Branch-local attach: stamp branch_id on the insert so the row
+    // stays invisible to main readers until promote. Discard hard-
+    // deletes via `.delete().eq("branch_id", branchId)` in
+    // discardBranchAction.
     const attachment = await createAttachment(supabase, {
       workspace_id: workspaceId,
       box_id: boxId,
@@ -639,6 +648,7 @@ export async function attachSkillToBoxAction(
       object_type: "skill",
       object_id: skillId,
       attached_by: userId,
+      branch_id: activeBranchId ?? null,
     });
 
     // Record the attachment as a structural event on a fresh change
@@ -699,7 +709,7 @@ export async function attachAgentToBoxAction(
   folderId?: string | null
 ): Promise<ActionResult<{ id: string }>> {
   try {
-    const { supabase, userId, workspaceId } = await requireContext();
+    const { supabase, userId, workspaceId, activeBranchId } = await requireContext();
     const { getBoxById } = await import("@/server/repositories/box_repository");
     const { getAgentById } = await import("@/server/repositories/agent_repository");
     const {
@@ -717,13 +727,16 @@ export async function attachAgentToBoxAction(
     if (!agent.is_reusable) return { ok: false, error: "Only workspace-level reusable agents can be attached" };
     if (agent.status === "trashed") return { ok: false, error: "Cannot attach a trashed agent" };
 
-    const alreadyAttached = await isObjectAttachedToBox(supabase, boxId, "agent", agentId);
+    const alreadyAttached = await isObjectAttachedToBox(
+      supabase, boxId, "agent", agentId, { branchId: activeBranchId }
+    );
     if (alreadyAttached) {
-      const existing = await listAttachmentsForBox(supabase, boxId);
+      const existing = await listAttachmentsForBox(supabase, boxId, { branchId: activeBranchId });
       const row = existing.find((a) => a.object_type === "agent" && a.object_id === agentId);
       return { ok: true, data: { id: row?.id ?? agentId } };
     }
 
+    // Branch-local attach — stamp branch_id; see attachSkillToBoxAction.
     const attachment = await createAttachment(supabase, {
       workspace_id: workspaceId,
       box_id: boxId,
@@ -731,6 +744,7 @@ export async function attachAgentToBoxAction(
       object_type: "agent",
       object_id: agentId,
       attached_by: userId,
+      branch_id: activeBranchId ?? null,
     });
 
     const { openChangeSet, commitChangeSet, recordStructuralEvent, recordChangeSetItem } =
@@ -787,9 +801,9 @@ export async function detachFromBoxAction(
   objectId: string
 ): Promise<ActionResult> {
   try {
-    const { supabase, userId, workspaceId } = await requireContext();
+    const { supabase, userId, workspaceId, activeBranchId } = await requireContext();
     const { getBoxById } = await import("@/server/repositories/box_repository");
-    const { deleteAttachmentForObject, listAttachmentsForBox } = await import("@/server/repositories/box_object_attachment_repository");
+    const { deleteAttachmentForObject, listAttachmentsForBox, deleteAttachment } = await import("@/server/repositories/box_object_attachment_repository");
 
     const box = await getBoxById(supabase, boxId);
     if (!box || box.workspace_id !== workspaceId) return { ok: false, error: "Box not found" };
@@ -797,10 +811,38 @@ export async function detachFromBoxAction(
     // Capture the attachment row before we delete it. before_state on
     // the structural event carries everything the inverse needs to
     // re-insert: box_id, folder_id, sort_order, attached_by.
-    const existing = await listAttachmentsForBox(supabase, boxId);
+    const existing = await listAttachmentsForBox(supabase, boxId, { branchId: activeBranchId });
     const priorRow = existing.find(
       (a) => a.object_type === objectType && a.object_id === objectId
     );
+
+    // Branch-aware detach:
+    //  * branch-local attachment (branch_id === activeBranchId) → hard
+    //    delete in place; the row never reached main.
+    //  * main attachment (branch_id === null) on a branch → record a
+    //    pending detach op so main survives until promote.
+    //  * main attachment without an active branch → continue the
+    //    existing change_set-wrapped hard delete.
+    if (activeBranchId && priorRow) {
+      if (priorRow.branch_id === activeBranchId) {
+        await deleteAttachment(supabase, priorRow.id);
+      } else if ((priorRow.branch_id ?? null) === null) {
+        const { recordPendingOp } = await import(
+          "@/server/services/pending_op_service"
+        );
+        await recordPendingOp(supabase, {
+          branchId: activeBranchId,
+          actorId: userId,
+          opType: "detach",
+          objectType: "box_object_attachment",
+          objectId: priorRow.id,
+        });
+      } else {
+        return { ok: false, error: "Attachment belongs to another branch" };
+      }
+      revalidatePath(`/app/boxes/${boxId}`);
+      return { ok: true, data: undefined };
+    }
 
     await deleteAttachmentForObject(supabase, boxId, objectType, objectId);
 

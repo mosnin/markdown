@@ -560,6 +560,135 @@ so the change is a correction rather than a break.
 
 Baseline 364 → 377 tests after the batch.
 
+## v1.10 — note_links + box_object_attachments branch isolation
+
+Two tables still had no branch-ownership column, so creating a
+note-to-note link or attaching a reusable Skill/Agent on a draft
+branch wrote straight to the canonical row. Detach already routed
+through `branch_pending_ops` (`object_type='box_object_attachment'`,
+`op_type='detach'`) so that half was safe, but the attach /
+link-create path still leaked.
+
+### Schema
+
+Migration `20260413000005_note_links_and_attachments_branch_id.sql`:
+
+- `note_links.branch_id` — nullable FK to `draft_branches(id) ON
+  DELETE SET NULL`, with a CHECK blocking the zero UUID (matches the
+  sentinel safeguard from 20260413000003).
+- `box_object_attachments.branch_id` — same shape + CHECK.
+- Unique indexes rebuilt with the COALESCE sentinel so a main row and
+  a branch-local row with otherwise-identical keys don't collide:
+  - `note_links_source_target_type_branch_uidx` replaces the
+    `UNIQUE (source_note_id, target_note_id, relationship_type)`
+    constraint.
+  - `box_object_attachments_box_object_branch_uidx` replaces the
+    `UNIQUE (box_id, object_type, object_id)` constraint.
+- `branch_pending_ops.object_type` CHECK extended with `'note_link'`
+  so detach of a main note_link on a branch can record an intent.
+- RLS rebuilt for both tables with the branch-access clause from
+  `branch_rls_hardening_v1.md`:
+  `branch_id IS NULL OR EXISTS (… draft_branches db … workspace_id)`.
+  `box_object_attachments` picks up an explicit SELECT policy; it
+  previously derived access from the old workspace gate only.
+
+### Services + write path
+
+- `object_link_service.createLink` now accepts `branchId` and stamps
+  the column on insert via the repo. Old callers that used the
+  post-insert update dance (`attachSkillToAgentAction`) are migrated
+  to the parameter.
+- `link_service.createLink / updateLink / deleteLink` accept
+  `branchId`. Create stamps the column. Delete on a main-row-on-
+  branch records a `branch_pending_ops` detach (`object_type =
+  'note_link'`). Delete on a branch-local row hard-deletes. Delete
+  on a row owned by a *different* branch throws — mutating another
+  branch's draft is never legal.
+- `updateLink` on a branch creates a new branch-local link and
+  records a detach pending op for the main row so the promote
+  surface reflects the swap.
+- `box_object_attachment_repository` gains `branch_id` on the
+  `CreateBoxObjectAttachmentInput` shape. `listAttachmentsForBox`
+  and `isObjectAttachedToBox` apply `branch_id IS NULL OR = branch`
+  filters (main-only readers drop branch rows).
+- `attachSkillToBoxAction` and `attachAgentToBoxAction` in
+  `src/app/app/boxes/actions.ts` stamp `branch_id =
+  ctx.activeBranchId` on the insert; main flow unchanged.
+- `detachFromBoxAction` routes:
+  * branch-local attachment (`branch_id` = active branch) → hard
+    delete in place (no pending op; the row never reached main).
+  * main attachment detached from a branch → record a pending
+    detach op (object_type='box_object_attachment'), skip the
+    existing change_set write-path.
+  * other-branch attachment → reject.
+- Object-link delete actions (`deleteAgentObjectLinkAction`,
+  `deleteSkillObjectLinkAction`, `deleteFileObjectLinkAction`)
+  route through `branch_pending_ops` on a branch when the link is
+  main-routed; branch-local object_links hard-delete in place.
+- Every `createAgentObjectLinkAction` / `createAgentChildFolder` /
+  `createAgentChildFile` / Skill sibling call now threads
+  `branchId` so the underlying `object_links` row is stamped on
+  branch-local child creation.
+
+### Read path
+
+- `listLinksForNote` / `listLinksFromNote` / `listLinksToNote`
+  accept a branchId filter. The note detail page, box overview,
+  and box page thread `ctx.activeBranchId` into the calls.
+- `listAttachmentsForBox` (already called with branchId from the
+  tree loader) now filters the underlying query by branch in
+  addition to applying placement overrides.
+
+### Promote
+
+`promoteBranch` grew two passes after the existing `object_links`
+and `files` promotion:
+
+1. Clear `branch_id` on every `note_links` row matching the branch,
+   recording a `change_set_item` with `operation='link_create'`,
+   `object_type='note_link'`, `before_snapshot: { branch_id }`,
+   `after_snapshot` capturing source / target / relationship_type.
+2. Clear `branch_id` on every `box_object_attachments` row matching
+   the branch, recording a `change_set_item` with
+   `operation='attach'`, `object_type='box_object_attachment'`.
+
+The pending-op pass picks up `detach` intents for `note_link` and
+`box_object_attachment` for free via `applyPendingOp`'s existing
+detach branch.
+
+### Discard
+
+`discardBranchAction` now hard-deletes branch-local
+`note_links` and `box_object_attachments` rows alongside the
+existing files / object_links / notes / folders / boxes pass.
+
+### Diff surface
+
+`branch_diff_service.getBranchDiff` gains two fields:
+
+- `createdNoteLinks: CreatedNoteLinkRow[]` — branch-created
+  note_links with resolved source / target titles.
+- `createdAttachments: CreatedAttachmentRow[]` — branch-created
+  box_object_attachments with box and leaf display names.
+
+`branch_detail_client.tsx` renders both as dedicated sections
+("New note links" and "New attachments"), and the promote
+confirm dialog mentions the counts.
+
+### Tests
+
+- `src/tests/unit/branch_note_links_and_attachments.test.ts` —
+  four cases for the note_link repository filter, three for
+  `listAttachmentsForBox`, two for `createAttachment`
+  branch_id threading, two for `object_link_service.createLink`
+  threading.
+- `src/tests/unit/branch_note_link_service.test.ts` — five cases
+  for `link_service` branch-aware create + delete (stamp,
+  main-row-detach-via-pending-op, branch-local-hard-delete,
+  cross-branch rejection, main-fallback).
+
+Baseline 377 → 393 tests after the batch.
+
 ## Related docs
 
 - [branch_aware_writes_v1.md](branch_aware_writes_v1.md)

@@ -17,6 +17,29 @@ export interface CreateNoteLinkInput {
   target_note_id: string;
   relationship_type: RelationshipType;
   relationship_note?: string | null;
+  /**
+   * Optional branch ownership. `null` (or omitted) writes a main
+   * row; a uuid lands the link on a draft branch. See
+   * docs/branch_local_structural_creation_v1.md (v1.10).
+   */
+  branch_id?: string | null;
+}
+
+/**
+ * Shared branch-filter shape: reads accept an optional `branchId`.
+ *   - null / undefined → main-only view (branch_id IS NULL)
+ *   - uuid → main + rows whose branch_id matches
+ */
+type BranchFilter = { branchId?: string | null };
+
+function applyBranchFilter<Q extends {
+  or: (expr: string) => Q;
+  is: (col: string, v: unknown) => Q;
+}>(query: Q, branchId: string | null | undefined): Q {
+  if (branchId) {
+    return query.or(`branch_id.is.null,branch_id.eq.${branchId}`);
+  }
+  return query.is("branch_id", null);
 }
 
 export async function getNoteLinkById(
@@ -36,13 +59,15 @@ export async function getNoteLinkById(
 /** All links where this note is the source. */
 export async function listLinksFromNote(
   supabase: SupabaseClient,
-  source_note_id: string
+  source_note_id: string,
+  { branchId = null }: BranchFilter = {}
 ): Promise<NoteLink[]> {
-  const { data, error } = await supabase
+  let query = supabase
     .from("note_links")
     .select("*")
-    .eq("source_note_id", source_note_id)
-    .order("created_at", { ascending: true });
+    .eq("source_note_id", source_note_id);
+  query = applyBranchFilter(query, branchId);
+  const { data, error } = await query.order("created_at", { ascending: true });
 
   if (error || !data) return [];
   return data as NoteLink[];
@@ -51,13 +76,15 @@ export async function listLinksFromNote(
 /** All links where this note is the target. */
 export async function listLinksToNote(
   supabase: SupabaseClient,
-  target_note_id: string
+  target_note_id: string,
+  { branchId = null }: BranchFilter = {}
 ): Promise<NoteLink[]> {
-  const { data, error } = await supabase
+  let query = supabase
     .from("note_links")
     .select("*")
-    .eq("target_note_id", target_note_id)
-    .order("created_at", { ascending: true });
+    .eq("target_note_id", target_note_id);
+  query = applyBranchFilter(query, branchId);
+  const { data, error } = await query.order("created_at", { ascending: true });
 
   if (error || !data) return [];
   return data as NoteLink[];

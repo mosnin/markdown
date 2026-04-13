@@ -22,6 +22,13 @@ export interface CreateBoxObjectAttachmentInput {
   object_id: string;
   sort_order?: number;
   attached_by?: string | null;
+  /**
+   * Optional branch ownership. `null` (or omitted) writes a main row;
+   * a uuid lands the attachment on a draft branch so main readers
+   * never see it until promote. See
+   * docs/branch_local_structural_creation_v1.md (v1.10).
+   */
+  branch_id?: string | null;
 }
 
 /**
@@ -40,11 +47,18 @@ export async function listAttachmentsForBox(
     branchId = null,
   }: { branchId?: string | null } = {}
 ): Promise<BoxObjectAttachment[]> {
-  const { data, error } = await supabase
+  let query = supabase
     .from("box_object_attachments")
     .select("*")
-    .eq("box_id", box_id)
-    .order("sort_order", { ascending: true });
+    .eq("box_id", box_id);
+  // Branch filter: main-only readers (no branchId) drop rows stamped
+  // with a draft branch; branch readers keep main + matching rows.
+  if (branchId) {
+    query = query.or(`branch_id.is.null,branch_id.eq.${branchId}`);
+  } else {
+    query = query.is("branch_id", null);
+  }
+  const { data, error } = await query.order("sort_order", { ascending: true });
 
   if (error || !data) return [];
   let rows = data as BoxObjectAttachment[];
@@ -154,15 +168,25 @@ export async function isObjectAttachedToBox(
   supabase: SupabaseClient,
   box_id: string,
   object_type: "skill" | "agent",
-  object_id: string
+  object_id: string,
+  { branchId = null }: { branchId?: string | null } = {}
 ): Promise<boolean> {
-  const { data, error } = await supabase
+  let query = supabase
     .from("box_object_attachments")
     .select("id")
     .eq("box_id", box_id)
     .eq("object_type", object_type)
-    .eq("object_id", object_id)
-    .single();
+    .eq("object_id", object_id);
+  // Branch-aware existence check: the UNIQUE on
+  // (box_id, object_type, object_id, COALESCE(branch_id, zero)) lets
+  // main and branch-local rows coexist, so the service layer must
+  // scope the lookup to the caller's branch context.
+  if (branchId) {
+    query = query.or(`branch_id.is.null,branch_id.eq.${branchId}`);
+  } else {
+    query = query.is("branch_id", null);
+  }
+  const { data, error } = await query.maybeSingle();
 
   if (error || !data) return false;
   return true;
