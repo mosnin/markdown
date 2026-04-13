@@ -1,16 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import {
-  parseBearerAccessToken,
-  resolveAccessToken,
-} from "@/server/services/oauth_token_service";
+  requireScope,
+  requireWrite,
+  resolveMcpRequestAuth,
+  legacyDeprecationHeaders,
+  type McpAuthContext,
+} from "@/server/auth/mcp_auth_adapter";
 import {
-  hasScope,
-  canAccessBox,
-  type OAuthScope,
   type OAuthCapabilityScope,
 } from "@/server/services/oauth_scope_service";
-import { getWorkspaceRole } from "@/server/repositories/workspace_membership_repository";
+import { getPublicAppUrl } from "@/server/services/public_app_url";
+import { log } from "@/lib/logger";
 import { listBoxesByWorkspace } from "@/server/repositories/box_repository";
 import { getNoteById } from "@/server/repositories/note_repository";
 import { searchWorkspace } from "@/server/services/workspace_search_service";
@@ -225,42 +226,30 @@ const TOOLS: ToolDef[] = [
 // ─── Auth context ────────────────────────────────────────────────────────────
 
 interface McpCallContext {
-  userId: string;
-  workspaceId: string;
-  clientId: string;
-  scope: OAuthScope[];
-  role: "owner" | "admin" | "member" | "viewer";
+  auth: McpAuthContext;
 }
 
 async function resolveMcpContext(req: NextRequest): Promise<
-  { ok: true; ctx: McpCallContext } | { ok: false; status: number; error: string }
+  { ok: true; ctx: McpCallContext } | { ok: false; status: number; error: string; headers?: Record<string, string> }
 > {
-  const parsed = parseBearerAccessToken(req.headers.get("authorization"));
-  if (!parsed) {
+  const auth = await resolveMcpRequestAuth(req);
+  if (!auth) {
     return { ok: false, status: 401, error: "Authorization: Bearer <access_token> header required" };
   }
-  const admin = createAdminClient();
-  const resolved = await resolveAccessToken(admin, parsed);
-  if (!resolved) {
-    return { ok: false, status: 401, error: "Invalid or expired access token" };
+
+  // Policy: legacy csk_v1_ tokens are tolerated only on transition
+  // paths (/api/v1 + stdio). The connector-grade HTTP MCP endpoint
+  // requires OAuth access tokens exclusively.
+  if (auth.source === "legacy_csk") {
+    return {
+      ok: false,
+      status: 401,
+      error: "Legacy csk_v1_ tokens are not accepted on /api/mcp. Use OAuth via /oauth/authorize.",
+      headers: legacyDeprecationHeaders(),
+    };
   }
-  // Resolve the user's current role on the token's workspace. The token
-  // binds (user, workspace) at issue time; the live role may differ if
-  // an admin changed it, so we check every request.
-  const role = await getWorkspaceRole(admin, resolved.workspaceId, resolved.userId);
-  if (!role) {
-    return { ok: false, status: 403, error: "User no longer has access to the authorized workspace" };
-  }
-  return {
-    ok: true,
-    ctx: {
-      userId: resolved.userId,
-      workspaceId: resolved.workspaceId,
-      clientId: resolved.clientId,
-      scope: resolved.scope,
-      role,
-    },
-  };
+
+  return { ok: true, ctx: { auth } };
 }
 
 // ─── Tool dispatch ───────────────────────────────────────────────────────────
@@ -274,11 +263,10 @@ async function dispatchTool(
   if (!tool) throw toolError(-32601, `Unknown tool: ${name}`);
 
   // Scope gate first.
-  if (!hasScope(ctx.scope, tool.scope)) {
+  if (!requireScope(ctx.auth, tool.scope)) {
     throw toolError(-32002, `Token does not have required scope: ${tool.scope}`);
   }
-  // Role gate — viewers cannot write regardless of scope.
-  if (tool.writes && ctx.role === "viewer") {
+  if (tool.writes && !requireWrite(ctx.auth)) {
     throw toolError(-32003, "Viewer role cannot perform write operations");
   }
 
@@ -286,10 +274,10 @@ async function dispatchTool(
 
   switch (name) {
     case "list_boxes": {
-      const boxes = await listBoxesByWorkspace(admin, ctx.workspaceId);
+      const boxes = await listBoxesByWorkspace(admin, ctx.auth.workspaceId);
       // Box-scoped tokens see only the boxes they were granted access
       // to. Workspace-wide tokens (no box scope) see every box.
-      const scoped = boxes.filter((b) => canAccessBox(ctx.scope, b.id));
+      const scoped = boxes.filter((b) => ctx.auth.allowedBoxIds.has(b.id));
       return { boxes: scoped.map((b) => ({
         id: b.id, name: b.name, slug: b.slug, description: b.description,
         created_at: b.created_at, updated_at: b.updated_at,
@@ -305,21 +293,21 @@ async function dispatchTool(
       // scope narrowing. A note inside a box the token wasn't granted
       // is indistinguishable from not-found from the caller's view.
       const { data: box } = await admin.from("boxes").select("workspace_id").eq("id", note.box_id).maybeSingle();
-      if (box?.workspace_id !== ctx.workspaceId) return { note: null };
-      if (!canAccessBox(ctx.scope, note.box_id)) return { note: null };
+      if (box?.workspace_id !== ctx.auth.workspaceId) return { note: null };
+      if (!ctx.auth.allowedBoxIds.has(note.box_id)) return { note: null };
       return { note };
     }
 
     case "search_workspace": {
       const query = String(args.query ?? "");
       if (!query) throw toolError(-32602, "query is required");
-      const hits = await searchWorkspace(admin, ctx.workspaceId, query);
+      const hits = await searchWorkspace(admin, ctx.auth.workspaceId, query);
       // Filter hits whose box_id is outside the token's granted box
       // set. Hits that have no box_id (box-level hits themselves)
       // match on the hit's id.
       const filtered = hits.filter((h) => {
-        if (h.objectType === "box") return canAccessBox(ctx.scope, h.id);
-        if (h.boxId) return canAccessBox(ctx.scope, h.boxId);
+        if (h.objectType === "box") return ctx.auth.allowedBoxIds.has(h.id);
+        if (h.boxId) return ctx.auth.allowedBoxIds.has(h.boxId);
         return true;
       });
       return { hits: filtered };
@@ -328,10 +316,10 @@ async function dispatchTool(
     case "get_box_overview": {
       const boxId = String(args.box_id ?? "");
       if (!boxId) throw toolError(-32602, "box_id is required");
-      if (!canAccessBox(ctx.scope, boxId)) return { overview: null };
+      if (!ctx.auth.allowedBoxIds.has(boxId)) return { overview: null };
       const { getBoxById } = await import("@/server/repositories/box_repository");
       const box = await getBoxById(admin, boxId);
-      if (!box || box.workspace_id !== ctx.workspaceId) return { overview: null };
+      if (!box || box.workspace_id !== ctx.auth.workspaceId) return { overview: null };
       const { getBoxOverview } = await import("@/server/services/overview_service");
       const overview = await getBoxOverview(admin, box);
       return { overview };
@@ -340,10 +328,10 @@ async function dispatchTool(
     case "list_folder_contents": {
       const boxId = String(args.box_id ?? "");
       if (!boxId) throw toolError(-32602, "box_id is required");
-      if (!canAccessBox(ctx.scope, boxId)) return { folders: [], notes: [] };
+      if (!ctx.auth.allowedBoxIds.has(boxId)) return { folders: [], notes: [] };
       const { getBoxById } = await import("@/server/repositories/box_repository");
       const box = await getBoxById(admin, boxId);
-      if (!box || box.workspace_id !== ctx.workspaceId) {
+      if (!box || box.workspace_id !== ctx.auth.workspaceId) {
         return { folders: [], notes: [] };
       }
       const folderId = args.folder_id === null || args.folder_id === undefined
@@ -389,8 +377,8 @@ async function dispatchTool(
         .select("workspace_id")
         .eq("id", note.box_id)
         .maybeSingle();
-      if (box?.workspace_id !== ctx.workspaceId) return { outbound: [], inbound: [] };
-      if (!canAccessBox(ctx.scope, note.box_id)) return { outbound: [], inbound: [] };
+      if (box?.workspace_id !== ctx.auth.workspaceId) return { outbound: [], inbound: [] };
+      if (!ctx.auth.allowedBoxIds.has(note.box_id)) return { outbound: [], inbound: [] };
       const { listLinksFromNote, listLinksToNote } = await import(
         "@/server/repositories/note_link_repository"
       );
@@ -411,14 +399,14 @@ async function dispatchTool(
         .select("box_id")
         .eq("id", noteId)
         .maybeSingle();
-      if (!noteRow || !canAccessBox(ctx.scope, noteRow.box_id)) {
+      if (!noteRow || !ctx.auth.allowedBoxIds.has(noteRow.box_id)) {
         return { bundle: null };
       }
       const { assembleContextBundle } = await import(
         "@/server/services/context_bundle_service"
       );
       try {
-        const bundle = await assembleContextBundle(admin, ctx.workspaceId, noteId, {
+        const bundle = await assembleContextBundle(admin, ctx.auth.workspaceId, noteId, {
           linkedLimit: typeof args.linked_limit === "number" ? args.linked_limit : undefined,
           includeArchived: args.include_archived === true,
         });
@@ -449,7 +437,7 @@ async function dispatchTool(
         .select("box_id")
         .eq("id", folderId)
         .maybeSingle();
-      if (!folder || !canAccessBox(ctx.scope, folder.box_id)) {
+      if (!folder || !ctx.auth.allowedBoxIds.has(folder.box_id)) {
         throw toolError(-32003, "Folder is not in an authorized box");
       }
 
@@ -460,36 +448,28 @@ async function dispatchTool(
       // way to the service layer. permission_mode is pinned to
       // generate_in_allowed_folders because the scope gate above
       // already required context:generate.
-      const { data: boxes } = await admin
-        .from("boxes")
-        .select("id")
-        .eq("workspace_id", ctx.workspaceId)
-        .neq("status", "trashed");
-      const workspaceBoxIds = (boxes ?? []).map((b: { id: string }) => b.id);
-      const allowedBoxIds = new Set(
-        workspaceBoxIds.filter((id: string) => canAccessBox(ctx.scope, id))
-      );
+      const allowedBoxIds = new Set(ctx.auth.allowedBoxIds);
       const { createGeneratedNote } = await import(
         "@/server/services/generated_note_service"
       );
       const syntheticConnection = {
         connection: {
-          id: `oauth:${ctx.clientId}`,
-          workspace_id: ctx.workspaceId,
-          name: `oauth:${ctx.clientId}`,
+          id: `oauth:${ctx.auth.clientId ?? "unknown-client"}`,
+          workspace_id: ctx.auth.workspaceId,
+          name: `oauth:${ctx.auth.clientId ?? "unknown-client"}`,
           description: null,
           connection_type: "mcp" as const,
           status: "active" as const,
           permission_mode: "generate_in_allowed_folders" as const,
           last_used_at: null,
           usage_count: 0,
-          metadata: { oauth_client_id: ctx.clientId, oauth_user_id: ctx.userId },
+          metadata: { oauth_client_id: ctx.auth.clientId ?? "unknown-client", oauth_user_id: ctx.auth.userId ?? "unknown-user" },
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
         },
-        workspaceId: ctx.workspaceId,
+        workspaceId: ctx.auth.workspaceId,
         allowedBoxIds,
-        tokenId: `oauth:${ctx.clientId}`,
+        tokenId: `oauth:${ctx.auth.clientId ?? "unknown-client"}`,
       };
       const result = await createGeneratedNote(admin, syntheticConnection, {
         folder_id: folderId,
@@ -512,12 +492,12 @@ async function dispatchTool(
       const { openChangeSet, commitChangeSet, recordChangeSetItem } =
         await import("@/server/services/change_set_service");
       const cs = await openChangeSet(admin, {
-        workspace_id: ctx.workspaceId,
+        workspace_id: ctx.auth.workspaceId,
         origin: "proposal_approval",
         actor_type: "user",
-        actor_id: ctx.userId,
-        summary: `MCP proposal from ${ctx.clientId}`,
-        metadata: { oauth_client: ctx.clientId },
+        actor_id: ctx.auth.userId ?? "unknown-user",
+        summary: `MCP proposal from ${ctx.auth.clientId ?? "unknown-client"}`,
+        metadata: { oauth_client: ctx.auth.clientId ?? "unknown-client" },
       });
 
       try {
@@ -550,11 +530,11 @@ async function dispatchTool(
 
         await recordChangeSetItem(admin, {
           change_set_id: cs.id,
-          workspace_id: ctx.workspaceId,
+          workspace_id: ctx.auth.workspaceId,
           operation: "create",
           object_type: "note",
-          object_id: ctx.userId, // placeholder — real proposal_id after implementation
-          after_snapshot: { client_id: ctx.clientId },
+          object_id: ctx.auth.userId ?? "unknown-user", // placeholder — real proposal_id after implementation
+          after_snapshot: { client_id: ctx.auth.clientId ?? "unknown-client" },
         });
         await commitChangeSet(admin, cs.id);
         return {
@@ -592,6 +572,7 @@ export async function POST(req: NextRequest) {
 
   const authn = await resolveMcpContext(req);
   if (!authn.ok) {
+    log.warn("mcp_http_auth_failed", { status: authn.status, reason: authn.error });
     // Respond with a WWW-Authenticate hint to help connectors discover
     // the OAuth authorize URL (per RFC 6750).
     return NextResponse.json(
@@ -620,7 +601,7 @@ export async function POST(req: NextRequest) {
       // see a minimal menu that reflects what they actually can do.
       return rpcResult(body.id, {
         tools: TOOLS
-          .filter((t) => hasScope(ctx.scope, t.scope))
+          .filter((t) => requireScope(ctx.auth, t.scope))
           .map((t) => ({
             name: t.name,
             description: t.description,
@@ -640,14 +621,14 @@ export async function POST(req: NextRequest) {
         // across every MCP-routed event.
         const admin = createAdminClient();
         await auditMcp(admin, {
-          workspaceId: ctx.workspaceId,
-          userId: ctx.userId,
-          clientId: ctx.clientId,
+          workspaceId: ctx.auth.workspaceId,
+          userId: ctx.auth.userId ?? "unknown-user",
+          clientId: ctx.auth.clientId ?? "unknown-client",
           source: "oauth",
           objectType: "oauth_client",
-          objectId: ctx.clientId,
+          objectId: ctx.auth.clientId ?? "unknown-client",
           eventType: `mcp.tool.called.${params.name}`,
-          metadata: { scope: ctx.scope },
+          metadata: { scope: ctx.auth.scopes },
         });
         // Retain a low-cardinality structural event for legacy
         // queries that group by object_type='oauth_client'.
@@ -673,15 +654,11 @@ export async function POST(req: NextRequest) {
 // resource itself so connectors can discover which authorization server
 // to use).
 export async function GET() {
-  const issuer = (
-    process.env.NEXT_PUBLIC_CANONICAL_URL ??
-    process.env.NEXT_PUBLIC_SITE_URL ??
-    "http://localhost:3000"
-  ).replace(/\/$/, "");
+  const issuer = getPublicAppUrl();
   return NextResponse.json({
     resource: `${issuer}/api/mcp`,
     authorization_servers: [issuer],
     bearer_methods_supported: ["header"],
-    resource_documentation: `${issuer}/docs/mcp_oauth_and_secure_connector_architecture_v1.md`,
+    resource_documentation: `${issuer}/docs/mcp_oauth_product_surface_and_token_lifecycle_v1.md`,
   });
 }

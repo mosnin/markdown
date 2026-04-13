@@ -41,9 +41,8 @@ export async function listConnectedAppsAction(): Promise<ActionResult<ConnectedA
 
     const { data: consents } = await supabase
       .from("oauth_consents")
-      .select("client_id, workspace_id, scopes, created_at")
-      .eq("user_id", ctx.user.id)
-      .is("revoked_at", null);
+      .select("client_id, workspace_id, scopes, created_at, revoked_at")
+      .eq("user_id", ctx.user.id);
     if (!consents || consents.length === 0) return { ok: true, data: [] };
 
     const clientIds = Array.from(new Set(consents.map((c) => c.client_id)));
@@ -85,7 +84,7 @@ export async function listConnectedAppsAction(): Promise<ActionResult<ConnectedA
         is_first_party: client.is_first_party,
         workspace_id: c.workspace_id,
         workspace_name: workspaceMap.get(c.workspace_id) ?? c.workspace_id,
-        status: "active",
+        status: c.revoked_at ? "revoked" : "active",
         scopes: c.scopes,
         granted_at: c.created_at,
         last_used_at: lastUsed,

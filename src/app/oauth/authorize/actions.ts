@@ -19,6 +19,7 @@ import { listBoxesByWorkspace } from "@/server/repositories/box_repository";
 import { createClient } from "@/lib/supabase/server";
 import { createAuditEvent } from "@/server/repositories/audit_event_repository";
 import { oauthAuthorizeLimit } from "@/lib/api/rate_limit";
+import { log } from "@/lib/logger";
 
 /**
  * Server action invoked by the Approve / Deny buttons on the consent
@@ -42,6 +43,7 @@ export async function approveAuthorizeAction(formData: FormData): Promise<never>
 
   const rl = oauthAuthorizeLimit(ctx.user.id);
   if (!rl.allowed) {
+    log.warn("oauth_authorize_rate_limited", { user_id: ctx.user.id, retry_after: rl.retryAfter });
     redirect(errorRedirect(redirectUri, state, "slow_down", `Too many approvals. Retry in ${rl.retryAfter}s.`));
   }
 
@@ -133,6 +135,33 @@ export async function approveAuthorizeAction(formData: FormData): Promise<never>
 export async function denyAuthorizeAction(formData: FormData): Promise<never> {
   const redirectUri = String(formData.get("redirect_uri") ?? "");
   const state = String(formData.get("state") ?? "");
+  const clientId = String(formData.get("client_id") ?? "");
+  const workspaceId = String(formData.get("workspace_id") ?? "");
+
+  try {
+    const ctx = await requireAuthenticatedUser();
+    const admin = createAdminClient();
+    const { data: client } = await admin
+      .from("oauth_clients")
+      .select("id")
+      .eq("client_id", clientId)
+      .maybeSingle();
+
+    if (workspaceId && client?.id) {
+      await createAuditEvent(admin, {
+        workspace_id: workspaceId,
+        actor_type: "user",
+        actor_id: ctx.user.id,
+        object_type: "oauth_client",
+        object_id: client.id,
+        event_type: "oauth.consent.denied",
+        metadata: { client_id: clientId },
+      });
+    }
+  } catch (err) {
+    log.warn("oauth_authorize_deny_audit_failed", { reason: err instanceof Error ? err.message : "unknown" });
+  }
+
   redirect(errorRedirect(redirectUri, state, "access_denied", "User denied the request."));
 }
 

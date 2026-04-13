@@ -139,7 +139,7 @@ function AppRow({
         variant="ghost"
         size="sm"
         onClick={onRevoke}
-        disabled={revoking}
+        disabled={revoking || row.status === "revoked"}
         className="shrink-0 text-muted-foreground hover:text-destructive"
         aria-label={`Revoke ${row.client_name}`}
       >

@@ -209,3 +209,9 @@ capability scope — admin actions remain on the human UI.
 - Workspace membership/role is re-checked live for OAuth tokens before request authorization.
 - Viewer-role OAuth callers are forced into read-only behavior even if a connector requested write-capable scopes.
 - Consent revocation invalidates all child access/refresh tokens for that `(user, client, workspace)` tuple.
+
+## Launch-readiness operational notes
+
+- OAuth token-exchange failures emit structured log warnings without raw secrets.
+- HTTP MCP auth failures emit structured warnings to aid production debugging.
+- Legacy `csk_v1_` is isolated from `/api/mcp`; OAuth is the only supported connector auth path there.

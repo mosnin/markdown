@@ -55,3 +55,9 @@ OAuth-backed writes continue to use the canonical API write path and current def
 - No token-in-URL patterns.
 - No client-credentials grant.
 - No opaque bypass around canonical role/membership gates.
+
+## Connector compatibility checks
+
+- Discovery documents and endpoint URLs are generated from one public base URL resolver.
+- `/api/mcp` requires OAuth bearer access tokens and rejects legacy `csk_v1_` tokens.
+- OAuth failures are logged in structured form without logging raw token secrets.

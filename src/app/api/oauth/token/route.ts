@@ -15,6 +15,7 @@ import {
 import { parseScopeString, serializeScopes } from "@/server/services/oauth_scope_service";
 import { createAuditEvent } from "@/server/repositories/audit_event_repository";
 import { oauthTokenLimit } from "@/lib/api/rate_limit";
+import { log } from "@/lib/logger";
 
 /**
  * OAuth 2.1 token endpoint (RFC 6749 §3.2 with OAuth 2.1 tightening).
@@ -245,6 +246,7 @@ function tokenSuccess(pair: {
 }
 
 function tokenError(code: string, description: string) {
+  log.warn("oauth_token_exchange_failed", { code, description });
   return NextResponse.json(
     { error: code, error_description: description },
     {

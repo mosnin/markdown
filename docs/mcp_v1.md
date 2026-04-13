@@ -290,3 +290,9 @@ connector-style integrations should use HTTP + OAuth.
   - **Connected apps** (user grant management + revoke)
   - **Developer apps** (OAuth client registration, one-time secret reveal, rotation, delete/revoke)
 - OAuth-backed writes remain branch-safe by using existing canonical API write semantics. Branch targeting is not separately requested by OAuth tokens; behavior remains equivalent to current API write defaults.
+
+## Launch policy update (2026-04-13)
+
+- Connector-grade HTTP MCP (`/api/mcp`) is OAuth-only.
+- Legacy `csk_v1_` tokens remain migration/dev-only and are not accepted on `/api/mcp`.
+- See `docs/mcp_connector_compatibility_and_launch_readiness_v1.md` for troubleshooting and launch checks.
