@@ -296,3 +296,7 @@ connector-style integrations should use HTTP + OAuth.
 - Connector-grade HTTP MCP (`/api/mcp`) is OAuth-only.
 - Legacy `csk_v1_` tokens remain migration/dev-only and are not accepted on `/api/mcp`.
 - See `docs/mcp_connector_compatibility_and_launch_readiness_v1.md` for troubleshooting and launch checks.
+
+## OAuth write branch policy (final)
+
+OAuth-backed writes are intentionally main-only in V1. Branch-targeting fields are rejected explicitly rather than silently ignored.

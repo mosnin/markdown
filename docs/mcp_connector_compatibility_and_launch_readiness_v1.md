@@ -41,3 +41,8 @@ OAuth-backed writes follow canonical API branch semantics (default behavior) and
 - `invalid_grant` on token exchange: verify redirect URI exact match and PKCE verifier.
 - `access_denied` on authorize callback: user denied consent or user lacks selected workspace access.
 - Unexpected missing tools: token scopes do not include required capability.
+
+## Final policy closure
+
+- OAuth write requests are explicitly main-only and reject branch-targeting attempts.
+- Full repository `pnpm -s tsc --noEmit` is expected to pass in this repository state.

@@ -215,3 +215,7 @@ capability scope — admin actions remain on the human UI.
 - OAuth token-exchange failures emit structured log warnings without raw secrets.
 - HTTP MCP auth failures emit structured warnings to aid production debugging.
 - Legacy `csk_v1_` is isolated from `/api/mcp`; OAuth is the only supported connector auth path there.
+
+## OAuth write branch policy
+
+OAuth-scoped machine writes currently target canonical main behavior only. Branch targeting parameters are rejected for OAuth write requests to avoid ambiguous semantics.

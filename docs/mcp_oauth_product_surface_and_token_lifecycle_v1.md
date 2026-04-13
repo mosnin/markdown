@@ -61,3 +61,9 @@ OAuth-backed writes continue to use the canonical API write path and current def
 - Discovery documents and endpoint URLs are generated from one public base URL resolver.
 - `/api/mcp` requires OAuth bearer access tokens and rejects legacy `csk_v1_` tokens.
 - OAuth failures are logged in structured form without logging raw token secrets.
+
+## Final write policy closure (2026-04-13)
+
+- OAuth-backed writes are **main-only** in V1.
+- Any attempted branch-targeting fields on OAuth write requests are rejected explicitly with a bad-request error.
+- This keeps audit, rollback, and existing branch protection semantics honest while avoiding implicit branch behavior.

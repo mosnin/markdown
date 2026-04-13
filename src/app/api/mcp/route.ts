@@ -424,6 +424,9 @@ async function dispatchTool(
     }
 
     case "create_generated_note": {
+      if ("branch_id" in args || "target_branch_id" in args) {
+        throw toolError(-32602, "OAuth-backed writes are main-only in this version. Branch targeting is not supported.");
+      }
       const folderId = String(args.folder_id ?? "");
       const title = String(args.title ?? "");
       const markdown = String(args.markdown_content ?? "");
@@ -506,6 +509,10 @@ async function dispatchTool(
         // from the OAuth client_id to preserve attribution — the audit
         // layer sees a human-initiated proposal coming through a
         // specific connector.
+        if ("branch_id" in args || "target_branch_id" in args) {
+          throw toolError(-32602, "OAuth-backed writes are main-only in this version. Branch targeting is not supported.");
+        }
+
         const proposalInput = args as {
           proposal_type: string;
           target_note_id?: string;
