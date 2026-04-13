@@ -458,6 +458,34 @@ export async function revokeConsentTokens(
     .is("revoked_at", null);
 }
 
+/**
+ * Revoke every live access + refresh token that derives from a
+ * specific consent row. Stamps the consent itself with `revoked_at`
+ * so subsequent `resolveAccessToken` calls short-circuit (defense in
+ * depth: expired tokens and revoked consent both guard independently).
+ */
+export async function revokeAllTokensForConsent(
+  supabase: SupabaseClient,
+  consentId: string
+): Promise<void> {
+  const { data: consent } = await supabase
+    .from("oauth_consents")
+    .select("user_id, client_id, workspace_id")
+    .eq("id", consentId)
+    .maybeSingle();
+  if (!consent) return;
+  await revokeConsentTokens(supabase, {
+    userId: consent.user_id,
+    clientId: consent.client_id,
+    workspaceId: consent.workspace_id,
+  });
+  await supabase
+    .from("oauth_consents")
+    .update({ revoked_at: new Date().toISOString() })
+    .eq("id", consentId)
+    .is("revoked_at", null);
+}
+
 // ─── Exports for use by the routes ───────────────────────────────────────────
 
 export { ACCESS_TOKEN_TTL_SECONDS, REFRESH_TOKEN_TTL_SECONDS, AUTHORIZATION_CODE_TTL_SECONDS };

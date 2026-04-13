@@ -197,5 +197,92 @@ export async function registerClient(
     .select("id, client_id, name, description, homepage_url, logo_url, redirect_uris, allowed_scopes, is_confidential, is_first_party, status, created_by, created_at, updated_at")
     .single();
   if (error || !data) throw new Error(error?.message ?? "Failed to register client");
+
+  // Enforce the "confidential = secret required" invariant at the
+  // service boundary. The DB allows NULL on client_secret_hash so
+  // seed migrations can populate confidential first-party clients
+  // asynchronously, but any service-layer registration that marks
+  // itself confidential MUST produce a hash or fail loudly.
+  if (input.is_confidential && !secretHash) {
+    throw new Error("Confidential clients must have a client_secret_hash");
+  }
+  // Public clients intentionally have no secret — PKCE is the
+  // security boundary. This is enforced at the token endpoint which
+  // requires code_verifier for public clients.
+
   return { client: data as OAuthClient, client_secret: secret };
 }
+
+// ─── Management: deprecate / update / list ───────────────────────────────────
+
+/**
+ * Mark an OAuth client deprecated. Does NOT revoke live tokens —
+ * deprecation is a "warn first, cut over later" signal. The admin UI
+ * surfaces the deprecated_at banner; connectors see the warning
+ * through their discovery / introspection calls. When you are ready
+ * to actually cut access, set `status = 'suspended'` or `'deleted'`
+ * via `updateClient` which invalidates the lookup path.
+ */
+export async function deprecateClient(
+  adminSupabase: SupabaseClient,
+  clientId: string
+): Promise<OAuthClient | null> {
+  const { data, error } = await adminSupabase
+    .from("oauth_clients")
+    .update({ deprecated_at: new Date().toISOString() })
+    .eq("client_id", clientId)
+    .select("id, client_id, name, description, homepage_url, logo_url, redirect_uris, allowed_scopes, is_confidential, is_first_party, status, created_by, created_at, updated_at")
+    .maybeSingle();
+  if (error || !data) return null;
+  return data as OAuthClient;
+}
+
+export interface UpdateClientInput {
+  name?: string;
+  description?: string | null;
+  homepage_url?: string | null;
+  logo_url?: string | null;
+  redirect_uris?: string[];
+  allowed_scopes?: string[];
+  status?: "active" | "suspended" | "deleted";
+}
+
+/**
+ * Patch a subset of an OAuth client's metadata. Returns null for
+ * unknown client_id. Does not mutate `is_confidential` — that's a
+ * registration-time attribute; to change it, delete and re-register.
+ */
+export async function updateClient(
+  adminSupabase: SupabaseClient,
+  clientId: string,
+  patch: UpdateClientInput
+): Promise<OAuthClient | null> {
+  if (patch.redirect_uris && patch.redirect_uris.length === 0) {
+    throw new Error("redirect_uris cannot be empty");
+  }
+  const { data, error } = await adminSupabase
+    .from("oauth_clients")
+    .update(patch)
+    .eq("client_id", clientId)
+    .select("id, client_id, name, description, homepage_url, logo_url, redirect_uris, allowed_scopes, is_confidential, is_first_party, status, created_by, created_at, updated_at")
+    .maybeSingle();
+  if (error || !data) return null;
+  return data as OAuthClient;
+}
+
+/**
+ * List every OAuth client a given user registered. Admin UI only —
+ * confidential client_secret_hash is NOT returned.
+ */
+export async function listClientsForOwner(
+  adminSupabase: SupabaseClient,
+  userId: string
+): Promise<OAuthClient[]> {
+  const { data } = await adminSupabase
+    .from("oauth_clients")
+    .select("id, client_id, name, description, homepage_url, logo_url, redirect_uris, allowed_scopes, is_confidential, is_first_party, status, created_by, created_at, updated_at")
+    .eq("created_by", userId)
+    .order("created_at", { ascending: false });
+  return (data ?? []) as OAuthClient[];
+}
+

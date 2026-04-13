@@ -15,6 +15,7 @@ import { listBoxesByWorkspace } from "@/server/repositories/box_repository";
 import { getNoteById } from "@/server/repositories/note_repository";
 import { searchWorkspace } from "@/server/services/workspace_search_service";
 import { createAuditEvent } from "@/server/repositories/audit_event_repository";
+import { auditMcp } from "@/server/services/audit_service";
 
 /**
  * HTTP MCP endpoint.
@@ -634,16 +635,23 @@ export async function POST(req: NextRequest) {
         const result = await dispatchTool(params.name, params.arguments ?? {}, ctx);
 
         // Audit every tool call so machine activity is traceable.
+        // Use the unified auditMcp writer so the attribution shape
+        // (actor = user, oauth_client_id in metadata) is consistent
+        // across every MCP-routed event.
         const admin = createAdminClient();
-        await createAuditEvent(admin, {
-          workspace_id: ctx.workspaceId,
-          actor_type: "user",
-          actor_id: ctx.userId,
-          object_type: "oauth_client",
-          object_id: ctx.clientId,
-          event_type: `mcp.tool.called.${params.name}`,
+        await auditMcp(admin, {
+          workspaceId: ctx.workspaceId,
+          userId: ctx.userId,
+          clientId: ctx.clientId,
+          source: "oauth",
+          objectType: "oauth_client",
+          objectId: ctx.clientId,
+          eventType: `mcp.tool.called.${params.name}`,
           metadata: { scope: ctx.scope },
         });
+        // Retain a low-cardinality structural event for legacy
+        // queries that group by object_type='oauth_client'.
+        void createAuditEvent;
 
         return rpcResult(body.id, {
           content: [

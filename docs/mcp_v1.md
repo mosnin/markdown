@@ -1,5 +1,43 @@
 # MCP Server V1
 
+> **Primary auth flow is OAuth 2.1 + PKCE over HTTP.**
+>
+> The stdio `csk_v1_` flow documented later in this file is
+> deprecated and retained for first-party local dev only. New
+> integrators should use:
+>
+> 1. **Discover:** `GET /.well-known/oauth-authorization-server`
+>    and `GET /.well-known/mcp-server`.
+> 2. **Register a client** (one-time, RFC 7591):
+>    `POST /api/oauth/register` with a `client_name`,
+>    `redirect_uris`, `scope`, and `token_endpoint_auth_method`.
+>    Public (native) clients get `none`; confidential clients get
+>    `client_secret_post`/`client_secret_basic` and receive a
+>    one-time `client_secret` in the response.
+> 3. **Authorize:** redirect the user to
+>    `/oauth/authorize?response_type=code&client_id=<>&redirect_uri=<>&scope=<scope-list>&state=<>&code_challenge=<S256>`.
+>    Context Store shows a consent screen that lists the requested
+>    scopes, the target workspace, and the client identity.
+> 4. **Exchange code:** `POST /api/oauth/token` with
+>    `grant_type=authorization_code`, `code`, `code_verifier`,
+>    `client_id`, and (confidential only) `client_secret`. Response
+>    returns `{ access_token: "cso_a_…", refresh_token:
+>    "cso_r_…", expires_in: 3600, scope }`.
+> 5. **Call MCP:** `POST ${NEXT_PUBLIC_APP_URL}/api/mcp` with
+>    `Authorization: Bearer <access_token>` and a JSON-RPC 2.0
+>    body (`initialize`, `tools/list`, `tools/call`).
+> 6. **Refresh:** `POST /api/oauth/token` with
+>    `grant_type=refresh_token` + the refresh token. Each refresh
+>    rotates both tokens; reuse of a retired refresh revokes the
+>    whole family.
+> 7. **Revoke:** `POST /api/oauth/revoke` (RFC 7009) or delete the
+>    consent from the admin UI.
+>
+> See `mcp_auth_architecture_foundation_v1.md` for the full
+> architecture and
+> `mcp_oauth_and_secure_connector_architecture_v1.md` for the
+> OAuth server design.
+
 Context Store ships an MCP (Model Context Protocol) server that exposes the canonical `/api/v1` routes as MCP tools. AI clients (Claude Desktop, Cursor, Windsurf, etc.) can connect to it and retrieve structured knowledge from any box they have access to, and — with the appropriate connection permission — submit write proposals or create generated notes.
 
 ---

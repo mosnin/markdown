@@ -167,3 +167,38 @@ for the full model; highlights:
 - `/api/mcp` — HTTP MCP transport that requires a Bearer access token
 - Revoking a consent in Settings → Connected apps immediately
   invalidates every access + refresh token for that connector.
+
+### Scope / role precedence
+
+Workspace role and OAuth scope are orthogonal gates that both have
+to pass. They are evaluated in this order on every MCP and canonical
+API call:
+
+1. **Role gate** (workspace membership). A `viewer` cannot write
+   regardless of scope. A non-member cannot read, regardless of
+   scope.
+2. **Scope gate** (OAuth). Even if the user's role would permit an
+   operation, the bearer token must carry the scope for that
+   operation. A member with only `context:read` cannot propose
+   writes through an OAuth-backed client — the connector has to
+   ask for `context:propose` explicitly.
+3. **Box-narrowing** (optional). If the token carries any
+   `context:box:<uuid>` scopes, the accessible box set is the
+   intersection of the user's workspace membership and the granted
+   box ids. A token with no box scopes has workspace-wide access.
+
+Scopes never broaden what role would allow; they only narrow it.
+There is intentionally no `context:*` wildcard and no admin-level
+capability scope — admin actions remain on the human UI.
+
+### Primary vs legacy auth flows
+
+- **Primary:** OAuth 2.1 + PKCE, access tokens prefixed `cso_a_`,
+  refresh tokens `cso_r_`, resolved via
+  `src/server/auth/mcp_auth_adapter.ts`.
+- **Legacy (deprecated):** workspace-wide `csk_v1_` connection
+  tokens described in [`connections_v1.md`](connections_v1.md).
+  Only accepted when `CONTEXT_STORE_LEGACY_CSK_ENABLED=true` is set
+  in the process environment. Every use emits a rate-limited
+  `mcp.legacy_token_used` audit event and attaches standard
+  deprecation response headers.

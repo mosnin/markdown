@@ -1,5 +1,29 @@
 # Connections V1
 
+> **Deprecated as the primary MCP auth flow.**
+>
+> The `csk_v1_` connection-token flow described below is retained
+> only for first-party local development. All new integrations —
+> Claude Desktop, OpenAI Apps, custom remote agents, etc. — must
+> use the OAuth 2.1 + PKCE flow documented in
+> [`mcp_v1.md`](./mcp_v1.md) and
+> [`mcp_auth_architecture_foundation_v1.md`](./mcp_auth_architecture_foundation_v1.md).
+>
+> Runtime use of `csk_v1_` tokens requires the explicit opt-in env
+> flag `CONTEXT_STORE_LEGACY_CSK_ENABLED=true`; the stdio MCP
+> entrypoint refuses to start in `NODE_ENV=production` without it,
+> and the HTTP MCP auth adapter rejects legacy tokens unless the
+> flag is set. Every deprecated-token use emits an
+> `mcp.legacy_token_used` audit event (rate-limited per token to
+> 1/hour) and attaches `Deprecation: true`, `Link`, and `Warning`
+> response headers.
+>
+> Migration path: register an OAuth client via
+> `POST /api/oauth/register`, walk the user through
+> `/oauth/authorize`, exchange the returned code at
+> `/api/oauth/token`, then call `/api/mcp` with the `cso_a_` access
+> token. See `mcp_v1.md` for a worked example.
+
 Connections are the external trust boundary for Context Store. Each connection represents an authorized external agent (MCP client, API integration, script) and carries a bearer token for authentication.
 
 ---

@@ -841,3 +841,66 @@ export function auditObjectProposalApproved(
     metadata
   );
 }
+
+// ─── MCP (OAuth-primary) audit write ─────────────────────────────────────────
+
+/**
+ * Canonical audit write for MCP-originated events.
+ *
+ * Records the human user as the actor (actor_type='user', actor_id=
+ * userId) and stamps the OAuth client_id + auth source into metadata.
+ * This is the correct attribution shape for OAuth-backed activity:
+ * the user is the authority, the client is the channel.
+ *
+ * For true legacy (csk_v1_) machine-only paths, continue calling
+ * `writeConnection` (internal, not exported) or the specific
+ * auditConnection* helpers — those retain actor_type='connection'
+ * because no human user is on record.
+ *
+ * Event-type convention: "mcp.<object_type>.<verb>" or the existing
+ * feature-specific event names (e.g. "note.created") when the MCP
+ * layer delegates to service code that already audits itself.
+ */
+export async function auditMcp(
+  supabase: SupabaseClient,
+  event: {
+    workspaceId: string;
+    userId: string;
+    clientId: string | null;
+    connectionId?: string | null;
+    source: "oauth" | "legacy_csk";
+    objectType: string;
+    objectId: string;
+    eventType: string;
+    metadata?: Record<string, unknown>;
+  }
+): Promise<void> {
+  const {
+    workspaceId,
+    userId,
+    clientId,
+    connectionId,
+    source,
+    objectType,
+    objectId,
+    eventType,
+  } = event;
+  try {
+    await createAuditEvent(supabase, {
+      workspace_id: workspaceId,
+      actor_type: "user",
+      actor_id: userId,
+      object_type: objectType,
+      object_id: objectId,
+      event_type: eventType,
+      metadata: {
+        ...(event.metadata ?? {}),
+        auth_source: source,
+        ...(clientId ? { oauth_client_id: clientId } : {}),
+        ...(connectionId ? { connection_id: connectionId } : {}),
+      },
+    });
+  } catch (err) {
+    console.error(`[audit] auditMcp failed for ${eventType}`, err);
+  }
+}

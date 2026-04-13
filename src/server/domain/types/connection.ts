@@ -42,6 +42,12 @@ export interface ConnectionToken {
   expires_at: string | null;
   last_used_at: string | null;
   revoked_at: string | null;
+  /**
+   * Most recent time the MCP auth adapter emitted a deprecation
+   * warning for this token. Nullable; added with
+   * 20260413000006_mcp_auth_hardening.
+   */
+  last_warned_at: string | null;
   created_at: string;
 }
 

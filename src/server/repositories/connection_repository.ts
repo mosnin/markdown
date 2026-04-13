@@ -54,6 +54,12 @@ export interface UpdateConnectionTokenInput {
   label?: string | null;
   last_used_at?: string | null;
   revoked_at?: string | null;
+  /**
+   * Timestamp of the most recent deprecation warning emitted for this
+   * token. Read/written by the MCP auth adapter to rate-limit
+   * `mcp.legacy_token_used` audit events to at most 1/hour/token.
+   */
+  last_warned_at?: string | null;
 }
 
 // ─── Connection ───────────────────────────────────────────────────────────────
