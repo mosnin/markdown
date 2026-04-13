@@ -17,6 +17,8 @@ export interface ConnectedAppRow {
   client_description: string | null;
   is_first_party: boolean;
   workspace_id: string;
+  workspace_name: string;
+  status: "active" | "revoked";
   scopes: string[];
   granted_at: string;
   last_used_at: string | null;
@@ -51,6 +53,13 @@ export async function listConnectedAppsAction(): Promise<ActionResult<ConnectedA
       .in("client_id", clientIds);
     const clientMap = new Map((clients ?? []).map((c) => [c.client_id, c]));
 
+    const workspaceIds = Array.from(new Set(consents.map((c) => c.workspace_id)));
+    const { data: workspaces } = await supabase
+      .from("workspaces")
+      .select("id, name")
+      .in("id", workspaceIds);
+    const workspaceMap = new Map((workspaces ?? []).map((w) => [w.id, w.name]));
+
     const rows: ConnectedAppRow[] = [];
     for (const c of consents) {
       const client = clientMap.get(c.client_id);
@@ -75,6 +84,8 @@ export async function listConnectedAppsAction(): Promise<ActionResult<ConnectedA
         client_description: client.description,
         is_first_party: client.is_first_party,
         workspace_id: c.workspace_id,
+        workspace_name: workspaceMap.get(c.workspace_id) ?? c.workspace_id,
+        status: "active",
         scopes: c.scopes,
         granted_at: c.created_at,
         last_used_at: lastUsed,

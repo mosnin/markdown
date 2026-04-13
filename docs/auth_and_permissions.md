@@ -202,3 +202,10 @@ capability scope — admin actions remain on the human UI.
   in the process environment. Every use emits a rate-limited
   `mcp.legacy_token_used` audit event and attaches standard
   deprecation response headers.
+
+## MCP OAuth hardening updates (2026-04-13)
+
+- `/api/mcp` and canonical `/api/v1/**` now resolve bearer auth through a unified resolver path.
+- Workspace membership/role is re-checked live for OAuth tokens before request authorization.
+- Viewer-role OAuth callers are forced into read-only behavior even if a connector requested write-capable scopes.
+- Consent revocation invalidates all child access/refresh tokens for that `(user, client, workspace)` tuple.

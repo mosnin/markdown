@@ -280,3 +280,13 @@ for the full architecture, including the scope table, token model,
 and legacy migration guidance. The stdio transport is preserved for
 local development and deployments already using env-var auth; new
 connector-style integrations should use HTTP + OAuth.
+
+## OAuth product surface status (2026-04-13)
+
+- `/oauth/authorize` is a production consent UI (client identity, scopes, workspace selector, box narrowing, approve/deny).
+- `/api/oauth/token` enforces 1h access-token TTL and 30d rotating refresh tokens.
+- `/api/oauth/revoke` revokes bearer credentials without leaking token existence.
+- Settings includes:
+  - **Connected apps** (user grant management + revoke)
+  - **Developer apps** (OAuth client registration, one-time secret reveal, rotation, delete/revoke)
+- OAuth-backed writes remain branch-safe by using existing canonical API write semantics. Branch targeting is not separately requested by OAuth tokens; behavior remains equivalent to current API write defaults.

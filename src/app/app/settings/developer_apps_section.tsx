@@ -183,6 +183,14 @@ function AppRow({ row, onDeleted }: { row: DeveloperAppRow; onDeleted: () => voi
         {row.description && (
           <p className="mt-0.5 truncate text-xs text-muted-foreground">{row.description}</p>
         )}
+        <p className="mt-1 text-[10px] text-muted-foreground">
+          Status: {row.status} · Created: {new Date(row.created_at).toLocaleDateString()} · Last used: {row.last_used_at ? new Date(row.last_used_at).toLocaleString() : "never"} · Active sessions: {row.active_tokens}
+        </p>
+        <div className="mt-1 space-y-0.5 text-[10px] text-muted-foreground">
+          {row.redirect_uris.map((uri) => (
+            <p key={uri} className="truncate">redirect_uri: <code>{uri}</code></p>
+          ))}
+        </div>
         <div className="mt-2 flex flex-wrap gap-1">
           {row.allowed_scopes.map((s) => (
             <Badge key={s} variant="outline" className="text-[10px] font-normal">

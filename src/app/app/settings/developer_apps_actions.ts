@@ -23,6 +23,8 @@ export interface DeveloperAppRow {
   allowed_scopes: string[];
   created_at: string;
   created_by: string | null;
+  last_used_at: string | null;
+  active_tokens: number;
 }
 
 export interface NewlyRegisteredApp {
@@ -40,8 +42,6 @@ export async function listDeveloperAppsAction(): Promise<ActionResult<DeveloperA
   try {
     const ctx = await requireAuthenticatedUser();
     const admin = createAdminClient();
-    // Include: rows the user created + first-party seeds (so users can
-    // see what's available but the UI disables actions on first-party).
     const { data, error } = await admin
       .from("oauth_clients")
       .select("id, client_id, name, description, is_confidential, is_first_party, status, redirect_uris, allowed_scopes, created_at, created_by")
@@ -49,7 +49,28 @@ export async function listDeveloperAppsAction(): Promise<ActionResult<DeveloperA
       .neq("status", "deleted")
       .order("created_at", { ascending: false });
     if (error) return { ok: false, error: error.message };
-    return { ok: true, data: (data ?? []) as DeveloperAppRow[] };
+
+    const rows = ((data ?? []) as Omit<DeveloperAppRow, "last_used_at" | "active_tokens">[]);
+    const enriched: DeveloperAppRow[] = [];
+    for (const row of rows) {
+      const { data: tokens } = await admin
+        .from("oauth_access_tokens")
+        .select("last_used_at")
+        .eq("client_id", row.client_id)
+        .is("revoked_at", null);
+      const lastUsed = (tokens ?? [])
+        .map((t) => t.last_used_at)
+        .filter((x): x is string => !!x)
+        .sort()
+        .pop() ?? null;
+      enriched.push({
+        ...row,
+        last_used_at: lastUsed,
+        active_tokens: tokens?.length ?? 0,
+      });
+    }
+
+    return { ok: true, data: enriched };
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : "Failed to list apps" };
   }
@@ -117,7 +138,7 @@ export async function registerDeveloperAppAction(input: {
     return {
       ok: true,
       data: {
-        client: registered.client as DeveloperAppRow,
+        client: { ...registered.client, last_used_at: null, active_tokens: 0 } as DeveloperAppRow,
         client_secret: registered.client_secret,
       },
     };

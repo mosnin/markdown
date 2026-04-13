@@ -131,7 +131,7 @@ function AppRow({
           ))}
         </div>
         <p className="mt-1 text-[10px] text-muted-foreground">
-          Last used: {lastUsed} · {row.active_tokens} active session{row.active_tokens === 1 ? "" : "s"}
+          Workspace: {row.workspace_name} · Status: {row.status} · Last used: {lastUsed} · {row.active_tokens} active session{row.active_tokens === 1 ? "" : "s"}
         </p>
       </div>
       <Button

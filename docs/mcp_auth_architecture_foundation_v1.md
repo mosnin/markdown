@@ -264,3 +264,10 @@ subsequent PRs:
 * Dynamic client registration (`/api/oauth/register`) accepts any
   signed-in Context Store user. Per-workspace registration limits
   are a follow-up.
+
+## 2026-04-13 completion notes
+
+- Canonical `/api/v1/**` bearer resolution now delegates to the same unified adapter used by `/api/mcp`, so OAuth and legacy `csk_v1_` paths share one verifier and one role/membership re-check flow.
+- OAuth token rate limits now apply on `/api/oauth/token` (per `client_id + IP`) and `/api/oauth/register` (per `user + IP`), with `slow_down` responses and retry guidance.
+- Consent approvals are now rate-limited per signed-in user to reduce authorize-surface abuse.
+- Token lifecycle audit now includes refresh and revocation events in addition to initial token issuance.

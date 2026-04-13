@@ -236,3 +236,7 @@ Connection tokens will not be removed in this release. Operators can
 continue using them; the Settings → Connections panel keeps them
 visible and manageable. A future release may retire them once all
 first-party surfaces have migrated.
+
+## OAuth connector surfaces (2026-04-13)
+
+Connections (`csk_v1_`) are now explicitly legacy for connector auth. New connector integrations should use OAuth clients via Settings → Developer apps or `POST /api/oauth/register`, then authorize through `/oauth/authorize` and exchange at `/api/oauth/token`.

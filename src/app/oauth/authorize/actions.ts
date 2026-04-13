@@ -18,6 +18,7 @@ import { listAccessibleWorkspaces } from "@/server/repositories/workspace_member
 import { listBoxesByWorkspace } from "@/server/repositories/box_repository";
 import { createClient } from "@/lib/supabase/server";
 import { createAuditEvent } from "@/server/repositories/audit_event_repository";
+import { oauthAuthorizeLimit } from "@/lib/api/rate_limit";
 
 /**
  * Server action invoked by the Approve / Deny buttons on the consent
@@ -38,6 +39,11 @@ export async function approveAuthorizeAction(formData: FormData): Promise<never>
   const workspaceId = String(formData.get("workspace_id") ?? "");
 
   const ctx = await requireAuthenticatedUser();
+
+  const rl = oauthAuthorizeLimit(ctx.user.id);
+  if (!rl.allowed) {
+    redirect(errorRedirect(redirectUri, state, "slow_down", `Too many approvals. Retry in ${rl.retryAfter}s.`));
+  }
 
   // Re-validate everything the page validated. The form is a trust
   // boundary — a crafted POST must still fail safe.
