@@ -376,9 +376,81 @@ is active.
 
 Full details: [branch_local_sort_order_and_reorder_isolation_v1.md](branch_local_sort_order_and_reorder_isolation_v1.md).
 
+## v1.8 — Search and archived/trashed read-path coverage
+
+Placement, folder, and box overlays already made the active content
+surfaces branch-aware. Two read paths still ran with no branch
+context and therefore leaked canonical state into branch sessions:
+
+1. **Workspace search** — `searchWorkspaceAction` called
+   `searchWorkspace(supabase, workspaceId, query)` with no branchId.
+   The underlying SQL matched main rows only; a branch-created note
+   never surfaced, and a branch-trashed row stayed visible.
+
+2. **Folder detail page** — `src/app/app/folders/[folder_id]/page.tsx`
+   ran inline `supabase.from(...)` queries for children and a
+   breadcrumb loop via `getFolderById` without branchId. Renamed
+   folders, branch-trashed children, and branch-created children all
+   fell out of the view.
+
+3. **Archived / trashed tabs** on the box page pulled from
+   `listArchivedNotesByBox`, `listTrashedNotesByBox`, and the folder
+   equivalents — none of which accepted a branchId or consulted
+   `branch_pending_ops`. A user who archived a main row on their
+   branch wouldn't see it in the Archived tab, and a canonical
+   archived row the branch had unarchived would still appear.
+
+v1.8 closes all three gaps:
+
+- `workspace_search_service.searchWorkspace` now takes
+  `opts.branchId`. Every per-type query applies the standard
+  `branch_id IS NULL OR branch_id = <uuid>` predicate (boxes
+  excepted — `boxes` is not branch-partitioned), and the hit loop
+  filters through `getHiddenByPendingOps` so soft-trashed rows on
+  the branch disappear. `searchWorkspaceAction` threads
+  `ctx.activeBranchId ?? null` into the call.
+
+- Folder detail page now calls the existing repository readers —
+  `listNotesByBox`, `listFilesByBox`, `listSkillsByBox`,
+  `listAgentsByBox`, `listFoldersByParent` — each scoped by
+  `folder_id` plus `branchId`. The breadcrumb loop passes the same
+  branchId to `getFolderById` so `folder_branch_overrides` renames
+  render on the trail. `listSkillsByBox` and `listAgentsByBox`
+  gained the branchId parameter to match the note/file readers,
+  including the pending-op trash overlay.
+
+- Archived / trashed readers gained a `branchId?: string | null`
+  option with a symmetric overlay:
+  * Canonical rows with `status = archived|trashed` and
+    `branch_id IS NULL` are the base set (plus branch-local rows
+    with the same status).
+  * For archived, rows that have a pending `unarchive` op on this
+    branch are dropped (the branch restored them).
+  * Rows that have a pending `archive` (for the archived tab) or
+    `trash` (for the trashed tab) op on this branch are fused in
+    from the main-active set so branch-local intents surface in
+    the right tab even though canonical status hasn't moved.
+
+  The helper lives as `listLifecycleNotesByBox` /
+  `listLifecycleFoldersByBox` inside each repository — one shared
+  codepath per table, parameterised by the status + op type.
+
+### Tests
+
+`src/tests/unit/branch_archived_trashed_readers.test.ts` covers
+three archived/trashed invariants for notes and folders: canonical
+archived hidden by a branch unarchive op, main-active row surfaced
+via a branch trash op, and a canonical archived row passing
+through untouched when the branch has no conflicting op.
+
+Baseline 358 → 364 tests after the batch.
+
 ## Related docs
 
 - [branch_aware_writes_v1.md](branch_aware_writes_v1.md)
 - [branch_local_sort_order_and_reorder_isolation_v1.md](branch_local_sort_order_and_reorder_isolation_v1.md)
 - [package_branch_state_for_skills_and_agents_v1.md](package_branch_state_for_skills_and_agents_v1.md)
 - [rollback_schema_and_restore_engine_v1.md](rollback_schema_and_restore_engine_v1.md)
+- [branch_rls_hardening_v1.md](branch_rls_hardening_v1.md) — RLS
+  branch-access clause and zero-UUID CHECKs covering the `branch_id`
+  columns introduced here.

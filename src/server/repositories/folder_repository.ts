@@ -238,34 +238,109 @@ export async function updateFolder(
   return data as Folder;
 }
 
-/** List trashed folders for a box (for the trash recovery surface). */
+/**
+ * List trashed folders for a box (for the trash recovery surface).
+ *
+ * Branch-aware overlay (when `branchId` is set): canonical trashed
+ * rows, branch-local trashed rows, plus main-active rows carrying a
+ * pending `trash` op on this branch. Mirrors note_repository.
+ */
 export async function listTrashedFoldersByBox(
   supabase: SupabaseClient,
-  box_id: string
+  box_id: string,
+  { branchId = null }: { branchId?: string | null } = {}
 ): Promise<Folder[]> {
-  const { data, error } = await supabase
-    .from("folders")
-    .select("*")
-    .eq("box_id", box_id)
-    .eq("status", FOLDER_STATUS.TRASHED)
-    .order("path_cache", { ascending: true });
-
-  if (error || !data) return [];
-  return data as Folder[];
+  return listLifecycleFoldersByBox(supabase, box_id, {
+    canonicalStatus: FOLDER_STATUS.TRASHED,
+    pendingOpType: "trash",
+    branchId,
+  });
 }
 
-/** List archived folders for a box (for the archive browsing surface). */
+/**
+ * List archived folders for a box (for the archive browsing surface).
+ *
+ * Branch-aware overlay: canonical archived rows minus those the branch
+ * has a pending `unarchive` op on, plus main-active rows carrying a
+ * pending `archive` op on this branch. Mirrors note_repository.
+ */
 export async function listArchivedFoldersByBox(
   supabase: SupabaseClient,
-  box_id: string
+  box_id: string,
+  { branchId = null }: { branchId?: string | null } = {}
 ): Promise<Folder[]> {
-  const { data, error } = await supabase
+  return listLifecycleFoldersByBox(supabase, box_id, {
+    canonicalStatus: FOLDER_STATUS.ARCHIVED,
+    pendingOpType: "archive",
+    branchId,
+  });
+}
+
+async function listLifecycleFoldersByBox(
+  supabase: SupabaseClient,
+  box_id: string,
+  {
+    canonicalStatus,
+    pendingOpType,
+    branchId,
+  }: {
+    canonicalStatus: typeof FOLDER_STATUS.ARCHIVED | typeof FOLDER_STATUS.TRASHED;
+    pendingOpType: "archive" | "trash";
+    branchId: string | null;
+  }
+): Promise<Folder[]> {
+  let canonicalQuery = supabase
     .from("folders")
     .select("*")
     .eq("box_id", box_id)
-    .eq("status", FOLDER_STATUS.ARCHIVED)
-    .order("path_cache", { ascending: true });
+    .eq("status", canonicalStatus);
 
-  if (error || !data) return [];
-  return data as Folder[];
+  if (branchId) {
+    canonicalQuery = canonicalQuery.or(
+      `branch_id.is.null,branch_id.eq.${branchId}`
+    );
+  } else {
+    canonicalQuery = canonicalQuery.is("branch_id", null);
+  }
+
+  const { data: canonicalData, error } = await canonicalQuery.order(
+    "path_cache",
+    { ascending: true }
+  );
+  if (error || !canonicalData) return [];
+  let rows = canonicalData as Folder[];
+
+  if (!branchId) return rows;
+
+  const { listPendingOps } = await import(
+    "@/server/services/pending_op_service"
+  );
+  const ops = await listPendingOps(supabase, branchId);
+  const unarchiveIds = new Set(
+    ops
+      .filter((o) => o.object_type === "folder" && o.op_type === "unarchive")
+      .map((o) => o.object_id)
+  );
+  const matchingIds = ops
+    .filter((o) => o.object_type === "folder" && o.op_type === pendingOpType)
+    .map((o) => o.object_id);
+
+  if (canonicalStatus === FOLDER_STATUS.ARCHIVED) {
+    rows = rows.filter((r) => !unarchiveIds.has(r.id));
+  }
+
+  if (matchingIds.length > 0) {
+    const { data: overlayData } = await supabase
+      .from("folders")
+      .select("*")
+      .eq("box_id", box_id)
+      .is("branch_id", null)
+      .in("id", matchingIds);
+    const existingIds = new Set(rows.map((r) => r.id));
+    for (const f of (overlayData ?? []) as Folder[]) {
+      if (!existingIds.has(f.id)) rows.push(f);
+    }
+  }
+
+  return rows;
 }

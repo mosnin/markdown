@@ -326,10 +326,10 @@ export default async function BoxPage({
   ] = await Promise.all([
     listFoldersByBox(supabase, box.id, { branchId: ctx.activeBranchId }),
     listNotesByBox(supabase, box.id, { branchId: ctx.activeBranchId }),
-    listArchivedNotesByBox(supabase, box.id),
-    listTrashedNotesByBox(supabase, box.id),
-    listArchivedFoldersByBox(supabase, box.id),
-    listTrashedFoldersByBox(supabase, box.id),
+    listArchivedNotesByBox(supabase, box.id, { branchId: ctx.activeBranchId }),
+    listTrashedNotesByBox(supabase, box.id, { branchId: ctx.activeBranchId }),
+    listArchivedFoldersByBox(supabase, box.id, { branchId: ctx.activeBranchId }),
+    listTrashedFoldersByBox(supabase, box.id, { branchId: ctx.activeBranchId }),
   ]);
 
   const guideNote = box.guide_note_id

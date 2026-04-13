@@ -40,6 +40,11 @@ export async function getSkillById(
  * List skills in a box with optional folder scoping.
  * Excludes trashed skills. Pass includeArchived = true to include archived skills.
  * Pass folder_id = null to scope to the box root; omit it to return all folders.
+ *
+ * Branch-aware: when `branchId` is supplied, the query returns main
+ * rows (branch_id IS NULL) plus rows whose branch_id matches, and the
+ * `branch_pending_ops` trash overlay is applied so skills soft-trashed
+ * on the branch disappear from the live listing. Mirrors listNotesByBox.
  */
 export async function listSkillsByBox(
   supabase: SupabaseClient,
@@ -47,9 +52,11 @@ export async function listSkillsByBox(
   {
     folder_id,
     includeArchived = false,
+    branchId = null,
   }: {
     folder_id?: string | null;
     includeArchived?: boolean;
+    branchId?: string | null;
   } = {}
 ): Promise<Skill[]> {
   let query = supabase
@@ -57,6 +64,12 @@ export async function listSkillsByBox(
     .select("*")
     .eq("box_id", box_id)
     .neq("status", OBJECT_STATUS.TRASHED);
+
+  if (branchId) {
+    query = query.or(`branch_id.is.null,branch_id.eq.${branchId}`);
+  } else {
+    query = query.is("branch_id", null);
+  }
 
   if (!includeArchived) {
     query = query.neq("status", OBJECT_STATUS.ARCHIVED);
@@ -74,6 +87,15 @@ export async function listSkillsByBox(
   const { data, error } = await query.order("name", { ascending: true });
 
   if (error || !data) return [];
+
+  if (branchId && (data as Skill[]).length > 0) {
+    const { getHiddenByPendingOps } = await import(
+      "@/server/services/pending_op_service"
+    );
+    const hidden = await getHiddenByPendingOps(supabase, branchId);
+    return (data as Skill[]).filter((s) => !hidden.has(`skill:${s.id}`));
+  }
+
   return data as Skill[];
 }
 

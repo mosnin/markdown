@@ -25,7 +25,12 @@ export async function searchWorkspaceAction(
   try {
     const ctx = await requireAuthenticatedUser();
     const supabase = await createClient();
-    const hits = await searchWorkspace(supabase, ctx.workspace.id, query);
+    // Thread the active branch through so soft-trashed rows on the
+    // branch disappear from search and branch-created rows surface to
+    // their author. See docs/branch_local_structural_creation_v1.md.
+    const hits = await searchWorkspace(supabase, ctx.workspace.id, query, {
+      branchId: ctx.activeBranchId ?? null,
+    });
     return { ok: true, data: hits };
   } catch (err) {
     return {

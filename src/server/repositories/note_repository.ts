@@ -149,36 +149,141 @@ export async function updateNote(
   return data as Note;
 }
 
-/** List trashed notes for a box (for the trash recovery surface). */
+/**
+ * List trashed notes for a box (for the trash recovery surface).
+ *
+ * Branch-aware overlay (when `branchId` is supplied):
+ *   - Canonical trashed notes (status=trashed, branch_id IS NULL) are
+ *     included by default.
+ *   - Main-active notes that carry a pending `trash` op for this branch
+ *     are also surfaced — the user's branch view treats them as trashed
+ *     even though canonical status is still `active`.
+ *   - Branch-local trashed rows (branch_id = <this branch>) are included.
+ * Pending ops on other branches never leak into this branch's view.
+ */
 export async function listTrashedNotesByBox(
   supabase: SupabaseClient,
-  box_id: string
+  box_id: string,
+  { branchId = null }: { branchId?: string | null } = {}
 ): Promise<Note[]> {
-  const { data, error } = await supabase
-    .from("notes")
-    .select("*")
-    .eq("box_id", box_id)
-    .eq("status", NOTE_STATUS.TRASHED)
-    .order("updated_at", { ascending: false });
-
-  if (error || !data) return [];
-  return data as Note[];
+  return listLifecycleNotesByBox(supabase, box_id, {
+    canonicalStatus: NOTE_STATUS.TRASHED,
+    pendingOpType: "trash",
+    branchId,
+  });
 }
 
-/** List archived notes for a box (for the archive browsing surface). */
+/**
+ * List archived notes for a box (for the archive browsing surface).
+ *
+ * Branch-aware overlay mirrors `listTrashedNotesByBox`: include
+ * canonically archived notes unless the branch has a pending
+ * `unarchive` op for them; also include main-active notes that have a
+ * pending `archive` op on this branch.
+ */
 export async function listArchivedNotesByBox(
   supabase: SupabaseClient,
-  box_id: string
+  box_id: string,
+  { branchId = null }: { branchId?: string | null } = {}
 ): Promise<Note[]> {
-  const { data, error } = await supabase
+  return listLifecycleNotesByBox(supabase, box_id, {
+    canonicalStatus: NOTE_STATUS.ARCHIVED,
+    pendingOpType: "archive",
+    branchId,
+  });
+}
+
+/**
+ * Shared loader for archived/trashed notes with branch overlay.
+ *
+ * Semantics (when `branchId` is set):
+ *   - Start with the canonical set (status = canonicalStatus,
+ *     branch_id IS NULL) and branch-local rows (branch_id = branchId,
+ *     status = canonicalStatus).
+ *   - For canonical rows, drop those whose branch has a pending op of
+ *     the reverse kind:
+ *       * trash canonical + `unarchive` on branch → still shown
+ *         (archive/unarchive doesn't affect trash visibility).
+ *       * archive canonical + `unarchive` on branch → hidden (branch
+ *         restored it).
+ *     In v1 we only treat `unarchive` as reversing `archive`.
+ *   - Fold in main-active rows that have a pending op for this branch
+ *     matching `pendingOpType` (archive → archived tab, trash → trash
+ *     tab). These rows keep their canonical status=active but render
+ *     as archived/trashed under the branch's view.
+ */
+async function listLifecycleNotesByBox(
+  supabase: SupabaseClient,
+  box_id: string,
+  {
+    canonicalStatus,
+    pendingOpType,
+    branchId,
+  }: {
+    canonicalStatus: typeof NOTE_STATUS.ARCHIVED | typeof NOTE_STATUS.TRASHED;
+    pendingOpType: "archive" | "trash";
+    branchId: string | null;
+  }
+): Promise<Note[]> {
+  // Canonical + branch-local rows with this status.
+  let canonicalQuery = supabase
     .from("notes")
     .select("*")
     .eq("box_id", box_id)
-    .eq("status", NOTE_STATUS.ARCHIVED)
-    .order("updated_at", { ascending: false });
+    .eq("status", canonicalStatus);
 
-  if (error || !data) return [];
-  return data as Note[];
+  if (branchId) {
+    canonicalQuery = canonicalQuery.or(
+      `branch_id.is.null,branch_id.eq.${branchId}`
+    );
+  } else {
+    canonicalQuery = canonicalQuery.is("branch_id", null);
+  }
+
+  const { data: canonicalData, error } = await canonicalQuery.order(
+    "updated_at",
+    { ascending: false }
+  );
+  if (error || !canonicalData) return [];
+  let rows = canonicalData as Note[];
+
+  if (!branchId) return rows;
+
+  const { listPendingOps } = await import(
+    "@/server/services/pending_op_service"
+  );
+  const ops = await listPendingOps(supabase, branchId);
+  const unarchiveIds = new Set(
+    ops
+      .filter((o) => o.object_type === "note" && o.op_type === "unarchive")
+      .map((o) => o.object_id)
+  );
+  const matchingIds = ops
+    .filter((o) => o.object_type === "note" && o.op_type === pendingOpType)
+    .map((o) => o.object_id);
+
+  // For archived listing: hide canonical rows the branch has unarchived.
+  if (canonicalStatus === NOTE_STATUS.ARCHIVED) {
+    rows = rows.filter((r) => !unarchiveIds.has(r.id));
+  }
+
+  // Pull main-active rows that carry a pending `pendingOpType` op on
+  // this branch and merge them in. They keep canonical status=active
+  // but render in the archived/trashed tab for the branch view.
+  if (matchingIds.length > 0) {
+    const { data: overlayData } = await supabase
+      .from("notes")
+      .select("*")
+      .eq("box_id", box_id)
+      .is("branch_id", null)
+      .in("id", matchingIds);
+    const existingIds = new Set(rows.map((r) => r.id));
+    for (const n of (overlayData ?? []) as Note[]) {
+      if (!existingIds.has(n.id)) rows.push(n);
+    }
+  }
+
+  return rows;
 }
 
 /**

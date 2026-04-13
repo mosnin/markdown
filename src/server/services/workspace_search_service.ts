@@ -74,65 +74,100 @@ function titleRank(title: string, q: string): number {
  * Run a workspace-wide search and return ranked, deduplicated hits.
  * Limit is the soft cap per object type; the caller may post-filter to
  * trim the returned list further for display.
+ *
+ * Branch awareness:
+ *   - `branchId = null` → search only main rows (branch_id IS NULL).
+ *   - `branchId = <uuid>` → main + rows belonging to the branch; we
+ *     additionally drop rows hidden by a pending `trash` op on that
+ *     branch so soft-deleted content disappears from search. Other
+ *     branches' draft rows never leak in — see
+ *     `docs/branch_local_structural_creation_v1.md`.
  */
 export async function searchWorkspace(
   supabase: SupabaseClient,
   workspaceId: string,
   rawQuery: string,
-  opts: { boxMap?: Map<string, string>; limitPerType?: number } = {}
+  opts: {
+    boxMap?: Map<string, string>;
+    limitPerType?: number;
+    branchId?: string | null;
+  } = {}
 ): Promise<WorkspaceSearchHit[]> {
   const q = rawQuery.trim();
   if (!q) return [];
 
   const perType = opts.limitPerType ?? MAX_PER_TYPE;
   const like = `%${q.replace(/[%_]/g, "\\$&")}%`;
+  const branchId = opts.branchId ?? null;
 
   const boxMap = opts.boxMap
     ?? (await loadBoxMap(supabase, workspaceId));
 
+  // Branch filter helper: attach the branch_id predicate uniformly to
+  // any ilike/or'd query builder. Boxes are workspace-scoped and not
+  // branch-partitioned — they never carry branch_id.
+  const applyBranch = <Q extends { or: (e: string) => Q; is: (c: string, v: unknown) => Q }>(
+    query: Q
+  ): Q => {
+    if (branchId) {
+      return query.or(`branch_id.is.null,branch_id.eq.${branchId}`);
+    }
+    return query.is("branch_id", null);
+  };
+
   const [notes, files, skills, agents, folders, boxes] = await Promise.all([
     // Notes: name + body
-    supabase
-      .from("notes")
-      .select("id, title, summary, markdown_content, box_id, path_cache, status, updated_at")
-      .eq("workspace_id", workspaceId)
-      .neq("status", "trashed")
+    applyBranch(
+      supabase
+        .from("notes")
+        .select("id, title, summary, markdown_content, box_id, path_cache, status, updated_at, branch_id")
+        .eq("workspace_id", workspaceId)
+        .neq("status", "trashed")
+    )
       .or(`title.ilike.${like},markdown_content.ilike.${like}`)
       .limit(perType)
       .then((r) => r.data ?? []),
 
-    supabase
-      .from("files")
-      .select("id, name, box_id, path_cache, source_content, description, status, updated_at")
-      .eq("workspace_id", workspaceId)
-      .neq("status", "trashed")
+    applyBranch(
+      supabase
+        .from("files")
+        .select("id, name, box_id, path_cache, source_content, description, status, updated_at, branch_id")
+        .eq("workspace_id", workspaceId)
+        .neq("status", "trashed")
+    )
       .or(`name.ilike.${like},source_content.ilike.${like}`)
       .limit(perType)
       .then((r) => r.data ?? []),
 
-    supabase
-      .from("skills")
-      .select("id, name, box_id, path_cache, source_content, description, status, updated_at, is_reusable")
-      .eq("workspace_id", workspaceId)
-      .neq("status", "trashed")
+    applyBranch(
+      supabase
+        .from("skills")
+        .select("id, name, box_id, path_cache, source_content, description, status, updated_at, is_reusable, branch_id")
+        .eq("workspace_id", workspaceId)
+        .neq("status", "trashed")
+    )
       .or(`name.ilike.${like},source_content.ilike.${like}`)
       .limit(perType)
       .then((r) => r.data ?? []),
 
-    supabase
-      .from("agents")
-      .select("id, name, box_id, path_cache, source_content, description, system_prompt, status, updated_at, is_reusable")
-      .eq("workspace_id", workspaceId)
-      .neq("status", "trashed")
+    applyBranch(
+      supabase
+        .from("agents")
+        .select("id, name, box_id, path_cache, source_content, description, system_prompt, status, updated_at, is_reusable, branch_id")
+        .eq("workspace_id", workspaceId)
+        .neq("status", "trashed")
+    )
       .or(`name.ilike.${like},source_content.ilike.${like},system_prompt.ilike.${like}`)
       .limit(perType)
       .then((r) => r.data ?? []),
 
-    supabase
-      .from("folders")
-      .select("id, name, box_id, path_cache, description, status, updated_at")
-      .eq("workspace_id", workspaceId)
-      .neq("status", "trashed")
+    applyBranch(
+      supabase
+        .from("folders")
+        .select("id, name, box_id, path_cache, description, status, updated_at, branch_id")
+        .eq("workspace_id", workspaceId)
+        .neq("status", "trashed")
+    )
       .or(`name.ilike.${like},description.ilike.${like}`)
       .limit(perType)
       .then((r) => r.data ?? []),
@@ -147,9 +182,21 @@ export async function searchWorkspace(
       .then((r) => r.data ?? []),
   ]);
 
+  // Pending-op overlay: when a branch is active, drop rows the branch
+  // has soft-trashed. Matches the reader semantic in
+  // note_repository.listNotesByBox and file_repository.listFilesByBox.
+  let hidden: Set<string> | null = null;
+  if (branchId) {
+    const { getHiddenByPendingOps } = await import("./pending_op_service");
+    hidden = await getHiddenByPendingOps(supabase, branchId);
+  }
+  const notVisible = (type: string, id: string) =>
+    hidden !== null && hidden.has(`${type}:${id}`);
+
   const hits: WorkspaceSearchHit[] = [];
 
   for (const n of notes) {
+    if (notVisible("note", n.id)) continue;
     const rank = titleRank(n.title, q)
       || (n.markdown_content?.toLowerCase().includes(q.toLowerCase()) ? 100 : 0);
     hits.push({
@@ -167,6 +214,7 @@ export async function searchWorkspace(
     });
   }
   for (const f of files) {
+    if (notVisible("file", f.id)) continue;
     const rank = titleRank(f.name, q)
       || (f.source_content?.toLowerCase().includes(q.toLowerCase()) ? 90 : 0);
     hits.push({
@@ -184,6 +232,7 @@ export async function searchWorkspace(
     });
   }
   for (const s of skills) {
+    if (notVisible("skill", s.id)) continue;
     const rank = titleRank(s.name, q)
       || (s.source_content?.toLowerCase().includes(q.toLowerCase()) ? 80 : 0);
     hits.push({
@@ -201,6 +250,7 @@ export async function searchWorkspace(
     });
   }
   for (const a of agents) {
+    if (notVisible("agent", a.id)) continue;
     const rank = titleRank(a.name, q)
       || (a.source_content?.toLowerCase().includes(q.toLowerCase()) ? 80 : 0)
       || (a.system_prompt?.toLowerCase().includes(q.toLowerCase()) ? 60 : 0);
@@ -219,6 +269,7 @@ export async function searchWorkspace(
     });
   }
   for (const fl of folders) {
+    if (notVisible("folder", fl.id)) continue;
     const rank = titleRank(fl.name, q)
       || (fl.description?.toLowerCase().includes(q.toLowerCase()) ? 70 : 0);
     hits.push({

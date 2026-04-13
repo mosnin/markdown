@@ -12,8 +12,16 @@ import {
 } from "lucide-react";
 import { requireAuthenticatedUser } from "@/server/auth/require_authenticated_user";
 import { createClient } from "@/lib/supabase/server";
-import { getFolderById, listFoldersByBox } from "@/server/repositories/folder_repository";
+import {
+  getFolderById,
+  listFoldersByBox,
+  listFoldersByParent,
+} from "@/server/repositories/folder_repository";
 import { getBoxById } from "@/server/repositories/box_repository";
+import { listNotesByBox } from "@/server/repositories/note_repository";
+import { listFilesByBox } from "@/server/repositories/file_repository";
+import { listSkillsByBox } from "@/server/repositories/skill_repository";
+import { listAgentsByBox } from "@/server/repositories/agent_repository";
 import { CreateFolderDialog } from "@/components/product/create_folder_dialog";
 import { FileCreateDialog } from "@/components/product/file_create_dialog";
 import { SkillCreateDialog } from "@/components/product/skill_create_dialog";
@@ -36,7 +44,8 @@ export default async function FolderPage({
   const ctx = await requireAuthenticatedUser();
   const supabase = await createClient();
 
-  const folder = await getFolderById(supabase, folder_id);
+  const branchId = ctx.activeBranchId ?? null;
+  const folder = await getFolderById(supabase, folder_id, { branchId });
   if (!folder) notFound();
 
   // Verify ownership: via box for box-level folders, via workspace_id for workspace-level
@@ -48,60 +57,47 @@ export default async function FolderPage({
     notFound();
   }
 
-  // Fetch all child content — query by parent_folder_id (works for both box-level and workspace-level)
+  // Fetch all child content via the repository readers so branch
+  // filters + pending-op overlays + folder_branch_overrides all apply
+  // uniformly. Note/File/Skill/Agent readers accept folder_id directly;
+  // listFoldersByParent replaces the inline child-folder query and
+  // carries the branch filter the same way.
   const [childFolders, childNotes, childFiles, childSkills, childAgents] = await Promise.all([
-    supabase
-      .from("folders")
-      .select("id, name, status, accepts_generated_notes")
-      .eq("parent_folder_id", folder.id)
-      .neq("status", "trashed")
-      .order("name", { ascending: true })
-      .then((r) => r.data ?? []),
+    listFoldersByParent(supabase, folder.id, { branchId }),
     folder.box_id
-      ? supabase
-          .from("notes")
-          .select("id, title, kind, updated_at")
-          .eq("box_id", folder.box_id)
-          .eq("folder_id", folder.id)
-          .neq("status", "trashed")
-          .order("title", { ascending: true })
-          .then((r) => r.data ?? [])
-      : Promise.resolve([]),
-    supabase
-      .from("files")
-      .select("id, name, file_extension, updated_at")
-      .eq("folder_id", folder.id)
-      .neq("status", "trashed")
-      .order("name", { ascending: true })
-      .then((r) => r.data ?? []),
-    folder.box_id
-      ? supabase
-          .from("skills")
-          .select("id, name, is_reusable, updated_at")
-          .eq("box_id", folder.box_id)
-          .eq("folder_id", folder.id)
-          .neq("status", "trashed")
-          .order("name", { ascending: true })
-          .then((r) => r.data ?? [])
+      ? listNotesByBox(supabase, folder.box_id, {
+          folder_id: folder.id,
+          branchId,
+        })
       : Promise.resolve([]),
     folder.box_id
-      ? supabase
-          .from("agents")
-          .select("id, name, is_reusable, updated_at")
-          .eq("box_id", folder.box_id)
-          .eq("folder_id", folder.id)
-          .neq("status", "trashed")
-          .order("name", { ascending: true })
-          .then((r) => r.data ?? [])
+      ? listFilesByBox(supabase, folder.box_id, {
+          folder_id: folder.id,
+          branchId,
+        })
+      : Promise.resolve([]),
+    folder.box_id
+      ? listSkillsByBox(supabase, folder.box_id, {
+          folder_id: folder.id,
+          branchId,
+        })
+      : Promise.resolve([]),
+    folder.box_id
+      ? listAgentsByBox(supabase, folder.box_id, {
+          folder_id: folder.id,
+          branchId,
+        })
       : Promise.resolve([]),
   ]);
 
-  // Build breadcrumb path
+  // Build breadcrumb path — `getFolderById` with a branchId applies
+  // the folder_branch_overrides overlay so renamed folders on the
+  // active branch appear with their branch-local name here.
   const breadcrumbs: Array<{ id: string; name: string }> = [];
   if (folder.parent_folder_id) {
     let parentId: string | null = folder.parent_folder_id;
     while (parentId) {
-      const parent = await getFolderById(supabase, parentId);
+      const parent = await getFolderById(supabase, parentId, { branchId });
       if (!parent) break;
       breadcrumbs.unshift({ id: parent.id, name: parent.name });
       parentId = parent.parent_folder_id;
