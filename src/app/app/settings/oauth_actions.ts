@@ -17,6 +17,8 @@ export interface ConnectedAppRow {
   client_description: string | null;
   is_first_party: boolean;
   workspace_id: string;
+  workspace_name: string;
+  status: "active" | "revoked";
   scopes: string[];
   granted_at: string;
   last_used_at: string | null;
@@ -39,9 +41,8 @@ export async function listConnectedAppsAction(): Promise<ActionResult<ConnectedA
 
     const { data: consents } = await supabase
       .from("oauth_consents")
-      .select("client_id, workspace_id, scopes, created_at")
-      .eq("user_id", ctx.user.id)
-      .is("revoked_at", null);
+      .select("client_id, workspace_id, scopes, created_at, revoked_at")
+      .eq("user_id", ctx.user.id);
     if (!consents || consents.length === 0) return { ok: true, data: [] };
 
     const clientIds = Array.from(new Set(consents.map((c) => c.client_id)));
@@ -51,34 +52,55 @@ export async function listConnectedAppsAction(): Promise<ActionResult<ConnectedA
       .in("client_id", clientIds);
     const clientMap = new Map((clients ?? []).map((c) => [c.client_id, c]));
 
+    const workspaceIds = Array.from(new Set(consents.map((c) => c.workspace_id)));
+    const { data: workspaces } = await supabase
+      .from("workspaces")
+      .select("id, name")
+      .in("id", workspaceIds);
+    const workspaceMap = new Map((workspaces ?? []).map((w) => [w.id, w.name]));
+
+    const tokenKey = (clientId: string, workspaceId: string) =>
+      `${clientId}::${workspaceId}`;
+    const tokenStats = new Map<string, { active: number; lastUsedAt: string | null }>();
+
+    const { data: tokenRows } = await supabase
+      .from("oauth_access_tokens")
+      .select("client_id, workspace_id, last_used_at")
+      .eq("user_id", ctx.user.id)
+      .in("client_id", clientIds)
+      .in("workspace_id", workspaceIds)
+      .is("revoked_at", null);
+    for (const t of tokenRows ?? []) {
+      const key = tokenKey(t.client_id, t.workspace_id);
+      const prev = tokenStats.get(key) ?? { active: 0, lastUsedAt: null };
+      const lastUsedAt =
+        t.last_used_at && (!prev.lastUsedAt || t.last_used_at > prev.lastUsedAt)
+          ? t.last_used_at
+          : prev.lastUsedAt;
+      tokenStats.set(key, {
+        active: prev.active + 1,
+        lastUsedAt,
+      });
+    }
+
     const rows: ConnectedAppRow[] = [];
     for (const c of consents) {
       const client = clientMap.get(c.client_id);
       if (!client) continue;
-
-      const { data: tokens } = await supabase
-        .from("oauth_access_tokens")
-        .select("last_used_at")
-        .eq("user_id", ctx.user.id)
-        .eq("client_id", c.client_id)
-        .eq("workspace_id", c.workspace_id)
-        .is("revoked_at", null);
-      const lastUsed = (tokens ?? [])
-        .map((t) => t.last_used_at)
-        .filter((x): x is string => !!x)
-        .sort()
-        .pop() ?? null;
+      const stats = tokenStats.get(tokenKey(c.client_id, c.workspace_id));
 
       rows.push({
         client_id: c.client_id,
-        client_name: client.name,
-        client_description: client.description,
-        is_first_party: client.is_first_party,
+        client_name: client.name ?? "Unknown app",
+        client_description: client.description ?? null,
+        is_first_party: Boolean(client.is_first_party),
         workspace_id: c.workspace_id,
-        scopes: c.scopes,
+        workspace_name: workspaceMap.get(c.workspace_id) ?? c.workspace_id,
+        status: c.revoked_at ? "revoked" : "active",
+        scopes: Array.isArray(c.scopes) ? c.scopes : [],
         granted_at: c.created_at,
-        last_used_at: lastUsed,
-        active_tokens: tokens?.length ?? 0,
+        last_used_at: stats?.lastUsedAt ?? null,
+        active_tokens: stats?.active ?? 0,
       });
     }
 

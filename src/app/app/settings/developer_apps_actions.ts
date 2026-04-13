@@ -23,6 +23,8 @@ export interface DeveloperAppRow {
   allowed_scopes: string[];
   created_at: string;
   created_by: string | null;
+  last_used_at: string | null;
+  active_tokens: number;
 }
 
 export interface NewlyRegisteredApp {
@@ -40,8 +42,6 @@ export async function listDeveloperAppsAction(): Promise<ActionResult<DeveloperA
   try {
     const ctx = await requireAuthenticatedUser();
     const admin = createAdminClient();
-    // Include: rows the user created + first-party seeds (so users can
-    // see what's available but the UI disables actions on first-party).
     const { data, error } = await admin
       .from("oauth_clients")
       .select("id, client_id, name, description, is_confidential, is_first_party, status, redirect_uris, allowed_scopes, created_at, created_by")
@@ -49,7 +49,46 @@ export async function listDeveloperAppsAction(): Promise<ActionResult<DeveloperA
       .neq("status", "deleted")
       .order("created_at", { ascending: false });
     if (error) return { ok: false, error: error.message };
-    return { ok: true, data: (data ?? []) as DeveloperAppRow[] };
+
+    const rows = ((data ?? []) as Omit<DeveloperAppRow, "last_used_at" | "active_tokens">[]);
+    const clientIds = rows.map((r) => r.client_id);
+    const tokenStats = new Map<string, { active: number; lastUsedAt: string | null }>();
+    if (clientIds.length > 0) {
+      const { data: tokenRows } = await admin
+        .from("oauth_access_tokens")
+        .select("client_id, last_used_at")
+        .in("client_id", clientIds)
+        .is("revoked_at", null);
+      for (const t of tokenRows ?? []) {
+        const prev = tokenStats.get(t.client_id) ?? { active: 0, lastUsedAt: null };
+        const lastUsedAt =
+          t.last_used_at && (!prev.lastUsedAt || t.last_used_at > prev.lastUsedAt)
+            ? t.last_used_at
+            : prev.lastUsedAt;
+        tokenStats.set(t.client_id, {
+          active: prev.active + 1,
+          lastUsedAt,
+        });
+      }
+    }
+
+    const enriched: DeveloperAppRow[] = [];
+    for (const row of rows) {
+      const stats = tokenStats.get(row.client_id);
+      enriched.push({
+        ...row,
+        name: row.name ?? "Unnamed app",
+        description: row.description ?? null,
+        redirect_uris: Array.isArray(row.redirect_uris) ? row.redirect_uris : [],
+        allowed_scopes: Array.isArray(row.allowed_scopes) ? row.allowed_scopes : [],
+        is_confidential: Boolean(row.is_confidential),
+        is_first_party: Boolean(row.is_first_party),
+        last_used_at: stats?.lastUsedAt ?? null,
+        active_tokens: stats?.active ?? 0,
+      });
+    }
+
+    return { ok: true, data: enriched };
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : "Failed to list apps" };
   }
@@ -117,7 +156,7 @@ export async function registerDeveloperAppAction(input: {
     return {
       ok: true,
       data: {
-        client: registered.client as DeveloperAppRow,
+        client: { ...registered.client, last_used_at: null, active_tokens: 0 } as DeveloperAppRow,
         client_secret: registered.client_secret,
       },
     };

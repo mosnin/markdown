@@ -3,6 +3,7 @@ import { getRequestContext } from "@/server/auth/get_request_context";
 import { AuthPanel } from "./sign_in_form";
 import Link from "next/link";
 import { Check } from "lucide-react";
+import Image from "next/image";
 
 export const metadata = {
   title: "Sign in — Poggle",
@@ -42,10 +43,21 @@ export default async function SignInPage({
 
         {/* Logo */}
         <Link href="/" className="relative flex items-center gap-2.5">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-violet-600">
-            <div className="h-3 w-3 rounded-sm bg-white" />
-          </div>
-          <span className="text-sm font-semibold text-white">Poggle</span>
+          <Image
+            src="/logo-symbol-light.png"
+            alt="Poggle"
+            width={28}
+            height={28}
+            className="rounded"
+            priority
+          />
+          <Image
+            src="/logo-text-white.png"
+            alt="Poggle"
+            width={84}
+            height={24}
+            priority
+          />
         </Link>
 
         {/* Center content */}
@@ -92,10 +104,38 @@ export default async function SignInPage({
           {/* Mobile logo */}
           <div className="flex justify-center lg:hidden">
             <Link href="/" className="flex items-center gap-2.5">
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-violet-600">
-                <div className="h-3 w-3 rounded-sm bg-background" />
-              </div>
-              <span className="text-sm font-semibold text-foreground">Poggle</span>
+              <Image
+                src="/logo-symbol-dark.png"
+                alt="Poggle"
+                width={28}
+                height={28}
+                className="rounded dark:hidden"
+                priority
+              />
+              <Image
+                src="/logo-symbol-light.png"
+                alt="Poggle"
+                width={28}
+                height={28}
+                className="hidden rounded dark:block"
+                priority
+              />
+              <Image
+                src="/logo-text-black.png"
+                alt="Poggle"
+                width={84}
+                height={24}
+                className="dark:hidden"
+                priority
+              />
+              <Image
+                src="/logo-text-white.png"
+                alt="Poggle"
+                width={84}
+                height={24}
+                className="hidden dark:block"
+                priority
+              />
             </Link>
           </div>
 

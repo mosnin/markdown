@@ -290,3 +290,7 @@ writes the overlay back; discard drops the overlay. See
 - `docs/rollback_schema_and_restore_engine_v1.md` — engine surface
 - `docs/version_history_v1.md` — immutable version invariant
 - `docs/branch_local_sort_order_and_reorder_isolation_v1.md` — placement overlay
+
+## OAuth connector interaction (2026-04-13)
+
+Branch-aware editing exists for human/editor branch flows. OAuth connector writes do not target branches in V1; OAuth write payloads that attempt branch targeting are rejected explicitly and remain main-only.
