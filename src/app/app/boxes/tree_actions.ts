@@ -4,10 +4,12 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getRequestContext } from "@/server/auth/get_request_context";
 import { renameFolder } from "@/server/services/folder_service";
+import { upsertFolderOverride } from "@/server/services/folder_branch_service";
 import { createNote } from "@/server/services/note_service";
 import { createFile } from "@/server/services/file_service";
 import { createSkill } from "@/server/services/skill_service";
 import { createAgent } from "@/server/services/agent_service";
+import { slugify } from "@/lib/slugify";
 
 export type ActionResult<T = void> =
   | { ok: true; data: T }
@@ -19,7 +21,12 @@ async function requireContext() {
   const ctx = await getRequestContext();
   if (!ctx.isAuthenticated || !ctx.user || !ctx.workspace) throw new Error("Unauthenticated");
   const supabase = await createClient();
-  return { supabase, userId: ctx.user.id, workspaceId: ctx.workspace.id };
+  return {
+    supabase,
+    userId: ctx.user.id,
+    workspaceId: ctx.workspace.id,
+    activeBranchId: ctx.activeBranchId,
+  };
 }
 
 // ─── Note actions ─────────────────────────────────────────────────────────────
@@ -102,12 +109,14 @@ export async function duplicateNoteAction(noteId: string): Promise<ActionResult<
 
 export async function renameFolderAction(folderId: string, name: string): Promise<ActionResult> {
   try {
-    const { supabase, userId, workspaceId } = await requireContext();
+    const { supabase, userId, workspaceId, activeBranchId } = await requireContext();
+    const trimmed = name.trim();
 
-    // Load folder to get box_id for revalidation
+    // Load folder to get box_id for revalidation + branch_id so we
+    // can route main-row edits through the overlay table.
     const { data: folder, error: folderError } = await supabase
       .from("folders")
-      .select("id, box_id")
+      .select("id, box_id, branch_id, path_cache")
       .eq("id", folderId)
       .single();
     if (folderError || !folder) return { ok: false, error: "Folder not found" };
@@ -122,7 +131,24 @@ export async function renameFolderAction(folderId: string, name: string): Promis
       return { ok: false, error: "Folder not found" };
     }
 
-    await renameFolder(supabase, userId, workspaceId, folderId, name.trim());
+    // Branch-routed rename: record an overlay rather than mutating
+    // the canonical row. Only overlay when the folder is a main row
+    // (branch_id IS NULL) — branch-local folders are free to be
+    // updated directly.
+    if (activeBranchId && folder.branch_id === null) {
+      const newSlug = slugify(trimmed);
+      const oldPathSegments = (folder.path_cache ?? "").split("/");
+      oldPathSegments[oldPathSegments.length - 1] = newSlug;
+      const newPathCache = oldPathSegments.join("/");
+      await upsertFolderOverride(supabase, {
+        branchId: activeBranchId,
+        folderId,
+        actorId: userId,
+        patch: { name: trimmed, path_cache: newPathCache },
+      });
+    } else {
+      await renameFolder(supabase, userId, workspaceId, folderId, trimmed);
+    }
 
     revalidatePath(`/app/boxes/${folder.box_id}`);
     return { ok: true, data: undefined };

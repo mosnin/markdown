@@ -324,7 +324,7 @@ export default async function BoxPage({
     archivedFolders,
     trashedFolders,
   ] = await Promise.all([
-    listFoldersByBox(supabase, box.id),
+    listFoldersByBox(supabase, box.id, { branchId: ctx.activeBranchId ?? null }),
     listNotesByBox(supabase, box.id),
     listArchivedNotesByBox(supabase, box.id),
     listTrashedNotesByBox(supabase, box.id),

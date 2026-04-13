@@ -1,6 +1,11 @@
 import { type SupabaseClient } from "@supabase/supabase-js";
 import { type Folder } from "@/server/domain/types/folder";
 import { FOLDER_STATUS } from "@/server/domain/constants/content_status";
+import {
+  applyFolderOverridesToList,
+  applyOverrideToFolder,
+  type FolderBranchOverride,
+} from "@/server/services/folder_branch_service";
 
 export interface CreateFolderInput {
   workspace_id: string;
@@ -33,7 +38,8 @@ export interface UpdateFolderInput {
 
 export async function getFolderById(
   supabase: SupabaseClient,
-  id: string
+  id: string,
+  { branchId = null }: { branchId?: string | null } = {}
 ): Promise<Folder | null> {
   const { data, error } = await supabase
     .from("folders")
@@ -42,7 +48,20 @@ export async function getFolderById(
     .single();
 
   if (error || !data) return null;
-  return data as Folder;
+  const folder = data as Folder;
+  if (branchId && folder.branch_id === null) {
+    // Apply per-branch overlay. A main-routed folder edited on an
+    // active branch is read through the override. Branch-local
+    // folders (branch_id set) are returned as-is.
+    const { data: ov } = await supabase
+      .from("folder_branch_overrides")
+      .select("*")
+      .eq("branch_id", branchId)
+      .eq("folder_id", id)
+      .maybeSingle();
+    return applyOverrideToFolder(folder, (ov as FolderBranchOverride | null) ?? null);
+  }
+  return folder;
 }
 
 export async function listFoldersByBox(
@@ -73,7 +92,25 @@ export async function listFoldersByBox(
 
   const { data, error } = await query.order("path_cache", { ascending: true });
   if (error || !data) return [];
-  return data as Folder[];
+  const folders = data as Folder[];
+
+  if (!branchId) return folders;
+
+  // Overlay every main-row folder with its per-branch override (if
+  // any). Branch-local folders (branch_id set) bypass the overlay
+  // since they have no main counterpart.
+  const mainIds = folders.filter((f) => f.branch_id === null).map((f) => f.id);
+  if (mainIds.length === 0) return folders;
+  const { data: ovRows } = await supabase
+    .from("folder_branch_overrides")
+    .select("*")
+    .eq("branch_id", branchId)
+    .in("folder_id", mainIds);
+  const overridesById = new Map<string, FolderBranchOverride>();
+  for (const r of (ovRows ?? []) as FolderBranchOverride[]) {
+    overridesById.set(r.folder_id, r);
+  }
+  return applyFolderOverridesToList(folders, overridesById);
 }
 
 export async function listFoldersByParent(

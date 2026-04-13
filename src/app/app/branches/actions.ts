@@ -259,6 +259,14 @@ export async function discardBranchAction(
     );
     await dropAllPendingOpsForBranch(supabase, branchId);
 
+    // Drop every folder-branch override row. Same reasoning —
+    // overrides only represented intent; promote never fired so
+    // main is untouched and there's no audit trail to preserve.
+    const { dropAllFolderOverridesForBranch } = await import(
+      "@/server/services/folder_branch_service"
+    );
+    await dropAllFolderOverridesForBranch(supabase, branchId);
+
     await discardDraftBranch(supabase, branchId);
 
     await createAuditEvent(supabase, {

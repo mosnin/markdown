@@ -42,6 +42,7 @@ import type { DraftBranch } from "@/server/services/branch_service";
 import type {
   BranchDiff,
   BranchDiffRow,
+  FolderOverrideDiffRow,
   PackageDiffGroup,
   PackageMetadataChange,
   PendingOpDiffRow,
@@ -186,8 +187,8 @@ export function BranchDetailClient({
             <Button
               size="sm"
               onClick={() => setConfirmAction("promote")}
-              disabled={pending || (diff.headCount === 0 && diff.pendingOps.length === 0)}
-              title={(diff.headCount === 0 && diff.pendingOps.length === 0) ? "Nothing to promote" : undefined}
+              disabled={pending || (diff.headCount === 0 && diff.pendingOps.length === 0 && diff.folderOverrides.length === 0)}
+              title={(diff.headCount === 0 && diff.pendingOps.length === 0 && diff.folderOverrides.length === 0) ? "Nothing to promote" : undefined}
             >
               <PackageOpen className="h-3.5 w-3.5 mr-1" aria-hidden="true" />
               Promote
@@ -211,7 +212,7 @@ export function BranchDetailClient({
           branch has only standalone rows the grouped block is
           skipped; when a branch has only package changes (e.g. a
           metadata-only edit) the standalone block is skipped. */}
-      {diff.rows.length === 0 && diff.packages.length === 0 && diff.pendingOps.length === 0 ? (
+      {diff.rows.length === 0 && diff.packages.length === 0 && diff.pendingOps.length === 0 && diff.folderOverrides.length === 0 ? (
         <div className="rounded-lg border border-dashed border-border bg-card/50 px-6 py-10 text-center">
           <p className="text-sm font-medium text-foreground">No edits yet</p>
           <p className="mx-auto mt-1 max-w-md text-xs text-muted-foreground">
@@ -267,6 +268,21 @@ export function BranchDetailClient({
               </ul>
             </section>
           )}
+          {diff.folderOverrides.length > 0 && (
+            <section>
+              <h2 className="mb-2 px-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                Folder changes
+                <span className="ml-2 text-[10px] font-normal">{diff.folderOverrides.length}</span>
+              </h2>
+              <ul className="flex flex-col gap-2 list-none">
+                {diff.folderOverrides.map((row) => (
+                  <li key={row.folderId}>
+                    <FolderOverrideCard row={row} />
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
         </div>
       )}
 
@@ -284,6 +300,9 @@ export function BranchDetailClient({
             {" "}on main to their branch-head state
             {diff.pendingOps.length > 0 && (
               <> and applies {diff.pendingOps.length} pending structural op{diff.pendingOps.length === 1 ? "" : "s"}</>
+            )}
+            {diff.folderOverrides.length > 0 && (
+              <> and {diff.folderOverrides.length} folder change{diff.folderOverrides.length === 1 ? "" : "s"}</>
             )}
             {" "}as one grouped history entry. The promotion is itself a
             restore-able change set — you can undo it from History if
@@ -802,6 +821,33 @@ function describeMovePayload(p: Record<string, unknown>): string {
   else if (p.folder_id === null) parts.push("to root");
   if (typeof p.box_id === "string") parts.push(`box ${p.box_id.slice(0, 8)}`);
   return parts.join(" · ");
+}
+
+function FolderOverrideCard({ row }: { row: FolderOverrideDiffRow }) {
+  return (
+    <div className="rounded-lg border border-border bg-card px-4 py-3">
+      <div className="mb-2 flex items-center gap-2">
+        <Folder className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+        <p className="truncate text-sm font-medium">{row.folderName}</p>
+        <Badge variant="outline" className="shrink-0 text-[10px] font-normal">
+          {row.changes.length} field{row.changes.length === 1 ? "" : "s"}
+        </Badge>
+      </div>
+      <ul className="flex flex-col gap-1 list-none">
+        {row.changes.map((c) => (
+          <li key={c.field}>
+            <MetadataChangeRow
+              change={{
+                field: c.field,
+                mainValue: c.mainValue,
+                branchValue: c.branchValue,
+              }}
+            />
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
 }
 
 function PreviewColumn({

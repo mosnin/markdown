@@ -98,6 +98,24 @@ export interface BranchDiff {
    * them. See `docs/branch_local_structural_creation_v1.md`.
    */
   pendingOps: PendingOpDiffRow[];
+  /**
+   * Folder-branch overrides (rename / reparent / reorder intents)
+   * recorded against main folder rows. Each row summarises the
+   * changed fields between main and the overlay. See
+   * `folder_branch_service`.
+   */
+  folderOverrides: FolderOverrideDiffRow[];
+}
+
+/**
+ * Diff row for a single branch_folder_overrides entry. `changes` is
+ * populated only with fields where the overlay differs from main —
+ * NULL override fields are "no override" and are skipped.
+ */
+export interface FolderOverrideDiffRow {
+  folderId: string;
+  folderName: string;
+  changes: Array<{ field: string; mainValue: unknown; branchValue: unknown }>;
 }
 
 /**
@@ -240,6 +258,7 @@ export async function getBranchDiff(
   );
 
   const pendingOps = await loadPendingOpRows(supabase, branchId);
+  const folderOverrides = await loadFolderOverrideRows(supabase, branchId);
 
   return {
     branchId,
@@ -251,7 +270,97 @@ export async function getBranchDiff(
     packages,
     standalone,
     pendingOps,
+    folderOverrides,
   };
+}
+
+/**
+ * Load every folder-branch override for the branch and diff each
+ * against its canonical folder row. Overrides where no field
+ * differs from main are dropped (no-op overlays).
+ */
+async function loadFolderOverrideRows(
+  supabase: SupabaseClient,
+  branchId: string
+): Promise<FolderOverrideDiffRow[]> {
+  const { data: overrides } = await supabase
+    .from("folder_branch_overrides")
+    .select("*")
+    .eq("branch_id", branchId);
+  const rows = (overrides ?? []) as Array<{
+    folder_id: string;
+    name: string | null;
+    parent_folder_id: string | null;
+    sort_order: number | null;
+    path_cache: string | null;
+  }>;
+  if (rows.length === 0) return [];
+
+  const ids = rows.map((r) => r.folder_id);
+  const { data: folders } = await supabase
+    .from("folders")
+    .select("id, name, parent_folder_id, path_cache")
+    .in("id", ids);
+  const folderById = new Map<
+    string,
+    { id: string; name: string; parent_folder_id: string | null; path_cache: string }
+  >();
+  for (const f of (folders ?? []) as Array<{
+    id: string;
+    name: string;
+    parent_folder_id: string | null;
+    path_cache: string;
+  }>) {
+    folderById.set(f.id, f);
+  }
+
+  // sort_order lives in workspace_objects, not on folders. Resolve
+  // in one bulk call so the diff surfaces reorder intent correctly.
+  const { data: woRows } = await supabase
+    .from("workspace_objects")
+    .select("object_id, sort_order")
+    .eq("object_type", "folder")
+    .in("object_id", ids);
+  const sortOrderById = new Map<string, number | null>();
+  for (const r of (woRows ?? []) as Array<{ object_id: string; sort_order: number | null }>) {
+    sortOrderById.set(r.object_id, r.sort_order ?? null);
+  }
+
+  const out: FolderOverrideDiffRow[] = [];
+  for (const ov of rows) {
+    const main = folderById.get(ov.folder_id);
+    const changes: FolderOverrideDiffRow["changes"] = [];
+    if (ov.name !== null && main && main.name !== ov.name) {
+      changes.push({ field: "name", mainValue: main.name, branchValue: ov.name });
+    }
+    if (ov.parent_folder_id !== null && main && main.parent_folder_id !== ov.parent_folder_id) {
+      changes.push({
+        field: "parent_folder_id",
+        mainValue: main.parent_folder_id,
+        branchValue: ov.parent_folder_id,
+      });
+    }
+    if (ov.path_cache !== null && main && main.path_cache !== ov.path_cache) {
+      changes.push({
+        field: "path_cache",
+        mainValue: main.path_cache,
+        branchValue: ov.path_cache,
+      });
+    }
+    if (ov.sort_order !== null) {
+      const mainSort = sortOrderById.get(ov.folder_id) ?? null;
+      if (mainSort !== ov.sort_order) {
+        changes.push({ field: "sort_order", mainValue: mainSort, branchValue: ov.sort_order });
+      }
+    }
+    if (changes.length === 0) continue;
+    out.push({
+      folderId: ov.folder_id,
+      folderName: main?.name ?? "(missing folder)",
+      changes,
+    });
+  }
+  return out;
 }
 
 /**

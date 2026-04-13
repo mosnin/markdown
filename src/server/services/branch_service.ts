@@ -540,6 +540,37 @@ export async function promoteBranch(
       }
     }
 
+    // Apply folder-branch overrides — rename / reparent / reorder
+    // intents recorded against main folder rows. Each promoted
+    // override becomes a change_set_item so the rollback engine can
+    // revert. See `folder_branch_service.promoteFolderOverrides`.
+    const { promoteFolderOverrides } = await import(
+      "./folder_branch_service"
+    );
+    const folderChanges = await promoteFolderOverrides(supabase, branchId);
+    for (const ch of folderChanges) {
+      if (
+        Object.keys(ch.before).length === 0 &&
+        Object.keys(ch.after).length === 0
+      ) {
+        continue; // empty overlay — nothing to record
+      }
+      await recordChangeSetItem(supabase, {
+        change_set_id: cs.id,
+        workspace_id: workspaceId,
+        operation: "update",
+        object_type: "folder",
+        object_id: ch.folderId,
+        before_snapshot: { ...ch.before, branch_id: branchId },
+        after_snapshot: { ...ch.after, promoted_from_branch: branchId },
+      });
+      promoted.push({
+        object_type: "folder" as unknown as BranchHeadObjectType,
+        object_id: ch.folderId,
+        new_version_id: "",
+      });
+    }
+
     // Apply pending structural ops (trash / archive / unarchive /
     // move / detach against main rows). Each op becomes a
     // change_set_item so the rollback engine can revert. Ops are

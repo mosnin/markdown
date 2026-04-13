@@ -130,7 +130,7 @@ move + unsupported target rejection).
 | **Detach Skill from Agent on branch**        | ✅ (pending op) |
 | **Move file between folders on branch**      | ✅ (pending op) |
 | **Trash / archive object on branch**         | ✅ (pending op) |
-| Child folder nesting / reorder on branch     | ❌ (independent design) |
+| Child folder nesting / reorder on branch     | ✅ (override overlay) |
 
 ## Soft-delete / move / detach on branch (landed v1.5)
 
@@ -239,20 +239,108 @@ section with a one-line row per op. Move payloads produce a
 compact `from → to` suffix; trash uses the destructive palette
 so it's visually distinct from archive/unarchive.
 
-## Design sketch: child folder branching
+## Child folder branching on branch (landed v1.6)
 
-Folders aren't versioned today; adding `branch_id` to folders is
-easy (it's already in `20260412000009_branch_scoped_content_rows.sql`)
-but doesn't cover *edits* to existing folders — renaming,
-reparenting, moving child contents. A proper pass needs either:
+Folders still aren't versioned — we never ran a full
+`object_versions` extension for them. Instead, *edits* to existing
+main folders (rename / reparent / reorder) now route through a thin
+overlay table that mirrors `branch_package_metadata`'s shape.
 
-- per-folder `object_versions` rows (heavy — folders as versioned
-  objects), or
-- a `folder_branch_overrides` overlay table with `(branch_id,
-  folder_id, name, parent_folder_id, path_cache)`, mirroring the
-  `branch_package_metadata` shape for Skills/Agents.
+### Schema
 
-The second option is cheaper and consistent. Left for follow-up.
+Migration `20260413000001_folder_branch_overrides.sql`:
+
+```sql
+CREATE TABLE folder_branch_overrides (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  branch_id uuid NOT NULL REFERENCES draft_branches(id) ON DELETE CASCADE,
+  folder_id uuid NOT NULL REFERENCES folders(id) ON DELETE CASCADE,
+  name             text,
+  parent_folder_id uuid,
+  sort_order       int,
+  path_cache       text,
+  actor_id         uuid REFERENCES auth.users(id),
+  created_at       timestamptz NOT NULL DEFAULT now(),
+  updated_at       timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (branch_id, folder_id)
+);
+```
+
+Every overlay field is nullable; `NULL` means "no override for this
+field, inherit from main". RLS joins through `draft_branches` and
+uses `owns_workspace` / `can_write_workspace` identical to
+`branch_package_metadata`.
+
+### Service — `src/server/services/folder_branch_service.ts`
+
+- `upsertFolderOverride({ branchId, folderId, actorId, patch })` —
+  upserts on `(branch_id, folder_id)`. Patch is
+  `{ name?, parent_folder_id?, sort_order?, path_cache? }`; only
+  declared keys are written, so successive edits on the same folder
+  merge into one overlay row.
+- `getFolderOverride / listFolderOverridesForBranch` — reads used by
+  the repository and diff surface.
+- `applyOverrideToFolder` / `applyFolderOverridesToList` — pure
+  functions. NULL override fields are skipped (inherit from main);
+  non-null fields overlay the folder row. The input folder is never
+  mutated.
+- `promoteFolderOverrides(branchId)` — on promote, copies every
+  overlay's non-null fields onto the canonical `folders` row (and
+  `workspace_objects.sort_order` when the overlay sets that field).
+  Returns `{ folderId, before, after }[]` so the change-set recorder
+  can persist `change_set_items` with `operation: "update"`,
+  `object_type: "folder"`.
+- `dropFolderOverride / dropAllFolderOverridesForBranch` — rollback
+  and discard paths; the latter runs after the branch-scoped
+  hard-deletes in `discardBranchAction`.
+
+### Read overlay
+
+`folder_repository.listFoldersByBox(supabase, boxId, { branchId })`
+now bulk-fetches every override for the branch after the folder
+query returns, then patches each main row via
+`applyFolderOverridesToList`. Branch-created folders (`branch_id`
+non-null) are returned as-is since they have no main counterpart to
+overlay. Main readers (no `branchId`) never touch the overrides
+table.
+
+`folder_repository.getFolderById(supabase, id, { branchId })`
+applies the same overlay when the folder is a main row. Tree views,
+breadcrumbs, and the box page all flow through these two readers.
+
+### Write path
+
+`renameFolderAction` (both `app/boxes/actions.ts` and
+`app/boxes/tree_actions.ts`) routes through
+`upsertFolderOverride` when `ctx.activeBranchId` is set and the
+folder is a main row (`branch_id IS NULL`). Branch-created folders
+are still updated directly — the overlay only protects main.
+
+`moveTreeNodeAction` does the same for folder reparents: the
+canonical `folders` row stays untouched, the intent lands as an
+overlay, and descendant `path_cache` cascade is deferred to
+promote, which re-derives the authoritative paths from the patched
+parent.
+
+### Promote + discard
+
+- `promoteBranch` iterates `promoteFolderOverrides(branchId)` after
+  pending-ops and records each change as a `change_set_item` with
+  `before_snapshot: { ...before, branch_id }` and
+  `after_snapshot: { ...after, promoted_from_branch }`.
+- `discardBranchAction` calls `dropAllFolderOverridesForBranch`
+  after the branch-scoped hard-deletes. Overlays only ever
+  represented intent, main is untouched.
+
+### Diff surface
+
+`getBranchDiff` now returns `folderOverrides: FolderOverrideDiffRow[]`
+alongside `rows` / `packages` / `pendingOps`. Each row lists the
+fields that changed between main and the overlay (skipping NULL
+override fields) and carries a resolved folder display name. The
+branch detail client renders a "Folder changes" section with one
+card per folder; fields reuse the existing `MetadataChangeRow`
+component so the UI shape matches package metadata changes.
 
 ## Related docs
 

@@ -213,8 +213,45 @@ export async function renameFolderAction(
   newName: string
 ): Promise<ActionResult> {
   try {
-    const { supabase, userId, workspaceId } = await requireContext();
-    await renameFolder(supabase, userId, workspaceId, folderId, newName.trim());
+    const { supabase, userId, workspaceId, activeBranchId } = await requireContext();
+    const trimmed = newName.trim();
+
+    // When a branch is active and the folder is a main row, record
+    // the rename as an override on `folder_branch_overrides` rather
+    // than mutating the canonical folder. Branch-created folders
+    // (branch_id set) are updated directly since there is no main
+    // counterpart to protect. See
+    // docs/branch_local_structural_creation_v1.md.
+    if (activeBranchId) {
+      const { data: folder } = await supabase
+        .from("folders")
+        .select("id, branch_id, path_cache, slug")
+        .eq("id", folderId)
+        .maybeSingle();
+      if (!folder) return { ok: false, error: "Folder not found" };
+
+      if (folder.branch_id === null) {
+        const { slugify } = await import("@/lib/slugify");
+        const newSlug = slugify(trimmed);
+        const oldPathSegments = (folder.path_cache ?? "").split("/");
+        oldPathSegments[oldPathSegments.length - 1] = newSlug;
+        const newPathCache = oldPathSegments.join("/");
+
+        const { upsertFolderOverride } = await import(
+          "@/server/services/folder_branch_service"
+        );
+        await upsertFolderOverride(supabase, {
+          branchId: activeBranchId,
+          folderId,
+          actorId: userId,
+          patch: { name: trimmed, path_cache: newPathCache },
+        });
+        revalidatePath(`/app/boxes/${boxId}`);
+        return { ok: true, data: undefined };
+      }
+    }
+
+    await renameFolder(supabase, userId, workspaceId, folderId, trimmed);
     revalidatePath(`/app/boxes/${boxId}`);
     return { ok: true, data: undefined };
   } catch (err) {
@@ -980,7 +1017,7 @@ export async function moveTreeNodeAction(input: MoveTreeNodeInput): Promise<Acti
   let changeSetId: string | null = null;
   let changeSetSupabase: Awaited<ReturnType<typeof createClient>> | null = null;
   try {
-    const { supabase, userId, workspaceId } = await requireContext();
+    const { supabase, userId, workspaceId, activeBranchId } = await requireContext();
     const { boxId, draggedType, draggedId, isAttachment = false } = input;
 
     const { data: box } = await supabase.from("boxes").select("id, workspace_id").eq("id", boxId).single();
@@ -1077,7 +1114,7 @@ export async function moveTreeNodeAction(input: MoveTreeNodeInput): Promise<Acti
     if (draggedType === "folder") {
       const { data: folder } = await supabase
         .from("folders")
-        .select("id, box_id, slug, path_cache")
+        .select("id, box_id, slug, path_cache, branch_id")
         .eq("id", draggedId)
         .single();
       if (!folder || folder.box_id !== boxId) {
@@ -1096,15 +1133,32 @@ export async function moveTreeNodeAction(input: MoveTreeNodeInput): Promise<Acti
       }
       const oldPath = folder.path_cache;
 
-      await supabase
-        .from("folders")
-        .update({ parent_folder_id: nextFolderId, path_cache: newPath })
-        .eq("id", draggedId);
-      await supabase
-        .from("workspace_objects")
-        .update({ folder_id: nextFolderId })
-        .eq("object_type", "folder")
-        .eq("object_id", draggedId);
+      // Branch-routed move: when a branch is active and the folder
+      // is a main row, record an overlay rather than mutating the
+      // canonical folder. Descendant path cascades are NOT written
+      // to the overlay — promote re-derives the authoritative paths
+      // from the patched parent.
+      if (activeBranchId && folder.branch_id === null) {
+        const { upsertFolderOverride } = await import(
+          "@/server/services/folder_branch_service"
+        );
+        await upsertFolderOverride(supabase, {
+          branchId: activeBranchId,
+          folderId: draggedId,
+          actorId: userId,
+          patch: { parent_folder_id: nextFolderId, path_cache: newPath },
+        });
+      } else {
+        await supabase
+          .from("folders")
+          .update({ parent_folder_id: nextFolderId, path_cache: newPath })
+          .eq("id", draggedId);
+        await supabase
+          .from("workspace_objects")
+          .update({ folder_id: nextFolderId })
+          .eq("object_type", "folder")
+          .eq("object_id", draggedId);
+      }
 
       // Cascade descendant folder paths. For every descendant we
       // rewrite, record a `path_cascade` structural event on the
@@ -1117,7 +1171,13 @@ export async function moveTreeNodeAction(input: MoveTreeNodeInput): Promise<Acti
         "@/server/services/change_set_service"
       );
 
-      if (oldPath !== newPath) {
+      // Skip the cascade when the move is overlay-recorded — promote
+      // re-derives the authoritative path_cache from the patched
+      // parent, so the branch overlay doesn't need per-descendant
+      // intent. See docs/branch_local_structural_creation_v1.md.
+      const isOverlayMove = !!activeBranchId && folder.branch_id === null;
+
+      if (oldPath !== newPath && !isOverlayMove) {
         const { data: descendants } = await supabase
           .from("folders")
           .select("id, path_cache")
