@@ -501,11 +501,162 @@ function PackageGroupCard({ group }: { group: PackageDiffGroup }) {
   );
 }
 
+/**
+ * MetadataChangeRow — field-appropriate rendering for each known metadata field.
+ *
+ * Dispatch order:
+ *   1. Null ↔ non-null: special "set for the first time" / "cleared" messages.
+ *   2. "tags": tag-diff pills (unchanged / added / removed).
+ *   3. Text fields (description, summary, system_prompt): stacked pre blocks.
+ *   4. Enum-like scalars (agent_type, model_hint): side-by-side pill transition.
+ *   5. Fallback: the original two-column code-block layout via formatMetaValue.
+ */
 function MetadataChangeRow({ change }: { change: PackageMetadataChange }) {
+  const label = change.field.replace(/_/g, " ");
+
+  // ── 1. Null handling ──────────────────────────────────────────────────────
+  // When one side is null and the other isn't, skip the two-column split and
+  // show a single descriptive message instead.
+  if (change.mainValue === null && change.branchValue !== null) {
+    return (
+      <div className="grid grid-cols-1 gap-2 rounded-md border border-border bg-background px-3 py-2 md:grid-cols-[auto_1fr]">
+        <p className="text-[11px] font-semibold capitalize text-muted-foreground">{label}</p>
+        <p className="text-xs italic text-muted-foreground">Set for the first time on this branch.</p>
+      </div>
+    );
+  }
+  if (change.mainValue !== null && change.branchValue === null) {
+    return (
+      <div className="grid grid-cols-1 gap-2 rounded-md border border-border bg-background px-3 py-2 md:grid-cols-[auto_1fr]">
+        <p className="text-[11px] font-semibold capitalize text-muted-foreground">{label}</p>
+        <p className="text-xs italic text-muted-foreground">Cleared on this branch.</p>
+      </div>
+    );
+  }
+
+  // ── 2. Tags field ─────────────────────────────────────────────────────────
+  // Computes three groups from the two arrays: unchanged, removed, added.
+  // Renders each group as colour-coded pill badges.
+  if (change.field === "tags") {
+    const mainTags = Array.isArray(change.mainValue)
+      ? (change.mainValue as unknown[]).map(String)
+      : [];
+    const branchTags = Array.isArray(change.branchValue)
+      ? (change.branchValue as unknown[]).map(String)
+      : [];
+    const mainSet = new Set(mainTags);
+    const branchSet = new Set(branchTags);
+    const unchanged = mainTags.filter((t) => branchSet.has(t));
+    const removed = mainTags.filter((t) => !branchSet.has(t));
+    const added = branchTags.filter((t) => !mainSet.has(t));
+
+    return (
+      <div className="grid grid-cols-1 gap-2 rounded-md border border-border bg-background px-3 py-2 md:grid-cols-[auto_1fr]">
+        <p className="text-[11px] font-semibold capitalize text-muted-foreground">{label}</p>
+        <div className="flex flex-wrap gap-1">
+          {unchanged.map((tag) => (
+            <Badge key={`u:${tag}`} variant="outline" className="text-[10px]">
+              {tag}
+            </Badge>
+          ))}
+          {removed.map((tag) => (
+            <Badge
+              key={`r:${tag}`}
+              variant="outline"
+              className="gap-0.5 border-destructive/40 bg-destructive/10 text-destructive text-[10px]"
+            >
+              <Minus className="h-2.5 w-2.5" aria-hidden="true" />
+              {tag}
+            </Badge>
+          ))}
+          {added.map((tag) => (
+            <Badge
+              key={`a:${tag}`}
+              variant="outline"
+              className="gap-0.5 border-success/40 bg-success/10 text-success text-[10px]"
+            >
+              <Plus className="h-2.5 w-2.5" aria-hidden="true" />
+              {tag}
+            </Badge>
+          ))}
+          {unchanged.length === 0 && removed.length === 0 && added.length === 0 && (
+            <span className="text-xs italic text-muted-foreground">No tags.</span>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // ── 3. Text fields ────────────────────────────────────────────────────────
+  // description, summary, system_prompt — when both sides are strings, render
+  // as stacked preformatted blocks truncated at ~240 chars so the card stays
+  // compact. Full content is reachable via "Open editor" / "Open package".
+  const TEXT_FIELDS = ["description", "summary", "system_prompt"];
+  const TRUNCATE_LEN = 240;
+  if (
+    TEXT_FIELDS.includes(change.field) &&
+    typeof change.mainValue === "string" &&
+    typeof change.branchValue === "string"
+  ) {
+    const truncate = (s: string) =>
+      s.length > TRUNCATE_LEN ? s.slice(0, TRUNCATE_LEN) + "…" : s;
+
+    return (
+      <div className="grid grid-cols-1 gap-2 rounded-md border border-border bg-background px-3 py-2">
+        <p className="text-[11px] font-semibold capitalize text-muted-foreground">{label}</p>
+        {/* Main value: muted, visually "old" */}
+        <div>
+          <p className="mb-0.5 text-[10px] font-semibold uppercase text-muted-foreground">Main</p>
+          <pre className="rounded bg-muted/50 px-2 py-1 font-mono text-[11px] whitespace-pre-wrap break-words text-muted-foreground line-through decoration-muted-foreground/40">
+            {truncate(change.mainValue)}
+          </pre>
+        </div>
+        {/* Branch value: highlighted with the existing warning accent palette */}
+        <div>
+          <p className="mb-0.5 text-[10px] font-semibold uppercase text-warning">Branch</p>
+          <pre className="rounded bg-warning/10 px-2 py-1 font-mono text-[11px] whitespace-pre-wrap break-words">
+            {truncate(change.branchValue)}
+          </pre>
+        </div>
+      </div>
+    );
+  }
+
+  // ── 4. Enum-like scalar fields ────────────────────────────────────────────
+  // agent_type, model_hint — when both sides are non-null scalar strings,
+  // show a "main pill → branch pill" transition so the change is immediately
+  // legible at a glance without reading raw code blocks.
+  const ENUM_FIELDS = ["agent_type", "model_hint"];
+  if (
+    ENUM_FIELDS.includes(change.field) &&
+    typeof change.mainValue === "string" &&
+    typeof change.branchValue === "string"
+  ) {
+    return (
+      <div className="grid grid-cols-1 gap-2 rounded-md border border-border bg-background px-3 py-2 md:grid-cols-[auto_1fr]">
+        <p className="text-[11px] font-semibold capitalize text-muted-foreground">{label}</p>
+        <div className="flex items-center gap-2">
+          {/* Main: outline pill */}
+          <Badge variant="outline" className="text-[11px] font-mono">
+            {change.mainValue}
+          </Badge>
+          <ChevronRight className="h-3 w-3 shrink-0 text-muted-foreground" aria-hidden="true" />
+          {/* Branch: filled secondary pill */}
+          <Badge variant="secondary" className="text-[11px] font-mono">
+            {change.branchValue}
+          </Badge>
+        </div>
+      </div>
+    );
+  }
+
+  // ── 5. Generic fallback ───────────────────────────────────────────────────
+  // Unknown or unrecognised field types fall back to the original two-column
+  // code-block layout so we never silently swallow data.
   return (
     <div className="grid grid-cols-1 gap-2 rounded-md border border-border bg-background px-3 py-2 md:grid-cols-[auto_1fr_1fr]">
       <p className="text-[11px] font-semibold capitalize text-muted-foreground">
-        {change.field.replace(/_/g, " ")}
+        {label}
       </p>
       <div className="text-xs">
         <p className="text-[10px] font-semibold uppercase text-muted-foreground">Main</p>
