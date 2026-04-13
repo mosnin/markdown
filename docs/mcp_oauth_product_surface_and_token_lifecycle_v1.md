@@ -67,3 +67,7 @@ OAuth-backed writes continue to use the canonical API write path and current def
 - OAuth-backed writes are **main-only** in V1.
 - Any attempted branch-targeting fields on OAuth write requests are rejected explicitly with a bad-request error.
 - This keeps audit, rollback, and existing branch protection semantics honest while avoiding implicit branch behavior.
+
+## End-to-end verification status
+
+Route-level tests now cover discovery coherence, authorize approve/deny redirects, token exchange success/failure (bad verifier, bad redirect), refresh success/failure, legacy rejection on `/api/mcp`, insufficient scope denial, viewer write denial, and explicit OAuth branch-target rejection.

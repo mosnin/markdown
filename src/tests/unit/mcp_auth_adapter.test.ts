@@ -18,6 +18,8 @@ import {
 
 describe("mcp_auth_adapter — env gating", () => {
   const original = process.env.CONTEXT_STORE_LEGACY_CSK_ENABLED;
+  const originalNodeEnv = process.env.NODE_ENV;
+  const originalMigration = process.env.CONTEXT_STORE_LEGACY_CSK_MIGRATION;
   beforeEach(() => {
     delete process.env.CONTEXT_STORE_LEGACY_CSK_ENABLED;
   });
@@ -26,6 +28,16 @@ describe("mcp_auth_adapter — env gating", () => {
       delete process.env.CONTEXT_STORE_LEGACY_CSK_ENABLED;
     } else {
       process.env.CONTEXT_STORE_LEGACY_CSK_ENABLED = original;
+    }
+    if (originalMigration === undefined) {
+      delete process.env.CONTEXT_STORE_LEGACY_CSK_MIGRATION;
+    } else {
+      process.env.CONTEXT_STORE_LEGACY_CSK_MIGRATION = originalMigration;
+    }
+    if (originalNodeEnv === undefined) {
+      delete (process.env as Record<string, string | undefined>).NODE_ENV;
+    } else {
+      (process.env as Record<string, string | undefined>).NODE_ENV = originalNodeEnv;
     }
   });
 
@@ -51,6 +63,19 @@ describe("mcp_auth_adapter — env gating", () => {
   });
 });
 
+  it("legacyCskEnabled is false in production unless migration override is enabled", () => {
+    (process.env as Record<string, string | undefined>).NODE_ENV = "production";
+    process.env.CONTEXT_STORE_LEGACY_CSK_ENABLED = "true";
+    delete process.env.CONTEXT_STORE_LEGACY_CSK_MIGRATION;
+    expect(legacyCskEnabled()).toBe(false);
+  });
+
+  it("legacyCskEnabled is true in production only with migration override", () => {
+    (process.env as Record<string, string | undefined>).NODE_ENV = "production";
+    process.env.CONTEXT_STORE_LEGACY_CSK_ENABLED = "true";
+    process.env.CONTEXT_STORE_LEGACY_CSK_MIGRATION = "true";
+    expect(legacyCskEnabled()).toBe(true);
+  });
 describe("mcp_auth_adapter — deprecation header shape", () => {
   it("sets Deprecation: true", () => {
     const h = legacyDeprecationHeaders();

@@ -920,3 +920,7 @@ The MCP/OAuth stack now includes production UI surfaces (consent, connected-app 
 ## MCP connector launch readiness (2026-04-13)
 
 Discovery metadata and protected-resource metadata are now generated from a single public URL resolver so connector endpoint URLs remain internally consistent. HTTP MCP is OAuth-only; legacy token support is isolated to migration/dev paths.
+
+### Legacy shutdown hardening (2026-04-13)
+
+Legacy `csk_v1_` acceptance now has a production migration gate (`CONTEXT_STORE_LEGACY_CSK_MIGRATION=true`). HTTP MCP remains OAuth-only.

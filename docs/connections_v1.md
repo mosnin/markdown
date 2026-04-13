@@ -244,3 +244,7 @@ Connections (`csk_v1_`) are now explicitly legacy for connector auth. New connec
 ### Legacy policy clarification (2026-04-13)
 
 `csk_v1_` tokens are migration/dev artifacts and are not accepted by `/api/mcp`. New connector integrations must use OAuth discovery + authorization code with PKCE.
+
+### Production migration gate
+
+When legacy acceptance is still required during migration, production environments must also set `CONTEXT_STORE_LEGACY_CSK_MIGRATION=true` in addition to `CONTEXT_STORE_LEGACY_CSK_ENABLED=true`.

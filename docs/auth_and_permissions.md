@@ -219,3 +219,9 @@ capability scope — admin actions remain on the human UI.
 ## OAuth write branch policy
 
 OAuth-scoped machine writes currently target canonical main behavior only. Branch targeting parameters are rejected for OAuth write requests to avoid ambiguous semantics.
+
+### Production legacy gate
+
+Legacy `csk_v1_` acceptance is migration-only. In production it requires both:
+1. `CONTEXT_STORE_LEGACY_CSK_ENABLED=true`
+2. `CONTEXT_STORE_LEGACY_CSK_MIGRATION=true`

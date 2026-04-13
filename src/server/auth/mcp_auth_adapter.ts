@@ -110,7 +110,13 @@ export interface McpAuthContext {
  * local dev only.
  */
 export function legacyCskEnabled(): boolean {
-  return process.env.CONTEXT_STORE_LEGACY_CSK_ENABLED === "true";
+  if (process.env.CONTEXT_STORE_LEGACY_CSK_ENABLED !== "true") return false;
+  // Production requires an explicit migration override to avoid
+  // accidental long-tail legacy exposure.
+  if (process.env.NODE_ENV === "production") {
+    return process.env.CONTEXT_STORE_LEGACY_CSK_MIGRATION === "true";
+  }
+  return true;
 }
 
 // ─── Public resolver ─────────────────────────────────────────────────────────

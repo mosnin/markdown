@@ -46,3 +46,19 @@ OAuth-backed writes follow canonical API branch semantics (default behavior) and
 
 - OAuth write requests are explicitly main-only and reject branch-targeting attempts.
 - Full repository `pnpm -s tsc --noEmit` is expected to pass in this repository state.
+
+## Legacy-path inventory (final)
+
+Remaining legacy paths in repository:
+- `/api/v1/**` legacy bearer acceptance via unified auth adapter — **migration-only**, gated by `CONTEXT_STORE_LEGACY_CSK_ENABLED=true` and, in production, additionally `CONTEXT_STORE_LEGACY_CSK_MIGRATION=true`.
+- `src/server/mcp` stdio bridge using `CONTEXT_STORE_CONNECTION_SECRET` — **dev/migration-only**.
+- `/api/mcp` legacy bearer path — **removed/blocked** (explicit rejection).
+
+## Troubleshooting checklist
+
+- Wrong public URL in discovery metadata: set `NEXT_PUBLIC_APP_URL` to the deployed origin and verify both well-known endpoints.
+- Bad redirect URI at token exchange: ensure exact redirect URI match with registered client metadata.
+- Revoked token/grant: expect `401` from `/api/mcp` and `invalid_grant` on refresh.
+- Insufficient scope: tool call returns explicit scope-required error.
+- Viewer write denial: write tools return viewer-role rejection even with write scopes.
+- Legacy auth rejection: `/api/mcp` rejects `csk_v1_` and points callers to OAuth authorize flow.

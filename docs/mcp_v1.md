@@ -300,3 +300,10 @@ connector-style integrations should use HTTP + OAuth.
 ## OAuth write branch policy (final)
 
 OAuth-backed writes are intentionally main-only in V1. Branch-targeting fields are rejected explicitly rather than silently ignored.
+
+### Troubleshooting (OAuth MCP)
+
+- If discovery URLs are wrong, verify `NEXT_PUBLIC_APP_URL` and reload `/.well-known/oauth-authorization-server` and `/.well-known/mcp-server`.
+- `invalid_grant` at token endpoint usually means bad PKCE verifier, revoked grant, or redirect URI mismatch.
+- `401` on `/api/mcp` with legacy token is expected: `csk_v1_` is rejected on HTTP MCP.
+- Write tool errors for viewer role are expected even if the token requested write scopes.
