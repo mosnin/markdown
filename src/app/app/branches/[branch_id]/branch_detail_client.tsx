@@ -37,6 +37,8 @@ import type { DraftBranch } from "@/server/services/branch_service";
 import type {
   BranchDiff,
   BranchDiffRow,
+  PackageDiffGroup,
+  PackageMetadataChange,
 } from "@/server/services/branch_diff_service";
 
 /**
@@ -197,8 +199,13 @@ export function BranchDetailClient({
         )}
       </div>
 
-      {/* Head list */}
-      {diff.rows.length === 0 ? (
+      {/* Head list. Rendered in two passes — packaged (Skills /
+          Agents with canonical source + child files + metadata
+          changes all grouped together) and then standalone. When a
+          branch has only standalone rows the grouped block is
+          skipped; when a branch has only package changes (e.g. a
+          metadata-only edit) the standalone block is skipped. */}
+      {diff.rows.length === 0 && diff.packages.length === 0 ? (
         <div className="rounded-lg border border-dashed border-border bg-card/50 px-6 py-10 text-center">
           <p className="text-sm font-medium text-foreground">No edits yet</p>
           <p className="mx-auto mt-1 max-w-md text-xs text-muted-foreground">
@@ -208,13 +215,38 @@ export function BranchDetailClient({
           </p>
         </div>
       ) : (
-        <ul className="flex flex-col gap-2 list-none">
-          {diff.rows.map((row) => (
-            <li key={row.branchHeadId}>
-              <HeadCard row={row} />
-            </li>
-          ))}
-        </ul>
+        <div className="space-y-4">
+          {diff.packages.length > 0 && (
+            <section>
+              <h2 className="mb-2 px-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                Skill &amp; Agent packages
+                <span className="ml-2 text-[10px] font-normal">{diff.packages.length}</span>
+              </h2>
+              <ul className="flex flex-col gap-2 list-none">
+                {diff.packages.map((p) => (
+                  <li key={`${p.packageType}:${p.packageId}`}>
+                    <PackageGroupCard group={p} />
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+          {diff.standalone.length > 0 && (
+            <section>
+              <h2 className="mb-2 px-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                Other changes
+                <span className="ml-2 text-[10px] font-normal">{diff.standalone.length}</span>
+              </h2>
+              <ul className="flex flex-col gap-2 list-none">
+                {diff.standalone.map((row) => (
+                  <li key={row.branchHeadId}>
+                    <HeadCard row={row} />
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+        </div>
       )}
 
       {/* Confirm dialogs */}
@@ -377,6 +409,124 @@ function HeadCard({ row }: { row: BranchDiffRow }) {
       )}
     </div>
   );
+}
+
+function PackageGroupCard({ group }: { group: PackageDiffGroup }) {
+  const [open, setOpen] = useState(true);
+  const Icon = group.packageType === "skill" ? Zap : Bot;
+  const typeLabel = group.packageType === "skill" ? "Skill" : "Agent";
+
+  const changeCount =
+    (group.canonical ? 1 : 0) +
+    group.children.length +
+    group.metadataChanges.length;
+
+  return (
+    <div className="rounded-lg border border-border bg-card">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className="flex w-full items-start gap-3 px-4 py-3 text-left"
+      >
+        {open ? (
+          <ChevronDown className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+        ) : (
+          <ChevronRight className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+        )}
+        <Icon className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2">
+            <p className="truncate text-sm font-medium">{group.packageName}</p>
+            <Badge variant="secondary" className="shrink-0 text-[10px] font-normal capitalize">
+              {typeLabel} package
+            </Badge>
+          </div>
+          <p className="mt-0.5 text-[11px] text-muted-foreground">
+            {changeCount} change{changeCount === 1 ? "" : "s"}
+            {group.canonical && " · canonical source"}
+            {group.children.length > 0 && ` · ${group.children.length} child file${group.children.length === 1 ? "" : "s"}`}
+            {group.metadataChanges.length > 0 && ` · ${group.metadataChanges.length} metadata field${group.metadataChanges.length === 1 ? "" : "s"}`}
+          </p>
+        </div>
+        <Link
+          href={group.packageHref}
+          onClick={(e) => e.stopPropagation()}
+          className="shrink-0 inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground transition-fast"
+        >
+          Open package
+          <ExternalLink className="h-3 w-3" aria-hidden="true" />
+        </Link>
+      </button>
+      {open && (
+        <div className="border-t border-border px-4 py-3 space-y-3">
+          {group.canonical && (
+            <div>
+              <p className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                Canonical source
+              </p>
+              <HeadCard row={group.canonical} />
+            </div>
+          )}
+          {group.children.length > 0 && (
+            <div>
+              <p className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                Child files
+              </p>
+              <ul className="flex flex-col gap-2 list-none">
+                {group.children.map((c) => (
+                  <li key={c.branchHeadId}>
+                    <HeadCard row={c} />
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {group.metadataChanges.length > 0 && (
+            <div>
+              <p className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                Metadata changes
+              </p>
+              <ul className="flex flex-col gap-1 list-none">
+                {group.metadataChanges.map((c) => (
+                  <li key={c.field}>
+                    <MetadataChangeRow change={c} />
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function MetadataChangeRow({ change }: { change: PackageMetadataChange }) {
+  return (
+    <div className="grid grid-cols-1 gap-2 rounded-md border border-border bg-background px-3 py-2 md:grid-cols-[auto_1fr_1fr]">
+      <p className="text-[11px] font-semibold capitalize text-muted-foreground">
+        {change.field.replace(/_/g, " ")}
+      </p>
+      <div className="text-xs">
+        <p className="text-[10px] font-semibold uppercase text-muted-foreground">Main</p>
+        <code className="block rounded bg-muted/50 px-2 py-1 font-mono text-[11px] whitespace-pre-wrap break-words">
+          {formatMetaValue(change.mainValue)}
+        </code>
+      </div>
+      <div className="text-xs">
+        <p className="text-[10px] font-semibold uppercase text-warning">Branch</p>
+        <code className="block rounded bg-warning/10 px-2 py-1 font-mono text-[11px] whitespace-pre-wrap break-words">
+          {formatMetaValue(change.branchValue)}
+        </code>
+      </div>
+    </div>
+  );
+}
+
+function formatMetaValue(v: unknown): string {
+  if (v === null || v === undefined) return "—";
+  if (Array.isArray(v)) return v.length === 0 ? "[]" : v.join(", ");
+  return String(v);
 }
 
 function PreviewColumn({

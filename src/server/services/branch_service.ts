@@ -398,6 +398,62 @@ export async function promoteBranch(
       }
     }
 
+    // Apply any package metadata overlays (description / tags /
+    // summary / agent_type / model_hint / system_prompt) onto the
+    // canonical skills / agents rows. The overlay rows themselves
+    // are left in place as audit trail — the branch is marked
+    // promoted below, which is what hides the overlay from active
+    // reads.
+    const { data: overlays } = await supabase
+      .from("branch_package_metadata")
+      .select("package_type, package_id, description, tags, summary, agent_type, model_hint, system_prompt")
+      .eq("branch_id", branchId);
+
+    for (const ov of overlays ?? []) {
+      const table = ov.package_type === "skill" ? "skills" : "agents";
+      const legalFields = ov.package_type === "skill"
+        ? ["description", "tags", "summary"]
+        : ["description", "tags", "summary", "agent_type", "model_hint", "system_prompt"];
+      const patch: Record<string, unknown> = {};
+      for (const f of legalFields) {
+        const v = (ov as Record<string, unknown>)[f];
+        if (v !== undefined) patch[f] = v; // include explicit nulls
+      }
+      if (Object.keys(patch).length === 0) continue;
+
+      // Read main's prior values for the audit snapshot. Keeps the
+      // change_set_item's before_snapshot useful for restore.
+      const { data: before } = await supabase
+        .from(table)
+        .select("id, " + legalFields.join(", "))
+        .eq("id", ov.package_id)
+        .maybeSingle();
+
+      await supabase
+        .from(table)
+        .update(patch)
+        .eq("id", ov.package_id);
+
+      await recordChangeSetItem(supabase, {
+        change_set_id: cs.id,
+        workspace_id: workspaceId,
+        operation: "update",
+        object_type: ov.package_type as "skill" | "agent",
+        object_id: ov.package_id,
+        before_snapshot: { metadata: before ?? {} },
+        after_snapshot: { metadata: patch, from_branch: branchId },
+      });
+
+      promoted.push({
+        object_type: ov.package_type as "skill" | "agent",
+        object_id: ov.package_id,
+        // No new version is created for a metadata-only promotion —
+        // reuse the existing current_version_id on the row. The
+        // object's version graph is untouched.
+        new_version_id: "",
+      });
+    }
+
     await commitChangeSet(supabase, cs.id);
     await markBranchPromoted(supabase, branchId);
 

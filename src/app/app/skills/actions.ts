@@ -239,11 +239,31 @@ export async function saveSkillAction(
     const ctx = await requireAuthenticatedUser();
     const supabase = await createClient();
     if (ctx.activeBranchId) {
-      // Branch save — canonical source only. Non-versioned fields
-      // (description, tags, summary) stay on main until promote.
+      // Branch save. The canonical source lands on a new immutable
+      // object_versions row via updateSkillContentOnBranch. Package
+      // metadata (description / tags / summary) lands on the
+      // branch_package_metadata overlay so the user's edits survive
+      // on the branch without mutating main.
       await updateSkillContentOnBranch(
         supabase, ctx.user.id, ctx.workspace.id, ctx.activeBranchId, skillId, params.sourceContent
       );
+      if (
+        params.description !== undefined ||
+        params.tags !== undefined ||
+        params.summary !== undefined
+      ) {
+        const { upsertPackageMetadataOverlay } = await import(
+          "@/server/services/package_branch_service"
+        );
+        await upsertPackageMetadataOverlay(supabase, {
+          branchId: ctx.activeBranchId,
+          packageType: "skill",
+          packageId: skillId,
+          description: params.description,
+          tags: params.tags ?? undefined,
+          summary: params.summary,
+        });
+      }
       return { ok: true, data: { id: skillId } };
     }
     const updated = await updateSkillContent(supabase, ctx.user.id, ctx.workspace.id, skillId, params);

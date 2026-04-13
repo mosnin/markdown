@@ -61,14 +61,38 @@ export async function saveAgentAction(
     const supabase = await createClient();
 
     if (ctx.activeBranchId) {
-      // Branch save — canonical source only. Agent-specific fields
-      // (agentType, modelHint, systemPrompt, description, tags,
-      // summary) stay on main until promote. The agent's system
-      // prompt is part of the canonical source contract but not
-      // branch-aware in V1; see docs/branch_aware_writes_v1.md.
+      // Branch save. Canonical source lands on a new immutable
+      // object_versions row. Agent package metadata (description,
+      // tags, summary, agent_type, model_hint, system_prompt) lands
+      // on the branch_package_metadata overlay so the whole package
+      // draft is coherent without mutating main. See
+      // docs/package_branch_state_for_skills_and_agents_v1.md.
       await updateAgentContentOnBranch(
         supabase, ctx.user.id, ctx.workspace.id, ctx.activeBranchId, agentId, params.sourceContent
       );
+      if (
+        params.description !== undefined ||
+        params.tags !== undefined ||
+        params.summary !== undefined ||
+        params.agentType !== undefined ||
+        params.modelHint !== undefined ||
+        params.systemPrompt !== undefined
+      ) {
+        const { upsertPackageMetadataOverlay } = await import(
+          "@/server/services/package_branch_service"
+        );
+        await upsertPackageMetadataOverlay(supabase, {
+          branchId: ctx.activeBranchId,
+          packageType: "agent",
+          packageId: agentId,
+          description: params.description,
+          tags: params.tags ?? undefined,
+          summary: params.summary,
+          agent_type: params.agentType,
+          model_hint: params.modelHint,
+          system_prompt: params.systemPrompt,
+        });
+      }
       return { ok: true, data: { id: agentId } };
     }
 

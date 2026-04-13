@@ -242,18 +242,24 @@ See type-specific documentation:
      (`withLifecycleChangeSet`), attach/detach structural events, and
      subtree `path_cascade` events recorded per descendant.
    - Branch-aware writes: see
-     [docs/branch_aware_writes_v1.md](branch_aware_writes_v1.md).
-     Active-branch cookie + `RequestContext.activeBranchId`
-     resolution. Branch writes for every content-bearing object:
-     `updateNoteOnBranch`, `updateFileContentOnBranch`,
-     `updateSkillContentOnBranch`, `updateAgentContentOnBranch`.
-     Branch reads: `getNoteForWorkspace`, `getFileForWorkspace`,
+     [docs/branch_aware_writes_v1.md](branch_aware_writes_v1.md)
+     for per-object contracts and
+     [docs/package_branch_state_for_skills_and_agents_v1.md](package_branch_state_for_skills_and_agents_v1.md)
+     for Skill / Agent package drafting. Active-branch cookie +
+     `RequestContext.activeBranchId` resolution. Branch writes for
+     every content-bearing object (`updateNoteOnBranch`,
+     `updateFileContentOnBranch`, `updateSkillContentOnBranch`,
+     `updateAgentContentOnBranch`). Branch reads:
+     `getNoteForWorkspace`, `getFileForWorkspace`,
      `getSkillForWorkspace`, `getAgentForWorkspace` all accept an
-     optional `branchId`. `promoteBranch` advances every head
-     (notes + files + skills + agents) under one
-     `origin: 'branch_promotion'` change set, restoreable end-to-end.
-     Every detail page renders the shared `ActiveBranchBannerServer`
-     component so the branch context is unambiguous.
+     optional `branchId`. Skills + Agents also carry a
+     `branch_package_metadata` overlay (description / tags /
+     summary + agent-specific fields) plus derived membership so
+     child-file edits are attributed to the parent package.
+     `promoteBranch` advances every head plus applies metadata
+     overlays under one `origin: 'branch_promotion'` change set,
+     restoreable end-to-end. `/app/branches/[id]` renders package-
+     grouped diffs.
      `change_sets` + `change_set_items` group every mutation;
      `structural_events` capture tree-shape changes; `draft_branches` +
      `branch_heads` land the foundation for exploratory editing;

@@ -72,6 +72,17 @@ function makeMockSupabase(overrides: {
     const builder: Record<string, unknown> = {};
     builder.select = () => builder;
     builder.eq = (col: string, val: unknown) => { filters[col] = val; return builder; };
+    // New in v1.3: branch_diff groups rows by parent package, which
+    // requires a `.in("id", fileIds)` query on the files table. Mock
+    // it so the grouper doesn't blow up even when the test case
+    // doesn't exercise grouping.
+    builder.in = () => builder;
+    builder.then = async (resolve: (v: { data: unknown[]; error: null }) => void) => {
+      // Only the files `.in()` branch + the overlays query reach
+      // here. Both are safe to return empty for these tests; the
+      // diff row assertions don't depend on group structure.
+      resolve({ data: [], error: null });
+    };
     builder.maybeSingle = async () => {
       if (table === "draft_branches") {
         return {

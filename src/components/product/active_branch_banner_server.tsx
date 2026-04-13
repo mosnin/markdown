@@ -39,12 +39,44 @@ export async function ActiveBranchBannerServer({
     return null;
   }
 
-  // Presence check — purely so we can optionally decorate the banner
-  // with "head exists for this object" info later. Intentionally
-  // unused for now.
+  // For package-style objects (skill / agent) surface a stronger
+  // signal: count the package draft's changed elements (canonical
+  // source + child file heads + metadata overlay) so the banner can
+  // say "3 changes pending on this package" instead of just "editing
+  // on branch X". For note / file the simpler message is fine.
+  let packageNote: string | null = null;
   if (objectType && objectId) {
-    void (await resolveBranchVersion(supabase, ctx.activeBranchId, objectType, objectId));
+    if (objectType === "skill" || objectType === "agent") {
+      const { getPackageDraftState } = await import(
+        "@/server/services/package_branch_service"
+      );
+      const draft = await getPackageDraftState(
+        supabase,
+        ctx.activeBranchId,
+        objectType,
+        objectId
+      );
+      if (draft) {
+        const parts: string[] = [];
+        if (draft.canonicalSourceVersionId) parts.push("canonical source");
+        if (draft.childHeads.length > 0) {
+          parts.push(`${draft.childHeads.length} child file${draft.childHeads.length === 1 ? "" : "s"}`);
+        }
+        if (draft.metadataOverlay) parts.push("metadata");
+        if (parts.length > 0) {
+          packageNote = `This package has branch changes: ${parts.join(" · ")}.`;
+        }
+      }
+    } else {
+      void (await resolveBranchVersion(supabase, ctx.activeBranchId, objectType, objectId));
+    }
   }
 
-  return <ActiveBranchBanner branchName={branch.name} branchId={branch.id} />;
+  return (
+    <ActiveBranchBanner
+      branchName={branch.name}
+      branchId={branch.id}
+      packageNote={packageNote}
+    />
+  );
 }

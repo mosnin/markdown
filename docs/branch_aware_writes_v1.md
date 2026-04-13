@@ -133,6 +133,33 @@ Role gating: any workspace member sees the page; write actions
 require `canWrite` (member / admin / owner). The role gate fires on
 every server action call; the UI hides controls viewers can't use.
 
+## Package-aware branching for Skills and Agents (v1.3)
+
+Skills and Agents are packages: canonical source + child files +
+metadata. As of this release, a branch represents a coherent
+package draft:
+
+- **Child file edits** made on a branch are attributed to the
+  parent Skill / Agent via `computePackageBranchMembership` (joins
+  `branch_heads` type=`file` against `files.parent_skill_id` /
+  `files.parent_agent_id`). No new membership table — parent
+  pointers are already canonical.
+- **Package metadata overlay** — new `branch_package_metadata`
+  table stores per-(branch, package) overrides for description,
+  tags, summary (skills + agents) plus `agent_type`, `model_hint`,
+  `system_prompt` (agents only). Branch-aware reads patch these
+  fields onto the returned row; promote applies the overlay to
+  the canonical row inside the `origin: 'branch_promotion'`
+  change set, restore-able via the rollback engine.
+- **Package-aware diff** — `/app/branches/[id]` renders Skill and
+  Agent packages as grouped cards (canonical source + children +
+  metadata changes) before standalone rows.
+- **Pending-package indicator** — the active-branch banner on
+  Skill / Agent pages now reads *"This package has branch
+  changes: canonical source · 3 child files · metadata."*
+
+Full walkthrough: [docs/package_branch_state_for_skills_and_agents_v1.md](package_branch_state_for_skills_and_agents_v1.md).
+
 ## Scope vs deferrals
 
 **V1.1 covers branch-aware writes for every content-bearing object:**

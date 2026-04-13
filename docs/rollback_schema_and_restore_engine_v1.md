@@ -260,6 +260,28 @@ dialog. Sidebar nav link `Branches` opens it.
 Full design in
 [`docs/branch_aware_writes_v1.md`](branch_aware_writes_v1.md).
 
+### Follow-ups landed (v1.6): package-aware branching for Skills and Agents
+
+`branch_package_metadata` overlay table (migration
+`20260412000007_branch_package_metadata.sql`) records
+per-(branch, package) metadata overrides for Skills and Agents.
+`promoteBranch` applies the overlay onto the canonical
+`skills` / `agents` row as part of the same
+`origin: 'branch_promotion'` change set, recording a
+`change_set_item` with before/after `metadata` snapshots.
+Restoring the promotion reverts metadata to main's prior values
+through the normal restore path — no new restore logic.
+
+The branch diff service groups child-file heads under their parent
+Skill / Agent package via `files.parent_skill_id` /
+`files.parent_agent_id`, so `/app/branches/[id]` renders coherent
+package cards instead of a flat head list. No new persistence for
+membership; parent pointers are already canonical.
+
+Out of scope in this release: structural adds / removes on branch
+(new-object creation still lands on main), child folder branching,
+Agent → Skill reference branching.
+
 ### Follow-ups landed (v1.5): branch-aware writes for files / skills / agents
 
 `updateObjectContentOnBranch` (in

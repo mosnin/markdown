@@ -203,15 +203,26 @@ export async function getAgentForWorkspace(
 
   if (branchId) {
     const { resolveBranchObjectVersion } = await import("./object_branch_service");
+    const { getPackageMetadataOverlay, applyPackageMetadataOverlay } = await import(
+      "./package_branch_service"
+    );
     const branchVer = await resolveBranchObjectVersion(supabase, branchId, "agent", agentId);
+    let overlayed = agent;
     if (branchVer) {
-      return {
-        ...agent,
+      overlayed = {
+        ...overlayed,
         source_content: branchVer.source_content,
         content_bytes: branchVer.content_bytes,
         current_version_id: branchVer.id,
       } as Agent;
     }
+    // Package metadata overlay: description / tags / summary /
+    // agent_type / model_hint / system_prompt.
+    const overlay = await getPackageMetadataOverlay(supabase, branchId, "agent", agentId);
+    if (overlay) {
+      overlayed = applyPackageMetadataOverlay(overlayed as unknown as Record<string, unknown>, overlay) as unknown as Agent;
+    }
+    if (branchVer || overlay) return overlayed;
   }
 
   return agent;

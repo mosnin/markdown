@@ -202,15 +202,27 @@ export async function getSkillForWorkspace(
 
   if (branchId) {
     const { resolveBranchObjectVersion } = await import("./object_branch_service");
+    const { getPackageMetadataOverlay, applyPackageMetadataOverlay } = await import(
+      "./package_branch_service"
+    );
     const branchVer = await resolveBranchObjectVersion(supabase, branchId, "skill", skillId);
+    let overlayed = skill;
     if (branchVer) {
-      return {
-        ...skill,
+      overlayed = {
+        ...overlayed,
         source_content: branchVer.source_content,
         content_bytes: branchVer.content_bytes,
         current_version_id: branchVer.id,
       } as Skill;
     }
+    // Package metadata overlay: description / tags / summary.
+    const overlay = await getPackageMetadataOverlay(supabase, branchId, "skill", skillId);
+    if (overlay) {
+      overlayed = applyPackageMetadataOverlay(overlayed as unknown as Record<string, unknown>, overlay) as unknown as Skill;
+    }
+    // Only return overlay'd row when something actually differs;
+    // otherwise fall through to main for cleanliness.
+    if (branchVer || overlay) return overlayed;
   }
 
   return skill;

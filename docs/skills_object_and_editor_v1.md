@@ -211,8 +211,15 @@ the branch head when one exists. Non-versioned fields
 (name, description, tags, summary, status, is_reusable,
 canonical_format) remain on main.
 
-**Child files and child folders of a skill are NOT branch-aware via
-the skill itself.** They are individual File / Folder objects; a
-child file is branch-edited through its own `/app/files/<id>` page
-which wires the same pattern. See
-[`docs/branch_aware_writes_v1.md`](branch_aware_writes_v1.md).
+Child files of a skill now participate in the skill's **package
+draft state** on a branch. Editing a child file (through its own
+`/app/files/<id>` page) creates a branch_heads row whose
+`parent_skill_id` on the canonical `files` row pins it to this
+skill's package. The `/app/branches/[id]` page renders skill
+packages as grouped cards with canonical source + every child
+file + metadata-change rows. `description`, `tags`, and `summary`
+are also branch-aware via a `branch_package_metadata` overlay. See
+[`docs/package_branch_state_for_skills_and_agents_v1.md`](package_branch_state_for_skills_and_agents_v1.md).
+
+Child folders inside a skill and adding / removing child files on
+a branch are NOT yet branch-aware — both remain main-routed.

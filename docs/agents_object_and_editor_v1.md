@@ -371,7 +371,16 @@ the branch head when one exists. Agent-specific metadata
 canonical source is the only versioned field and therefore the
 only branch-aware one.
 
-**Child files and child folders of an agent are NOT branch-aware
-via the agent itself.** They are individual File / Folder objects
-and branch-edited through their own routes. See
-[`docs/branch_aware_writes_v1.md`](branch_aware_writes_v1.md).
+Child files of an agent now participate in the agent's **package
+draft state** on a branch. Editing a child file creates a
+branch_heads row whose `parent_agent_id` pins it to this agent's
+package. `description`, `tags`, `summary`, `agent_type`,
+`model_hint`, and `system_prompt` are all branch-aware via a
+`branch_package_metadata` overlay. The `/app/branches/[id]` page
+renders agent packages as grouped cards with canonical source +
+every child file + metadata-change rows. See
+[`docs/package_branch_state_for_skills_and_agents_v1.md`](package_branch_state_for_skills_and_agents_v1.md).
+
+Child folders inside an agent, adding / removing child files on a
+branch, and Agent → Skill reference changes are NOT yet
+branch-aware — all remain main-routed.

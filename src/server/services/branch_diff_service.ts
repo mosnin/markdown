@@ -75,6 +75,42 @@ export interface BranchDiff {
   /** Convenience totals for the page header. */
   totalBytesAdded: number;
   totalBytesRemoved: number;
+  /**
+   * Package-grouped view over `rows` + metadata overlays. Skills and
+   * Agents appear as package groups; standalone notes / files /
+   * orphan child files fall under `standalone`. Populated when any
+   * package row or overlay exists; otherwise `packages` is empty and
+   * everything lives in `standalone`.
+   */
+  packages: PackageDiffGroup[];
+  standalone: BranchDiffRow[];
+}
+
+/**
+ * A single Skill or Agent package group in the diff view.
+ *
+ * `canonical` is the branch diff row for the package's own
+ * canonical source, when it has one. `children` are file diff rows
+ * whose canonical row has `parent_skill_id` / `parent_agent_id`
+ * pointing at this package. `metadataChanges` are fields the user
+ * overrode on the branch_package_metadata overlay with a
+ * before/after comparison against main. Empty arrays are valid — a
+ * package might appear in the diff because of overlay-only changes.
+ */
+export interface PackageDiffGroup {
+  packageType: "skill" | "agent";
+  packageId: string;
+  packageName: string;
+  packageHref: string;
+  canonical: BranchDiffRow | null;
+  children: BranchDiffRow[];
+  metadataChanges: PackageMetadataChange[];
+}
+
+export interface PackageMetadataChange {
+  field: string;
+  mainValue: unknown;
+  branchValue: unknown;
 }
 
 // ─── Type helpers ────────────────────────────────────────────────────────────
@@ -153,6 +189,12 @@ export async function getBranchDiff(
     else totalBytesRemoved += Math.abs(delta);
   }
 
+  const { packages, standalone } = await groupRowsIntoPackages(
+    supabase,
+    branchId,
+    nonNull
+  );
+
   return {
     branchId,
     branchName: branch.name,
@@ -160,7 +202,203 @@ export async function getBranchDiff(
     rows: nonNull,
     totalBytesAdded,
     totalBytesRemoved,
+    packages,
+    standalone,
   };
+}
+
+/**
+ * Turn a flat list of branch diff rows into package-grouped
+ * structures.
+ *
+ * A row is "packaged" if:
+ *   1. It's a skill or agent head directly, OR
+ *   2. It's a file head whose canonical row has a non-null
+ *      parent_skill_id / parent_agent_id.
+ *
+ * Rows that don't match either criterion are standalone (notes,
+ * box-level files that aren't children of any skill / agent).
+ *
+ * On top of rows we also pull every `branch_package_metadata` row
+ * for the branch; a package appears in the grouped view if it has
+ * overlay rows even when it has no branch_heads.
+ */
+async function groupRowsIntoPackages(
+  supabase: SupabaseClient,
+  branchId: string,
+  rows: BranchDiffRow[]
+): Promise<{ packages: PackageDiffGroup[]; standalone: BranchDiffRow[] }> {
+  // Pull parent pointers + package names for every file row in one
+  // shot so we don't issue N queries.
+  const fileIds = rows.filter((r) => r.objectType === "file").map((r) => r.objectId);
+  const fileParents = new Map<
+    string,
+    { parent_skill_id: string | null; parent_agent_id: string | null }
+  >();
+  if (fileIds.length > 0) {
+    const { data } = await supabase
+      .from("files")
+      .select("id, parent_skill_id, parent_agent_id")
+      .in("id", fileIds);
+    for (const row of data ?? []) {
+      fileParents.set(row.id, {
+        parent_skill_id: row.parent_skill_id ?? null,
+        parent_agent_id: row.parent_agent_id ?? null,
+      });
+    }
+  }
+
+  interface GroupAccum {
+    packageType: "skill" | "agent";
+    packageId: string;
+    canonical: BranchDiffRow | null;
+    children: BranchDiffRow[];
+  }
+  const groups = new Map<string, GroupAccum>();
+  const standalone: BranchDiffRow[] = [];
+
+  function keyFor(type: "skill" | "agent", id: string) {
+    return `${type}:${id}`;
+  }
+  function ensureGroup(type: "skill" | "agent", id: string): GroupAccum {
+    const k = keyFor(type, id);
+    const existing = groups.get(k);
+    if (existing) return existing;
+    const fresh: GroupAccum = { packageType: type, packageId: id, canonical: null, children: [] };
+    groups.set(k, fresh);
+    return fresh;
+  }
+
+  for (const row of rows) {
+    if (row.objectType === "skill" || row.objectType === "agent") {
+      ensureGroup(row.objectType, row.objectId).canonical = row;
+      continue;
+    }
+    if (row.objectType === "file") {
+      const parents = fileParents.get(row.objectId);
+      if (parents?.parent_skill_id) {
+        ensureGroup("skill", parents.parent_skill_id).children.push(row);
+        continue;
+      }
+      if (parents?.parent_agent_id) {
+        ensureGroup("agent", parents.parent_agent_id).children.push(row);
+        continue;
+      }
+    }
+    standalone.push(row);
+  }
+
+  // Pull every metadata overlay for this branch and resolve before/
+  // after pairs against main. Overlay rows whose package didn't show
+  // up in groups yet still get a group entry (metadata-only drafts).
+  const { data: overlays } = await supabase
+    .from("branch_package_metadata")
+    .select("*")
+    .eq("branch_id", branchId);
+
+  const metadataChangesByKey = new Map<string, PackageMetadataChange[]>();
+  for (const o of overlays ?? []) {
+    const key = `${o.package_type}:${o.package_id}`;
+    ensureGroup(o.package_type as "skill" | "agent", o.package_id);
+    const changes = await deriveMetadataChanges(supabase, o);
+    if (changes.length > 0) metadataChangesByKey.set(key, changes);
+  }
+
+  // Resolve package display names for the grouped view in one round
+  // per type.
+  const skillIds = Array.from(groups.values())
+    .filter((g) => g.packageType === "skill")
+    .map((g) => g.packageId);
+  const agentIds = Array.from(groups.values())
+    .filter((g) => g.packageType === "agent")
+    .map((g) => g.packageId);
+  const nameMap = new Map<string, string>();
+  if (skillIds.length > 0) {
+    const { data } = await supabase.from("skills").select("id, name").in("id", skillIds);
+    for (const r of data ?? []) nameMap.set(`skill:${r.id}`, r.name);
+  }
+  if (agentIds.length > 0) {
+    const { data } = await supabase.from("agents").select("id, name").in("id", agentIds);
+    for (const r of data ?? []) nameMap.set(`agent:${r.id}`, r.name);
+  }
+
+  const packages: PackageDiffGroup[] = Array.from(groups.values()).map((g) => {
+    const key = keyFor(g.packageType, g.packageId);
+    return {
+      packageType: g.packageType,
+      packageId: g.packageId,
+      packageName: nameMap.get(key) ?? `(deleted ${g.packageType})`,
+      packageHref: g.packageType === "skill"
+        ? `/app/skills/${g.packageId}`
+        : `/app/agents/${g.packageId}`,
+      canonical: g.canonical,
+      children: g.children,
+      metadataChanges: metadataChangesByKey.get(key) ?? [],
+    };
+  });
+
+  // Sort packages alphabetically for stable rendering.
+  packages.sort((a, b) => a.packageName.localeCompare(b.packageName));
+  return { packages, standalone };
+}
+
+/**
+ * Derive the set of metadata fields that actually changed between
+ * main and the overlay. We treat null / undefined symmetrically on
+ * main (a cleared field and a never-set field are both "no value")
+ * and compare primitives + arrays for equality. `tags` uses
+ * set-equality to ignore reorders.
+ */
+async function deriveMetadataChanges(
+  supabase: SupabaseClient,
+  overlay: {
+    package_type: string;
+    package_id: string;
+    description: string | null;
+    tags: string[] | null;
+    summary: string | null;
+    agent_type: string | null;
+    model_hint: string | null;
+    system_prompt: string | null;
+  }
+): Promise<PackageMetadataChange[]> {
+  const table = overlay.package_type === "skill" ? "skills" : "agents";
+  const cols = overlay.package_type === "skill"
+    ? "id, description, tags, summary"
+    : "id, description, tags, summary, agent_type, model_hint, system_prompt";
+  const { data: main } = await supabase
+    .from(table)
+    .select(cols)
+    .eq("id", overlay.package_id)
+    .maybeSingle();
+  const overlayObj = overlay as unknown as Record<string, unknown>;
+  const mainObj = (main ?? {}) as Record<string, unknown>;
+
+  const fields = overlay.package_type === "skill"
+    ? (["description", "tags", "summary"] as const)
+    : (["description", "tags", "summary", "agent_type", "model_hint", "system_prompt"] as const);
+
+  const out: PackageMetadataChange[] = [];
+  for (const f of fields) {
+    const overlayVal = overlayObj[f];
+    if (overlayVal === undefined) continue;
+    const mainVal = mainObj[f] ?? null;
+    if (valuesEqual(mainVal, overlayVal)) continue;
+    out.push({ field: f, mainValue: mainVal, branchValue: overlayVal });
+  }
+  return out;
+}
+
+function valuesEqual(a: unknown, b: unknown): boolean {
+  if (a === b) return true;
+  if (Array.isArray(a) && Array.isArray(b)) {
+    if (a.length !== b.length) return false;
+    const as = [...a].sort();
+    const bs = [...b].sort();
+    for (let i = 0; i < as.length; i++) if (as[i] !== bs[i]) return false;
+    return true;
+  }
+  return false;
 }
 
 async function buildDiffRow(
