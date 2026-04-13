@@ -243,9 +243,12 @@ See type-specific documentation:
      subtree `path_cascade` events recorded per descendant.
    - Branch-aware writes: see
      [docs/branch_aware_writes_v1.md](branch_aware_writes_v1.md)
-     for per-object contracts and
+     for per-object contracts,
      [docs/package_branch_state_for_skills_and_agents_v1.md](package_branch_state_for_skills_and_agents_v1.md)
-     for Skill / Agent package drafting. Active-branch cookie +
+     for Skill / Agent package drafting, and
+     [docs/branch_local_structural_creation_v1.md](branch_local_structural_creation_v1.md)
+     for branch-local file creation + Agent → Skill reference
+     branching via `branch_id` columns on `files` and `object_links`. Active-branch cookie +
      `RequestContext.activeBranchId` resolution. Branch writes for
      every content-bearing object (`updateNoteOnBranch`,
      `updateFileContentOnBranch`, `updateSkillContentOnBranch`,

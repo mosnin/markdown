@@ -318,7 +318,15 @@ export async function createSkillChildFileAction(
     const supabase = await createClient();
     const skill = await getSkillForWorkspace(supabase, skillId, ctx.workspace.id);
     if (!skill) return { ok: false, error: "Skill not found" };
-    const file = await createFile(supabase, ctx.user.id, ctx.workspace.id, {
+
+    // Branch-local creation when a draft branch is active: the file
+    // lands with `branch_id` set and is invisible to main readers
+    // until promote. This is the supported way to add a new child
+    // file to a Skill package without leaking draft structure.
+    const { createFile, createFileOnBranch } = await import(
+      "@/server/services/file_service"
+    );
+    const createParams = {
       boxId: skill.box_id ?? null,
       folderId: skill.box_id ? (skill.folder_id ?? null) : null,
       name: params.filename.trim(),
@@ -327,8 +335,14 @@ export async function createSkillChildFileAction(
       sourceLanguage: null,
       fileExtension: null,
       mimeType: null,
-    });
-    // Set direct FK containment
+    };
+    const file = ctx.activeBranchId
+      ? await createFileOnBranch(supabase, ctx.user.id, ctx.workspace.id, ctx.activeBranchId, createParams)
+      : await createFile(supabase, ctx.user.id, ctx.workspace.id, createParams);
+
+    // Set direct FK containment. parent_skill_id is a main-level
+    // structural field, not branch-scoped — a branch-local file still
+    // declares its parent skill so membership derivation works.
     await supabase.from("files").update({ parent_skill_id: skillId }).eq("id", file.id);
     await createLink(supabase, ctx.workspace.id, {
       sourceObjectType: OBJECT_TYPE.SKILL,

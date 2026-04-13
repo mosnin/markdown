@@ -37,6 +37,14 @@ export interface File {
   status: ObjectStatus;
   current_version_id: string | null;
   origin_type: ObjectOriginType;
+  /**
+   * Non-null when the file exists only on a draft branch. Cleared on
+   * promote (the row becomes main) or hard-deleted on discard. Main
+   * readers filter these out; branch readers include rows matching
+   * the active branch. See
+   * docs/branch_local_structural_creation_v1.md.
+   */
+  branch_id: string | null;
   created_at: string;
   updated_at: string;
 }

@@ -454,6 +454,65 @@ export async function promoteBranch(
       });
     }
 
+    // Promote any branch-scoped structural rows onto main. `files`
+    // and `object_links` both use a nullable `branch_id` column:
+    // clearing it lands the row on main. We record a `change_set_item`
+    // per promoted row so the rollback engine can revert.
+    const { data: branchFiles } = await supabase
+      .from("files")
+      .select("id, name, box_id, parent_skill_id, parent_agent_id")
+      .eq("branch_id", branchId);
+    for (const f of branchFiles ?? []) {
+      await supabase.from("files").update({ branch_id: null }).eq("id", f.id);
+      await recordChangeSetItem(supabase, {
+        change_set_id: cs.id,
+        workspace_id: workspaceId,
+        operation: "create",
+        object_type: "file",
+        object_id: f.id,
+        before_snapshot: { branch_id: branchId },
+        after_snapshot: {
+          branch_id: null,
+          box_id: f.box_id,
+          parent_skill_id: f.parent_skill_id ?? null,
+          parent_agent_id: f.parent_agent_id ?? null,
+          promoted_from_branch: branchId,
+        },
+      });
+      promoted.push({
+        object_type: "file" as const,
+        object_id: f.id,
+        new_version_id: "",
+      });
+    }
+
+    const { data: branchLinks } = await supabase
+      .from("object_links")
+      .select("id, source_object_type, source_object_id, target_object_type, target_object_id, relationship_type")
+      .eq("branch_id", branchId);
+    for (const link of branchLinks ?? []) {
+      await supabase
+        .from("object_links")
+        .update({ branch_id: null })
+        .eq("id", link.id);
+      await recordChangeSetItem(supabase, {
+        change_set_id: cs.id,
+        workspace_id: workspaceId,
+        operation: "link_create",
+        object_type: "object_link",
+        object_id: link.id,
+        before_snapshot: { branch_id: branchId },
+        after_snapshot: {
+          source_object_type: link.source_object_type,
+          source_object_id: link.source_object_id,
+          target_object_type: link.target_object_type,
+          target_object_id: link.target_object_id,
+          relationship_type: link.relationship_type,
+          promoted_from_branch: branchId,
+        },
+      });
+    }
+
     await commitChangeSet(supabase, cs.id);
     await markBranchPromoted(supabase, branchId);
 

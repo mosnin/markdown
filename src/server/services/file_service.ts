@@ -327,6 +327,75 @@ export async function createFile(
  * Update a file's content and metadata, creating a new version atomically via RPC.
  * Returns the updated File.
  */
+/**
+ * Create a file whose existence is scoped to a draft branch.
+ *
+ * Shape: call the normal `createFile` path first (which runs the
+ * atomic RPC + workspace_objects + audit), then stamp `branch_id`
+ * on the resulting row. Until promote, main-scoped readers filter
+ * out rows with `branch_id IS NOT NULL`; branch readers union main
+ * with rows where `branch_id = <active branch>`.
+ *
+ * Discard of the owning branch hard-deletes these rows because they
+ * never reached main and have no audit history to preserve. See
+ * `docs/branch_local_structural_creation_v1.md`.
+ *
+ * This is the only supported way for the UI to add a child file to
+ * a Skill / Agent package while a branch is active. The normal
+ * `createFile` path remains main-only.
+ */
+export async function createFileOnBranch(
+  supabase: SupabaseClient,
+  userId: string,
+  workspaceId: string,
+  branchId: string,
+  params: Parameters<typeof createFile>[3]
+): Promise<File> {
+  // Re-validate the branch is open and belongs to this workspace
+  // up-front so we never write a file pointing at a stale branch.
+  const { data: branch } = await supabase
+    .from("draft_branches")
+    .select("id, workspace_id, status")
+    .eq("id", branchId)
+    .maybeSingle();
+  if (!branch || branch.workspace_id !== workspaceId || branch.status !== "open") {
+    throw new Error("Branch not found or not open");
+  }
+
+  const file = await createFile(supabase, userId, workspaceId, params);
+
+  // Stamp branch_id. We also mirror the column onto workspace_objects
+  // so tree / navigation filters that read the registry can scope
+  // branch-local rows just as cheaply as the files table.
+  await supabase
+    .from("files")
+    .update({ branch_id: branchId })
+    .eq("id", file.id);
+
+  // Distinct audit event: "file.branch_created" — separate from
+  // "file.created" so the Audit Log makes branch-scoped structural
+  // creation easy to filter.
+  const { createAuditEvent } = await import(
+    "@/server/repositories/audit_event_repository"
+  );
+  await createAuditEvent(supabase, {
+    workspace_id: workspaceId,
+    actor_type: "user",
+    actor_id: userId,
+    object_type: "file",
+    object_id: file.id,
+    event_type: "file.branch_created",
+    metadata: {
+      branch_id: branchId,
+      box_id: file.box_id,
+      parent_skill_id: file.parent_skill_id ?? null,
+      parent_agent_id: file.parent_agent_id ?? null,
+    },
+  });
+
+  return { ...file, branch_id: branchId } as File;
+}
+
 export async function updateFileContent(
   supabase: SupabaseClient,
   userId: string,

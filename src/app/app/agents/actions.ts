@@ -401,7 +401,11 @@ export async function createAgentChildFileAction(
     const supabase = await createClient();
     const agent = await getAgentForWorkspace(supabase, agentId, ctx.workspace.id);
     if (!agent) return { ok: false, error: "Agent not found" };
-    const file = await createFile(supabase, ctx.user.id, ctx.workspace.id, {
+
+    const { createFile, createFileOnBranch } = await import(
+      "@/server/services/file_service"
+    );
+    const createParams = {
       boxId: agent.box_id ?? null,
       folderId: agent.box_id ? (agent.folder_id ?? null) : null,
       name: params.filename.trim(),
@@ -410,8 +414,13 @@ export async function createAgentChildFileAction(
       sourceLanguage: null,
       fileExtension: null,
       mimeType: null,
-    });
-    // Set direct FK containment
+    };
+    const file = ctx.activeBranchId
+      ? await createFileOnBranch(supabase, ctx.user.id, ctx.workspace.id, ctx.activeBranchId, createParams)
+      : await createFile(supabase, ctx.user.id, ctx.workspace.id, createParams);
+
+    // Set direct FK containment. parent_agent_id is a main-level
+    // structural field, not branch-scoped.
     await supabase.from("files").update({ parent_agent_id: agentId }).eq("id", file.id);
     await createLink(supabase, ctx.workspace.id, {
       sourceObjectType: OBJECT_TYPE.AGENT,
@@ -451,6 +460,18 @@ export async function attachSkillToAgentAction(
       relationshipType: RELATIONSHIP_TYPE.DEPENDS_ON,
       relationshipNote: "Agent skill dependency",
     });
+
+    // Branch-local reference: if the user is attaching this Skill to
+    // the Agent while a draft branch is active, stamp `branch_id` on
+    // the newly-written object_links row so it stays invisible to
+    // main readers until promote. Main-only attach (no active branch)
+    // continues unchanged.
+    if (ctx.activeBranchId) {
+      await supabase
+        .from("object_links")
+        .update({ branch_id: ctx.activeBranchId })
+        .eq("id", link.id);
+    }
     revalidatePath(`/app/agents/${agentId}`);
     return { ok: true, data: { id: link.id } };
   } catch (err) {

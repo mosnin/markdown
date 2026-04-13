@@ -84,11 +84,24 @@ export async function getLinksForObject(
   supabase: SupabaseClient,
   workspaceId: string,
   objectType: ObjectType,
-  objectId: string
+  objectId: string,
+  opts: { branchId?: string | null } = {}
 ): Promise<{ outgoing: ObjectLink[]; incoming: ObjectLink[] }> {
   const [outgoing, incoming] = await Promise.all([
     getObjectLinksForSource(supabase, workspaceId, objectType, objectId),
     getObjectLinksForTarget(supabase, workspaceId, objectType, objectId),
   ]);
-  return { outgoing, incoming };
+  // Branch filter. object_links.branch_id is NULL for main links.
+  // Main-only readers (no active branch) drop any row with a
+  // non-null branch_id. Branch readers keep main + rows scoped to
+  // that branch.
+  const filter = (l: ObjectLink): boolean => {
+    const bid = (l as ObjectLink & { branch_id?: string | null }).branch_id ?? null;
+    if (!opts.branchId) return bid === null;
+    return bid === null || bid === opts.branchId;
+  };
+  return {
+    outgoing: outgoing.filter(filter),
+    incoming: incoming.filter(filter),
+  };
 }

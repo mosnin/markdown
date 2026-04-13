@@ -181,6 +181,13 @@ export async function getBranchDiff(
   );
   const nonNull = rows.filter((r): r is BranchDiffRow => r !== null);
 
+  // Branch-local structural creates (files + object_links) have no
+  // corresponding branch_heads row — they are new rows marked with
+  // branch_id. Surface them in the diff as synthetic "created on
+  // branch" entries so the user sees what promote will add to main.
+  const createdFiles = await loadBranchCreatedFiles(supabase, branchId);
+  nonNull.push(...createdFiles);
+
   let totalBytesAdded = 0;
   let totalBytesRemoved = 0;
   for (const r of nonNull) {
@@ -399,6 +406,48 @@ function valuesEqual(a: unknown, b: unknown): boolean {
     return true;
   }
   return false;
+}
+
+/**
+ * Load files that exist only on this branch (branch_id matches, no
+ * main counterpart). Each one becomes a BranchDiffRow where
+ * mainContent=null and mainBytes=0 so the UI renders it as
+ * "new on branch" — the same shape the deleted-on-main edge case
+ * uses today.
+ */
+async function loadBranchCreatedFiles(
+  supabase: SupabaseClient,
+  branchId: string
+): Promise<BranchDiffRow[]> {
+  const { data } = await supabase
+    .from("files")
+    .select("id, name, source_content, content_bytes, current_version_id, path_cache, parent_skill_id, parent_agent_id")
+    .eq("branch_id", branchId);
+  return (data ?? []).map((f: {
+    id: string;
+    name: string;
+    source_content: string;
+    content_bytes: number;
+    current_version_id: string | null;
+    path_cache: string | null;
+    parent_skill_id: string | null;
+    parent_agent_id: string | null;
+  }) => ({
+    branchHeadId: `created:${f.id}`,
+    objectType: "file" as const,
+    objectId: f.id,
+    displayName: f.name,
+    href: `/app/files/${f.id}`,
+    branchVersionId: f.current_version_id ?? "",
+    branchContent: f.source_content,
+    branchBytes: f.content_bytes,
+    branchVersionNumber: 1,
+    mainVersionId: null,
+    mainContent: null,
+    mainBytes: 0,
+    mainMovedAhead: false,
+    mainTrashed: false,
+  }));
 }
 
 async function buildDiffRow(

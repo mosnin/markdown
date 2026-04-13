@@ -26,5 +26,12 @@ export interface ObjectLink {
   target_object_id: string;
   relationship_type: RelationshipType;
   relationship_note: string | null;
+  /**
+   * Non-null when the link exists only on a draft branch (e.g.
+   * Agent → Skill dependency attached while on a branch). Cleared
+   * on promote; hard-deleted on discard. See
+   * docs/branch_local_structural_creation_v1.md.
+   */
+  branch_id: string | null;
   created_at: string;
 }

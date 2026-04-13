@@ -81,7 +81,9 @@ export default async function SkillPage({
       ? listAttachmentsForObject(supabase, ctx.workspace.id, "skill", skill_id)
       : Promise.resolve([]),
     getLinksForObject(supabase, ctx.workspace.id, OBJECT_TYPE.SKILL, skill_id),
-    skill.box_id ? listFilesByBox(supabase, skill.box_id, { includeArchived: true }) : Promise.resolve([]),
+    skill.box_id
+      ? listFilesByBox(supabase, skill.box_id, { includeArchived: true, branchId: ctx.activeBranchId })
+      : Promise.resolve([]),
     skill.box_id ? listFoldersByBox(supabase, skill.box_id, { includeArchived: true }) : Promise.resolve([]),
   ]);
 

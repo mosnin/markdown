@@ -194,14 +194,18 @@ export default async function AgentPage({
   // Parallel data fetching
   const [rawLinks, versions, attachments, pendingProposals, boxNotes, boxFiles, boxSkills, boxAgents, reusableAgents, reusableSkills, boxFolders] =
     await Promise.all([
-      getLinksForObject(supabase, ctx.workspace.id, OBJECT_TYPE.AGENT, agent_id),
+      getLinksForObject(supabase, ctx.workspace.id, OBJECT_TYPE.AGENT, agent_id, {
+        branchId: ctx.activeBranchId,
+      }),
       listObjectVersions(supabase, "agent", agent_id, { limit: 50 }),
       agent.is_reusable
         ? listAttachmentsForObject(supabase, ctx.workspace.id, "agent", agent_id)
         : Promise.resolve([]),
       listPendingProposalsForObject(supabase, ctx.workspace.id, "agent", agent_id),
       agent.box_id ? listNotesByBox(supabase, agent.box_id) : Promise.resolve([]),
-      agent.box_id ? listFilesByBox(supabase, agent.box_id) : Promise.resolve([]),
+      agent.box_id
+        ? listFilesByBox(supabase, agent.box_id, { branchId: ctx.activeBranchId })
+        : Promise.resolve([]),
       agent.box_id ? listSkillsByBox(supabase, agent.box_id) : Promise.resolve([]),
       agent.box_id ? listAgentsByBox(supabase, agent.box_id) : Promise.resolve([]),
       // For workspace-level reusable agents, also load reusable skills/agents for linking
