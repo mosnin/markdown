@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { _internalGetClientWithSecret, verifyClientSecret } from "@/server/services/oauth_client_service";
 import { revokeToken } from "@/server/services/oauth_token_service";
+import { createAuditEvent } from "@/server/repositories/audit_event_repository";
 
 /**
  * OAuth 2.0 Token Revocation (RFC 7009).
@@ -49,6 +50,25 @@ export async function POST(req: NextRequest) {
   }
 
   await revokeToken(admin, token);
+
+  const { data: latest } = await admin
+    .from("oauth_access_tokens")
+    .select("user_id, workspace_id")
+    .eq("client_id", client.client_id)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (latest) {
+    await createAuditEvent(admin, {
+      workspace_id: latest.workspace_id,
+      actor_type: "user",
+      actor_id: latest.user_id,
+      object_type: "oauth_client",
+      object_id: client.id,
+      event_type: "oauth.token.revoked",
+      metadata: { client_id: client.client_id },
+    });
+  }
   // Per RFC 7009, respond 200 even if the token was unknown. We don't
   // leak whether the token existed.
   return new NextResponse(null, {

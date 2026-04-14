@@ -131,7 +131,7 @@ function AppRow({
           ))}
         </div>
         <p className="mt-1 text-[10px] text-muted-foreground">
-          Last used: {lastUsed} · {row.active_tokens} active session{row.active_tokens === 1 ? "" : "s"}
+          Workspace: {row.workspace_name} · Status: {row.status} · Last used: {lastUsed} · {row.active_tokens} active session{row.active_tokens === 1 ? "" : "s"}
         </p>
       </div>
       <Button
@@ -139,7 +139,7 @@ function AppRow({
         variant="ghost"
         size="sm"
         onClick={onRevoke}
-        disabled={revoking}
+        disabled={revoking || row.status === "revoked"}
         className="shrink-0 text-muted-foreground hover:text-destructive"
         aria-label={`Revoke ${row.client_name}`}
       >

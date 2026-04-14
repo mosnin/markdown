@@ -280,3 +280,30 @@ for the full architecture, including the scope table, token model,
 and legacy migration guidance. The stdio transport is preserved for
 local development and deployments already using env-var auth; new
 connector-style integrations should use HTTP + OAuth.
+
+## OAuth product surface status (2026-04-13)
+
+- `/oauth/authorize` is a production consent UI (client identity, scopes, workspace selector, box narrowing, approve/deny).
+- `/api/oauth/token` enforces 1h access-token TTL and 30d rotating refresh tokens.
+- `/api/oauth/revoke` revokes bearer credentials without leaking token existence.
+- Settings includes:
+  - **Connected apps** (user grant management + revoke)
+  - **Developer apps** (OAuth client registration, one-time secret reveal, rotation, delete/revoke)
+- OAuth-backed writes remain branch-safe by using existing canonical API write semantics. Branch targeting is not separately requested by OAuth tokens; behavior remains equivalent to current API write defaults.
+
+## Launch policy update (2026-04-13)
+
+- Connector-grade HTTP MCP (`/api/mcp`) is OAuth-only.
+- Legacy `csk_v1_` tokens remain migration/dev-only and are not accepted on `/api/mcp`.
+- See `docs/mcp_connector_compatibility_and_launch_readiness_v1.md` for troubleshooting and launch checks.
+
+## OAuth write branch policy (final)
+
+OAuth-backed writes are intentionally main-only in V1. Branch-targeting fields are rejected explicitly rather than silently ignored.
+
+### Troubleshooting (OAuth MCP)
+
+- If discovery URLs are wrong, verify `NEXT_PUBLIC_APP_URL` and reload `/.well-known/oauth-authorization-server` and `/.well-known/mcp-server`.
+- `invalid_grant` at token endpoint usually means bad PKCE verifier, revoked grant, or redirect URI mismatch.
+- `401` on `/api/mcp` with legacy token is expected: `csk_v1_` is rejected on HTTP MCP.
+- Write tool errors for viewer role are expected even if the token requested write scopes.

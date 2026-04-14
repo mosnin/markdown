@@ -20,7 +20,7 @@ import { SkillSourceEditor } from "@/components/product/skill_source_editor";
 import { SkillChildrenPanel } from "@/components/product/skill_children_panel";
 import { OBJECT_TYPE } from "@/server/domain/constants/object_constants";
 import { WorkspaceLiveRefresh } from "@/components/product/workspace_live_refresh";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs } from "@heroui/react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 
@@ -216,25 +216,30 @@ export default async function SkillPage({
       )}
 
       {/* Tabbed content */}
-      <Tabs defaultValue="overview" className="flex flex-1 flex-col overflow-hidden">
-        <div className="border-b border-border px-6">
-          <TabsList variant="line" className="h-auto pb-0">
-            <TabsTrigger value="overview" className="pb-3">Overview</TabsTrigger>
-            <TabsTrigger value="source" className="pb-3">Source</TabsTrigger>
-            <TabsTrigger value="children" className="pb-3">
+      <Tabs
+        aria-label="Skill sections"
+        defaultSelectedKey="overview"
+        variant="primary"
+        className="flex flex-1 flex-col overflow-hidden"
+      >
+        <Tabs.List>
+          <Tabs.Tab id="overview">Overview</Tabs.Tab>
+          <Tabs.Tab id="source">Source</Tabs.Tab>
+          <Tabs.Tab id="children">
+            <span className="inline-flex items-center">
               Files
               {childrenItems.length > 0 && (
                 <Badge variant="secondary" className="ml-1.5 h-4 px-1.5 text-[10px] font-normal">
                   {childrenItems.length}
                 </Badge>
               )}
-            </TabsTrigger>
-            <TabsTrigger value="history" className="pb-3">History</TabsTrigger>
-          </TabsList>
-        </div>
+            </span>
+          </Tabs.Tab>
+          <Tabs.Tab id="history">History</Tabs.Tab>
+        </Tabs.List>
 
         {/* ── Overview tab ── */}
-        <TabsContent value="overview" className="flex-1 overflow-hidden">
+        <Tabs.Panel id="overview" className="flex-1 overflow-hidden">
           <ScrollArea className="h-full">
             <div className="mx-auto max-w-3xl px-6 py-6 space-y-4">
               <ObjectTrustHeader
@@ -289,10 +294,10 @@ export default async function SkillPage({
               </section>
             </div>
           </ScrollArea>
-        </TabsContent>
+        </Tabs.Panel>
 
         {/* ── Source tab ── */}
-        <TabsContent value="source" className="flex-1 overflow-hidden">
+        <Tabs.Panel id="source" className="flex-1 overflow-hidden">
           <ScrollArea className="h-full">
             <div className="mx-auto max-w-3xl px-6 py-6 space-y-4">
               <section className="space-y-2">
@@ -307,10 +312,10 @@ export default async function SkillPage({
               </section>
             </div>
           </ScrollArea>
-        </TabsContent>
+        </Tabs.Panel>
 
         {/* ── Children / Files tab ── */}
-        <TabsContent value="children" className="flex-1 overflow-hidden">
+        <Tabs.Panel id="children" className="flex-1 overflow-hidden">
           <ScrollArea className="h-full">
             <div className="mx-auto max-w-3xl px-6 py-6">
               <div className="mb-4 space-y-1">
@@ -325,10 +330,10 @@ export default async function SkillPage({
               <SkillChildrenPanel skillId={skill_id} childrenItems={childrenItems} canCreateFolders={true} />
             </div>
           </ScrollArea>
-        </TabsContent>
+        </Tabs.Panel>
 
         {/* ── History tab ── */}
-        <TabsContent value="history" className="flex-1 overflow-hidden">
+        <Tabs.Panel id="history" className="flex-1 overflow-hidden">
           <ScrollArea className="h-full">
             <div className="mx-auto max-w-3xl px-6 py-6">
               <SkillHistoryPanel
@@ -339,7 +344,7 @@ export default async function SkillPage({
               />
             </div>
           </ScrollArea>
-        </TabsContent>
+        </Tabs.Panel>
       </Tabs>
     </div>
   );

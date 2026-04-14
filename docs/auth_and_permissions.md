@@ -202,3 +202,26 @@ capability scope — admin actions remain on the human UI.
   in the process environment. Every use emits a rate-limited
   `mcp.legacy_token_used` audit event and attaches standard
   deprecation response headers.
+
+## MCP OAuth hardening updates (2026-04-13)
+
+- `/api/mcp` and canonical `/api/v1/**` now resolve bearer auth through a unified resolver path.
+- Workspace membership/role is re-checked live for OAuth tokens before request authorization.
+- Viewer-role OAuth callers are forced into read-only behavior even if a connector requested write-capable scopes.
+- Consent revocation invalidates all child access/refresh tokens for that `(user, client, workspace)` tuple.
+
+## Launch-readiness operational notes
+
+- OAuth token-exchange failures emit structured log warnings without raw secrets.
+- HTTP MCP auth failures emit structured warnings to aid production debugging.
+- Legacy `csk_v1_` is isolated from `/api/mcp`; OAuth is the only supported connector auth path there.
+
+## OAuth write branch policy
+
+OAuth-scoped machine writes currently target canonical main behavior only. Branch targeting parameters are rejected for OAuth write requests to avoid ambiguous semantics.
+
+### Production legacy gate
+
+Legacy `csk_v1_` acceptance is migration-only. In production it requires both:
+1. `CONTEXT_STORE_LEGACY_CSK_ENABLED=true`
+2. `CONTEXT_STORE_LEGACY_CSK_MIGRATION=true`
