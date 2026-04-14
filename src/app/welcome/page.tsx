@@ -1,30 +1,29 @@
-"use client";
+import { redirect } from "next/navigation";
+import { getRequestContext } from "@/server/auth/get_request_context";
+import { WelcomeOnboardingFlow } from "@/components/product/welcome_onboarding_flow";
 
-import { useEffect } from "react";
-import { useRouter } from "next/navigation";
-import { BoxLoader } from "@/components/ui/box-loader";
+export default async function WelcomePage() {
+  const ctx = await getRequestContext();
 
-/**
- * Post-login welcome screen.
- *
- * Shown once after a user signs in or signs up. Plays the 3-second
- * box-stacking animation on a white background, then navigates to /app.
- * The animation's CSS duration is 3s; we wait 3.2s before redirecting
- * so the final frame is visible before the transition.
- */
-export default function WelcomePage() {
-  const router = useRouter();
+  if (!ctx.isAuthenticated || !ctx.user) {
+    redirect("/sign_in");
+  }
 
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      router.replace("/app");
-    }, 3200);
-    return () => clearTimeout(timer);
-  }, [router]);
+  if (ctx.user.user_metadata?.onboarding_v1_complete) {
+    redirect("/app");
+  }
+
+  const initialTheme =
+    ctx.user.user_metadata?.theme === "dark" ? "dark" : "light";
+  const initialFullName =
+    (ctx.user.user_metadata?.full_name as string | undefined) ??
+    (ctx.user.user_metadata?.name as string | undefined) ??
+    "";
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-white">
-      <BoxLoader />
-    </div>
+    <WelcomeOnboardingFlow
+      initialTheme={initialTheme}
+      initialFullName={initialFullName}
+    />
   );
 }
