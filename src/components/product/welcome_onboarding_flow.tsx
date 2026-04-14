@@ -7,6 +7,7 @@ import { useTheme } from "next-themes";
 import { ArrowRight, Building2, Circle, Gauge, Palette, PenTool, UserRound, Wrench } from "lucide-react";
 import BackgroundSnippetsNoiseEffect11 from "@/components/ui/background-snippets-noise-effect11";
 import { completeWelcomeOnboardingAction } from "@/app/welcome/actions";
+import { Confetti } from "@/components/ui/confetti";
 
 type ThemeChoice = "light" | "dark";
 
@@ -44,6 +45,7 @@ export function WelcomeOnboardingFlow({
   const [role, setRole] = useState<string>("founder");
   const [fullName, setFullName] = useState(initialFullName);
   const [error, setError] = useState<string | null>(null);
+  const [celebrate, setCelebrate] = useState(false);
 
   const canContinue = useMemo(() => {
     if (step === 0) return !!themeChoice;
@@ -78,12 +80,14 @@ export function WelcomeOnboardingFlow({
         setError(res.error);
         return;
       }
-      router.replace("/app");
+      setCelebrate(true);
+      setTimeout(() => router.replace("/app"), 1100);
     });
   }
 
   return (
     <div className="relative flex min-h-screen items-center justify-center overflow-hidden px-4 py-12">
+      <Confetti active={celebrate} />
       <BackgroundSnippetsNoiseEffect11 />
       <div className="relative z-10 w-full max-w-3xl rounded-2xl border border-border/40 bg-background/70 p-8 backdrop-blur-md">
         <div className="mb-6 flex justify-center">
