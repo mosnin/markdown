@@ -3,13 +3,10 @@ import { requireAuthenticatedUser } from "@/server/auth/require_authenticated_us
 import { createClient } from "@/lib/supabase/server";
 import { listReusableAgents } from "@/server/repositories/agent_repository";
 import { listBoxesByWorkspace } from "@/server/repositories/box_repository";
-import Link from "next/link";
-import { AgentTypeBadge } from "@/components/product/agent_type_badge";
 import { AgentCreateDialog } from "@/components/product/agent_create_dialog";
-import { AttachToBoxTrigger } from "@/components/product/attach_to_box_trigger";
 import { AgentImportTrigger } from "@/components/product/agent_import_dialog";
 import { WorkspaceLiveRefresh } from "@/components/product/workspace_live_refresh";
-import { cn } from "@/lib/utils";
+import { AgentsLibraryView } from "@/components/product/agents_library_view";
 
 // ─── Empty state ──────────────────────────────────────────────────────────────
 
@@ -31,70 +28,6 @@ function EmptyAgents() {
           </div>
         </div>
       </div>
-    </div>
-  );
-}
-
-// ─── Agent card ───────────────────────────────────────────────────────────────
-
-function AgentCard({
-  agent,
-  boxes,
-}: {
-  agent: {
-    id: string;
-    name: string;
-    description: string | null;
-    agent_type: string | null;
-    tags: string[];
-    canonical_format: string;
-    status: string;
-  };
-  boxes: Array<{ id: string; name: string }>;
-}) {
-  return (
-    <div className="relative flex flex-col gap-0">
-      <Link
-        href={`/app/agents/${agent.id}`}
-        className={cn(
-          "flex flex-col gap-1.5 rounded-lg border border-border bg-card p-4",
-          "transition-colors duration-150 hover:bg-accent/40",
-          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        )}
-      >
-        <div className="flex items-center gap-2">
-          <Bot className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-          <span className="text-sm font-medium text-foreground truncate flex-1">{agent.name}</span>
-          {agent.agent_type && (
-            <AgentTypeBadge agentType={agent.agent_type} subtle className="ml-auto shrink-0" />
-          )}
-        </div>
-        {agent.description && (
-          <p className="text-xs text-muted-foreground line-clamp-2">{agent.description}</p>
-        )}
-        <div className="flex items-center gap-2 mt-0.5">
-          <span className="rounded-md border border-border/50 bg-muted/40 px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
-            {agent.canonical_format}
-          </span>
-          {agent.tags.length > 0 && (
-            <div className="flex flex-wrap gap-1">
-              {agent.tags.slice(0, 4).map((tag) => (
-                <span key={tag} className="rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
-                  {tag}
-                </span>
-              ))}
-            </div>
-          )}
-          <div className="ml-auto">
-            <AttachToBoxTrigger
-              objectType="agent"
-              objectId={agent.id}
-              objectName={agent.name}
-              boxes={boxes}
-            />
-          </div>
-        </div>
-      </Link>
     </div>
   );
 }
@@ -140,11 +73,7 @@ export default async function AgentsPage() {
                 {agents.length} agent{agents.length === 1 ? "" : "s"}
               </p>
             </div>
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-              {agents.map((agent) => (
-                <AgentCard key={agent.id} agent={agent} boxes={boxes} />
-              ))}
-            </div>
+            <AgentsLibraryView agents={agents} boxes={boxes} />
           </div>
         )}
       </div>

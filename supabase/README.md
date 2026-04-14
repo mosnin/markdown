@@ -45,3 +45,19 @@ Connection token authorization is NOT handled via RLS in V1 — it is enforced
 by the API layer.
 
 See `docs/data_model.md` and `docs/auth.md` for full detail.
+
+## Troubleshooting: "workspace id not found"
+
+I re-checked the migration files in `supabase/migrations/` and they do **not** require a hardcoded workspace id.
+
+This error usually happens when running **ad-hoc SQL inserts/updates** that reference a `workspace_id` that does not exist yet.
+
+Before running custom SQL, verify your workspace ids first:
+
+```sql
+select id, name, owner_id, created_at
+from public.workspaces
+order by created_at asc;
+```
+
+If this returns no rows, create a workspace from the app first (sign in and load `/app` once), then re-run your SQL using a real workspace id from the query above.

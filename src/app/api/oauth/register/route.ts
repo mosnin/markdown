@@ -8,6 +8,7 @@ import {
 import { getRequestContext } from "@/server/auth/get_request_context";
 import { ALL_SCOPES, type OAuthScope } from "@/server/services/oauth_scope_service";
 import { createAuditEvent } from "@/server/repositories/audit_event_repository";
+import { oauthRegistrationLimit } from "@/lib/api/rate_limit";
 
 /**
  * OAuth 2.0 Dynamic Client Registration (RFC 7591).
@@ -57,6 +58,15 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(
       { error: "invalid_request", error_description: "Authenticated Context Store session required to register a client." },
       { status: 401 }
+    );
+  }
+
+  const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
+  const rl = oauthRegistrationLimit(`${callerUserId}:${ip}`);
+  if (!rl.allowed) {
+    return NextResponse.json(
+      { error: "slow_down", error_description: `Too many registrations. Retry in ${rl.retryAfter}s.` },
+      { status: 429, headers: { "Retry-After": String(rl.retryAfter) } }
     );
   }
 

@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import {
@@ -13,6 +14,8 @@ import {
 } from "@/server/services/oauth_token_service";
 import { parseScopeString, serializeScopes } from "@/server/services/oauth_scope_service";
 import { createAuditEvent } from "@/server/repositories/audit_event_repository";
+import { oauthTokenLimit } from "@/lib/api/rate_limit";
+import { log } from "@/lib/logger";
 
 /**
  * OAuth 2.1 token endpoint (RFC 6749 §3.2 with OAuth 2.1 tightening).
@@ -54,6 +57,12 @@ export async function POST(req: NextRequest) {
   const body = await parseBody(req);
   const { clientId, clientSecret } = resolveClientAuth(req, body);
   if (!clientId) return tokenError("invalid_client", "client_id is required");
+
+  const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
+  const rl = oauthTokenLimit(`${clientId}:${ip}`);
+  if (!rl.allowed) {
+    return tokenError("slow_down", `Too many token requests. Retry in ${rl.retryAfter}s.`);
+  }
 
   const admin = createAdminClient();
   const client = await _internalGetClientWithSecret(admin, clientId);
@@ -146,6 +155,26 @@ async function handleRefreshToken(
   }
   const pair = result as Exclude<typeof result, { ok: false; error: string }>;
 
+  const { data: refreshRow } = await admin
+    .from("oauth_refresh_tokens")
+    .select("user_id, workspace_id")
+    .eq("token_hash", createHash("sha256").update(pair.refreshToken).digest("hex"))
+    .maybeSingle();
+  if (refreshRow) {
+    const client = await _internalGetClientWithSecret(admin, clientId);
+    if (client) {
+      await createAuditEvent(admin, {
+        workspace_id: refreshRow.workspace_id,
+        actor_type: "user",
+        actor_id: refreshRow.user_id,
+        object_type: "oauth_client",
+        object_id: client.id,
+        event_type: "oauth.token.refreshed",
+        metadata: { grant_type: "refresh_token", scope: serializeScopes(pair.scope) },
+      });
+    }
+  }
+
   return tokenSuccess(pair);
 }
 
@@ -217,6 +246,7 @@ function tokenSuccess(pair: {
 }
 
 function tokenError(code: string, description: string) {
+  log.warn("oauth_token_exchange_failed", { code, description });
   return NextResponse.json(
     { error: code, error_description: description },
     {

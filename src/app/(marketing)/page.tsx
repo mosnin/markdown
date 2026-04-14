@@ -5,6 +5,7 @@ import * as PricingCard from "@/components/ui/pricing-card";
 import { Button } from "@/components/ui/button";
 import { NotificationCenterFeed } from "@/components/ui/live-feed";
 import { AnomalyHeatmap } from "@/components/ui/anomaly-heatmap";
+import { FileCard } from "@/components/ui/file-card-collections";
 
 // ─── App visuals ──────────────────────────────────────────────────────────────
 
@@ -220,6 +221,21 @@ function Bullet({ title, children }: { title: string; children: string }) {
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function HomePage() {
+  const uploadFormats = [
+    "pdf",
+    "md",
+    "txt",
+    "csv",
+    "xlsx",
+    "pptx",
+    "json",
+    "zip",
+    "code",
+    "png",
+    "jpg",
+    "video",
+  ] as const;
+
   return (
     <div className="min-h-screen bg-background">
 
@@ -256,6 +272,26 @@ export default function HomePage() {
             <div className="flex justify-center lg:justify-end">
               <NotificationCenterFeed />
             </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ── Upload formats ──────────────────────────────────────────────────── */}
+      <section className="border-b border-border/30 bg-muted/10 px-6 py-20">
+        <div className="mx-auto max-w-6xl">
+          <div className="space-y-4 text-center">
+            <h2 className="text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
+              Upload the files your team already uses.
+            </h2>
+            <p className="mx-auto max-w-2xl text-sm leading-relaxed text-muted-foreground">
+              Only select the files we offer: docs, markdown, spreadsheets, slide decks,
+              archives, code snippets, images, and videos.
+            </p>
+          </div>
+          <div className="mt-8 flex flex-wrap items-center justify-center gap-5">
+            {uploadFormats.map((format) => (
+              <FileCard key={format} formatFile={format} />
+            ))}
           </div>
         </div>
       </section>

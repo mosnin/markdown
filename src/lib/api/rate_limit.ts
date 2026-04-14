@@ -95,3 +95,12 @@ export const apiWriteLimit = (key: string) => checkRateLimit(key, 20, 60);
 
 /** 5 import/export initiations per minute. */
 export const importExportLimit = (key: string) => checkRateLimit(key, 5, 60);
+
+/** 20 OAuth token exchanges per minute per (client,ip) key. */
+export const oauthTokenLimit = (key: string) => checkRateLimit(key, 20, 60);
+
+/** 10 OAuth client registrations per hour per caller key. */
+export const oauthRegistrationLimit = (key: string) => checkRateLimit(key, 10, 60 * 60);
+
+/** 30 consent approvals per 10 minutes per signed-in user. */
+export const oauthAuthorizeLimit = (key: string) => checkRateLimit(key, 30, 10 * 60);

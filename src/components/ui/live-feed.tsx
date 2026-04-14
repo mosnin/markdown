@@ -47,22 +47,22 @@ export const NotificationCenterFeed = ({
       onMouseLeave={() => setIsHovered(false)}
       className={cn(
         "relative",
-        "flex max-w-[350px] items-center justify-center",
-        "rounded-xl border border-border/50 bg-card p-6",
+        "flex max-w-[430px] items-center justify-center",
+        "rounded-2xl border border-border/50 bg-card px-7 py-8",
       )}
     >
-      <div className="relative h-[230px] w-[264px] overflow-hidden rounded-[14px] bg-muted/40 p-2">
-        <div className="absolute left-3 top-2 text-[9px] text-muted-foreground">
+      <div className="relative h-[272px] w-[318px] overflow-hidden rounded-[16px] bg-muted/40 p-3">
+        <div className="absolute left-4 top-3 text-[10px] text-muted-foreground">
           {new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false })}
         </div>
-        <div className="absolute inset-x-2 bottom-2 top-8">
+        <div className="absolute inset-x-3 bottom-3 top-10">
           {items.map((it, i) => (
             <motion.div
               key={it.id + i}
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.25, delay: i * 0.05 }}
-              className="mb-2 rounded-md border border-border/60 bg-card p-2 text-xs shadow-sm"
+              className="mb-3 rounded-lg border border-border/60 bg-card px-3 py-2.5 text-xs shadow-sm"
             >
               <div className="flex items-center justify-between gap-2">
                 <span className="flex min-w-0 items-center gap-1.5 font-medium text-foreground">
@@ -78,10 +78,10 @@ export const NotificationCenterFeed = ({
       </div>
 
       {/* Fade-out overlay — uses card color so it works in both modes */}
-      <div className="pointer-events-none absolute bottom-0 left-0 h-[160px] w-full rounded-b-xl bg-gradient-to-t from-card to-transparent" />
+      <div className="pointer-events-none absolute bottom-0 left-0 h-[180px] w-full rounded-b-2xl bg-gradient-to-t from-card to-transparent" />
 
-      <div className="absolute bottom-4 left-0 w-full px-6">
-        <h3 className="text-sm font-semibold text-foreground">{cardTitle}</h3>
+      <div className="absolute bottom-5 left-0 w-full px-7">
+        <h3 className="text-base font-semibold text-foreground">{cardTitle}</h3>
         <p className="mt-1 text-xs text-muted-foreground">{cardDescription}</p>
       </div>
     </motion.div>

@@ -9,7 +9,8 @@
  *   NEXT_PUBLIC_SUPABASE_URL       — Supabase project URL
  *   NEXT_PUBLIC_SUPABASE_ANON_KEY  — Public anon key (also used server-side)
  *   SUPABASE_SERVICE_ROLE_KEY      — Server-only service role key (bypasses RLS)
- *   NEXT_PUBLIC_APP_URL            — Application base URL for auth callbacks
+ *   Public app URL (at least one):
+ *     NEXT_PUBLIC_APP_URL | NEXT_PUBLIC_CANONICAL_URL | NEXT_PUBLIC_SITE_URL | VERCEL_URL
  *
  * Optional (must be present in production):
  *   NEXT_PUBLIC_API_BASE_URL       — Used in connection UI to build example curl
@@ -19,7 +20,13 @@ const REQUIRED_SERVER_ENV = [
   "NEXT_PUBLIC_SUPABASE_URL",
   "NEXT_PUBLIC_SUPABASE_ANON_KEY",
   "SUPABASE_SERVICE_ROLE_KEY",
+] as const;
+
+const PUBLIC_APP_URL_KEYS = [
   "NEXT_PUBLIC_APP_URL",
+  "NEXT_PUBLIC_CANONICAL_URL",
+  "NEXT_PUBLIC_SITE_URL",
+  "VERCEL_URL",
 ] as const;
 
 export type RequiredEnvKey = (typeof REQUIRED_SERVER_ENV)[number];
@@ -32,9 +39,18 @@ export type RequiredEnvKey = (typeof REQUIRED_SERVER_ENV)[number];
  * of any server bootstrap path. It is safe to call multiple times.
  */
 export function validateServerEnv(): void {
-  const missing = REQUIRED_SERVER_ENV.filter(
+  const missing: string[] = REQUIRED_SERVER_ENV.filter(
     (key) => !process.env[key]?.trim()
   );
+
+  const hasPublicAppUrl = PUBLIC_APP_URL_KEYS.some((key) =>
+    Boolean(process.env[key]?.trim())
+  );
+  if (!hasPublicAppUrl) {
+    missing.push(
+      "NEXT_PUBLIC_APP_URL (or NEXT_PUBLIC_CANONICAL_URL / NEXT_PUBLIC_SITE_URL / VERCEL_URL)"
+    );
+  }
 
   if (missing.length > 0) {
     throw new Error(

@@ -2,6 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { getPublicAppUrl } from "@/server/services/public_app_url";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -58,7 +59,7 @@ export async function requestPasswordReset(
   }
 
   const supabase = await createClient();
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
+  const appUrl = getPublicAppUrl();
 
   const { error } = await supabase.auth.resetPasswordForEmail(email, {
     redirectTo: `${appUrl}/auth/callback?next=/reset-password`,
@@ -162,7 +163,7 @@ export async function signUp(
     email,
     password,
     options: {
-      emailRedirectTo: `${process.env.NEXT_PUBLIC_APP_URL}/auth/callback`,
+      emailRedirectTo: `${getPublicAppUrl()}/auth/callback`,
       data: {
         // Record the user's consent for audit purposes.
         agreed_to_terms_at: new Date().toISOString(),
