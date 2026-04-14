@@ -30,19 +30,15 @@ import { createAuditEvent } from "@/server/repositories/audit_event_repository";
  * Unified authentication adapter for Context Store's MCP and
  * canonical API surfaces.
  *
- * Two token families are accepted:
+ * OAuth access tokens are accepted:
  *
  *   1. `cso_a_…` — OAuth 2.1 access tokens. PRIMARY public flow.
  *      Resolves to (user, workspace, client, scopes, role).
  *      Audit attribution captures BOTH the user (as actor) and the
  *      client (as metadata.oauth_client_id).
  *
- *   2. `csk_v1_…` — legacy connection tokens. DEPRECATED.
- *      Only accepted when `CONTEXT_STORE_LEGACY_CSK_ENABLED=true` is
- *      explicitly set in the environment. Emits a rate-limited
- *      `mcp.legacy_token_used` audit event and sets a
- *      `Deprecation: true` response header hint via
- *      `legacyDeprecationHeaders()`.
+ * Legacy `csk_v1_…` connection tokens are now fully rejected on
+ * HTTP/API surfaces.
  *
  * The unified return shape (`McpAuthContext`) lets route handlers
  * carry a single resolved auth object regardless of the source.
@@ -105,12 +101,14 @@ export interface McpAuthContext {
 // ─── Env flag ────────────────────────────────────────────────────────────────
 
 /**
- * Whether legacy csk_v1_ tokens are permitted by this process. Must
- * be opted into explicitly; default off. Intended for first-party
- * local dev only.
+ * Whether legacy csk_v1_ tokens are permitted by this process.
+ * Legacy token acceptance has been retired and is always false.
  */
 export function legacyCskEnabled(): boolean {
-  return process.env.CONTEXT_STORE_LEGACY_CSK_ENABLED === "true";
+  // Legacy csk_v1_ acceptance has been retired from HTTP/API auth
+  // surfaces. Kept as an explicit constant-false helper so callers and
+  // tests can assert shutdown status.
+  return false;
 }
 
 // ─── Public resolver ─────────────────────────────────────────────────────────
@@ -125,10 +123,7 @@ export function legacyCskEnabled(): boolean {
  *   1. If the Authorization header parses as an OAuth access token,
  *      resolve it through oauth_token_service and build an OAuth
  *      McpAuthContext.
- *   2. Else, if the token looks like a legacy csk_v1_ AND the env
- *      flag is set, resolve it through the legacy connection flow,
- *      emit a rate-limited deprecation audit event, and build a
- *      legacy McpAuthContext.
+ *   2. Else, if the token looks like a legacy csk_v1_, reject it.
  *   3. Else, return null.
  */
 export async function resolveMcpRequestAuth(
@@ -143,13 +138,11 @@ export async function resolveMcpRequestAuth(
     return await resolveOAuth(header);
   }
 
-  // Path 2 — legacy csk_v1_. Gate on env flag.
+  // Path 2 — legacy csk_v1_ is fully retired on HTTP/API auth
+  // surfaces. Keep rejection explicit for diagnostics.
   if (raw.startsWith("csk_v1_")) {
-    if (!legacyCskEnabled()) {
-      log.warn("mcp_auth_legacy_token_rejected_env_off");
-      return null;
-    }
-    return await resolveLegacyCsk(raw);
+    log.warn("mcp_auth_legacy_token_rejected_retired");
+    return null;
   }
 
   return null;

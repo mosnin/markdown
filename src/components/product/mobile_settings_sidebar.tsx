@@ -24,7 +24,6 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { ThemeToggle } from "@/components/product/theme_toggle";
-import { UserMenu } from "@/components/product/user_menu";
 import { Separator } from "@/components/ui/separator";
 
 const settingsNav = [
@@ -188,8 +187,8 @@ export function MobileSettingsSidebar({
               <ThemeToggle />
             </div>
             {userEmail && (
-              <div className="border-t border-sidebar-border px-2 py-2">
-                <UserMenu email={userEmail} />
+              <div className="border-t border-sidebar-border px-3 py-2">
+                <p className="truncate text-xs text-sidebar-foreground/60">{userEmail}</p>
               </div>
             )}
           </div>

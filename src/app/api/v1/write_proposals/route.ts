@@ -113,6 +113,16 @@ export async function POST(request: NextRequest) {
     return E_BAD_REQUEST("Request body must be valid JSON");
   }
 
+  const oauthMainOnlyBranchAttempt =
+    ctx.connection.metadata?.auth_source === "oauth" &&
+    (Object.prototype.hasOwnProperty.call(body, "branch_id") ||
+      Object.prototype.hasOwnProperty.call(body, "target_branch_id"));
+  if (oauthMainOnlyBranchAttempt) {
+    return E_BAD_REQUEST(
+      "OAuth-backed writes are main-only in this version. Branch targeting is not supported for OAuth requests."
+    );
+  }
+
   const { proposal_type } = body;
   if (!proposal_type) return E_BAD_REQUEST("proposal_type is required");
   if (!VALID_PROPOSAL_TYPES.includes(proposal_type)) {

@@ -140,26 +140,32 @@ export function MarketingHeader() {
 				</Button>
 			</nav>
 			<MobileMenu open={open} className="flex flex-col justify-between gap-2 overflow-y-auto">
-				<NavigationMenu className="max-w-full">
+				<nav aria-label="Mobile navigation" className="max-w-full">
 					<div className="flex w-full flex-col gap-y-2">
 						<span className="text-sm">Product</span>
 						{productLinks.map((link) => (
-							<ListItem key={link.title} {...link} />
+							<MobileListItem key={link.title} {...link} onNavigate={() => setOpen(false)} />
 						))}
 						<span className="text-sm">Company</span>
 						{companyLinks.map((link) => (
-							<ListItem key={link.title} {...link} />
+							<MobileListItem key={link.title} {...link} onNavigate={() => setOpen(false)} />
 						))}
 						{companyLinks2.map((link) => (
-							<ListItem key={link.title} {...link} />
+							<MobileListItem key={link.title} {...link} onNavigate={() => setOpen(false)} />
 						))}
 					</div>
-				</NavigationMenu>
+				</nav>
 				<div className="flex flex-col gap-2">
-					<Button variant="outline" className="w-full bg-transparent" render={<Link href="/sign_in" />}>
+					<Button
+						variant="outline"
+						className="w-full bg-transparent"
+						render={<Link href="/sign_in" onClick={() => setOpen(false)} />}
+					>
 						Sign In
 					</Button>
-					<Button className="w-full" render={<Link href="/sign_in" />}>Get Started</Button>
+					<Button className="w-full" render={<Link href="/sign_in" onClick={() => setOpen(false)} />}>
+						Get Started
+					</Button>
 				</div>
 			</MobileMenu>
 		</header>
@@ -194,6 +200,33 @@ function MobileMenu({ open, children, className, ...props }: MobileMenuProps) {
 			</div>
 		</div>,
 		document.body,
+	);
+}
+
+function MobileListItem({
+	title,
+	description,
+	icon: Icon,
+	href,
+	onNavigate,
+}: LinkItem & { onNavigate?: () => void }) {
+	return (
+		<Link
+			href={href}
+			onClick={onNavigate}
+			className={cn(
+				'w-full flex flex-row gap-x-2 rounded-sm p-2',
+				'hover:bg-accent hover:text-accent-foreground',
+			)}
+		>
+			<div className="bg-background/40 flex aspect-square size-12 items-center justify-center rounded-md border shadow-sm">
+				<Icon className="text-foreground size-5" />
+			</div>
+			<div className="flex flex-col items-start justify-center">
+				<span className="font-medium">{title}</span>
+				<span className="text-muted-foreground text-xs">{description}</span>
+			</div>
+		</Link>
 	);
 }
 

@@ -23,7 +23,6 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { ThemeToggle } from "@/components/product/theme_toggle";
-import { UserMenu } from "@/components/product/user_menu";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { TreeSidebar } from "@/components/product/tree_sidebar";
@@ -232,8 +231,8 @@ export function MobileSidebar({
               <ThemeToggle />
             </div>
             {userEmail && (
-              <div className="border-t border-sidebar-border px-2 py-2">
-                <UserMenu email={userEmail} />
+              <div className="border-t border-sidebar-border px-3 py-2">
+                <p className="truncate text-xs text-sidebar-foreground/60">{userEmail}</p>
               </div>
             )}
           </div>

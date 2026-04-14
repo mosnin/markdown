@@ -260,13 +260,14 @@ function TreeNode({
   })();
 
   // Build href based on node type
-  const href = (() => {
+  const href: string = (() => {
     switch (data.nodeType) {
       case "note": return `/app/notes/${data.objectId}`;
       case "file": return `/app/files/${data.objectId}`;
       case "skill": return `/app/skills/${data.objectId}`;
       case "agent": return `/app/agents/${data.objectId}`;
       case "folder": return `/app/folders/${data.objectId}`;
+      default: return "/app";
     }
   })();
 
@@ -302,6 +303,7 @@ function TreeNode({
       case "file": return File;
       case "skill": return Zap;
       case "agent": return Bot;
+      default: return File;
     }
   })();
 
@@ -561,7 +563,7 @@ function BoxTree({
       onMove={handleMove}
       onRename={handleRename}
       disableDrop={disableDrop}
-      disableEdit={(d) => !!d.isAttachment}
+      disableEdit={(d: TreeNodeData) => !!d.isAttachment}
       disableMultiSelection={true}
       openByDefault={false}
       initialOpenState={initialOpenState}
@@ -570,9 +572,7 @@ function BoxTree({
       width="100%"
       height={estimatedHeight}
       className="arborist-tree"
-      // Pass boxId through props so TreeNode can access it
-      // @ts-expect-error -- custom prop forwarded to TreeNode via tree.props
-      boxId={boxId}
+      {...({ boxId } as Record<string, unknown>)}
     >
       {TreeNode}
     </Tree>

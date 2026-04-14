@@ -912,3 +912,15 @@ src/app/app/layout.tsx       Updated: passes workspaceId to AppSidebar + MobileS
 ## Future prompts will add
 
 - `src/server/policies/` — authorization checks
+
+## MCP auth productization completion (2026-04-13)
+
+The MCP/OAuth stack now includes production UI surfaces (consent, connected-app grants, developer client management), centralized bearer resolution for `/api/mcp` and `/api/v1/**`, auditable token lifecycle events (issue/refresh/revoke), and lightweight abuse controls on registration/token endpoints.
+
+## MCP connector launch readiness (2026-04-13)
+
+Discovery metadata and protected-resource metadata are now generated from a single public URL resolver so connector endpoint URLs remain internally consistent. HTTP MCP is OAuth-only; legacy token support is isolated to migration/dev paths.
+
+### Legacy shutdown hardening (2026-04-13)
+
+Legacy `csk_v1_` acceptance now has a production migration gate (`CONTEXT_STORE_LEGACY_CSK_MIGRATION=true`). HTTP MCP remains OAuth-only.

@@ -39,7 +39,7 @@ import { AgentTypeBadge } from "@/components/product/agent_type_badge";
 import { AgentReferenceBadge } from "@/components/product/agent_reference_badge";
 import { WorkspaceLiveRefresh } from "@/components/product/workspace_live_refresh";
 import { ActiveBranchBannerServer } from "@/components/product/active_branch_banner_server";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs } from "@heroui/react";
 import { Badge } from "@/components/ui/badge";
 import {
   type ResolvedAgentLink,
@@ -413,48 +413,31 @@ export default async function AgentPage({
         )}
 
         {/* Tabbed workspace */}
-        <Tabs defaultValue={defaultTab} className="flex flex-1 flex-col overflow-hidden">
-          <div className="border-b border-border px-6">
-            <TabsList variant="line" className="h-auto pb-0">
-              <TabsTrigger value="overview" className="pb-2.5 text-xs">Overview</TabsTrigger>
-              <TabsTrigger value="source" className="pb-2.5 text-xs">Source</TabsTrigger>
-              <TabsTrigger value="exports" className="pb-2.5 text-xs">Exports</TabsTrigger>
-              <TabsTrigger value="children" className="pb-2.5 text-xs">
-                Children
-                {structuralLinks.length > 0 && (
-                  <span className="ml-1 rounded-full bg-muted px-1 text-[10px] text-muted-foreground">
-                    {structuralLinks.length}
-                  </span>
-                )}
-              </TabsTrigger>
-              <TabsTrigger value="skills" className="pb-2.5 text-xs">
-                Skills
-                {outgoingLinks.filter((l) => l.linkedObjectType === "skill" || l.linkedObjectType === "file").length > 0 && (
-                  <span className="ml-1 rounded-full bg-muted px-1 text-[10px] text-muted-foreground">
-                    {outgoingLinks.filter((l) => l.linkedObjectType === "skill" || l.linkedObjectType === "file").length}
-                  </span>
-                )}
-              </TabsTrigger>
-              <TabsTrigger value="relationships" className="pb-2.5 text-xs">
-                Relationships
-                {(outgoingLinks.length + incomingLinks.length) > 0 && (
-                  <span className="ml-1 rounded-full bg-muted px-1 text-[10px] text-muted-foreground">
-                    {outgoingLinks.length + incomingLinks.length}
-                  </span>
-                )}
-              </TabsTrigger>
-              <TabsTrigger value="trust" className="pb-2.5 text-xs">
-                Trust
-                {pendingProposals.length > 0 && (
-                  <span className="ml-1 rounded-full bg-amber-500/20 px-1 text-[10px] text-amber-600 dark:text-amber-400">
-                    {pendingProposals.length}
-                  </span>
-                )}
-              </TabsTrigger>
-            </TabsList>
-          </div>
+        <Tabs
+          aria-label="Agent sections"
+          defaultSelectedKey={defaultTab}
+          variant="primary"
+          className="flex flex-1 flex-col overflow-hidden"
+        >
+          <Tabs.List>
+            <Tabs.Tab id="overview">Overview</Tabs.Tab>
+            <Tabs.Tab id="source">Source</Tabs.Tab>
+            <Tabs.Tab id="exports">Exports</Tabs.Tab>
+            <Tabs.Tab id="children">
+              {`Children${structuralLinks.length > 0 ? ` (${structuralLinks.length})` : ""}`}
+            </Tabs.Tab>
+            <Tabs.Tab id="skills">
+              {`Skills${outgoingLinks.filter((l) => l.linkedObjectType === "skill" || l.linkedObjectType === "file").length > 0 ? ` (${outgoingLinks.filter((l) => l.linkedObjectType === "skill" || l.linkedObjectType === "file").length})` : ""}`}
+            </Tabs.Tab>
+            <Tabs.Tab id="relationships">
+              {`Relationships${outgoingLinks.length + incomingLinks.length > 0 ? ` (${outgoingLinks.length + incomingLinks.length})` : ""}`}
+            </Tabs.Tab>
+            <Tabs.Tab id="trust">
+              {`Trust${pendingProposals.length > 0 ? ` (${pendingProposals.length})` : ""}`}
+            </Tabs.Tab>
+          </Tabs.List>
 
-          <TabsContent value="overview" className="flex-1 overflow-hidden">
+          <Tabs.Panel id="overview" className="flex-1 overflow-hidden">
             <AgentOverviewPanel
               agent={agent}
               boxName={box?.name ?? null}
@@ -465,31 +448,31 @@ export default async function AgentPage({
               versionCount={versions.length}
               attachmentCount={attachments.length}
             />
-          </TabsContent>
+          </Tabs.Panel>
 
-          <TabsContent value="source" className="flex-1 overflow-hidden">
+          <Tabs.Panel id="source" className="flex-1 overflow-hidden">
             <AgentSourceEditor agent={agent} />
-          </TabsContent>
+          </Tabs.Panel>
 
-          <TabsContent value="exports" className="flex-1 overflow-hidden">
+          <Tabs.Panel id="exports" className="flex-1 overflow-hidden">
             <AgentExportsPanel agent={agent} />
-          </TabsContent>
+          </Tabs.Panel>
 
-          <TabsContent value="children" className="flex-1 overflow-hidden">
-                <AgentChildrenPanel structuralLinks={structuralLinks} agentId={agent_id} />
-          </TabsContent>
+          <Tabs.Panel id="children" className="flex-1 overflow-hidden">
+            <AgentChildrenPanel structuralLinks={structuralLinks} agentId={agent_id} />
+          </Tabs.Panel>
 
-          <TabsContent value="skills" className="flex-1 overflow-hidden">
-                <AgentSkillsPanel
-                  outgoingLinks={outgoingLinks}
-                  agentId={agent_id}
-                  availableSkills={[...boxSkills, ...reusableSkills]
-                    .filter((s, idx, arr) => arr.findIndex((x) => x.id === s.id) === idx)
-                    .map((s) => ({ id: s.id, name: s.name }))}
-                />
-              </TabsContent>
+          <Tabs.Panel id="skills" className="flex-1 overflow-hidden">
+            <AgentSkillsPanel
+              outgoingLinks={outgoingLinks}
+              agentId={agent_id}
+              availableSkills={[...boxSkills, ...reusableSkills]
+                .filter((s, idx, arr) => arr.findIndex((x) => x.id === s.id) === idx)
+                .map((s) => ({ id: s.id, name: s.name }))}
+            />
+          </Tabs.Panel>
 
-          <TabsContent value="relationships" className="flex-1 overflow-hidden">
+          <Tabs.Panel id="relationships" className="flex-1 overflow-hidden">
             <ScrollArea className="h-full">
               <div className="mx-auto max-w-2xl px-6 py-6">
                 <AgentObjectLinksPanel
@@ -500,9 +483,9 @@ export default async function AgentPage({
                 />
               </div>
             </ScrollArea>
-          </TabsContent>
+          </Tabs.Panel>
 
-          <TabsContent value="trust" className="flex-1 overflow-hidden">
+          <Tabs.Panel id="trust" className="flex-1 overflow-hidden">
             <ScrollArea className="h-full">
               <div className="mx-auto max-w-2xl px-6 py-6 space-y-4">
                 <AgentHistoryPanel
@@ -520,7 +503,7 @@ export default async function AgentPage({
                 </section>
               </div>
             </ScrollArea>
-          </TabsContent>
+          </Tabs.Panel>
         </Tabs>
       </div>
 

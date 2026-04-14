@@ -8,6 +8,7 @@ import { ArrowRightIcon, SparklesIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { AnimatedBackground } from "@/components/ui/animated-blur-blob-background";
+import { MorphingText } from "@/components/ui/morphing-text";
 
 // ─── Glitch title ─────────────────────────────────────────────────────────────
 
@@ -131,7 +132,14 @@ export function HeroSection() {
 				>
 					Structured context.
 					<br />
-					Built for AI.
+					<MorphingText
+						texts={[
+							"Built for AI.",
+							"Connected by semantics.",
+							"Ready for MCP workflows.",
+							"Versioned and auditable.",
+						]}
+					/>
 				</GlitchTitle>
 
 				{/* Description */}

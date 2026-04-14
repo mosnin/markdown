@@ -45,12 +45,18 @@ describe("mcp_auth_adapter — env gating", () => {
     expect(legacyCskEnabled()).toBe(false);
   });
 
-  it("legacyCskEnabled is true ONLY for the exact string 'true'", () => {
+  it("legacyCskEnabled remains false for the exact string 'true'", () => {
     process.env.CONTEXT_STORE_LEGACY_CSK_ENABLED = "true";
-    expect(legacyCskEnabled()).toBe(true);
+    expect(legacyCskEnabled()).toBe(false);
+  });
+
+  it("legacyCskEnabled remains false in production even with migration override", () => {
+    (process.env as Record<string, string | undefined>).NODE_ENV = "production";
+    process.env.CONTEXT_STORE_LEGACY_CSK_ENABLED = "true";
+    process.env.CONTEXT_STORE_LEGACY_CSK_MIGRATION = "true";
+    expect(legacyCskEnabled()).toBe(false);
   });
 });
-
 describe("mcp_auth_adapter — deprecation header shape", () => {
   it("sets Deprecation: true", () => {
     const h = legacyDeprecationHeaders();
