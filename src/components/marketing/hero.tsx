@@ -8,6 +8,7 @@ import { ArrowRightIcon, SparklesIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { AnimatedBackground } from "@/components/ui/animated-blur-blob-background";
+import { Component as BackgroundSnippets } from "@/components/ui/background-snippets";
 import { MorphingText } from "@/components/ui/morphing-text";
 
 // ─── Glitch title ─────────────────────────────────────────────────────────────
@@ -238,7 +239,8 @@ export function PageHeroSection({
 	ctaSecondary?: { label: string; href: string };
 }) {
 	return (
-		<section className="border-b border-border/50 bg-muted/20 py-20 pt-32">
+		<section className="relative overflow-hidden border-b border-border/50 bg-muted/20 py-20 pt-32">
+			<BackgroundSnippets />
 			{/* Background shade */}
 			<div aria-hidden="true" className="pointer-events-none absolute inset-x-0 top-0 h-64 overflow-hidden">
 				<div
