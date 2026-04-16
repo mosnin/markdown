@@ -36,24 +36,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 import { WorkspaceLiveRefresh } from "@/components/product/workspace_live_refresh";
 import { ActiveBranchBannerServer } from "@/components/product/active_branch_banner_server";
-
-function formatDate(dateStr: string): string {
-  return new Date(dateStr).toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
-}
-
-function formatRelativeDate(dateStr: string): string {
-  const now = new Date();
-  const d = new Date(dateStr);
-  const diffDays = Math.floor((now.getTime() - d.getTime()) / 86400000);
-  if (diffDays === 0) return "Today";
-  if (diffDays === 1) return "Yesterday";
-  if (diffDays < 7) return `${diffDays} days ago`;
-  return formatDate(dateStr);
-}
+import { formatRelativeDate } from "@/lib/format_date";
 
 // ─── Breadcrumb ───────────────────────────────────────────────────────────────
 
@@ -145,6 +128,7 @@ function NoteContextPanel({
   initialBundle,
   historyResult,
   defaultTab = "info",
+  nowIso,
 }: {
   note: NonNullable<Awaited<ReturnType<typeof getNoteById>>>;
   boxId: string;
@@ -161,6 +145,14 @@ function NoteContextPanel({
   initialBundle: Awaited<ReturnType<typeof assembleContextBundle>>;
   historyResult: Awaited<ReturnType<typeof listVersionsForNote>>;
   defaultTab?: NoteContextTab;
+  /**
+   * Wall-clock "now" frozen at the top of the server render so
+   * `formatRelativeDate` produces identical output during server
+   * render and client hydration. Without this, server and client
+   * would each call `new Date()` at different ticks and could
+   * straddle a day boundary, triggering a hydration mismatch.
+   */
+  nowIso: string;
 }) {
   const kindLabel: Record<string, string> = {
     note: "Note",
@@ -387,7 +379,7 @@ function NoteContextPanel({
                     aria-hidden="true"
                   />
                   <span className="text-foreground/70">
-                    {formatRelativeDate(note.updated_at)}
+                    {formatRelativeDate(note.updated_at, nowIso)}
                   </span>
                 </div>
                 {note.origin_type && note.origin_type !== "user_created" && (
@@ -457,6 +449,12 @@ export default async function NotePage({
   const defaultTab: NoteContextTab = VALID_TABS.includes(rawTab as NoteContextTab)
     ? (rawTab as NoteContextTab)
     : "info";
+  // Freeze "now" at server render start. React hydrates the client
+  // with exactly this string (embedded in the server HTML via the
+  // `nowIso` prop), so relative-date computation produces identical
+  // output on both sides and hydration passes. See
+  // src/lib/format_date.ts.
+  const nowIso = new Date().toISOString();
   const ctx = await requireAuthenticatedUser();
   const supabase = await createClient();
   const adminClient = createAdminClient();
@@ -633,6 +631,7 @@ export default async function NotePage({
           initialBundle={initialBundle}
           historyResult={historyResult}
           defaultTab={defaultTab}
+          nowIso={nowIso}
         />
       </aside>
       </div>

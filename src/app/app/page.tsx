@@ -18,20 +18,13 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { CONNECTION_STATUS } from "@/server/domain/constants/connection_constants";
-
-function formatRelativeDate(dateStr: string): string {
-  const now = new Date();
-  const d = new Date(dateStr);
-  const diffMs = now.getTime() - d.getTime();
-  const diffDays = Math.floor(diffMs / 86400000);
-  if (diffDays === 0) return "Today";
-  if (diffDays === 1) return "Yesterday";
-  if (diffDays < 7) return `${diffDays} days ago`;
-  if (diffDays < 30) return `${Math.floor(diffDays / 7)} weeks ago`;
-  return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
-}
+import { formatRelativeDateShort } from "@/lib/format_date";
 
 export default async function AppHomePage() {
+  // Freeze "now" at server render so relative-date strings computed
+  // further down are identical during client hydration. See
+  // src/lib/format_date.ts.
+  const nowIso = new Date().toISOString();
   const ctx = await requireAuthenticatedUser();
   const supabase = await createClient();
   const adminClient = createAdminClient();
@@ -136,7 +129,7 @@ export default async function AppHomePage() {
                         title={note.title}
                         kind={note.kind as "note" | "guide" | "bundle"}
                         excerpt={note.summary ?? undefined}
-                        updatedAt={formatRelativeDate(note.updated_at)}
+                        updatedAt={formatRelativeDateShort(note.updated_at, nowIso)}
                         tags={note.tags.slice(0, 3)}
                       />
                     </Link>

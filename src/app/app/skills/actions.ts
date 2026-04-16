@@ -286,9 +286,13 @@ export async function saveSkillAction(
           summary: params.summary,
         });
       }
+      // Refresh the skill detail page so branch-scoped source and
+      // overlay metadata show up on the next read.
+      revalidatePath(`/app/skills/${skillId}`);
       return { ok: true, data: { id: skillId } };
     }
     const updated = await updateSkillContent(supabase, ctx.user.id, ctx.workspace.id, skillId, params);
+    revalidatePath(`/app/skills/${skillId}`);
     return { ok: true, data: { id: updated.id } };
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : "Failed to save skill" };
@@ -412,6 +416,10 @@ export async function createSkillObjectLinkAction(
       branchId: ctx.activeBranchId ?? null,
     });
 
+    // New object links show up on the skill detail page's Links tab.
+    // Revalidate so the UI reflects the mutation without a refresh.
+    revalidatePath(`/app/skills/${skillId}`);
+
     return { ok: true, data: { id: link.id } };
   } catch (err) {
     console.error("[createSkillObjectLinkAction]", err);
@@ -454,10 +462,15 @@ export async function deleteSkillObjectLinkAction(
       } else {
         return { ok: false, error: "Link belongs to another branch" };
       }
+      // Link removal affects the skill detail page's Links tab. The
+      // skill id isn't trivially available here without another
+      // lookup, so revalidate the index as a defensive fallback.
+      revalidatePath("/app/skills");
       return { ok: true, data: undefined };
     }
 
     await removeLink(supabase, ctx.workspace.id, linkId);
+    revalidatePath("/app/skills");
     return { ok: true, data: undefined };
   } catch (err) {
     console.error("[deleteSkillObjectLinkAction]", err);

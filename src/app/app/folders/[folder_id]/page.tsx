@@ -31,6 +31,7 @@ import { FolderLifecycleMenu } from "@/components/product/folder_lifecycle_menu"
 import { FolderPolicyToggle } from "@/components/product/folder_policy_toggle";
 import { FolderExportButton } from "@/components/product/folder_export_button";
 import { WorkspaceLiveRefresh } from "@/components/product/workspace_live_refresh";
+import { formatAbsoluteDate } from "@/lib/format_date";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
@@ -388,11 +389,7 @@ export default async function FolderPage({
                 <div>
                   <p className="text-[10px] uppercase tracking-wider text-muted-foreground/60">Created</p>
                   <p className="text-foreground/80">
-                    {new Date(folder.created_at).toLocaleDateString("en-US", {
-                      month: "short",
-                      day: "numeric",
-                      year: "numeric",
-                    })}
+                    {formatAbsoluteDate(folder.created_at)}
                   </p>
                 </div>
                 <div>

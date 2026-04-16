@@ -23,6 +23,7 @@ import { WorkspaceLiveRefresh } from "@/components/product/workspace_live_refres
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
+import { formatAbsoluteDate } from "@/lib/format_date";
 
 // ─── Meta row ─────────────────────────────────────────────────────────────────
 
@@ -166,11 +167,11 @@ export default async function SkillPage({
     }
   }
 
-  const createdDate = new Date(skill.created_at).toLocaleDateString(undefined, {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-  });
+  // Pin to en-US via the shared helper so server and client hydration
+  // produce identical output regardless of the user's OS locale. The
+  // previous call used `undefined` locale — a guaranteed mismatch on
+  // non-US systems. See src/lib/format_date.ts.
+  const createdDate = formatAbsoluteDate(skill.created_at);
 
   const rollbackDisabled = skill.status === "archived" || skill.status === "trashed";
 

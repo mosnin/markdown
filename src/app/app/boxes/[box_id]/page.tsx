@@ -55,24 +55,7 @@ import { BoxTemplateSetup } from "@/components/product/box_template_setup";
 import { WorkspaceLiveRefresh } from "@/components/product/workspace_live_refresh";
 import { type Folder as FolderType } from "@/server/domain/types/folder";
 import { type Note } from "@/server/domain/types/note";
-
-function formatDate(dateStr: string): string {
-  return new Date(dateStr).toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
-}
-
-function formatRelativeDate(dateStr: string): string {
-  const now = new Date();
-  const d = new Date(dateStr);
-  const diffDays = Math.floor((now.getTime() - d.getTime()) / 86400000);
-  if (diffDays === 0) return "Today";
-  if (diffDays === 1) return "Yesterday";
-  if (diffDays < 7) return `${diffDays} days ago`;
-  return formatDate(dateStr);
-}
+import { formatAbsoluteDate, formatRelativeDate } from "@/lib/format_date";
 
 // ─── Tab skeleton (generic loading state for heavy tabs) ─────────────────────
 
@@ -279,7 +262,7 @@ async function BoxContextPanel({
               <p className="text-[10px] uppercase tracking-wider text-muted-foreground/60">
                 Created
               </p>
-              <p className="text-foreground/80">{formatDate(box.created_at)}</p>
+              <p className="text-foreground/80">{formatAbsoluteDate(box.created_at)}</p>
             </div>
             <div>
               <p className="text-[10px] uppercase tracking-wider text-muted-foreground/60">
@@ -310,6 +293,11 @@ export default async function BoxPage({
   const resolvedSearch = await searchParams;
   const rawTab = typeof resolvedSearch.tab === "string" ? resolvedSearch.tab : "notes";
   const requestedTab = VALID_BOX_TABS.includes(rawTab as BoxTab) ? (rawTab as BoxTab) : "notes";
+  // Freeze "now" at server render start so every relative-date
+  // computation on this page uses exactly the same reference point.
+  // React hydrates the client with this frozen ISO string, so server
+  // and client produce identical output. See src/lib/format_date.ts.
+  const nowIso = new Date().toISOString();
   const ctx = await requireAuthenticatedUser();
   const supabase = await createClient();
 
@@ -528,7 +516,7 @@ export default async function BoxPage({
                           title={note.title}
                           kind={note.kind as "note" | "guide" | "bundle"}
                           excerpt={note.summary ?? undefined}
-                          updatedAt={formatRelativeDate(note.updated_at)}
+                          updatedAt={formatRelativeDate(note.updated_at, nowIso)}
                           tags={note.tags.slice(0, 3)}
                         />
                       </Link>
@@ -650,7 +638,7 @@ export default async function BoxPage({
                               title={note.title}
                               kind={note.kind as "note" | "guide" | "bundle"}
                               excerpt={note.summary ?? undefined}
-                              updatedAt={formatRelativeDate(note.updated_at)}
+                              updatedAt={formatRelativeDate(note.updated_at, nowIso)}
                               tags={note.tags.slice(0, 3)}
                             />
                           </Link>
@@ -713,7 +701,7 @@ export default async function BoxPage({
                               title={note.title}
                               kind={note.kind as "note" | "guide" | "bundle"}
                               excerpt={note.summary ?? undefined}
-                              updatedAt={formatRelativeDate(note.updated_at)}
+                              updatedAt={formatRelativeDate(note.updated_at, nowIso)}
                               tags={note.tags.slice(0, 3)}
                             />
                           </Link>

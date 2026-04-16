@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import {
   Plus,
   RotateCcw,
@@ -31,6 +31,7 @@ import {
   type Connection,
   type ConnectionBoxScope,
 } from "@/server/domain/types/connection";
+import { formatAbsoluteDate } from "@/lib/format_date";
 import {
   CONNECTION_TYPE,
   CONNECTION_STATUS,
@@ -422,20 +423,38 @@ function ConnectionCard({
     connection.box_scopes.some((s) => s.box_id === b.id)
   );
 
+  // Use the shared hydration-safe absolute formatter — en-US pinned
+  // on both server and client so the SSR HTML matches the first
+  // client render regardless of the user's OS locale. The old
+  // `toLocaleDateString()` call inherited the system locale.
   const lastUsed = connection.last_used_at
-    ? new Date(connection.last_used_at).toLocaleDateString()
+    ? formatAbsoluteDate(connection.last_used_at)
     : "Never";
+
+  // The "Expires in N days" bucket depends on an implicit `now` and
+  // could flip at a day boundary between server render and client
+  // hydration. Render the absolute expiry date on the initial (SSR)
+  // pass and switch to the relative bucket after mount, when
+  // `clientNow` is populated.
+  const [clientNow, setClientNow] = useState<number | null>(null);
+  useEffect(() => {
+    setClientNow(Date.now());
+  }, []);
 
   const tokenExpiryLabel = (() => {
     if (!connection.token_expires_at) return null;
     const expiryDate = new Date(connection.token_expires_at);
-    const now = new Date();
-    const diffMs = expiryDate.getTime() - now.getTime();
+    if (clientNow === null) {
+      // Initial / SSR render — always the absolute date. Matches on
+      // both sides so hydration succeeds.
+      return `Expires ${formatAbsoluteDate(connection.token_expires_at)}`;
+    }
+    const diffMs = expiryDate.getTime() - clientNow;
     const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
     if (diffDays <= 0) return "Expired";
     if (diffDays <= 14)
       return `Expires in ${diffDays} day${diffDays !== 1 ? "s" : ""}`;
-    return `Expires ${expiryDate.toLocaleDateString()}`;
+    return `Expires ${formatAbsoluteDate(connection.token_expires_at)}`;
   })();
 
   function handleRotate() {

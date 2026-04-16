@@ -93,10 +93,14 @@ export async function saveAgentAction(
           system_prompt: params.systemPrompt,
         });
       }
+      // Refresh the agent detail page so the next read picks up the
+      // new branch-scoped content and overlay metadata.
+      revalidatePath(`/app/agents/${agentId}`);
       return { ok: true, data: { id: agentId } };
     }
 
     const updated = await updateAgentContent(supabase, ctx.user.id, ctx.workspace.id, agentId, params);
+    revalidatePath(`/app/agents/${agentId}`);
     return { ok: true, data: { id: updated.id } };
   } catch (err) {
     console.error("[saveAgentAction]", err);
@@ -321,10 +325,14 @@ export async function updateAgentStatusAction(
         objectId: agentId,
         op,
       });
+      revalidatePath(`/app/agents/${agentId}`);
+      revalidatePath("/app/agents");
       return { ok: true, data: undefined };
     }
 
     await updateAgent(supabase, agentId, { status });
+    revalidatePath(`/app/agents/${agentId}`);
+    revalidatePath("/app/agents");
     return { ok: true, data: undefined };
   } catch (err) {
     console.error("[updateAgentStatusAction]", err);
@@ -358,6 +366,10 @@ export async function createAgentObjectLinkAction(
       relationshipNote: relationshipNote ?? null,
       branchId: ctx.activeBranchId ?? null,
     });
+
+    // New object links show up on the agent detail page's Links tab.
+    // Revalidate so the UI reflects the mutation without a refresh.
+    revalidatePath(`/app/agents/${agentId}`);
 
     return { ok: true, data: { id: link.id } };
   } catch (err) {
@@ -402,10 +414,12 @@ export async function deleteAgentObjectLinkAction(
       } else {
         return { ok: false, error: "Link belongs to another branch" };
       }
+      revalidatePath("/app/agents");
       return { ok: true, data: undefined };
     }
 
     await removeLink(supabase, ctx.workspace.id, linkId);
+    revalidatePath("/app/agents");
     return { ok: true, data: undefined };
   } catch (err) {
     console.error("[deleteAgentObjectLinkAction]", err);

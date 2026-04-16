@@ -26,7 +26,31 @@ export const NotificationCenterFeed = ({
 }: NotificationFeedProps) => {
   const [isHovered, setIsHovered] = useState(false);
   const [items, setItems] = useState(feed);
+  // Compute the clock label after mount so the SSR HTML hydrates
+  // identically on every client regardless of the server-vs-client
+  // wall-clock skew. Inlining `new Date()` in the JSX used to produce
+  // different HH:MM values between the two passes and triggered a
+  // React hydration warning.
+  const [clockLabel, setClockLabel] = useState("");
   const timerRef = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    // Refresh once on mount, then every minute so the clock keeps
+    // feeling "live". `en-GB` + hour12=false pins the output format
+    // across operating systems.
+    const refreshClock = () => {
+      setClockLabel(
+        new Date().toLocaleTimeString("en-GB", {
+          hour: "2-digit",
+          minute: "2-digit",
+          hour12: false,
+        })
+      );
+    };
+    refreshClock();
+    const clockInterval = setInterval(refreshClock, 60_000);
+    return () => clearInterval(clockInterval);
+  }, []);
 
   useEffect(() => {
     if (isHovered) return;
@@ -53,7 +77,7 @@ export const NotificationCenterFeed = ({
     >
       <div className="relative h-[230px] w-[264px] overflow-hidden rounded-[14px] bg-muted/40 p-2">
         <div className="absolute left-3 top-2 text-[9px] text-muted-foreground">
-          {new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false })}
+          {clockLabel}
         </div>
         <div className="absolute inset-x-2 bottom-2 top-8">
           {items.map((it, i) => (

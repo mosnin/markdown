@@ -12,6 +12,7 @@ import {
   AutosaveStatus,
   type AutosaveState,
 } from "@/components/product/autosave_status";
+import { formatAbsoluteDate } from "@/lib/format_date";
 
 /**
  * Autosave debounce: 1500ms after the last content change.
@@ -229,11 +230,16 @@ export function NoteEditor({ note, initialMode = "document" }: NoteEditorProps) 
           <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
             {note.created_at && (
               <span className="text-xs text-muted-foreground">
-                {new Date(note.created_at).toLocaleDateString(undefined, {
-                  year: "numeric",
-                  month: "short",
-                  day: "numeric",
-                })}
+                {/*
+                 * Hydration-safe absolute date. The previous
+                 * `toLocaleDateString(undefined, ...)` call used the
+                 * system locale, so the server-rendered HTML and the
+                 * client-rendered HTML could disagree — a guaranteed
+                 * hydration mismatch on non-US systems. The shared
+                 * helper pins `'en-US'` on both sides. See
+                 * src/lib/format_date.ts.
+                 */}
+                {formatAbsoluteDate(note.created_at)}
               </span>
             )}
             {note.tags.length > 0 && (

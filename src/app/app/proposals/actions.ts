@@ -1,5 +1,6 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
 import { requireAuthenticatedUser } from "@/server/auth/require_authenticated_user";
 import { createAdminClient } from "@/lib/supabase/admin";
 import {
@@ -33,6 +34,13 @@ export async function approveProposalAction(
       reviewNote ?? null
     );
 
+    // Invalidate the human-review surface so the approved proposal
+    // falls out of the pending list without a hard refresh. No
+    // `/app/proposals/[id]` detail route exists today — the list page
+    // is the entire review UI. See
+    // node_modules/next/dist/docs/01-app/03-api-reference/04-functions/revalidatePath.md.
+    revalidatePath("/app/proposals");
+
     return { success: true, data: outcome };
   } catch (err) {
     const reason = err instanceof Error ? err.message : "Unknown error";
@@ -62,6 +70,10 @@ export async function rejectProposalAction(
       reviewNote ?? null
     );
 
+    // Same rationale as approveProposalAction — refresh the list so
+    // the rejected proposal leaves the pending queue.
+    revalidatePath("/app/proposals");
+
     return { success: true, data: proposal };
   } catch (err) {
     const reason = err instanceof Error ? err.message : "Unknown error";
@@ -90,6 +102,12 @@ export async function setFolderGeneratedPolicyAction(
       folderId,
       accepts
     );
+
+    // The AI-writes toggle renders on both the folder detail page
+    // and the containing box page; revalidate both so the UI state
+    // tracks the new policy without a manual refresh.
+    revalidatePath(`/app/folders/${folderId}`);
+    if (folder.box_id) revalidatePath(`/app/boxes/${folder.box_id}`);
 
     return { success: true, data: { id: folder.id, accepts_generated_notes: folder.accepts_generated_notes } };
   } catch (err) {
