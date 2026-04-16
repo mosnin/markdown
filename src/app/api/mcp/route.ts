@@ -16,6 +16,7 @@ import { getNoteById } from "@/server/repositories/note_repository";
 import { searchWorkspace } from "@/server/services/workspace_search_service";
 import { createAuditEvent } from "@/server/repositories/audit_event_repository";
 import { auditMcp } from "@/server/services/audit_service";
+import { getCanonicalBaseUrl } from "@/lib/canonical_url";
 
 /**
  * HTTP MCP endpoint.
@@ -673,11 +674,7 @@ export async function POST(req: NextRequest) {
 // resource itself so connectors can discover which authorization server
 // to use).
 export async function GET() {
-  const issuer = (
-    process.env.NEXT_PUBLIC_CANONICAL_URL ??
-    process.env.NEXT_PUBLIC_SITE_URL ??
-    "http://localhost:3000"
-  ).replace(/\/$/, "");
+  const issuer = getCanonicalBaseUrl();
   return NextResponse.json({
     resource: `${issuer}/api/mcp`,
     authorization_servers: [issuer],

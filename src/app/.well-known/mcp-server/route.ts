@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { ALL_SCOPES } from "@/server/services/oauth_scope_service";
+import { getCanonicalBaseUrl } from "@/lib/canonical_url";
 
 /**
  * MCP server discovery metadata.
@@ -18,17 +19,9 @@ import { ALL_SCOPES } from "@/server/services/oauth_scope_service";
  * describes the authorization server; this document describes the
  * MCP resource it protects.
  */
-function baseUrl(): string {
-  return (
-    process.env.NEXT_PUBLIC_CANONICAL_URL ??
-    process.env.NEXT_PUBLIC_APP_URL ??
-    process.env.NEXT_PUBLIC_SITE_URL ??
-    "http://localhost:3000"
-  ).replace(/\/$/, "");
-}
 
 export async function GET() {
-  const issuer = baseUrl();
+  const issuer = getCanonicalBaseUrl();
   return NextResponse.json(
     {
       mcp_server_url: `${issuer}/api/mcp`,

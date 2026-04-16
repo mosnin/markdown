@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { ALL_SCOPES } from "@/server/services/oauth_scope_service";
+import { getCanonicalBaseUrl } from "@/lib/canonical_url";
 
 /**
  * OAuth 2.0 Authorization Server Metadata (RFC 8414).
@@ -12,20 +13,8 @@ import { ALL_SCOPES } from "@/server/services/oauth_scope_service";
  * hand configuration.
  */
 
-function baseUrl(): string {
-  // Respect an explicit canonical URL if configured (production
-  // deployments set this so metadata is correct even when rendered
-  // behind a proxy), otherwise fall back to the Next.js runtime URL.
-  return (
-    process.env.NEXT_PUBLIC_CANONICAL_URL ??
-    process.env.NEXT_PUBLIC_SITE_URL ??
-    process.env.VERCEL_URL ??
-    "http://localhost:3000"
-  ).replace(/\/$/, "").replace(/^https?:\/\//, (m) => m === "http://" && !process.env.VERCEL_URL ? m : "https://");
-}
-
 export async function GET() {
-  const issuer = baseUrl();
+  const issuer = getCanonicalBaseUrl();
   return NextResponse.json({
     issuer,
     authorization_endpoint: `${issuer}/oauth/authorize`,
