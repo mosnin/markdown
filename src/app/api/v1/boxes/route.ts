@@ -1,21 +1,28 @@
 import { type NextRequest } from "next/server";
-import { getConnectionContext } from "@/server/auth/get_connection_context";
+import { resolveMcpRequestAuth, requireScope } from "@/server/auth/mcp_auth_adapter";
+import { canAccessBox } from "@/server/services/oauth_scope_service";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getBoxById } from "@/server/repositories/box_repository";
-import { apiOk, E_UNAUTHORIZED } from "@/lib/api/response";
+import {
+  apiOk,
+  E_UNAUTHORIZED,
+  E_INSUFFICIENT_SCOPE,
+} from "@/lib/api/response";
 
 /**
  * GET /api/v1/boxes
  *
- * Returns the list of boxes this connection has been scoped to.
- * Only active (non-trashed, non-archived) boxes are returned.
+ * Returns the list of boxes this token has been scoped to.
+ * Only active (non-trashed) boxes are returned.
  *
- * Response shape:
- *   data: Array<{ id, name, slug, description, guide_note_id, created_at, updated_at }>
+ * Auth: OAuth access token with `context:read` scope.
  */
 export async function GET(request: NextRequest) {
-  const ctx = await getConnectionContext(request);
+  const ctx = await resolveMcpRequestAuth(request);
   if (!ctx) return E_UNAUTHORIZED();
+  if (!requireScope(ctx, "context:read")) {
+    return E_INSUFFICIENT_SCOPE("context:read");
+  }
 
   if (ctx.allowedBoxIds.size === 0) {
     return apiOk([]);
@@ -23,7 +30,6 @@ export async function GET(request: NextRequest) {
 
   const adminClient = createAdminClient();
 
-  // Fetch each allowed box and verify workspace ownership
   const boxResults = await Promise.all(
     Array.from(ctx.allowedBoxIds).map((boxId) =>
       getBoxById(adminClient, boxId)
@@ -37,6 +43,10 @@ export async function GET(request: NextRequest) {
         box.workspace_id === ctx.workspaceId &&
         box.status !== "trashed"
     )
+    .filter((box) => {
+      if (ctx.source !== "oauth") return true;
+      return canAccessBox(ctx.scopes, box!.id);
+    })
     .map((box) => ({
       id: box!.id,
       name: box!.name,

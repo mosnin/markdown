@@ -1,39 +1,40 @@
 import { type NextRequest } from "next/server";
-import { getConnectionContext } from "@/server/auth/get_connection_context";
+import { resolveMcpRequestAuth, requireScope } from "@/server/auth/mcp_auth_adapter";
+import { canAccessBox } from "@/server/services/oauth_scope_service";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getBoxById } from "@/server/repositories/box_repository";
 import { getBoxOverview } from "@/server/services/overview_service";
-import { apiOk, E_UNAUTHORIZED, E_FORBIDDEN, E_NOT_FOUND, E_INTERNAL } from "@/lib/api/response";
+import {
+  apiOk,
+  E_UNAUTHORIZED,
+  E_FORBIDDEN,
+  E_NOT_FOUND,
+  E_INTERNAL,
+  E_INSUFFICIENT_SCOPE,
+} from "@/lib/api/response";
 
 /**
  * GET /api/v1/boxes/[box_id]/box_overview
  *
  * Returns the full hierarchy and link graph for the box.
- * Nodes represent folders and notes; edges represent note_links.
  *
- * Hard limits: 1000 nodes, 2000 edges.
- * When truncated, data.truncated is true.
- *
- * Response shape:
- *   data: {
- *     box: { id, name, slug, description, guide_note_id },
- *     nodes: Array<{ id, kind, label, path, noteKind?, parentFolderId, parentId }>,
- *     edges: Array<{ id, sourceNoteId, targetNoteId, relationshipType }>,
- *     folderCount: number,
- *     noteCount: number,
- *     edgeCount: number,
- *     truncated: boolean
- *   }
+ * Auth: OAuth access token with `context:read` scope.
  */
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ box_id: string }> }
 ) {
-  const ctx = await getConnectionContext(request);
+  const ctx = await resolveMcpRequestAuth(request);
   if (!ctx) return E_UNAUTHORIZED();
+  if (!requireScope(ctx, "context:read")) {
+    return E_INSUFFICIENT_SCOPE("context:read");
+  }
 
   const { box_id } = await params;
   if (!ctx.allowedBoxIds.has(box_id)) return E_FORBIDDEN();
+  if (ctx.source === "oauth" && !canAccessBox(ctx.scopes, box_id)) {
+    return E_FORBIDDEN();
+  }
 
   const adminClient = createAdminClient();
 

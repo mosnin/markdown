@@ -17,7 +17,15 @@ import { issueAuthorizationCode } from "@/server/services/oauth_token_service";
 import { listAccessibleWorkspaces } from "@/server/repositories/workspace_membership_repository";
 import { listBoxesByWorkspace } from "@/server/repositories/box_repository";
 import { createClient } from "@/lib/supabase/server";
-import { createAuditEvent } from "@/server/repositories/audit_event_repository";
+import {
+  auditOauthConsentGranted,
+  auditRateLimitTripped,
+} from "@/server/services/audit_service";
+import {
+  checkRateLimit,
+  authorizeBucketKey,
+  AUTHORIZE_LIMIT,
+} from "@/server/services/rate_limit_service";
 
 /**
  * Server action invoked by the Approve / Deny buttons on the consent
@@ -27,6 +35,11 @@ import { createAuditEvent } from "@/server/repositories/audit_event_repository";
  * session) can read it back. The user-session client is still the
  * one that gated entry — admins-only writes below are OK because we
  * verify ownership of the workspace inline.
+ *
+ * Rate limiting: approve/deny are throttled at 10/min per signed-in
+ * user via the durable `rate_limit_buckets` table. A user who trips
+ * the limit sees a redirect back to the authorize entry with an
+ * `error=rate_limited` query so they can retry. Trips are audited.
  */
 
 export async function approveAuthorizeAction(formData: FormData): Promise<never> {
@@ -38,6 +51,29 @@ export async function approveAuthorizeAction(formData: FormData): Promise<never>
   const workspaceId = String(formData.get("workspace_id") ?? "");
 
   const ctx = await requireAuthenticatedUser();
+
+  // Rate limit first — 10 approve/deny submissions per minute per
+  // user. Protects both against accidental repeat submits and against
+  // a scripted abuser bouncing through the consent surface.
+  const admin = createAdminClient();
+  const rl = await checkRateLimit(admin, authorizeBucketKey(ctx.user.id), AUTHORIZE_LIMIT);
+  if (!rl.allowed) {
+    await auditRateLimitTripped({
+      supabase: admin,
+      workspaceId: workspaceId || null,
+      userId: ctx.user.id,
+      bucketKey: rl.bucketKey,
+      limit: rl.limit,
+    });
+    redirect(
+      errorRedirect(
+        redirectUri,
+        state,
+        "rate_limited",
+        `Too many consent submissions. Retry after ${rl.retryAfterSeconds} seconds.`
+      )
+    );
+  }
 
   // Re-validate everything the page validated. The form is a trust
   // boundary — a crafted POST must still fail safe.
@@ -79,7 +115,6 @@ export async function approveAuthorizeAction(formData: FormData): Promise<never>
   // Persist a consent record so subsequent authorizations for the same
   // (client, workspace, scopes) skip the screen. Admin client to
   // bypass RLS, then explicitly bound to the calling user id.
-  const admin = createAdminClient();
   await admin
     .from("oauth_consents")
     .upsert(
@@ -105,20 +140,15 @@ export async function approveAuthorizeAction(formData: FormData): Promise<never>
     codeChallenge,
   });
 
-  // Audit the approval event with enough metadata to attribute the
-  // grant later. Event type follows the existing dot-taxonomy so the
-  // audit page renders it alongside other workspace events.
-  await createAuditEvent(admin, {
-    workspace_id: selectedWorkspace!.id,
-    actor_type: "user",
-    actor_id: ctx.user.id,
-    object_type: "oauth_client",
-    object_id: client!.id,
-    event_type: "oauth.consent.approved",
-    metadata: {
-      client_id: client!.client_id,
-      scopes: resolution.ok ? resolution.scopes : [],
-    },
+  // Audit the approval event via the canonical oauth.consent.granted
+  // helper so the attribution shape matches other OAuth events.
+  await auditOauthConsentGranted({
+    supabase: admin,
+    workspaceId: selectedWorkspace!.id,
+    userId: ctx.user.id,
+    clientId: client!.client_id,
+    clientRowId: client!.id,
+    scopes: (resolution.ok ? resolution.scopes : []).map(String),
   });
 
   redirect(codeRedirect(redirectUri, state, issued.code));
@@ -127,6 +157,39 @@ export async function approveAuthorizeAction(formData: FormData): Promise<never>
 export async function denyAuthorizeAction(formData: FormData): Promise<never> {
   const redirectUri = String(formData.get("redirect_uri") ?? "");
   const state = String(formData.get("state") ?? "");
+
+  // Rate-limit deny the same way as approve — a noisy /deny loop is
+  // still noise worth throttling. We skip the limiter if the user
+  // isn't authenticated (they'll bounce to the login flow anyway).
+  let userId: string | null = null;
+  try {
+    const ctx = await requireAuthenticatedUser();
+    userId = ctx.user.id;
+  } catch {
+    userId = null;
+  }
+  if (userId) {
+    const admin = createAdminClient();
+    const rl = await checkRateLimit(admin, authorizeBucketKey(userId), AUTHORIZE_LIMIT);
+    if (!rl.allowed) {
+      await auditRateLimitTripped({
+        supabase: admin,
+        workspaceId: null,
+        userId,
+        bucketKey: rl.bucketKey,
+        limit: rl.limit,
+      });
+      redirect(
+        errorRedirect(
+          redirectUri,
+          state,
+          "rate_limited",
+          `Too many consent submissions. Retry after ${rl.retryAfterSeconds} seconds.`
+        )
+      );
+    }
+  }
+
   redirect(errorRedirect(redirectUri, state, "access_denied", "User denied the request."));
 }
 

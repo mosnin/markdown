@@ -46,6 +46,17 @@ import { createAuditEvent } from "@/server/repositories/audit_event_repository";
  *
  * The unified return shape (`McpAuthContext`) lets route handlers
  * carry a single resolved auth object regardless of the source.
+ *
+ * ── Branch targeting rule ──────────────────────────────────────────────────
+ *
+ * OAuth-backed MCP writes target main only (`branch_id=null`). Branch
+ * targeting for OAuth-backed machine writes is out of scope for V1;
+ * consent screens and docs must reflect this. Any request carrying a
+ * branch parameter over OAuth is rejected with 400 via
+ * `requireNoBranchTargeting`. Legacy csk_v1_ contexts are not gated
+ * (they predate branches entirely), but no v1 route accepts a branch
+ * parameter today; if one is ever added, the helper below is the
+ * single choke point to extend.
  */
 
 export type McpAuthSource = "oauth" | "legacy_csk";
@@ -343,6 +354,112 @@ export function requireScope(
 export function requireWrite(ctx: McpAuthContext): boolean {
   if (ctx.source === "legacy_csk") return ctx.permissionMode !== "read_only";
   return ctx.role !== null && ctx.role !== "viewer";
+}
+
+// ─── ConnectionRequestContext bridge ─────────────────────────────────────────
+
+/**
+ * Adapt an `McpAuthContext` to the legacy `ConnectionRequestContext`
+ * shape that existing service code (`createProposal`,
+ * `createGeneratedNote`, etc.) consumes.
+ *
+ * The returned object is a transport-layer adapter: no persisted
+ * connection row exists for OAuth callers. Downstream services only
+ * read `connection.id`, `connection.workspace_id`,
+ * `connection.permission_mode`, `workspaceId`, and `allowedBoxIds` so
+ * supplying a synthetic connection with those fields preserves the
+ * entire existing code path without duplicating every service.
+ *
+ * For audit attribution, callers should additionally use `auditMcp`
+ * with the original `McpAuthContext` so the user + client both get
+ * stamped on the event.
+ */
+export function toConnectionRequestContext(ctx: McpAuthContext): {
+  connection: {
+    id: string;
+    workspace_id: string;
+    name: string;
+    description: string | null;
+    connection_type: "mcp";
+    status: "active";
+    permission_mode: PermissionMode;
+    last_used_at: null;
+    usage_count: number;
+    metadata: Record<string, unknown>;
+    created_at: string;
+    updated_at: string;
+  };
+  workspaceId: string;
+  allowedBoxIds: Set<string>;
+  tokenId: string;
+} {
+  const now = new Date().toISOString();
+  const name =
+    ctx.source === "oauth"
+      ? `oauth:${ctx.clientId ?? "unknown"}`
+      : `connection:${ctx.connectionId}`;
+  return {
+    connection: {
+      id: ctx.connectionId,
+      workspace_id: ctx.workspaceId,
+      name,
+      description: null,
+      connection_type: "mcp",
+      status: "active",
+      permission_mode: ctx.permissionMode,
+      last_used_at: null,
+      usage_count: 0,
+      metadata:
+        ctx.source === "oauth"
+          ? {
+              auth_source: "oauth",
+              oauth_client_id: ctx.clientId,
+              oauth_user_id: ctx.userId,
+            }
+          : { auth_source: "legacy_csk" },
+      created_at: now,
+      updated_at: now,
+    },
+    workspaceId: ctx.workspaceId,
+    allowedBoxIds: ctx.allowedBoxIds,
+    tokenId: ctx.tokenId,
+  };
+}
+
+// ─── Branch targeting guard ──────────────────────────────────────────────────
+
+export class BranchTargetingNotAllowedError extends Error {
+  code = "branch_targeting_not_allowed" as const;
+  constructor(public readonly requestedBranchId: string) {
+    super(
+      "OAuth-backed machine writes target main only. Branch targeting is not supported over OAuth in V1; retry the request without a branch_id parameter."
+    );
+    this.name = "BranchTargetingNotAllowedError";
+  }
+}
+
+/**
+ * Fail a v1/write route early if an OAuth caller tries to target a
+ * non-main branch. OAuth-backed writes land on main by design; any
+ * `branch_id` in the request body is a client bug or an attempted
+ * scope escalation, and should 400 with a clear code.
+ *
+ * Legacy csk_v1_ callers are not gated here — branch targeting is
+ * unreachable from that path in V1, and if a future route adds a
+ * branch param for legacy callers we will revisit this guard.
+ *
+ * @throws {BranchTargetingNotAllowedError} when the caller is OAuth-
+ *   backed and `requestedBranchId` is a non-empty string.
+ */
+export function requireNoBranchTargeting(
+  ctx: McpAuthContext,
+  requestedBranchId: string | null | undefined
+): void {
+  if (ctx.source !== "oauth") return;
+  if (requestedBranchId === null || requestedBranchId === undefined) return;
+  const normalized = String(requestedBranchId).trim();
+  if (!normalized) return;
+  throw new BranchTargetingNotAllowedError(normalized);
 }
 
 // Re-export parseScopeString so tests and other callers don't need

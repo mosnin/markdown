@@ -1,10 +1,18 @@
 import { type NextRequest } from "next/server";
-import { getConnectionContext } from "@/server/auth/get_connection_context";
+import {
+  resolveMcpRequestAuth,
+  requireScope,
+  requireWrite,
+  requireNoBranchTargeting,
+  toConnectionRequestContext,
+  BranchTargetingNotAllowedError,
+} from "@/server/auth/mcp_auth_adapter";
 import { createAdminClient } from "@/lib/supabase/admin";
 import {
   createProposal,
   listProposalsForConnection,
 } from "@/server/services/write_proposal_service";
+import { auditMcp } from "@/server/services/audit_service";
 import {
   apiOk,
   E_UNAUTHORIZED,
@@ -13,6 +21,9 @@ import {
   E_BAD_REQUEST,
   E_INTERNAL,
   E_RATE_LIMITED,
+  E_INSUFFICIENT_SCOPE,
+  E_FORBIDDEN_ROLE,
+  E_BRANCH_TARGETING_NOT_ALLOWED,
 } from "@/lib/api/response";
 import { PERMISSION_MODE } from "@/server/domain/constants/connection_constants";
 import { type ProposalStatus } from "@/server/domain/constants/audit_constants";
@@ -47,49 +58,45 @@ const MAX_RATIONALE_LENGTH = 2000;
 const MAX_TAGS = 50;
 const MAX_TAG_LENGTH = 100;
 
-// ─── POST /api/v1/write_proposals ────────────────────────────────────────────
-//
-// Create a write proposal for a note or an object (file / skill / agent).
-//
-// Request body (note proposals):
-//   {
-//     proposal_type:   "create_note" | "update_note" | "append_note" | "replace_note",
-//     target_note_id?:   string,  // required for update_note / append_note / replace_note
-//     target_folder_id?: string,  // required for create_note
-//     proposed_title?:   string,
-//     proposed_content?: string,
-//     proposed_summary?: string,
-//     proposed_tags?:    string[],
-//     rationale?:        string,
-//   }
-//
-// Request body (object proposals):
-//   {
-//     proposal_type:  "update_file" | "create_skill" | "update_skill" |
-//                    "create_agent" | "update_agent",
-//     target_object_id?: string,  // required for update_* proposals
-//     proposed_content?: string,
-//     proposed_title?:   string,
-//     proposed_summary?: string,
-//     proposed_tags?:    string[],
-//     rationale?:        string,
-//   }
-//
-// Permission: propose_writes OR generate_in_allowed_folders
-// Rate-limited: 20 requests per minute per connection
-// ---------------------------------------------------------------------------
+/**
+ * POST /api/v1/write_proposals
+ *
+ * Create a write proposal for a note or an object (file / skill /
+ * agent).
+ *
+ * Auth: OAuth access token with `context:propose` scope and a non-
+ * viewer workspace role. Legacy csk_v1_ tokens are accepted when the
+ * env flag is on (scope gate short-circuits), and fall through to the
+ * permission_mode check in the underlying service.
+ *
+ * Branch targeting: OAuth-backed writes target main only. Requests
+ * carrying a `branch_id` field are rejected with 400.
+ *
+ * Rate-limited: 20 requests per minute per authenticated
+ * connection/token via the in-process limiter.
+ */
 
 export async function POST(request: NextRequest) {
-  const ctx = await getConnectionContext(request);
+  const ctx = await resolveMcpRequestAuth(request);
   if (!ctx) return E_UNAUTHORIZED();
+  if (!requireScope(ctx, "context:propose")) {
+    return E_INSUFFICIENT_SCOPE("context:propose");
+  }
+  if (!requireWrite(ctx)) {
+    return E_FORBIDDEN_ROLE("Viewer role cannot submit write proposals");
+  }
 
-  // Rate limit per connection (20 writes/min)
-  const rl = apiWriteLimit(ctx.connection.id);
+  // Rate limit per connection/token (20 writes/min)
+  const rl = apiWriteLimit(ctx.connectionId);
   if (!rl.allowed) return E_RATE_LIMITED(rl.retryAfter);
 
+  // permission_mode check — still honoured for legacy csk_v1_ contexts.
+  // OAuth-synthesized permission_mode is derived from the scopes above
+  // so this branch is effectively a no-op for OAuth, but we keep the
+  // check because the underlying service expects it.
   if (
-    ctx.connection.permission_mode !== PERMISSION_MODE.PROPOSE_WRITES &&
-    ctx.connection.permission_mode !== PERMISSION_MODE.GENERATE_IN_ALLOWED_FOLDERS
+    ctx.permissionMode !== PERMISSION_MODE.PROPOSE_WRITES &&
+    ctx.permissionMode !== PERMISSION_MODE.GENERATE_IN_ALLOWED_FOLDERS
   ) {
     return E_FORBIDDEN(
       "Connection must have propose_writes or generate_in_allowed_folders permission"
@@ -106,11 +113,24 @@ export async function POST(request: NextRequest) {
     proposed_summary?: string;
     proposed_tags?: string[];
     rationale?: string;
+    branch_id?: string | null;
   };
   try {
     body = await request.json();
   } catch {
     return E_BAD_REQUEST("Request body must be valid JSON");
+  }
+
+  // Explicit branch rejection for OAuth-backed writes. Write proposals
+  // do not currently accept a branch_id in their service signature —
+  // this is defense in depth in case a client sends one.
+  try {
+    requireNoBranchTargeting(ctx, body.branch_id ?? null);
+  } catch (err) {
+    if (err instanceof BranchTargetingNotAllowedError) {
+      return E_BRANCH_TARGETING_NOT_ALLOWED();
+    }
+    throw err;
   }
 
   const { proposal_type } = body;
@@ -155,10 +175,16 @@ export async function POST(request: NextRequest) {
     rationale: body.rationale ?? null,
   };
 
+  // Build a ConnectionRequestContext-shaped bridge so the existing
+  // write_proposal_service code path keeps working unchanged. This
+  // service never bypasses the trust-gating helpers — it re-checks
+  // permission_mode + box scope internally.
+  const bridge = toConnectionRequestContext(ctx);
+
   try {
     const proposal = await createProposal(
       adminClient,
-      ctx,
+      bridge,
       OBJECT_PROPOSAL_TYPES.has(proposal_type)
         ? {
             proposal_type: proposal_type as
@@ -181,6 +207,23 @@ export async function POST(request: NextRequest) {
             ...sharedFields,
           }
     );
+
+    // Audit the user-attributed MCP event alongside the
+    // connection-attributed event the service wrote. For OAuth this
+    // names the user as the actor; for legacy csk_v1_ we skip (no user).
+    if (ctx.source === "oauth" && ctx.userId) {
+      auditMcp(adminClient, {
+        workspaceId: ctx.workspaceId,
+        userId: ctx.userId,
+        clientId: ctx.clientId,
+        connectionId: ctx.connectionId,
+        source: ctx.source,
+        objectType: "write_proposal",
+        objectId: proposal.id,
+        eventType: `mcp.write_proposal.created`,
+        metadata: { proposal_type },
+      });
+    }
 
     return apiOk(proposal, 201);
   } catch (err) {
@@ -208,21 +251,19 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// ─── GET /api/v1/write_proposals ─────────────────────────────────────────────
-//
-// List write proposals created by this connection.
-//
-// Query parameters:
-//   status?  — filter by status
-//   limit?   — default 50, max 100
-//   page?    — 1-based page number (default 1)
-//
-// Permission: any non-read_only connection (but only sees its own proposals)
-// ---------------------------------------------------------------------------
-
+/**
+ * GET /api/v1/write_proposals
+ *
+ * List write proposals created by this connection/token.
+ *
+ * Auth: OAuth access token with `context:propose` scope.
+ */
 export async function GET(request: NextRequest) {
-  const ctx = await getConnectionContext(request);
+  const ctx = await resolveMcpRequestAuth(request);
   if (!ctx) return E_UNAUTHORIZED();
+  if (!requireScope(ctx, "context:propose")) {
+    return E_INSUFFICIENT_SCOPE("context:propose");
+  }
 
   const searchParams = request.nextUrl.searchParams;
   const statusParam = searchParams.get("status");
@@ -247,7 +288,8 @@ export async function GET(request: NextRequest) {
   const adminClient = createAdminClient();
 
   try {
-    const proposals = await listProposalsForConnection(adminClient, ctx, {
+    const bridge = toConnectionRequestContext(ctx);
+    const proposals = await listProposalsForConnection(adminClient, bridge, {
       status,
       limit,
       offset,

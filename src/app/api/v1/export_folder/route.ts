@@ -1,5 +1,6 @@
 import { type NextRequest } from "next/server";
-import { getConnectionContext } from "@/server/auth/get_connection_context";
+import { resolveMcpRequestAuth, requireScope } from "@/server/auth/mcp_auth_adapter";
+import { canAccessBox } from "@/server/services/oauth_scope_service";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getFolderById } from "@/server/repositories/folder_repository";
 import { getBoxById } from "@/server/repositories/box_repository";
@@ -12,6 +13,7 @@ import {
   E_NOT_FOUND,
   E_BAD_REQUEST,
   E_INTERNAL,
+  E_INSUFFICIENT_SCOPE,
 } from "@/lib/api/response";
 
 /**
@@ -19,34 +21,14 @@ import {
  *
  * Exports a folder and all its descendant folders and notes.
  *
- * The package is assembled server-side, uploaded to private Supabase Storage,
- * and a short-lived signed URL is returned. The caller downloads the zip by
- * GETting the signed_url before it expires (1 hour).
- *
- * Authentication:
- *   Bearer token (connection auth). The folder's box must be in the
- *   connection's allowed box scope.
- *
- * Request body:
- *   { "folder_id": "<uuid>" }
- *
- * Response data:
- *   {
- *     "signed_url": "https://...",
- *     "expires_at": "2026-04-09T14:00:00.000Z",
- *     "filename": "my-folder-folder.zip",
- *     "size_bytes": 12288,
- *     "manifest_summary": {
- *       "export_type": "folder",
- *       "note_count": 5,
- *       "folder_count": 2,
- *       "link_count": 3
- *     }
- *   }
+ * Auth: OAuth access token with `context:read` scope.
  */
 export async function POST(request: NextRequest) {
-  const ctx = await getConnectionContext(request);
+  const ctx = await resolveMcpRequestAuth(request);
   if (!ctx) return E_UNAUTHORIZED();
+  if (!requireScope(ctx, "context:read")) {
+    return E_INSUFFICIENT_SCOPE("context:read");
+  }
 
   let body: { folder_id?: string };
   try {
@@ -63,6 +45,9 @@ export async function POST(request: NextRequest) {
   const folder = await getFolderById(adminClient, folder_id);
   if (!folder || folder.status === "trashed") return E_NOT_FOUND("Folder not found");
   if (!folder.box_id || !ctx.allowedBoxIds.has(folder.box_id)) return E_FORBIDDEN();
+  if (ctx.source === "oauth" && !canAccessBox(ctx.scopes, folder.box_id)) {
+    return E_FORBIDDEN();
+  }
 
   const box = await getBoxById(adminClient, folder.box_id!);
   if (!box || box.workspace_id !== ctx.workspaceId) return E_FORBIDDEN();

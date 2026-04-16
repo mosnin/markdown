@@ -1,7 +1,15 @@
 import { type NextRequest } from "next/server";
-import { getConnectionContext } from "@/server/auth/get_connection_context";
+import {
+  resolveMcpRequestAuth,
+  requireScope,
+  requireWrite,
+  requireNoBranchTargeting,
+  toConnectionRequestContext,
+  BranchTargetingNotAllowedError,
+} from "@/server/auth/mcp_auth_adapter";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createGeneratedNote } from "@/server/services/generated_note_service";
+import { auditMcp } from "@/server/services/audit_service";
 import {
   apiOk,
   E_UNAUTHORIZED,
@@ -10,6 +18,9 @@ import {
   E_BAD_REQUEST,
   E_INTERNAL,
   E_RATE_LIMITED,
+  E_INSUFFICIENT_SCOPE,
+  E_FORBIDDEN_ROLE,
+  E_BRANCH_TARGETING_NOT_ALLOWED,
 } from "@/lib/api/response";
 import { PERMISSION_MODE } from "@/server/domain/constants/connection_constants";
 import { apiWriteLimit } from "@/lib/api/rate_limit";
@@ -18,34 +29,30 @@ import { apiWriteLimit } from "@/lib/api/rate_limit";
  * POST /api/v1/generated_notes
  *
  * Creates a generated note directly in a folder.
- * Allowed only for connections with permission_mode = generate_in_allowed_folders.
  *
- * The folder must:
- *   - belong to a box in the connection's scope
- *   - have accepts_generated_notes = true
+ * Auth: OAuth access token with `context:generate` scope and a non-
+ * viewer workspace role. For legacy csk_v1_ contexts, the
+ * permission_mode must be generate_in_allowed_folders (the scope
+ * gate short-circuits true).
  *
- * Request body:
- *   {
- *     folder_id:          string,   // required
- *     title?:             string,
- *     markdown_content?:  string,
- *     summary?:           string,
- *     proposed_tags?:     string[],
- *     read_hint?:         string,
- *     retrieval_priority?: number
- *   }
- *
- * Response: { note: NoteDetail, version_id: string }
+ * Branch targeting: OAuth-backed writes target main only; a
+ * `branch_id` in the body is rejected with 400.
  */
 export async function POST(request: NextRequest) {
-  const ctx = await getConnectionContext(request);
+  const ctx = await resolveMcpRequestAuth(request);
   if (!ctx) return E_UNAUTHORIZED();
+  if (!requireScope(ctx, "context:generate")) {
+    return E_INSUFFICIENT_SCOPE("context:generate");
+  }
+  if (!requireWrite(ctx)) {
+    return E_FORBIDDEN_ROLE("Viewer role cannot create generated notes");
+  }
 
-  // Rate limit per connection (20 writes/min)
-  const rl = apiWriteLimit(ctx.connection.id);
+  // Rate limit per connection/token (20 writes/min)
+  const rl = apiWriteLimit(ctx.connectionId);
   if (!rl.allowed) return E_RATE_LIMITED(rl.retryAfter);
 
-  if (ctx.connection.permission_mode !== PERMISSION_MODE.GENERATE_IN_ALLOWED_FOLDERS) {
+  if (ctx.permissionMode !== PERMISSION_MODE.GENERATE_IN_ALLOWED_FOLDERS) {
     return E_FORBIDDEN(
       "Connection must have generate_in_allowed_folders permission to create generated notes"
     );
@@ -59,11 +66,21 @@ export async function POST(request: NextRequest) {
     tags?: string[];
     read_hint?: string;
     retrieval_priority?: number;
+    branch_id?: string | null;
   };
   try {
     body = await request.json();
   } catch {
     return E_BAD_REQUEST("Request body must be valid JSON");
+  }
+
+  try {
+    requireNoBranchTargeting(ctx, body.branch_id ?? null);
+  } catch (err) {
+    if (err instanceof BranchTargetingNotAllowedError) {
+      return E_BRANCH_TARGETING_NOT_ALLOWED();
+    }
+    throw err;
   }
 
   const { folder_id } = body;
@@ -101,9 +118,10 @@ export async function POST(request: NextRequest) {
   }
 
   const adminClient = createAdminClient();
+  const bridge = toConnectionRequestContext(ctx);
 
   try {
-    const result = await createGeneratedNote(adminClient, ctx, {
+    const result = await createGeneratedNote(adminClient, bridge, {
       folder_id,
       title: body.title ?? null,
       markdown_content: body.markdown_content ?? null,
@@ -112,6 +130,26 @@ export async function POST(request: NextRequest) {
       read_hint: body.read_hint ?? null,
       retrieval_priority: body.retrieval_priority,
     });
+
+    // User-attributed MCP audit event — complements the service's
+    // existing connection-attributed `note.generated` event.
+    if (ctx.source === "oauth" && ctx.userId) {
+      auditMcp(adminClient, {
+        workspaceId: ctx.workspaceId,
+        userId: ctx.userId,
+        clientId: ctx.clientId,
+        connectionId: ctx.connectionId,
+        source: ctx.source,
+        objectType: "note",
+        objectId: result.note.id,
+        eventType: "mcp.note.generated",
+        metadata: {
+          box_id: result.note.box_id,
+          folder_id: result.note.folder_id,
+          title: result.note.title,
+        },
+      });
+    }
 
     return apiOk(
       {

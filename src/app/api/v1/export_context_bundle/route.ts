@@ -1,5 +1,6 @@
 import { type NextRequest } from "next/server";
-import { getConnectionContext } from "@/server/auth/get_connection_context";
+import { resolveMcpRequestAuth, requireScope } from "@/server/auth/mcp_auth_adapter";
+import { canAccessBox } from "@/server/services/oauth_scope_service";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getNoteById } from "@/server/repositories/note_repository";
 import { exportBundle } from "@/server/services/export_service";
@@ -11,47 +12,23 @@ import {
   E_NOT_FOUND,
   E_BAD_REQUEST,
   E_INTERNAL,
+  E_INSUFFICIENT_SCOPE,
 } from "@/lib/api/response";
 
 /**
  * POST /api/v1/export_context_bundle
  *
- * Assembles a context bundle for a note and exports it as a signed download.
+ * Assembles a context bundle for a note and exports it as a signed
+ * download.
  *
- * The bundle includes: the entry note, guide note (if assigned and requested),
- * ancestor summary note (if found), and linked notes up to the configured limit.
- * A README with suggested upload order is included. The package is uploaded to
- * private Supabase Storage and a signed URL returned.
- *
- * Authentication:
- *   Bearer token (connection auth). The note's box must be in the connection's
- *   allowed box scope.
- *
- * Request body:
- *   {
- *     "note_id": "<uuid>",
- *     "include_guide": true,            // default true
- *     "include_ancestor_summary": true, // default true
- *     "linked_limit": 10               // default 10, max 10
- *   }
- *
- * Response data:
- *   {
- *     "signed_url": "https://...",
- *     "expires_at": "2026-04-09T14:00:00.000Z",
- *     "filename": "bundle-my-note.zip",
- *     "size_bytes": 8192,
- *     "manifest_summary": {
- *       "export_type": "bundle",
- *       "note_count": 5,
- *       "folder_count": 0,
- *       "link_count": 4
- *     }
- *   }
+ * Auth: OAuth access token with `context:bundles` scope.
  */
 export async function POST(request: NextRequest) {
-  const ctx = await getConnectionContext(request);
+  const ctx = await resolveMcpRequestAuth(request);
   if (!ctx) return E_UNAUTHORIZED();
+  if (!requireScope(ctx, "context:bundles")) {
+    return E_INSUFFICIENT_SCOPE("context:bundles");
+  }
 
   let body: {
     note_id?: string;
@@ -73,6 +50,9 @@ export async function POST(request: NextRequest) {
   const note = await getNoteById(adminClient, note_id);
   if (!note || note.status === "trashed") return E_NOT_FOUND("Note not found");
   if (!ctx.allowedBoxIds.has(note.box_id)) return E_FORBIDDEN();
+  if (ctx.source === "oauth" && !canAccessBox(ctx.scopes, note.box_id)) {
+    return E_FORBIDDEN();
+  }
 
   try {
     const pkg = await exportBundle(adminClient, ctx.workspaceId, note_id, {

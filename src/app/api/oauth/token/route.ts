@@ -10,9 +10,19 @@ import {
   issueTokenPair,
   refreshTokenPair,
   ACCESS_TOKEN_TTL_SECONDS,
+  type IssuedTokenPair,
 } from "@/server/services/oauth_token_service";
-import { parseScopeString, serializeScopes } from "@/server/services/oauth_scope_service";
-import { createAuditEvent } from "@/server/repositories/audit_event_repository";
+import { parseScopeString } from "@/server/services/oauth_scope_service";
+import {
+  auditOauthTokenIssued,
+  auditOauthTokenRefreshed,
+  auditRateLimitTripped,
+} from "@/server/services/audit_service";
+import {
+  checkRateLimit,
+  tokenBucketKey,
+  TOKEN_LIMIT,
+} from "@/server/services/rate_limit_service";
 
 /**
  * OAuth 2.1 token endpoint (RFC 6749 §3.2 with OAuth 2.1 tightening).
@@ -32,6 +42,13 @@ import { createAuditEvent } from "@/server/repositories/audit_event_repository";
  *     client_secret_post (client_id + client_secret in the body).
  *   * Public clients present only client_id; authentication is via
  *     PKCE.
+ *
+ * Rate limiting:
+ *
+ *   * 30 requests per minute per `client_id` via the durable
+ *     `rate_limit_buckets` table. Exceeding returns 429 with the
+ *     Retry-After header. Rate-limit trips are audited via
+ *     `auditRateLimitTripped`.
  *
  * Responses are standard OAuth JSON per RFC 6749; errors use the
  * `{ error, error_description }` envelope.
@@ -56,6 +73,22 @@ export async function POST(req: NextRequest) {
   if (!clientId) return tokenError("invalid_client", "client_id is required");
 
   const admin = createAdminClient();
+
+  // Rate limit per client_id BEFORE any DB lookups so an unknown client
+  // cannot be used as an oracle to hammer the token endpoint.
+  const rl = await checkRateLimit(admin, tokenBucketKey(clientId), TOKEN_LIMIT);
+  if (!rl.allowed) {
+    // Audit is best-effort; we don't know the user yet at this point.
+    await auditRateLimitTripped({
+      supabase: admin,
+      workspaceId: null,
+      userId: null,
+      bucketKey: rl.bucketKey,
+      limit: rl.limit,
+    });
+    return rateLimited(rl.retryAfterSeconds);
+  }
+
   const client = await _internalGetClientWithSecret(admin, clientId);
   if (!client) return tokenError("invalid_client", "Unknown client");
 
@@ -69,9 +102,9 @@ export async function POST(req: NextRequest) {
 
   switch (body.grant_type) {
     case "authorization_code":
-      return handleAuthorizationCode(admin, client.client_id, body);
+      return handleAuthorizationCode(admin, client.id, client.client_id, body);
     case "refresh_token":
-      return handleRefreshToken(admin, client.client_id, body);
+      return handleRefreshToken(admin, client.id, client.client_id, body);
     default:
       return tokenError("unsupported_grant_type", `grant_type=${body.grant_type} is not supported`);
   }
@@ -79,6 +112,7 @@ export async function POST(req: NextRequest) {
 
 async function handleAuthorizationCode(
   admin: ReturnType<typeof createAdminClient>,
+  clientRowId: string,
   clientId: string,
   body: TokenRequest
 ) {
@@ -111,17 +145,14 @@ async function handleAuthorizationCode(
     scope: redemption.scope,
   });
 
-  // Audit the grant so there's a durable, attributable record of the
-  // token issuance. We store the client and workspace; the raw tokens
-  // are never audited.
-  await createAuditEvent(admin, {
-    workspace_id: redemption.workspaceId,
-    actor_type: "user",
-    actor_id: redemption.userId,
-    object_type: "oauth_client",
-    object_id: client.id,
-    event_type: "oauth.token.issued",
-    metadata: { grant_type: "authorization_code", scope: serializeScopes(pair.scope) },
+  await auditOauthTokenIssued({
+    supabase: admin,
+    workspaceId: redemption.workspaceId,
+    userId: redemption.userId,
+    clientId,
+    clientRowId,
+    grantType: "authorization_code",
+    tokenId: pair.accessTokenId,
   });
 
   return tokenSuccess(pair);
@@ -129,6 +160,7 @@ async function handleAuthorizationCode(
 
 async function handleRefreshToken(
   admin: ReturnType<typeof createAdminClient>,
+  clientRowId: string,
   clientId: string,
   body: TokenRequest
 ) {
@@ -144,7 +176,17 @@ async function handleRefreshToken(
   if ("ok" in result && result.ok === false) {
     return tokenError(result.error, "Refresh token cannot be exchanged.");
   }
-  const pair = result as Exclude<typeof result, { ok: false; error: string }>;
+  const pair = result as IssuedTokenPair;
+
+  await auditOauthTokenRefreshed({
+    supabase: admin,
+    workspaceId: pair.workspaceId,
+    userId: pair.userId,
+    clientId,
+    clientRowId,
+    newTokenId: pair.accessTokenId,
+    rotatedFromTokenId: pair.rotatedFromRefreshTokenId ?? "",
+  });
 
   return tokenSuccess(pair);
 }
@@ -224,6 +266,23 @@ function tokenError(code: string, description: string) {
       headers: {
         "Cache-Control": "no-store",
         Pragma: "no-cache",
+      },
+    }
+  );
+}
+
+function rateLimited(retryAfterSeconds: number) {
+  return NextResponse.json(
+    {
+      error: "rate_limited",
+      error_description: `Too many token requests. Retry after ${retryAfterSeconds} seconds.`,
+    },
+    {
+      status: 429,
+      headers: {
+        "Cache-Control": "no-store",
+        Pragma: "no-cache",
+        "Retry-After": String(retryAfterSeconds),
       },
     }
   );

@@ -1,38 +1,40 @@
 import { type NextRequest } from "next/server";
-import { getConnectionContext } from "@/server/auth/get_connection_context";
+import { resolveMcpRequestAuth, requireScope } from "@/server/auth/mcp_auth_adapter";
+import { canAccessBox } from "@/server/services/oauth_scope_service";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getBoxById } from "@/server/repositories/box_repository";
 import { listFoldersByBox, listFoldersByParent, getFolderById } from "@/server/repositories/folder_repository";
 import { listNotesByBox } from "@/server/repositories/note_repository";
-import { apiOk, E_UNAUTHORIZED, E_FORBIDDEN, E_NOT_FOUND, E_BAD_REQUEST } from "@/lib/api/response";
+import {
+  apiOk,
+  E_UNAUTHORIZED,
+  E_FORBIDDEN,
+  E_NOT_FOUND,
+  E_INSUFFICIENT_SCOPE,
+} from "@/lib/api/response";
 
 /**
  * GET /api/v1/boxes/[box_id]/folder_contents
  *
  * Lists folders and notes at a specific level of the box hierarchy.
  *
- * Query parameters:
- *   folder_id  — (optional) parent folder ID; omit for box root level
- *
- * Response shape:
- *   data: {
- *     box_id: string,
- *     folder_id: string | null,   // null = root level
- *     folders: Array<{ id, name, slug, path_cache, description, accepts_generated_notes, parent_folder_id }>,
- *     notes: Array<{ id, title, slug, path_cache, summary, tags, read_hint, kind, status, updated_at }>
- *   }
- *
- * Notes: trashed and archived content is excluded. Only active content returned.
+ * Auth: OAuth access token with `context:read` scope.
  */
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ box_id: string }> }
 ) {
-  const ctx = await getConnectionContext(request);
+  const ctx = await resolveMcpRequestAuth(request);
   if (!ctx) return E_UNAUTHORIZED();
+  if (!requireScope(ctx, "context:read")) {
+    return E_INSUFFICIENT_SCOPE("context:read");
+  }
 
   const { box_id } = await params;
   if (!ctx.allowedBoxIds.has(box_id)) return E_FORBIDDEN();
+  if (ctx.source === "oauth" && !canAccessBox(ctx.scopes, box_id)) {
+    return E_FORBIDDEN();
+  }
 
   const searchParams = request.nextUrl.searchParams;
   const folder_id = searchParams.get("folder_id") ?? null;
@@ -44,7 +46,6 @@ export async function GET(
     return E_NOT_FOUND("Box not found");
   }
 
-  // If a folder_id was given, verify it belongs to this box
   if (folder_id !== null) {
     const folder = await getFolderById(adminClient, folder_id);
     if (!folder || folder.box_id !== box_id || folder.status === "trashed") {
@@ -52,13 +53,11 @@ export async function GET(
     }
   }
 
-  // Fetch child folders and notes at this level.
   // Canonical API: main-only view. Connection contexts don't carry a branch.
   const [folders, notes] = await Promise.all([
     folder_id
       ? listFoldersByParent(adminClient, folder_id)
-      : // root level: get all box folders and filter to those without a parent
-        listFoldersByBox(adminClient, box_id).then((all) =>
+      : listFoldersByBox(adminClient, box_id).then((all) =>
           all.filter((f) => f.parent_folder_id === null)
         ),
     listNotesByBox(adminClient, box_id, { folder_id }),

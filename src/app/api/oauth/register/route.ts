@@ -7,7 +7,15 @@ import {
 } from "@/server/services/oauth_token_service";
 import { getRequestContext } from "@/server/auth/get_request_context";
 import { ALL_SCOPES, type OAuthScope } from "@/server/services/oauth_scope_service";
-import { createAuditEvent } from "@/server/repositories/audit_event_repository";
+import {
+  auditOauthClientRegistered,
+  auditRateLimitTripped,
+} from "@/server/services/audit_service";
+import {
+  checkRateLimit,
+  registerBucketKey,
+  REGISTRATION_LIMIT,
+} from "@/server/services/rate_limit_service";
 
 /**
  * OAuth 2.0 Dynamic Client Registration (RFC 7591).
@@ -19,6 +27,10 @@ import { createAuditEvent } from "@/server/repositories/audit_event_repository";
  *     Either (a) a Supabase session cookie (human) or (b) an OAuth
  *     access token already issued to the same user is required. No
  *     anonymous registration — that door swings wide for abuse.
+ *
+ *   * Rate-limited to 3 successful registrations per user per hour
+ *     via the durable `rate_limit_buckets` table. Rate-limit trips
+ *     are audited.
  *
  *   * Redirect URIs are stored exactly as submitted and must match
  *     byte-for-byte at authorize time. Wildcards and regex patterns
@@ -57,6 +69,39 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(
       { error: "invalid_request", error_description: "Authenticated Context Store session required to register a client." },
       { status: 401 }
+    );
+  }
+
+  const admin = createAdminClient();
+
+  // Apply the per-user rate limit before touching the registration
+  // path. Rejected calls are audited so operators can see bursts.
+  const rl = await checkRateLimit(
+    admin,
+    registerBucketKey(callerUserId),
+    REGISTRATION_LIMIT
+  );
+  if (!rl.allowed) {
+    await auditRateLimitTripped({
+      supabase: admin,
+      workspaceId: await fallbackWorkspaceId(admin, callerUserId),
+      userId: callerUserId,
+      bucketKey: rl.bucketKey,
+      limit: rl.limit,
+    });
+    return NextResponse.json(
+      {
+        error: "rate_limited",
+        error_description: `Too many client registrations. Retry after ${rl.retryAfterSeconds} seconds.`,
+      },
+      {
+        status: 429,
+        headers: {
+          "Cache-Control": "no-store",
+          Pragma: "no-cache",
+          "Retry-After": String(rl.retryAfterSeconds),
+        },
+      }
     );
   }
 
@@ -102,7 +147,6 @@ export async function POST(req: NextRequest) {
   const authMethod = body.token_endpoint_auth_method ?? "none";
   const isConfidential = authMethod !== "none";
 
-  const admin = createAdminClient();
   try {
     const { client, client_secret } = await registerClient(admin, {
       name,
@@ -116,30 +160,33 @@ export async function POST(req: NextRequest) {
       created_by: callerUserId,
     });
 
+    // Capture the caller IP on the client row for abuse triage. Best-
+    // effort — if the column isn't available (e.g. migration hasn't
+    // run yet in dev) we fail quiet.
+    const callerIp = extractIp(req);
+    if (callerIp) {
+      await admin
+        .from("oauth_clients")
+        .update({ last_registration_ip: callerIp })
+        .eq("id", client.id);
+    }
+
     // Audit every self-registration so operators have a trail.
     // workspace_id here is synthetic — dynamic registration is
     // user-level, not workspace-level. We fall back to the caller's
     // active workspace for the audit write because audit_events
     // requires one.
-    const { data: anyWorkspace } = await admin
-      .from("workspaces")
-      .select("id")
-      .eq("owner_id", callerUserId)
-      .limit(1)
-      .maybeSingle();
-    if (anyWorkspace?.id) {
-      await createAuditEvent(admin, {
-        workspace_id: anyWorkspace.id,
-        actor_type: "user",
-        actor_id: callerUserId,
-        object_type: "oauth_client",
-        object_id: client.id,
-        event_type: "oauth.client.registered",
-        metadata: {
-          client_id: client.client_id,
-          is_confidential: isConfidential,
-          allowed_scopes: allowedScopes,
-        },
+    const fallbackWsId = await fallbackWorkspaceId(admin, callerUserId);
+    if (fallbackWsId) {
+      await auditOauthClientRegistered({
+        supabase: admin,
+        workspaceId: fallbackWsId,
+        userId: callerUserId,
+        clientId: client.client_id,
+        clientRowId: client.id,
+        isConfidential,
+        allowedScopes,
+        ip: callerIp,
       });
     }
 
@@ -198,6 +245,30 @@ async function resolveCallerUserId(req: NextRequest): Promise<string | null> {
     // No session.
   }
   return null;
+}
+
+async function fallbackWorkspaceId(
+  admin: ReturnType<typeof createAdminClient>,
+  userId: string
+): Promise<string | null> {
+  const { data } = await admin
+    .from("workspaces")
+    .select("id")
+    .eq("owner_id", userId)
+    .limit(1)
+    .maybeSingle();
+  return (data as { id: string } | null)?.id ?? null;
+}
+
+function extractIp(req: NextRequest): string | null {
+  // Next.js on Vercel populates x-forwarded-for; fall back to the
+  // connection-level remote address if present.
+  const fwd = req.headers.get("x-forwarded-for");
+  if (fwd) {
+    const first = fwd.split(",")[0]?.trim();
+    if (first) return first;
+  }
+  return req.headers.get("x-real-ip");
 }
 
 function rfcError(code: string, description: string) {

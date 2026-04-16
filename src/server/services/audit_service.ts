@@ -842,6 +842,254 @@ export function auditObjectProposalApproved(
   );
 }
 
+// ─── OAuth lifecycle events ─────────────────────────────────────────────────
+
+/**
+ * Durable audit hooks for the OAuth surface. Every event here is
+ * written via the service role (admin) client because the OAuth
+ * endpoints do not run in the user's RLS context. Failures are
+ * swallowed — audit must never block the primary operation.
+ *
+ * Naming convention: `oauth.<object>.<verb>`. Metadata always carries
+ * `oauth_client_id` when a client is involved so the audit timeline
+ * can group events by connector.
+ */
+
+export interface OauthClientRegisteredEvent {
+  supabase: SupabaseClient;
+  workspaceId: string;
+  userId: string;
+  clientId: string;
+  clientRowId: string;
+  isConfidential: boolean;
+  allowedScopes: string[];
+  ip: string | null;
+}
+
+export async function auditOauthClientRegistered(
+  input: OauthClientRegisteredEvent
+): Promise<void> {
+  await write(
+    input.supabase,
+    input.workspaceId,
+    input.userId,
+    "oauth_client",
+    input.clientRowId,
+    "oauth.client.registered",
+    {
+      oauth_client_id: input.clientId,
+      is_confidential: input.isConfidential,
+      allowed_scopes: input.allowedScopes,
+      ip: input.ip,
+    }
+  );
+}
+
+export async function auditOauthClientUpdated(input: {
+  supabase: SupabaseClient;
+  workspaceId: string;
+  userId: string;
+  clientId: string;
+  clientRowId: string;
+  patch: Record<string, unknown>;
+}): Promise<void> {
+  await write(
+    input.supabase,
+    input.workspaceId,
+    input.userId,
+    "oauth_client",
+    input.clientRowId,
+    "oauth.client.updated",
+    { oauth_client_id: input.clientId, patch: input.patch }
+  );
+}
+
+export async function auditOauthClientDeprecated(input: {
+  supabase: SupabaseClient;
+  workspaceId: string;
+  userId: string;
+  clientId: string;
+  clientRowId: string;
+}): Promise<void> {
+  await write(
+    input.supabase,
+    input.workspaceId,
+    input.userId,
+    "oauth_client",
+    input.clientRowId,
+    "oauth.client.deprecated",
+    { oauth_client_id: input.clientId }
+  );
+}
+
+export async function auditOauthConsentGranted(input: {
+  supabase: SupabaseClient;
+  workspaceId: string;
+  userId: string;
+  clientId: string;
+  clientRowId: string;
+  scopes: string[];
+}): Promise<void> {
+  await write(
+    input.supabase,
+    input.workspaceId,
+    input.userId,
+    "oauth_client",
+    input.clientRowId,
+    "oauth.consent.granted",
+    { oauth_client_id: input.clientId, scopes: input.scopes }
+  );
+}
+
+export async function auditOauthConsentRevoked(input: {
+  supabase: SupabaseClient;
+  workspaceId: string;
+  userId: string;
+  clientId: string;
+  clientRowId: string;
+  cascadedTokens: number;
+}): Promise<void> {
+  await write(
+    input.supabase,
+    input.workspaceId,
+    input.userId,
+    "oauth_client",
+    input.clientRowId,
+    "oauth.consent.revoked",
+    {
+      oauth_client_id: input.clientId,
+      cascaded_tokens: input.cascadedTokens,
+    }
+  );
+}
+
+export async function auditOauthTokenIssued(input: {
+  supabase: SupabaseClient;
+  workspaceId: string;
+  userId: string;
+  clientId: string;
+  clientRowId: string;
+  grantType: "authorization_code" | "refresh_token";
+  tokenId: string;
+}): Promise<void> {
+  await write(
+    input.supabase,
+    input.workspaceId,
+    input.userId,
+    "oauth_access_token",
+    input.tokenId,
+    "oauth.token.issued",
+    {
+      oauth_client_id: input.clientId,
+      oauth_client_row_id: input.clientRowId,
+      grant_type: input.grantType,
+    }
+  );
+}
+
+export async function auditOauthTokenRefreshed(input: {
+  supabase: SupabaseClient;
+  workspaceId: string;
+  userId: string;
+  clientId: string;
+  clientRowId: string;
+  newTokenId: string;
+  rotatedFromTokenId: string;
+}): Promise<void> {
+  await write(
+    input.supabase,
+    input.workspaceId,
+    input.userId,
+    "oauth_access_token",
+    input.newTokenId,
+    "oauth.token.refreshed",
+    {
+      oauth_client_id: input.clientId,
+      oauth_client_row_id: input.clientRowId,
+      rotated_from_token_id: input.rotatedFromTokenId,
+    }
+  );
+}
+
+export async function auditOauthTokenRevoked(input: {
+  supabase: SupabaseClient;
+  workspaceId: string | null;
+  userId: string | null;
+  clientId: string;
+  tokenId: string | null;
+  reason: string;
+}): Promise<void> {
+  // OAuth revocation may happen without an authenticated user context
+  // (RFC 7009 allows it via client auth). When that's the case we
+  // still want a trail, but we must not pretend we know which user
+  // did it. We pick a synthetic actor_id = clientId and route through
+  // the connection-actor writer so `actor_type='connection'`.
+  if (!input.userId || !input.workspaceId) {
+    await writeConnection(
+      input.supabase,
+      input.workspaceId ?? "00000000-0000-0000-0000-000000000000",
+      input.clientId,
+      "oauth_access_token",
+      input.tokenId ?? input.clientId,
+      "oauth.token.revoked",
+      { oauth_client_id: input.clientId, reason: input.reason }
+    );
+    return;
+  }
+  await write(
+    input.supabase,
+    input.workspaceId,
+    input.userId,
+    "oauth_access_token",
+    input.tokenId ?? input.clientId,
+    "oauth.token.revoked",
+    { oauth_client_id: input.clientId, reason: input.reason }
+  );
+}
+
+/**
+ * Rate-limit trip event. Fired when a caller exceeds one of the
+ * anti-abuse bucket limits. Metadata includes the bucket key and the
+ * applied limit so operators can triage bursts.
+ */
+export async function auditRateLimitTripped(input: {
+  supabase: SupabaseClient;
+  workspaceId: string | null;
+  userId: string | null;
+  bucketKey: string;
+  limit: number;
+}): Promise<void> {
+  try {
+    // We intentionally do not surface the actor's IP here — the bucket
+    // key already encodes the dimension. If workspaceId / userId are
+    // unknown we still write the event with a synthetic connection-
+    // actor so there is SOME trail.
+    if (!input.workspaceId || !input.userId) {
+      await writeConnection(
+        input.supabase,
+        input.workspaceId ?? "00000000-0000-0000-0000-000000000000",
+        input.bucketKey,
+        "rate_limit",
+        input.bucketKey,
+        "rate_limit.tripped",
+        { bucket_key: input.bucketKey, limit: input.limit }
+      );
+      return;
+    }
+    await write(
+      input.supabase,
+      input.workspaceId,
+      input.userId,
+      "rate_limit",
+      input.bucketKey,
+      "rate_limit.tripped",
+      { bucket_key: input.bucketKey, limit: input.limit }
+    );
+  } catch (err) {
+    console.error("[audit] auditRateLimitTripped failed", err);
+  }
+}
+
 // ─── MCP (OAuth-primary) audit write ─────────────────────────────────────────
 
 /**

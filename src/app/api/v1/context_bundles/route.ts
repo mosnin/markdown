@@ -1,9 +1,10 @@
 import { type NextRequest } from "next/server";
-import { getConnectionContext } from "@/server/auth/get_connection_context";
+import { resolveMcpRequestAuth, requireScope } from "@/server/auth/mcp_auth_adapter";
+import { canAccessBox } from "@/server/services/oauth_scope_service";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getNoteById } from "@/server/repositories/note_repository";
 import { assembleContextBundle } from "@/server/services/context_bundle_service";
-import { auditBundleReadByConnection } from "@/server/services/audit_service";
+import { auditMcp, auditBundleReadByConnection } from "@/server/services/audit_service";
 import {
   apiOk,
   E_UNAUTHORIZED,
@@ -11,30 +12,23 @@ import {
   E_NOT_FOUND,
   E_BAD_REQUEST,
   E_INTERNAL,
+  E_INSUFFICIENT_SCOPE,
 } from "@/lib/api/response";
 
 /**
  * POST /api/v1/context_bundles
  *
- * Assembles a bounded, deterministic context bundle centered on a note.
- * The bundle includes the target note, guide note, linked notes, ancestor
- * summary note, and relationship edges — all ranked and deduplicated.
+ * Assembles a bounded, deterministic context bundle centered on a
+ * note.
  *
- * Request body:
- *   {
- *     note_id: string,
- *     include_guide?: boolean,            // default true
- *     include_ancestor_summary?: boolean, // default true
- *     include_archived?: boolean,         // default false
- *     linked_limit?: number               // default 10, max 10
- *   }
- *
- * Response shape:
- *   data: ContextBundle  (see src/server/domain/types/context_bundle.ts)
+ * Auth: OAuth access token with `context:bundles` scope.
  */
 export async function POST(request: NextRequest) {
-  const ctx = await getConnectionContext(request);
+  const ctx = await resolveMcpRequestAuth(request);
   if (!ctx) return E_UNAUTHORIZED();
+  if (!requireScope(ctx, "context:bundles")) {
+    return E_INSUFFICIENT_SCOPE("context:bundles");
+  }
 
   let body: {
     note_id?: string;
@@ -54,10 +48,12 @@ export async function POST(request: NextRequest) {
 
   const adminClient = createAdminClient();
 
-  // Pre-check note existence and box authorization before assembling
   const note = await getNoteById(adminClient, note_id);
   if (!note || note.status === "trashed") return E_NOT_FOUND("Note not found");
   if (!ctx.allowedBoxIds.has(note.box_id)) return E_FORBIDDEN();
+  if (ctx.source === "oauth" && !canAccessBox(ctx.scopes, note.box_id)) {
+    return E_FORBIDDEN();
+  }
 
   try {
     const bundle = await assembleContextBundle(
@@ -71,14 +67,39 @@ export async function POST(request: NextRequest) {
         linkedLimit: body.linked_limit ?? 10,
       }
     );
-    // Audit the bundle read (fire-and-forget — must not abort the response).
-    auditBundleReadByConnection(adminClient, ctx.workspaceId, ctx.connection.id, note_id, {
-      box_id: bundle.box.id,
-      linked_count: bundle.linked_notes.length,
-      guide_included: bundle.guide_note !== null,
-      ancestor_summary_included: bundle.ancestor_summary_note !== null,
-      truncated: bundle.truncated,
-    });
+
+    // Audit the bundle read. For OAuth contexts we use the unified
+    // auditMcp writer so the human user is named as the actor and the
+    // oauth client id ends up in metadata. Legacy csk_v1_ contexts
+    // retain the classic connection-actor shape.
+    if (ctx.source === "oauth" && ctx.userId) {
+      auditMcp(adminClient, {
+        workspaceId: ctx.workspaceId,
+        userId: ctx.userId,
+        clientId: ctx.clientId,
+        connectionId: ctx.connectionId,
+        source: ctx.source,
+        objectType: "note",
+        objectId: note_id,
+        eventType: "bundle.read",
+        metadata: {
+          box_id: bundle.box.id,
+          linked_count: bundle.linked_notes.length,
+          guide_included: bundle.guide_note !== null,
+          ancestor_summary_included: bundle.ancestor_summary_note !== null,
+          truncated: bundle.truncated,
+        },
+      });
+    } else {
+      auditBundleReadByConnection(adminClient, ctx.workspaceId, ctx.connectionId, note_id, {
+        box_id: bundle.box.id,
+        linked_count: bundle.linked_notes.length,
+        guide_included: bundle.guide_note !== null,
+        ancestor_summary_included: bundle.ancestor_summary_note !== null,
+        truncated: bundle.truncated,
+      });
+    }
+
     return apiOk(bundle);
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Assembly failed";

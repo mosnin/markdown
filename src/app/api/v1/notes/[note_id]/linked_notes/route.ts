@@ -1,5 +1,6 @@
 import { type NextRequest } from "next/server";
-import { getConnectionContext } from "@/server/auth/get_connection_context";
+import { resolveMcpRequestAuth, requireScope } from "@/server/auth/mcp_auth_adapter";
+import { canAccessBox } from "@/server/services/oauth_scope_service";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getNoteById, getNotesByIds } from "@/server/repositories/note_repository";
 import { getBoxById } from "@/server/repositories/box_repository";
@@ -7,34 +8,35 @@ import {
   listLinksFromNote,
   listLinksToNote,
 } from "@/server/repositories/note_link_repository";
-import { apiOk, E_UNAUTHORIZED, E_FORBIDDEN, E_NOT_FOUND } from "@/lib/api/response";
+import {
+  apiOk,
+  E_UNAUTHORIZED,
+  E_FORBIDDEN,
+  E_NOT_FOUND,
+  E_INSUFFICIENT_SCOPE,
+} from "@/lib/api/response";
 
 /**
  * GET /api/v1/notes/[note_id]/linked_notes
  *
  * Returns all notes explicitly linked to or from the given note.
  *
- * Authorization:
- *   - The note's box must be in the connection's allowed box scopes.
- *   - Only linked notes in the same box (and allowed scope) are returned.
- *   - Trashed linked notes are excluded.
+ * Auth: OAuth access token with `context:read` scope.
  *
- * Response shape:
- *   data: {
- *     note_id: string,
- *     links: Array<{
- *       id, source_note_id, target_note_id, relationship_type,
- *       direction: "outgoing" | "incoming"
- *     }>,
- *     notes: Array<{ id, title, slug, path_cache, summary, tags, read_hint, kind, status, updated_at }>
- *   }
+ * Authorization:
+ *   - The note's box must be in the token's allowed box set.
+ *   - Only linked notes in an allowed box (and within scope) are returned.
+ *   - Trashed linked notes are excluded.
  */
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ note_id: string }> }
 ) {
-  const ctx = await getConnectionContext(request);
+  const ctx = await resolveMcpRequestAuth(request);
   if (!ctx) return E_UNAUTHORIZED();
+  if (!requireScope(ctx, "context:read")) {
+    return E_INSUFFICIENT_SCOPE("context:read");
+  }
 
   const { note_id } = await params;
   const adminClient = createAdminClient();
@@ -43,6 +45,9 @@ export async function GET(
   if (!note || note.status === "trashed") return E_NOT_FOUND("Note not found");
 
   if (!ctx.allowedBoxIds.has(note.box_id)) return E_FORBIDDEN();
+  if (ctx.source === "oauth" && !canAccessBox(ctx.scopes, note.box_id)) {
+    return E_FORBIDDEN();
+  }
 
   const box = await getBoxById(adminClient, note.box_id);
   if (!box || box.workspace_id !== ctx.workspaceId) return E_FORBIDDEN();
@@ -52,7 +57,6 @@ export async function GET(
     listLinksToNote(adminClient, note_id),
   ]);
 
-  // Resolve linked note IDs, deduplicating
   const linkedNoteIds = new Set<string>();
   outgoing.forEach((l) => linkedNoteIds.add(l.target_note_id));
   incoming.forEach((l) => linkedNoteIds.add(l.source_note_id));
@@ -62,13 +66,17 @@ export async function GET(
       ? await getNotesByIds(adminClient, Array.from(linkedNoteIds))
       : [];
 
-  // Only include notes from the same allowed box
+  // Only include notes from a box the token can reach.
   const visibleNoteIds = new Set(
     linkedNotes
-      .filter(
-        (n) =>
-          n.status !== "trashed" && ctx.allowedBoxIds.has(n.box_id)
-      )
+      .filter((n) => {
+        if (n.status === "trashed") return false;
+        if (!ctx.allowedBoxIds.has(n.box_id)) return false;
+        if (ctx.source === "oauth" && !canAccessBox(ctx.scopes, n.box_id)) {
+          return false;
+        }
+        return true;
+      })
       .map((n) => n.id)
   );
 

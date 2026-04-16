@@ -1,32 +1,38 @@
 import { type NextRequest } from "next/server";
-import { getConnectionContext } from "@/server/auth/get_connection_context";
+import { resolveMcpRequestAuth, requireScope } from "@/server/auth/mcp_auth_adapter";
+import { canAccessBox } from "@/server/services/oauth_scope_service";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getNoteById } from "@/server/repositories/note_repository";
 import { getBoxById } from "@/server/repositories/box_repository";
-import { apiOk, E_UNAUTHORIZED, E_FORBIDDEN, E_NOT_FOUND } from "@/lib/api/response";
+import {
+  apiOk,
+  E_UNAUTHORIZED,
+  E_FORBIDDEN,
+  E_NOT_FOUND,
+  E_INSUFFICIENT_SCOPE,
+} from "@/lib/api/response";
 
 /**
  * GET /api/v1/notes/[note_id]
  *
  * Returns a single note by ID, including its full markdown body.
  *
- * Authorization:
- *   - The note's box must be in the connection's allowed box scopes.
- *   - Trashed notes are treated as not found.
+ * Auth: OAuth access token with `context:read` scope.
  *
- * Response shape:
- *   data: {
- *     id, box_id, folder_id, title, slug, path_cache,
- *     markdown_content, summary, tags, read_hint,
- *     kind, status, created_at, updated_at
- *   }
+ * Authorization:
+ *   - The note's box must be in the token's allowed box set.
+ *   - Box-scoped tokens are further narrowed via `canAccessBox`.
+ *   - Trashed notes are treated as not found.
  */
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ note_id: string }> }
 ) {
-  const ctx = await getConnectionContext(request);
+  const ctx = await resolveMcpRequestAuth(request);
   if (!ctx) return E_UNAUTHORIZED();
+  if (!requireScope(ctx, "context:read")) {
+    return E_INSUFFICIENT_SCOPE("context:read");
+  }
 
   const { note_id } = await params;
   const adminClient = createAdminClient();
@@ -34,10 +40,13 @@ export async function GET(
   const note = await getNoteById(adminClient, note_id);
   if (!note || note.status === "trashed") return E_NOT_FOUND("Note not found");
 
-  // Verify box access
+  // Box-scope gate (OAuth capability + context:box:<uuid> narrowing)
   if (!ctx.allowedBoxIds.has(note.box_id)) return E_FORBIDDEN();
+  if (ctx.source === "oauth" && !canAccessBox(ctx.scopes, note.box_id)) {
+    return E_FORBIDDEN();
+  }
 
-  // Verify workspace ownership (defense in depth)
+  // Defense in depth: verify the box really is in the same workspace.
   const box = await getBoxById(adminClient, note.box_id);
   if (!box || box.workspace_id !== ctx.workspaceId) return E_FORBIDDEN();
 

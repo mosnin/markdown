@@ -70,3 +70,46 @@ export const E_RATE_LIMITED = (retryAfterSeconds: number) =>
     `Too many requests. Retry after ${retryAfterSeconds} seconds.`,
     429
   );
+
+/**
+ * 401 with WWW-Authenticate: Bearer error="insufficient_scope"; used by
+ * every `/api/v1/**` route handler when an OAuth token is missing the
+ * capability scope the route requires. The `scope` parameter advertises
+ * the exact scope the caller needs, so connectors can surface a useful
+ * re-authorize prompt.
+ */
+export function E_INSUFFICIENT_SCOPE(requiredScope: string): Response {
+  const body: ApiError = {
+    error_code: "insufficient_scope",
+    message: `Token does not have the required scope: ${requiredScope}`,
+    request_id: randomUUID(),
+  };
+  return new Response(JSON.stringify(body), {
+    status: 401,
+    headers: {
+      "Content-Type": "application/json",
+      "WWW-Authenticate": `Bearer realm="context-store", error="insufficient_scope", scope="${requiredScope}"`,
+    },
+  });
+}
+
+/**
+ * 403 with a clear `forbidden_role` code — used when scope is fine but
+ * the caller's workspace role (viewer) forbids the operation.
+ */
+export function E_FORBIDDEN_ROLE(reason = "Your workspace role does not permit this operation"): Response {
+  return apiError("forbidden_role", reason, 403);
+}
+
+/**
+ * 400 with a `branch_targeting_not_allowed` code — used when an
+ * OAuth-backed caller tries to write against a non-main branch.
+ * OAuth-backed MCP writes target main only in V1.
+ */
+export function E_BRANCH_TARGETING_NOT_ALLOWED(): Response {
+  return apiError(
+    "branch_targeting_not_allowed",
+    "OAuth-backed machine writes target main only. Branch targeting is not supported over OAuth in V1; retry without a branch_id parameter.",
+    400
+  );
+}

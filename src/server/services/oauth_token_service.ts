@@ -176,6 +176,30 @@ export interface IssuedTokenPair {
   scope: OAuthScope[];
   tokenType: "Bearer";
   expiresInSeconds: number;
+  /**
+   * Row id of the minted `oauth_access_tokens` row. Callers use this
+   * for audit attribution (`metadata.token_id`) without having to
+   * re-query by hash.
+   */
+  accessTokenId: string;
+  /**
+   * Row id of the minted `oauth_refresh_tokens` row. Populated after
+   * the insert returns so the audit event for rotation can name the
+   * new row explicitly.
+   */
+  refreshTokenId: string;
+  /**
+   * Meaningful only for rotation (`refreshTokenPair`). Set to the
+   * pre-rotation refresh token row id so audit events can link the
+   * rotation chain. Null for fresh `issueTokenPair` calls.
+   */
+  rotatedFromRefreshTokenId: string | null;
+  /** Workspace the pair belongs to — echoed for audit convenience. */
+  workspaceId: string;
+  /** User the pair was issued to — echoed for audit convenience. */
+  userId: string;
+  /** Client the pair was issued to — echoed for audit convenience. */
+  clientId: string;
 }
 
 export async function issueTokenPair(
@@ -213,7 +237,7 @@ export async function issueTokenPair(
 
   const familyId = input.familyId ?? crypto.randomUUID();
 
-  const { error: refErr } = await supabase
+  const { data: refreshRow, error: refErr } = await supabase
     .from("oauth_refresh_tokens")
     .insert({
       token_prefix: refreshRaw.slice(0, 14),
@@ -225,8 +249,12 @@ export async function issueTokenPair(
       access_token_id: accessRow.id,
       family_id: familyId,
       expires_at: refreshExpiresAt,
-    });
-  if (refErr) throw new Error(refErr.message);
+    })
+    .select("id")
+    .single();
+  if (refErr || !refreshRow) {
+    throw new Error(refErr?.message ?? "Failed to issue refresh token");
+  }
 
   return {
     accessToken: accessRaw,
@@ -236,6 +264,12 @@ export async function issueTokenPair(
     scope: input.scope,
     tokenType: "Bearer",
     expiresInSeconds: ACCESS_TOKEN_TTL_SECONDS,
+    accessTokenId: accessRow.id,
+    refreshTokenId: refreshRow.id,
+    rotatedFromRefreshTokenId: null,
+    workspaceId: input.workspaceId,
+    userId: input.userId,
+    clientId: input.clientId,
   };
 }
 
@@ -310,19 +344,15 @@ export async function refreshTokenPair(
 
   // Link the old row's replaced_by_token_id to the new refresh row for
   // chain traceability.
-  const { data: newRefreshRow } = await supabase
+  await supabase
     .from("oauth_refresh_tokens")
-    .select("id")
-    .eq("token_hash", sha256(newPair.refreshToken))
-    .maybeSingle();
-  if (newRefreshRow) {
-    await supabase
-      .from("oauth_refresh_tokens")
-      .update({ replaced_by_token_id: newRefreshRow.id })
-      .eq("id", row.id);
-  }
+    .update({ replaced_by_token_id: newPair.refreshTokenId })
+    .eq("id", row.id);
 
-  return newPair;
+  return {
+    ...newPair,
+    rotatedFromRefreshTokenId: row.id,
+  };
 }
 
 async function revokeFamily(supabase: SupabaseClient, familyId: string) {
@@ -389,9 +419,15 @@ export async function resolveAccessToken(
   if (consent?.revoked_at) return null;
 
   // Best-effort last_used_at update; we don't fail the request on error.
+  // Populate first_used_at exactly once, the first time the token
+  // actually authenticates a request. Powers the "first seen" column
+  // in the Grants UI and distinguishes minted-but-unused tokens.
+  const now = new Date().toISOString();
+  const patch: Record<string, string> = { last_used_at: now };
+  if (!row.first_used_at) patch.first_used_at = now;
   await supabase
     .from("oauth_access_tokens")
-    .update({ last_used_at: new Date().toISOString() })
+    .update(patch)
     .eq("id", row.id);
 
   return {

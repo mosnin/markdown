@@ -1,5 +1,6 @@
 import { type NextRequest } from "next/server";
-import { getConnectionContext } from "@/server/auth/get_connection_context";
+import { resolveMcpRequestAuth, requireScope } from "@/server/auth/mcp_auth_adapter";
+import { canAccessBox } from "@/server/services/oauth_scope_service";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getBoxById } from "@/server/repositories/box_repository";
 import { exportBox } from "@/server/services/export_service";
@@ -11,6 +12,7 @@ import {
   E_NOT_FOUND,
   E_BAD_REQUEST,
   E_INTERNAL,
+  E_INSUFFICIENT_SCOPE,
 } from "@/lib/api/response";
 
 /**
@@ -18,34 +20,14 @@ import {
  *
  * Exports an entire box: all active folders, notes, and qualifying links.
  *
- * The package is assembled server-side, uploaded to private Supabase Storage,
- * and a short-lived signed URL is returned. The caller downloads the zip by
- * GETting the signed_url before it expires (1 hour).
- *
- * Authentication:
- *   Bearer token (connection auth). The box must be in the connection's
- *   allowed box scope.
- *
- * Request body:
- *   { "box_id": "<uuid>" }
- *
- * Response data:
- *   {
- *     "signed_url": "https://...",
- *     "expires_at": "2026-04-09T14:00:00.000Z",
- *     "filename": "my-box-box.zip",
- *     "size_bytes": 65536,
- *     "manifest_summary": {
- *       "export_type": "box",
- *       "note_count": 42,
- *       "folder_count": 8,
- *       "link_count": 17
- *     }
- *   }
+ * Auth: OAuth access token with `context:read` scope.
  */
 export async function POST(request: NextRequest) {
-  const ctx = await getConnectionContext(request);
+  const ctx = await resolveMcpRequestAuth(request);
   if (!ctx) return E_UNAUTHORIZED();
+  if (!requireScope(ctx, "context:read")) {
+    return E_INSUFFICIENT_SCOPE("context:read");
+  }
 
   let body: { box_id?: string };
   try {
@@ -58,6 +40,9 @@ export async function POST(request: NextRequest) {
   if (!box_id) return E_BAD_REQUEST("box_id is required");
 
   if (!ctx.allowedBoxIds.has(box_id)) return E_FORBIDDEN();
+  if (ctx.source === "oauth" && !canAccessBox(ctx.scopes, box_id)) {
+    return E_FORBIDDEN();
+  }
 
   const adminClient = createAdminClient();
 
