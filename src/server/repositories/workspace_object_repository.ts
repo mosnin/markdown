@@ -100,7 +100,14 @@ export async function listWorkspaceObjectsByBox(
     }
   }
 
-  const { data, error } = await query.order("sort_order", { ascending: true });
+  // Deterministic ordering — sort_order is primary, created_at breaks
+  // ties so identical sort_order values never flicker between requests.
+  // The branch-overlay path below does its own post-overlay sort
+  // (sort_order only, since it's after an in-memory merge); this main
+  // query's ordering still feeds the overlay with a stable baseline.
+  const { data, error } = await query
+    .order("sort_order", { ascending: true })
+    .order("created_at", { ascending: true });
   if (error || !data) return [];
   let rows = data as WorkspaceObject[];
 
@@ -154,7 +161,11 @@ export async function listReusableObjects(
     query = query.eq("object_type", object_type);
   }
 
-  const { data, error } = await query.order("display_name", { ascending: true });
+  // display_name is the natural lexical sort; created_at secondary so
+  // rows with identical display_name have a stable deterministic order.
+  const { data, error } = await query
+    .order("display_name", { ascending: true })
+    .order("created_at", { ascending: true });
 
   if (error || !data) return [];
   return data as WorkspaceObject[];

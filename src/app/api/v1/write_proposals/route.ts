@@ -1,4 +1,4 @@
-import { type NextRequest } from "next/server";
+import { type NextRequest, NextResponse } from "next/server";
 import {
   resolveMcpRequestAuth,
   requireScope,
@@ -100,6 +100,19 @@ export async function POST(request: NextRequest) {
   ) {
     return E_FORBIDDEN(
       "Connection must have propose_writes or generate_in_allowed_folders permission"
+    );
+  }
+
+  // Defense-in-depth 1MB payload cap. Next.js enforces its own cap at
+  // parse time, but an explicit Content-Length check gives clients a
+  // clear 413 before the body is buffered and makes the limit a
+  // deliberate, reviewable policy rather than an implicit framework
+  // default.
+  const contentLength = request.headers.get("content-length");
+  if (contentLength && parseInt(contentLength, 10) > 1_000_000) {
+    return NextResponse.json(
+      { error: "payload_too_large" },
+      { status: 413 }
     );
   }
 

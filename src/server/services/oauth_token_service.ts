@@ -322,11 +322,24 @@ export async function refreshTokenPair(
   // A client may narrow the scope on refresh but not broaden it.
   const narrowed = requestedScopes.filter((s) => currentScopes.includes(s));
 
-  // Mark the old refresh + access revoked.
-  await supabase
+  // Mark the old refresh used with a CAS on used_at IS NULL. If two
+  // concurrent refresh calls race here, only one wins; the loser sees
+  // the row already marked used and must be treated the same as a
+  // replay — revoke the family defensively and fail. Without this
+  // guard both calls could succeed at marking used and both issue new
+  // token pairs (rotation-chain forgery).
+  const { error: markErr, data: marked } = await supabase
     .from("oauth_refresh_tokens")
     .update({ used_at: new Date().toISOString() })
-    .eq("id", row.id);
+    .eq("id", row.id)
+    .is("used_at", null)
+    .select("id")
+    .maybeSingle();
+  if (markErr || !marked) {
+    // Race loss OR replay. Same defense as the replay branch above.
+    await revokeFamily(supabase, row.family_id);
+    return { ok: false, error: "invalid_grant" };
+  }
   if (row.access_token_id) {
     await supabase
       .from("oauth_access_tokens")
@@ -509,7 +522,16 @@ export async function revokeAllTokensForConsent(
     .select("user_id, client_id, workspace_id")
     .eq("id", consentId)
     .maybeSingle();
-  if (!consent) return;
+  if (!consent) {
+    // Operators need a signal when a revoke target vanishes — without
+    // this log the call silently no-ops, which hides upstream bugs
+    // (wrong id passed, double-revoke race, row already hard-deleted).
+    console.debug(
+      "[oauth_token_service] revokeAllTokensForConsent: consent not found",
+      { consentId }
+    );
+    return;
+  }
   await revokeConsentTokens(supabase, {
     userId: consent.user_id,
     clientId: consent.client_id,

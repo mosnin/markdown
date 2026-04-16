@@ -192,6 +192,44 @@ describe("oauth_token_service — refresh rotation", () => {
       expect(r.used_at || r.revoked_at).toBeTruthy();
     }
   });
+
+  it("two concurrent refreshes race: only one pair is issued and the loser fails invalid_grant", async () => {
+    // Regression test for the CAS guard on the used_at update in
+    // refreshTokenPair. Without the guard, both concurrent calls would
+    // mark the row used AND issue fresh pairs — a rotation-chain fork.
+    // With the guard, the loser fails invalid_grant and takes the
+    // CAS-loss branch which revokes the family defensively.
+    const pair = await issueTokenPair(env.sb, {
+      clientId: CLIENT,
+      userId: USER,
+      workspaceId: WS,
+      scope: ["context:read"],
+    });
+
+    const [a, b] = await Promise.all([
+      refreshTokenPair(env.sb, {
+        refreshToken: pair.refreshToken,
+        clientId: CLIENT,
+      }),
+      refreshTokenPair(env.sb, {
+        refreshToken: pair.refreshToken,
+        clientId: CLIENT,
+      }),
+    ]);
+
+    const aFailed = "ok" in a && a.ok === false;
+    const bFailed = "ok" in b && b.ok === false;
+    // Exactly one of the two concurrent refreshes must fail (CAS-loss)
+    // — both succeeding would be the rotation-chain-forgery bug this
+    // guard exists to prevent.
+    expect(aFailed !== bFailed).toBe(true);
+    if (aFailed) expect((a as { error: string }).error).toBe("invalid_grant");
+    if (bFailed) expect((b as { error: string }).error).toBe("invalid_grant");
+
+    // The original contended row must be marked used_at by the winner.
+    const originalRow = env.tables.oauth_refresh_tokens.get(pair.refreshTokenId);
+    expect(originalRow?.used_at).toBeTruthy();
+  });
 });
 
 describe("oauth_token_service — revocation paths", () => {

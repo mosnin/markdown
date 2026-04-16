@@ -4,6 +4,11 @@ import { type SupabaseClient } from "@supabase/supabase-js";
  * Durable, cross-instance rate limiter backed by the
  * `rate_limit_buckets` table.
  *
+ * Known tradeoff: because windows are fixed (not sliding), a caller
+ * can burst up to 2x the configured limit straddling a window
+ * boundary — accepted as a coarse anti-abuse guarantee in exchange
+ * for a dramatically simpler implementation.
+ *
  * ── Why a separate service from `src/lib/api/rate_limit.ts`? ────────────────
  *
  * The in-process limiter there is fine for high-frequency, per-
@@ -141,7 +146,17 @@ export async function checkRateLimit(
         .eq("bucket_key", bucketKey)
         .eq("window_start", windowStartIso)
         .maybeSingle();
+      // Tight null guard: in an extreme race the row we collided with
+      // could have been deleted (window-rollover cleanup, manual ops)
+      // between the INSERT and this SELECT. Calling incrementAndCheck
+      // with an undefined count would either NaN-propagate or silently
+      // over-count. Fail-open with an explicit allow so rate limiting
+      // remains a defense-in-depth layer, never the primary gate.
       if (!refetched) {
+        console.debug(
+          "[rate_limit_service] dup-key refetch returned null; failing open",
+          { bucketKey, windowStart: windowStartIso }
+        );
         return allow(bucketKey, options.limit, options.limit - 1, 0);
       }
       return await incrementAndCheck(
