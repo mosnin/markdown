@@ -40,6 +40,15 @@ export function LegalStickyFooter() {
         )}
       >
         <ul className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-[10px] text-muted-foreground/70">
+          {/*
+           * `new Date().getFullYear()` is hydration-safe in practice: the
+           * only way server and client can disagree is if the request
+           * straddles a New Year boundary across the server/client
+           * timezones — a ~24-hour window once per year, resolved on the
+           * next client navigation. Not worth a `useState`/`useEffect`
+           * dance; documenting here so future readers know it was
+           * considered.
+           */}
           <li className="mr-1 text-muted-foreground/40">
             &copy; {new Date().getFullYear()} Poggle
           </li>

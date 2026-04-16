@@ -242,7 +242,7 @@ export default function FeaturesPage() {
                 "Plain markdown, portable forever. Export boxes, folders, or individual objects as structured ZIPs at any time.",
             },
           ].map(({ icon: Icon, title, description }) => (
-            <GridCard key={title} className="min-h-40">
+            <GridCard key={title} patternSeed={title} className="min-h-40">
               <Icon className="relative size-6 text-foreground/80" strokeWidth={1.5} />
               <div className="relative">
                 <span className="text-foreground/80 text-sm font-medium">{title}</span>

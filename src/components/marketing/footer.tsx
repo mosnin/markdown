@@ -72,6 +72,13 @@ export function MarketingFooter() {
         </div>
 
         <div className="mt-12 flex flex-col items-start justify-between gap-4 border-t border-border/50 pt-8 sm:flex-row sm:items-center">
+          {/*
+           * `new Date().getFullYear()` is hydration-safe here: this is a
+           * server component (no "use client"), so it only runs on the
+           * server. The rendered HTML ships to the client as static markup
+           * and is never re-evaluated during hydration, so server/client
+           * cannot disagree.
+           */}
           <p className="text-xs text-muted-foreground">
             © {new Date().getFullYear()} Poggle. All rights reserved.
           </p>
