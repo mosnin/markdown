@@ -13,7 +13,6 @@ import {
   Key,
   Menu,
   Palette,
-  Settings as SettingsIcon,
   Shield,
   User,
   X,
@@ -25,8 +24,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
-import { ThemeToggle } from "@/components/product/theme_toggle";
-import { UserMenu } from "@/components/product/user_menu";
+import { MobileSidebarFooter } from "@/components/product/mobile_sidebar_footer";
 import { Separator } from "@/components/ui/separator";
 
 const accountNav = [
@@ -117,8 +115,9 @@ export function MobileSettingsSidebar({
             </button>
           </SheetHeader>
 
-          {/* Workspace label — inline, no nested dropdown / dialog to
-              avoid the Sheet-inside-Sheet portal collision. */}
+          {/* Workspace label — inline only. See MobileSidebar for the
+              portal-collision rationale that banned nested popup
+              primitives inside this Sheet. */}
           <div className="px-4 pt-3 pb-1">
             <div className="flex items-center justify-between gap-2">
               <div className="min-w-0">
@@ -219,29 +218,13 @@ export function MobileSettingsSidebar({
             </ul>
           </nav>
 
-          <div className="border-t border-sidebar-border">
-            <div className="flex items-center justify-between px-3 py-2">
-              <Link
-                href="/app/settings"
-                onClick={close}
-                className={cn(
-                  "flex items-center gap-2 rounded-md p-1.5 text-sidebar-foreground/60 transition-fast text-sm",
-                  "hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
-                  pathname === "/app/settings" && "text-sidebar-accent-foreground",
-                )}
-                aria-label="Settings"
-              >
-                <SettingsIcon className="h-4 w-4" aria-hidden="true" />
-                <span>Settings</span>
-              </Link>
-              <ThemeToggle />
-            </div>
-            {userEmail && (
-              <div className="border-t border-sidebar-border px-2 py-2">
-                <UserMenu email={userEmail} />
-              </div>
-            )}
-          </div>
+          {/* Bottom chrome — inline (non-portaled). See
+              MobileSidebarFooter for the portal-collision rationale. */}
+          <MobileSidebarFooter
+            userEmail={userEmail}
+            isSettingsActive={pathname === "/app/settings"}
+            onNavigate={close}
+          />
         </SheetContent>
       </Sheet>
     </>

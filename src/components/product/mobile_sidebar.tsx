@@ -11,7 +11,6 @@ import {
   Menu,
   Plus,
   Search,
-  Settings,
   X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -22,8 +21,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
-import { ThemeToggle } from "@/components/product/theme_toggle";
-import { UserMenu } from "@/components/product/user_menu";
+import { MobileSidebarFooter } from "@/components/product/mobile_sidebar_footer";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { TreeSidebar } from "@/components/product/tree_sidebar";
@@ -111,12 +109,13 @@ export function MobileSidebar({
             </button>
           </SheetHeader>
 
-          {/* Workspace switcher — same as desktop */}
-          {/* Workspace label + manage link — inline list, no nested
-              DropdownMenu or Dialog. Nesting a Base UI DropdownMenu +
-              Dialog inside the Sheet's Dialog caused three portaled
-              overlays to collide and prevented the sheet from opening.
-              Users switch / create workspaces from /app/workspaces. */}
+          {/* Workspace label + manage link — inline list only. All
+              popup-primitive children (workspace switcher, user menu,
+              theme tooltip) have been moved out of the sheet to avoid
+              Base UI Floating UI portals nesting inside the Sheet's
+              own portal, which blocked the sheet from opening on
+              mobile. Users switch / create workspaces from
+              /app/workspaces. */}
           <div className="px-4 pt-3 pb-1">
             <div className="flex items-center justify-between gap-2">
               <div className="min-w-0">
@@ -212,31 +211,14 @@ export function MobileSidebar({
             )}
           </ScrollArea>
 
-          {/* Bottom chrome */}
-          <div className="border-t border-sidebar-border">
-            <div className="flex items-center justify-between px-3 py-2">
-              <Link
-                href="/app/settings"
-                onClick={close}
-                className={cn(
-                  "flex items-center gap-2 rounded-md p-1.5 text-sidebar-foreground/60 transition-fast text-sm",
-                  "hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
-                  pathname === "/app/settings" && "text-sidebar-accent-foreground"
-                )}
-                aria-label="Settings"
-                aria-current={pathname === "/app/settings" ? "page" : undefined}
-              >
-                <Settings className="h-4 w-4" aria-hidden="true" />
-                <span>Settings</span>
-              </Link>
-              <ThemeToggle />
-            </div>
-            {userEmail && (
-              <div className="border-t border-sidebar-border px-2 py-2">
-                <UserMenu email={userEmail} />
-              </div>
-            )}
-          </div>
+          {/* Bottom chrome — inline (non-portaled) to keep the Sheet's
+              Floating UI portal the only popup portal on the page while
+              the sheet is open. See MobileSidebarFooter for details. */}
+          <MobileSidebarFooter
+            userEmail={userEmail}
+            isSettingsActive={pathname === "/app/settings"}
+            onNavigate={close}
+          />
         </SheetContent>
       </Sheet>
     </>
