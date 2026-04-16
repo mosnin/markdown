@@ -31,6 +31,7 @@ import { FolderLifecycleMenu } from "@/components/product/folder_lifecycle_menu"
 import { FolderPolicyToggle } from "@/components/product/folder_policy_toggle";
 import { FolderExportButton } from "@/components/product/folder_export_button";
 import { WorkspaceLiveRefresh } from "@/components/product/workspace_live_refresh";
+import { ActiveBranchBannerServer } from "@/components/product/active_branch_banner_server";
 import { formatAbsoluteDate } from "@/lib/format_date";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -109,7 +110,9 @@ export default async function FolderPage({
   const totalChildren = childFolders.length + childNotes.length + childFiles.length + childSkills.length + childAgents.length;
 
   return (
-    <div className="flex h-full overflow-hidden">
+    <div className="flex h-full flex-col overflow-hidden">
+      <ActiveBranchBannerServer />
+      <div className="flex flex-1 overflow-hidden">
       {/* Main content */}
       <div className="flex flex-1 flex-col overflow-hidden min-w-0">
         <WorkspaceLiveRefresh
@@ -403,6 +406,7 @@ export default async function FolderPage({
           </ScrollArea>
         </div>
       </aside>
+      </div>
     </div>
   );
 }

@@ -9,6 +9,7 @@ import { AgentCreateDialog } from "@/components/product/agent_create_dialog";
 import { AttachToBoxTrigger } from "@/components/product/attach_to_box_trigger";
 import { AgentImportTrigger } from "@/components/product/agent_import_dialog";
 import { WorkspaceLiveRefresh } from "@/components/product/workspace_live_refresh";
+import { ActiveBranchBannerServer } from "@/components/product/active_branch_banner_server";
 import { cn } from "@/lib/utils";
 
 // ─── Empty state ──────────────────────────────────────────────────────────────
@@ -112,6 +113,7 @@ export default async function AgentsPage() {
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
+      <ActiveBranchBannerServer />
       <WorkspaceLiveRefresh workspaceId={ctx.workspace.id} scope="library" />
       {/* Header */}
       <div className="border-b border-border bg-background px-4 pt-4 pb-4 md:px-6 md:pt-6">

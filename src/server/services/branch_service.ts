@@ -29,7 +29,7 @@ import { type SupabaseClient } from "@supabase/supabase-js";
  * incrementally without another breaking migration.
  */
 
-export type DraftBranchStatus = "open" | "promoted" | "discarded";
+export type DraftBranchStatus = "open" | "promoting" | "promoted" | "discarded";
 
 export interface DraftBranch {
   id: string;
@@ -119,8 +119,8 @@ export async function getDraftBranch(
 }
 
 /**
- * Mark a branch discarded. Branch heads are left intact as an audit
- * trail; readers ignore discarded branches. No content is deleted.
+ * Mark a branch discarded. The branch row stays as audit trail;
+ * the action caller clears branch_heads and branch-scoped rows.
  */
 export async function discardDraftBranch(
   supabase: SupabaseClient,
@@ -258,12 +258,25 @@ export async function promoteBranch(
   if (branch.workspace_id !== workspaceId) throw new Error("Branch not in this workspace");
   if (branch.status !== "open") throw new Error(`Branch is ${branch.status}, cannot promote`);
 
+  // Concurrent-promote guard via check-and-swap.
+  const { data: casRows, error: casError } = await supabase
+    .from("draft_branches")
+    .update({ status: "promoting" })
+    .eq("id", branchId)
+    .eq("status", "open")
+    .select("id");
+  if (casError) throw new Error(casError.message);
+  if (!casRows || casRows.length === 0) {
+    throw new Error("Branch promote is already in progress or branch is not open");
+  }
+
   const heads = await listBranchHeads(supabase, branchId);
   if (heads.length === 0) {
-    // Nothing to promote. Mark the branch promoted anyway so the
-    // draft state is cleaned up; the caller can report "nothing to
-    // promote" if useful.
-    await markBranchPromoted(supabase, branchId);
+    await supabase
+      .from("draft_branches")
+      .update({ status: "open" })
+      .eq("id", branchId)
+      .eq("status", "promoting");
     throw new Error("Branch has no heads to promote");
   }
 
@@ -753,7 +766,12 @@ export async function promoteBranch(
     }
 
     await commitChangeSet(supabase, cs.id);
-    await markBranchPromoted(supabase, branchId);
+    const { error: promotedErr } = await supabase
+      .from("draft_branches")
+      .update({ status: "promoted", promoted_at: new Date().toISOString() })
+      .eq("id", branchId)
+      .eq("status", "promoting");
+    if (promotedErr) throw new Error(promotedErr.message);
 
     return { branchId, promotedObjects: promoted, changeSetId: cs.id };
   } catch (err) {
@@ -762,6 +780,11 @@ export async function promoteBranch(
       cs.id,
       err instanceof Error ? err.message : "promote failed"
     ).catch(() => {});
+    await supabase
+      .from("draft_branches")
+      .update({ status: "open" })
+      .eq("id", branchId)
+      .eq("status", "promoting");
     throw err;
   }
 }

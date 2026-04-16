@@ -255,6 +255,7 @@ export async function discardBranchAction(
     await supabase.from("notes").delete().eq("branch_id", branchId);
     await supabase.from("folders").delete().eq("branch_id", branchId);
     await supabase.from("boxes").delete().eq("branch_id", branchId);
+    await supabase.from("branch_heads").delete().eq("branch_id", branchId);
 
     // Drop every pending structural op. These only ever recorded
     // intent — they never mutated main — so there's nothing to
