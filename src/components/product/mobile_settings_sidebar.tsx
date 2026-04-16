@@ -4,9 +4,11 @@ import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
+  AppWindow,
   ArrowLeft,
   Bell,
   Building2,
+  Code2,
   CreditCard,
   Key,
   Menu,
@@ -27,7 +29,7 @@ import { ThemeToggle } from "@/components/product/theme_toggle";
 import { UserMenu } from "@/components/product/user_menu";
 import { Separator } from "@/components/ui/separator";
 
-const settingsNav = [
+const accountNav = [
   { id: "profile", label: "Profile", icon: User },
   { id: "workspace", label: "Workspace", icon: Building2 },
   { id: "billing", label: "Billing & Plans", icon: CreditCard },
@@ -35,6 +37,21 @@ const settingsNav = [
   { id: "notifications", label: "Notifications", icon: Bell },
   { id: "connections", label: "Connections", icon: Key },
   { id: "security", label: "Security", icon: Shield },
+];
+
+const developerNav = [
+  {
+    href: "/app/settings/oauth_clients",
+    label: "OAuth Clients",
+    subLabel: "Apps you've registered",
+    icon: Code2,
+  },
+  {
+    href: "/app/settings/connected_apps",
+    label: "Connected Apps",
+    subLabel: "Apps with access to your workspace",
+    icon: AppWindow,
+  },
 ];
 
 interface MobileSettingsSidebarProps {
@@ -152,10 +169,10 @@ export function MobileSettingsSidebar({
 
           <nav aria-label="Settings sections" className="flex-1 overflow-y-auto px-2">
             <ul className="flex flex-col gap-0.5 list-none">
-              {settingsNav.map(({ id, label, icon: Icon }) => (
+              {accountNav.map(({ id, label, icon: Icon }) => (
                 <li key={id}>
-                  <a
-                    href={`#settings-${id}`}
+                  <Link
+                    href={`/app/settings#settings-${id}`}
                     onClick={close}
                     className={cn(
                       "flex items-center gap-2.5 rounded-md px-2.5 py-2 text-sm",
@@ -164,9 +181,41 @@ export function MobileSettingsSidebar({
                   >
                     <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
                     <span>{label}</span>
-                  </a>
+                  </Link>
                 </li>
               ))}
+            </ul>
+            <div className="mt-4 px-2.5 py-1.5">
+              <span className="text-[11px] font-semibold uppercase tracking-wider text-sidebar-foreground/40">
+                Developer &amp; Apps
+              </span>
+            </div>
+            <ul className="flex flex-col gap-0.5 list-none">
+              {developerNav.map(({ href, label, subLabel, icon: Icon }) => {
+                const active = pathname === href;
+                return (
+                  <li key={href}>
+                    <Link
+                      href={href}
+                      onClick={close}
+                      aria-current={active ? "page" : undefined}
+                      className={cn(
+                        "flex items-start gap-2.5 rounded-md px-2.5 py-2 text-sm",
+                        "text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+                        active && "bg-sidebar-accent text-sidebar-accent-foreground",
+                      )}
+                    >
+                      <Icon className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+                      <span className="flex flex-col leading-tight">
+                        <span>{label}</span>
+                        <span className="text-[10px] text-sidebar-foreground/40">
+                          {subLabel}
+                        </span>
+                      </span>
+                    </Link>
+                  </li>
+                );
+              })}
             </ul>
           </nav>
 

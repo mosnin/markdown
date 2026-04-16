@@ -3,9 +3,11 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
+  AppWindow,
   ArrowLeft,
   Bell,
   Building2,
+  Code2,
   CreditCard,
   Key,
   Palette,
@@ -20,7 +22,11 @@ import { ThemeToggle } from "@/components/product/theme_toggle";
 import { UserMenu } from "@/components/product/user_menu";
 import { WorkspaceSwitcher } from "@/components/product/workspace_switcher";
 
-const settingsNav = [
+/**
+ * Account-section nav — rendered as in-page anchors on the main
+ * /app/settings page.
+ */
+const accountNav = [
   { id: "profile", label: "Profile", icon: User },
   { id: "workspace", label: "Workspace", icon: Building2 },
   { id: "billing", label: "Billing & Plans", icon: CreditCard },
@@ -28,6 +34,27 @@ const settingsNav = [
   { id: "notifications", label: "Notifications", icon: Bell },
   { id: "connections", label: "Connections", icon: Key },
   { id: "security", label: "Security", icon: Shield },
+];
+
+/**
+ * Developer / Apps nav — dedicated routes under /app/settings/*. Kept
+ * separate from account anchors because they navigate, not scroll.
+ * Order mirrors lifecycle: register a client first, then grant access
+ * to apps, then see everything that has been granted.
+ */
+const developerNav = [
+  {
+    href: "/app/settings/oauth_clients",
+    label: "OAuth Clients",
+    subLabel: "Apps you've registered",
+    icon: Code2,
+  },
+  {
+    href: "/app/settings/connected_apps",
+    label: "Connected Apps",
+    subLabel: "Apps with access to your workspace",
+    icon: AppWindow,
+  },
 ];
 
 interface SettingsSidebarProps {
@@ -104,10 +131,10 @@ export function SettingsSidebar({
       {/* Settings sections */}
       <ScrollArea className="flex-1 px-2">
         <ul className="flex flex-col gap-0.5 list-none">
-          {settingsNav.map(({ id, label, icon: Icon }) => (
+          {accountNav.map(({ id, label, icon: Icon }) => (
             <li key={id}>
-              <a
-                href={`#settings-${id}`}
+              <Link
+                href={`/app/settings#settings-${id}`}
                 className={cn(
                   "flex items-center gap-2.5 rounded-md px-2.5 py-2 text-sm transition-fast",
                   "text-foreground/70 hover:bg-accent/60 hover:text-foreground",
@@ -116,9 +143,42 @@ export function SettingsSidebar({
               >
                 <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
                 <span className="truncate">{label}</span>
-              </a>
+              </Link>
             </li>
           ))}
+        </ul>
+
+        <div className="mt-4 mb-1 flex items-center px-2.5">
+          <span className="text-[11px] font-semibold uppercase tracking-wider text-foreground/40">
+            Developer &amp; Apps
+          </span>
+        </div>
+        <ul className="flex flex-col gap-0.5 list-none">
+          {developerNav.map(({ href, label, subLabel, icon: Icon }) => {
+            const active = pathname === href;
+            return (
+              <li key={href}>
+                <Link
+                  href={href}
+                  aria-current={active ? "page" : undefined}
+                  className={cn(
+                    "flex items-start gap-2.5 rounded-md px-2.5 py-2 text-sm transition-fast",
+                    "text-foreground/70 hover:bg-accent/60 hover:text-foreground",
+                    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                    active && "bg-accent/60 text-foreground",
+                  )}
+                >
+                  <Icon className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+                  <span className="flex min-w-0 flex-col leading-tight">
+                    <span className="truncate">{label}</span>
+                    <span className="truncate text-[10px] text-foreground/40">
+                      {subLabel}
+                    </span>
+                  </span>
+                </Link>
+              </li>
+            );
+          })}
         </ul>
       </ScrollArea>
 
