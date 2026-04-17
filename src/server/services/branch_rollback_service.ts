@@ -48,18 +48,28 @@ export async function rollbackBranchPromotion(
 
   // 2. Find the promotion change set.
   //    promoteBranch stores the branch_id in change_set metadata, and
-  //    uses origin='branch_promotion'. We query for committed change
-  //    sets matching this branch.
+  //    uses origin='branch_promotion' for full promotes or
+  //    'branch_promotion_partial' for cherry-picked subsets. A branch may
+  //    accumulate multiple partial-promote change sets before it's
+  //    eventually fully promoted — we order by created_at DESC and pick the
+  //    latest one matching this branch, which is the one the "Revert this
+  //    promotion" button undoes. Older partial promotes can still be
+  //    located via History if the user wants to roll those back too.
   const { data: changeSets } = await supabase
     .from("change_sets")
-    .select("id, metadata, status")
+    .select("id, metadata, status, origin, created_at")
     .eq("workspace_id", branch.workspace_id)
-    .eq("origin", "branch_promotion")
+    .in("origin", ["branch_promotion", "branch_promotion_partial"])
     .eq("status", "committed")
     .order("created_at", { ascending: false });
 
   const promotionCs = (changeSets ?? []).find(
-    (cs: { id: string; metadata: Record<string, unknown>; status: string }) =>
+    (cs: {
+      id: string;
+      metadata: Record<string, unknown>;
+      status: string;
+      origin?: string;
+    }) =>
       cs.metadata &&
       (cs.metadata as Record<string, unknown>).branch_id === branchId
   );

@@ -292,6 +292,102 @@ export async function promoteBranchAction(
 }
 
 /**
+ * Cherry-pick / partial promote: advance main for a user-selected
+ * subset of the branch's heads + overlays, leaving everything else
+ * on the branch for a later promote. Unlike the all-or-nothing
+ * `promoteBranchAction`, this never clears the active-branch cookie
+ * unless the selection covered everything — the branch may still be
+ * `open` after the call returns.
+ *
+ * `selectedObjects` carries the exact (type, id) pairs to promote.
+ * An empty list is rejected at both the action layer (fast UX
+ * feedback) and the service layer (defense in depth).
+ */
+export async function partialPromoteBranchAction(
+  branchId: string,
+  selectedObjects: Array<{ objectType: string; objectId: string }>
+): Promise<ActionResult<PromoteBranchResult & { branchStatus: "open" | "promoted" }>> {
+  const gate = await requireWriteRoleResult();
+  if (!gate.ok) return { ok: false, error: gate.error };
+  const { ctx } = gate;
+
+  if (!Array.isArray(selectedObjects) || selectedObjects.length === 0) {
+    return { ok: false, error: "Select at least one object to promote" };
+  }
+  // Defensive shape check — server actions validate input because
+  // the wire type is erased at the `"use server"` boundary.
+  for (const s of selectedObjects) {
+    if (
+      !s ||
+      typeof s.objectType !== "string" ||
+      typeof s.objectId !== "string" ||
+      !s.objectType ||
+      !s.objectId
+    ) {
+      return { ok: false, error: "Malformed selection entry" };
+    }
+  }
+
+  try {
+    const supabase = await createClient();
+    const result = await promoteBranch(
+      supabase,
+      ctx.workspace.id,
+      ctx.user.id,
+      branchId,
+      { selectedObjects }
+    );
+
+    // Re-fetch to see whether the partial landed as a full promote
+    // (nothing remaining → status flipped to 'promoted') or stayed
+    // open. The UI uses this to decide between "continue editing"
+    // and "redirect to list".
+    const { data: updated } = await supabase
+      .from("draft_branches")
+      .select("status")
+      .eq("id", branchId)
+      .maybeSingle();
+    const branchStatus: "open" | "promoted" =
+      (updated as { status?: string } | null)?.status === "promoted"
+        ? "promoted"
+        : "open";
+
+    await createAuditEvent(supabase, {
+      workspace_id: ctx.workspace.id,
+      actor_type: "user",
+      actor_id: ctx.user.id,
+      object_type: "draft_branch",
+      object_id: branchId,
+      event_type: "branch.partial_promoted",
+      metadata: {
+        change_set_id: result.changeSetId,
+        promoted_object_count: result.promotedObjects.length,
+        selected_count: selectedObjects.length,
+        branch_status_after: branchStatus,
+      },
+    });
+
+    // Only clear the active-branch cookie when the partial covered
+    // everything and the branch flipped to 'promoted'. While the
+    // branch is still open the user probably wants to keep editing.
+    if (branchStatus === "promoted" && ctx.activeBranchId === branchId) {
+      const cookieStore = await cookies();
+      cookieStore.delete(ACTIVE_BRANCH_COOKIE);
+    }
+
+    revalidatePath("/app/branches");
+    revalidatePath(`/app/branches/${branchId}`);
+    revalidatePath("/app");
+    return { ok: true, data: { ...result, branchStatus } };
+  } catch (err) {
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : "Partial promote failed",
+    };
+  }
+}
+
+/**
  * Run the workspace's active pre-promote gates against this branch
  * WITHOUT promoting. Used by the branch detail UI's "Run gates" panel
  * so users can preview the pass/fail matrix before committing. The

@@ -47,6 +47,12 @@ function makeMock(opts: {
         filters[c] = v;
         return s;
       };
+      // Partial-promote support expanded the rollback query from
+      // `.eq('origin', 'branch_promotion')` to
+      // `.in('origin', ['branch_promotion', 'branch_promotion_partial'])`
+      // so the resolver can locate the most-recent promotion change
+      // set regardless of which variant it was.
+      s.in = () => s;
       s.order = () => s;
       s.maybeSingle = async () => {
         if (table === "draft_branches") {

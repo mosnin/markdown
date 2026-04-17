@@ -279,24 +279,6 @@ export interface PromoteBranchResult {
   gatesSkipped?: boolean;
 }
 
-export interface PromoteBranchOptions {
-  /**
-   * Admin override: skip the pre-promote webhook gate run. The branch
-   * row still moves through the CAS guard and the change-set flow
-   * exactly as for a normal promote. The override is audited with
-   * the `branch.promotion_gates_skipped` event type by the action
-   * layer. Caller must role-gate upstream.
-   */
-  skip_gates?: boolean;
-  /**
-   * Condensed diff handed to each webhook. Computed by the action
-   * layer via `branch_diff_service.buildBranchDiff`. When undefined
-   * (e.g. a programmatic caller), the gate payload falls back to a
-   * minimal summary built from the branch heads.
-   */
-  gate_diff_summary?: import("./branch_promotion_gate_service").GateDiffSummary;
-}
-
 /**
  * Promote every branch head onto main.
  *
@@ -341,6 +323,37 @@ export interface PromoteBranchOptions {
    * minimal summary built from the branch heads.
    */
   gate_diff_summary?: import("./branch_promotion_gate_service").GateDiffSummary;
+  /**
+   * Cherry-pick subset. When provided, only the listed
+   * `(objectType, objectId)` pairs are promoted — every other branch
+   * head / overlay / pending op / branch-local row stays on the
+   * branch for a future promote. The selection applies uniformly
+   * across ALL overlay kinds that address an object by `(type, id)`:
+   *
+   *   - branch_heads (note / file / skill / agent)
+   *   - branch_package_metadata (skill / agent)
+   *   - box_branch_metadata_overlay (box)
+   *   - branch_folder_overrides (folder)
+   *   - branch_placement_overrides — matched by the overlay's inner
+   *     (object_type, object_id) for workspace_object overlays, and
+   *     by (`box_object_attachment`, target_id) for attachment
+   *     overlays since attachments are their own object identity
+   *   - branch_pending_ops (by target object's type + id)
+   *   - branch-local rows on files / object_links / note_links /
+   *     box_object_attachments / notes / folders / boxes (matched by
+   *     their native object_type + their row id)
+   *
+   * When the partial promote leaves any unpromoted branch head /
+   * overlay / branch-local row behind, the branch status stays
+   * `open`. Only when the selection covers everything does it flip
+   * to `promoted`. The change_set origin is `'branch_promotion_partial'`
+   * rather than `'branch_promotion'` so history + rollback can
+   * distinguish the two.
+   *
+   * Passing `undefined` (or omitting) runs the full-promote path,
+   * identical to pre-cherry-pick behavior.
+   */
+  selectedObjects?: ReadonlyArray<{ objectType: string; objectId: string }>;
 }
 
 export async function promoteBranch(
@@ -449,8 +462,38 @@ export async function promoteBranch(
     }
   }
 
-  const heads = await listBranchHeads(supabase, branchId);
-  if (heads.length === 0) {
+  const allHeads = await listBranchHeads(supabase, branchId);
+
+  // Cherry-pick selection lookup. The full-promote path leaves this
+  // set null so `isSelected` short-circuits to true for every key.
+  // When the caller supplies a non-empty selection, keys are
+  // normalized to `${type}:${id}` so lookups across every overlay
+  // kind cost O(1).
+  const isPartial = options.selectedObjects !== undefined;
+  const selectedKeys: Set<string> | null = isPartial
+    ? new Set(
+        (options.selectedObjects ?? []).map(
+          (s) => `${s.objectType}:${s.objectId}`
+        )
+      )
+    : null;
+  const isSelected = (objectType: string, objectId: string): boolean =>
+    selectedKeys === null || selectedKeys.has(`${objectType}:${objectId}`);
+
+  // Filter heads up front so every downstream guard ("has heads?",
+  // "iterate heads") sees the cherry-picked view and the full-promote
+  // path continues to see every head.
+  const heads = selectedKeys
+    ? allHeads.filter((h) => isSelected(h.object_type, h.object_id))
+    : allHeads;
+
+  // The "nothing to promote" gate needs to check every change kind
+  // the partial path covers — just looking at heads would reject
+  // overlay-only selections (e.g. cherry-picking a box rename).
+  if (heads.length === 0 && isPartial) {
+    // Fall through: we still want to check overlays/pending ops
+    // against the selection and may find something to apply.
+  } else if (heads.length === 0) {
     await supabase
       .from("draft_branches")
       .update({ status: "open" })
@@ -459,18 +502,37 @@ export async function promoteBranch(
     throw new Error("Branch has no heads to promote");
   }
 
+  if (isPartial && selectedKeys!.size === 0) {
+    await supabase
+      .from("draft_branches")
+      .update({ status: "open" })
+      .eq("id", branchId)
+      .eq("status", "promoting");
+    throw new Error("Partial promote requires at least one selected object");
+  }
+
   const { openChangeSet, commitChangeSet, abortChangeSet, recordChangeSetItem } =
     await import("./change_set_service");
   const cs = await openChangeSet(supabase, {
     workspace_id: workspaceId,
-    origin: "branch_promotion",
+    origin: isPartial ? "branch_promotion_partial" : "branch_promotion",
     actor_type: "user",
     actor_id: actorId,
-    summary: `Promote branch "${branch.name}"`,
+    summary: isPartial
+      ? `Partial promote from branch "${branch.name}"`
+      : `Promote branch "${branch.name}"`,
     metadata: {
       branch_id: branchId,
       branch_name: branch.name,
       head_count: heads.length,
+      ...(isPartial
+        ? {
+            promoted_objects: Array.from(selectedKeys!).map((k) => {
+              const idx = k.indexOf(":");
+              return { object_type: k.slice(0, idx), object_id: k.slice(idx + 1) };
+            }),
+          }
+        : {}),
     },
   });
 
@@ -603,6 +665,9 @@ export async function promoteBranch(
       .eq("branch_id", branchId);
 
     for (const ov of overlays ?? []) {
+      // Cherry-pick gate: the package must be in the selection to
+      // promote its overlay. Matches by (skill|agent):<package_id>.
+      if (!isSelected(ov.package_type as string, ov.package_id as string)) continue;
       const table = ov.package_type === "skill" ? "skills" : "agents";
       const legalFields = ov.package_type === "skill"
         ? ["name", "description", "tags", "summary"]
@@ -673,6 +738,7 @@ export async function promoteBranch(
       .select("id, name, box_id, parent_skill_id, parent_agent_id")
       .eq("branch_id", branchId);
     for (const f of branchFiles ?? []) {
+      if (!isSelected("file", f.id)) continue;
       await supabase.from("files").update({ branch_id: null }).eq("id", f.id);
       await recordChangeSetItem(supabase, {
         change_set_id: cs.id,
@@ -701,6 +767,7 @@ export async function promoteBranch(
       .select("id, source_object_type, source_object_id, target_object_type, target_object_id, relationship_type")
       .eq("branch_id", branchId);
     for (const link of branchLinks ?? []) {
+      if (!isSelected("object_link", link.id)) continue;
       await supabase
         .from("object_links")
         .update({ branch_id: null })
@@ -732,6 +799,7 @@ export async function promoteBranch(
       .select("id, source_note_id, target_note_id, relationship_type")
       .eq("branch_id", branchId);
     for (const nl of branchNoteLinks ?? []) {
+      if (!isSelected("note_link", nl.id)) continue;
       await supabase
         .from("note_links")
         .update({ branch_id: null })
@@ -762,6 +830,7 @@ export async function promoteBranch(
       .select("id, box_id, folder_id, object_type, object_id, sort_order")
       .eq("branch_id", branchId);
     for (const att of branchAttachments ?? []) {
+      if (!isSelected("box_object_attachment", att.id)) continue;
       await supabase
         .from("box_object_attachments")
         .update({ branch_id: null })
@@ -795,6 +864,9 @@ export async function promoteBranch(
         .select("id")
         .eq("branch_id", branchId);
       for (const row of rows ?? []) {
+        const itemObjectType =
+          table === "notes" ? "note" : table === "folders" ? "folder" : "box";
+        if (!isSelected(itemObjectType, row.id)) continue;
         await supabase
           .from(table)
           .update({ branch_id: null })
@@ -803,7 +875,7 @@ export async function promoteBranch(
           change_set_id: cs.id,
           workspace_id: workspaceId,
           operation: "create",
-          object_type: table === "notes" ? "note" : table === "folders" ? "folder" : "box",
+          object_type: itemObjectType,
           object_id: row.id,
           before_snapshot: { branch_id: branchId },
           after_snapshot: { branch_id: null, promoted_from_branch: branchId },
@@ -818,7 +890,11 @@ export async function promoteBranch(
     const { promoteBoxOverlays } = await import(
       "./box_branch_metadata_service"
     );
-    const boxOverlayChanges = await promoteBoxOverlays(supabase, branchId);
+    const boxOverlayChanges = await promoteBoxOverlays(
+      supabase,
+      branchId,
+      selectedKeys ? (boxId) => isSelected("box", boxId) : undefined
+    );
     for (const ch of boxOverlayChanges) {
       await recordChangeSetItem(supabase, {
         change_set_id: cs.id,
@@ -838,7 +914,11 @@ export async function promoteBranch(
     const { promoteFolderOverrides } = await import(
       "./folder_branch_service"
     );
-    const folderChanges = await promoteFolderOverrides(supabase, branchId);
+    const folderChanges = await promoteFolderOverrides(
+      supabase,
+      branchId,
+      selectedKeys ? (folderId) => isSelected("folder", folderId) : undefined
+    );
     for (const ch of folderChanges) {
       if (
         Object.keys(ch.before).length === 0 &&
@@ -870,7 +950,28 @@ export async function promoteBranch(
     const { promotePlacementOverrides } = await import(
       "./placement_branch_service"
     );
-    const placementChanges = await promotePlacementOverrides(supabase, branchId);
+    const placementChanges = await promotePlacementOverrides(
+      supabase,
+      branchId,
+      selectedKeys
+        ? (ov) => {
+            // Workspace-object overlays resolve to their inner
+            // (object_type, object_id) for cherry-pick identity;
+            // attachment overlays use ('box_object_attachment',
+            // target_id) since attachments are their own objects.
+            if (ov.target_type === "box_object_attachment") {
+              return isSelected("box_object_attachment", ov.target_id);
+            }
+            if (ov.object_type && ov.object_id) {
+              return isSelected(ov.object_type, ov.object_id);
+            }
+            // Missing inner identity — can't tell which object, skip
+            // defensively under partial-promote so we don't accidentally
+            // promote orphan overlays without user consent.
+            return false;
+          }
+        : undefined
+    );
     for (const ch of placementChanges) {
       if (
         Object.keys(ch.before).length === 0 &&
@@ -924,6 +1025,9 @@ export async function promoteBranch(
     );
     const pending = await listPendingOps(supabase, branchId);
     for (const op of pending) {
+      // Partial promote only applies pending ops whose target object
+      // is in the selection; others stay on the branch for later.
+      if (!isSelected(op.object_type, op.object_id)) continue;
       const result = await applyPendingOp(supabase, op);
       const opToItemOp =
         op.op_type === "trash" ? "trash" as const :
@@ -945,9 +1049,25 @@ export async function promoteBranch(
     }
 
     await commitChangeSet(supabase, cs.id);
+
+    // Status flip. Full-promote (no selection) always lands on
+    // 'promoted'. Partial-promote lands on 'promoted' only if the
+    // selection covered every head / overlay / pending op /
+    // branch-local row — i.e., nothing is left to promote. If any
+    // unpromoted work remains, the branch stays 'open' so the
+    // author can continue editing or promote the rest later.
+    let finalStatus: "promoted" | "open" = "promoted";
+    if (isPartial) {
+      const remaining = await countUnpromotedForBranch(supabase, branchId);
+      finalStatus = remaining === 0 ? "promoted" : "open";
+    }
+    const patch: Record<string, unknown> =
+      finalStatus === "promoted"
+        ? { status: "promoted", promoted_at: new Date().toISOString() }
+        : { status: "open" };
     const { error: promotedErr } = await supabase
       .from("draft_branches")
-      .update({ status: "promoted", promoted_at: new Date().toISOString() })
+      .update(patch)
       .eq("id", branchId)
       .eq("status", "promoting");
     if (promotedErr) throw new Error(promotedErr.message);
@@ -972,4 +1092,64 @@ export async function promoteBranch(
       .eq("status", "promoting");
     throw err;
   }
+}
+
+/**
+ * Count the number of "still unpromoted" artifacts on a branch
+ * after a partial promote has committed. Used to decide whether to
+ * flip the branch to 'promoted' or keep it 'open' for a follow-up
+ * cherry-pick.
+ *
+ * Counts every overlay kind the partial-promote path clears:
+ *
+ *   - `branch_heads`             — content edits still pending
+ *   - `branch_package_metadata`  — skill / agent metadata overlays
+ *   - `box_branch_metadata_overlay`
+ *   - `branch_folder_overrides`
+ *   - `branch_placement_overrides`
+ *   - unapplied `branch_pending_ops`
+ *   - branch-local rows on `files`, `object_links`, `note_links`,
+ *     `box_object_attachments`, `notes`, `folders`, `boxes`
+ *
+ * Returns the total row count across every table. Zero means every
+ * intent on the branch has been promoted and the branch can flip to
+ * 'promoted'. The exact count isn't surfaced to callers — it's only
+ * used as an "is anything left" boolean — but it's returned as a
+ * number so tests can assert against it directly.
+ */
+export async function countUnpromotedForBranch(
+  supabase: SupabaseClient,
+  branchId: string
+): Promise<number> {
+  let total = 0;
+  const tables: Array<{ table: string; filter: "branch_id" }> = [
+    { table: "branch_heads", filter: "branch_id" },
+    { table: "branch_package_metadata", filter: "branch_id" },
+    { table: "box_branch_metadata_overlay", filter: "branch_id" },
+    { table: "branch_folder_overrides", filter: "branch_id" },
+    { table: "branch_placement_overrides", filter: "branch_id" },
+    { table: "files", filter: "branch_id" },
+    { table: "object_links", filter: "branch_id" },
+    { table: "note_links", filter: "branch_id" },
+    { table: "box_object_attachments", filter: "branch_id" },
+    { table: "notes", filter: "branch_id" },
+    { table: "folders", filter: "branch_id" },
+    { table: "boxes", filter: "branch_id" },
+  ];
+  for (const { table } of tables) {
+    const { count } = await supabase
+      .from(table)
+      .select("*", { count: "exact", head: true })
+      .eq("branch_id", branchId);
+    total += count ?? 0;
+  }
+  // Pending ops: only count rows that haven't been applied yet, to
+  // mirror `listPendingOps`'s read filter.
+  const { count: pendingCount } = await supabase
+    .from("branch_pending_ops")
+    .select("*", { count: "exact", head: true })
+    .eq("branch_id", branchId)
+    .is("applied_at", null);
+  total += pendingCount ?? 0;
+  return total;
 }

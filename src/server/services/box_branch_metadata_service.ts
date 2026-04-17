@@ -153,10 +153,15 @@ export async function deriveBoxMetadataChanges(
  * Promote every overlay for the branch onto main. Returns one
  * entry per applied overlay for the caller (branch_service) to
  * record change_set_items.
+ *
+ * When `filter` is provided, overlays whose box_id fails the
+ * predicate are skipped — used by partial-promote (cherry-pick) to
+ * leave unselected overlays on the branch for later.
  */
 export async function promoteBoxOverlays(
   supabase: SupabaseClient,
-  branchId: string
+  branchId: string,
+  filter?: (boxId: string) => boolean
 ): Promise<Array<{
   boxId: string;
   before: Record<string, unknown>;
@@ -169,6 +174,7 @@ export async function promoteBoxOverlays(
     after: Record<string, unknown>;
   }> = [];
   for (const ov of overlays) {
+    if (filter && !filter(ov.box_id)) continue;
     const patch: Record<string, unknown> = {};
     if (ov.name !== null && ov.name !== undefined) patch.name = ov.name;
     if (ov.description !== null && ov.description !== undefined) patch.description = ov.description;

@@ -38,6 +38,7 @@ import {
 } from "@/components/ui/dialog";
 import {
   promoteBranchAction,
+  partialPromoteBranchAction,
   discardBranchAction,
   setActiveBranchAction,
   detectBranchConflictsAction,
@@ -110,6 +111,68 @@ function commentKey(objectType: string, objectId: string): string {
   return `${objectType}:${objectId}`;
 }
 
+/**
+ * Selection state for cherry-pick / partial promote. When non-null,
+ * each card that represents a promote-able object renders a checkbox
+ * in its left gutter. Selection keys use the same
+ * `${objectType}:${objectId}` shape as the server-side cherry-pick
+ * filter so the wire format is 1:1.
+ *
+ * Only rendered when the branch is still `open` and the user has
+ * write access. Otherwise the context is null and `SelectionCheckbox`
+ * renders nothing.
+ */
+interface SelectionCtxValue {
+  selected: Set<string>;
+  toggle: (objectType: string, objectId: string) => void;
+  /** `null` when the context isn't available (branch closed / viewer). */
+}
+const SelectionContext = createContext<SelectionCtxValue | null>(null);
+function useSelection(): SelectionCtxValue | null {
+  return useContext(SelectionContext);
+}
+function selectionKey(objectType: string, objectId: string): string {
+  return `${objectType}:${objectId}`;
+}
+
+/**
+ * Checkbox rendered in the left gutter of a promote-able card.
+ * Noop when selection context is absent (closed branch or viewer
+ * role). Stopping propagation on the onChange event prevents the
+ * click from also toggling the expandable parent card.
+ */
+function SelectionCheckbox({
+  objectType,
+  objectId,
+  label,
+}: {
+  objectType: string;
+  objectId: string;
+  label?: string;
+}) {
+  const sel = useSelection();
+  if (!sel) return null;
+  const key = selectionKey(objectType, objectId);
+  const checked = sel.selected.has(key);
+  return (
+    <label
+      className="flex shrink-0 items-center"
+      onClick={(e) => e.stopPropagation()}
+    >
+      <input
+        type="checkbox"
+        checked={checked}
+        onChange={(e) => {
+          e.stopPropagation();
+          sel.toggle(objectType, objectId);
+        }}
+        aria-label={label ?? `Select ${objectType} for partial promote`}
+        className="h-3.5 w-3.5 cursor-pointer accent-primary"
+      />
+    </label>
+  );
+}
+
 const typeMeta: Record<
   BranchDiffRow["objectType"],
   { label: string; Icon: React.ComponentType<{ className?: string }> }
@@ -141,7 +204,7 @@ export function BranchDetailClient({
   comments: BranchComment[];
   currentUserId: string;
 }) {
-  const [confirmAction, setConfirmAction] = useState<"promote" | "discard" | "rollback" | null>(null);
+  const [confirmAction, setConfirmAction] = useState<"promote" | "discard" | "rollback" | "partial_promote" | null>(null);
   const [toast, setToast] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
   const [pending, startTransition] = useTransition();
   const [conflicts, setConflicts] = useState<BranchConflict[] | null>(null);
@@ -163,6 +226,9 @@ export function BranchDetailClient({
     }>
   | null
   >(null);
+  // Cherry-pick selection state. Keyed by `${objectType}:${objectId}`.
+  // Lives in component state only — no persistence / URL sync.
+  const [selected, setSelected] = useState<Set<string>>(new Set());
 
   const closed = branch.status !== "open";
   const conflictCount = diff.rows.filter((r) => r.mainMovedAhead).length;
@@ -290,8 +356,151 @@ export function BranchDetailClient({
     [branch.id, currentUserId, commentsByKey]
   );
 
+  // Universe of selectable (objectType, objectId) keys — the set
+  // "Select all" would check. Each kind of diff row maps to one
+  // selection identity.
+  //   - Packages (skill / agent) are selectable as the package itself
+  //     — its children / metadata promote together.
+  //   - Standalone heads select by (objectType, objectId).
+  //   - Pending ops select by the op's target object.
+  //   - Folder overrides, placement changes, note links, attachments,
+  //     box metadata changes each have their own native key.
+  // `changedKeys` additionally restricts to keys whose row has a
+  // non-zero diff — the "Select changed only" mode skips rows that
+  // the diff engine kept around but which don't actually differ.
+  const allSelectableKeys = useMemo(() => {
+    const s = new Set<string>();
+    for (const p of diff.packages) s.add(selectionKey(p.packageType, p.packageId));
+    for (const r of diff.standalone) s.add(selectionKey(r.objectType, r.objectId));
+    for (const op of diff.pendingOps) s.add(selectionKey(op.objectType, op.objectId));
+    for (const f of diff.folderOverrides) s.add(selectionKey("folder", f.folderId));
+    for (const pc of diff.placementChanges) {
+      if (pc.targetType === "box_object_attachment") {
+        s.add(selectionKey("box_object_attachment", pc.targetId));
+      } else if (pc.objectType && pc.objectId) {
+        s.add(selectionKey(pc.objectType, pc.objectId));
+      }
+    }
+    for (const nl of diff.createdNoteLinks) s.add(selectionKey("note_link", nl.id));
+    for (const att of diff.createdAttachments) s.add(selectionKey("box_object_attachment", att.id));
+    for (const bm of diff.boxMetadataChanges) s.add(selectionKey("box", bm.boxId));
+    return s;
+  }, [diff]);
+
+  // "Select changed only" universe — today the diff service only
+  // emits rows whose overlay actually differs from main, so it
+  // matches `allSelectableKeys`. Kept as a separate computation so a
+  // future refinement (e.g. filtering out empty metadata overlays)
+  // stays a one-line change.
+  const changedKeys = allSelectableKeys;
+
+  // Selection-key → display-name map, used by the partial-promote
+  // confirmation dialog to list the selected objects by name.
+  const displayNameByKey = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const p of diff.packages) {
+      m.set(selectionKey(p.packageType, p.packageId), p.packageName);
+    }
+    for (const r of diff.standalone) {
+      m.set(selectionKey(r.objectType, r.objectId), r.displayName);
+    }
+    for (const op of diff.pendingOps) {
+      // Don't overwrite a standalone head entry that may have a nicer name.
+      const k = selectionKey(op.objectType, op.objectId);
+      if (!m.has(k)) m.set(k, op.displayName);
+    }
+    for (const f of diff.folderOverrides) {
+      m.set(selectionKey("folder", f.folderId), f.folderName);
+    }
+    for (const pc of diff.placementChanges) {
+      const k =
+        pc.targetType === "box_object_attachment"
+          ? selectionKey("box_object_attachment", pc.targetId)
+          : pc.objectType && pc.objectId
+          ? selectionKey(pc.objectType, pc.objectId)
+          : null;
+      if (k && !m.has(k)) m.set(k, pc.displayName);
+    }
+    for (const nl of diff.createdNoteLinks) {
+      m.set(
+        selectionKey("note_link", nl.id),
+        `${nl.sourceTitle ?? "(note)"} → ${nl.targetTitle ?? "(note)"}`
+      );
+    }
+    for (const att of diff.createdAttachments) {
+      m.set(
+        selectionKey("box_object_attachment", att.id),
+        `${att.objectName ?? att.objectType} → ${att.boxName ?? "(box)"}`
+      );
+    }
+    for (const bm of diff.boxMetadataChanges) {
+      const k = selectionKey("box", bm.boxId);
+      if (!m.has(k)) m.set(k, bm.boxName);
+    }
+    return m;
+  }, [diff]);
+
+  const selectionCtx: SelectionCtxValue | null = canWrite && branch.status === "open"
+    ? {
+        selected,
+        toggle: (objectType, objectId) => {
+          const k = selectionKey(objectType, objectId);
+          setSelected((prev) => {
+            const next = new Set(prev);
+            if (next.has(k)) next.delete(k);
+            else next.add(k);
+            return next;
+          });
+        },
+      }
+    : null;
+
+  function selectAll() {
+    setSelected(new Set(allSelectableKeys));
+  }
+  function selectNone() {
+    setSelected(new Set());
+  }
+  function selectChangedOnly() {
+    setSelected(new Set(changedKeys));
+  }
+
+  function runPartialPromote() {
+    const payload = Array.from(selected).map((k) => {
+      const idx = k.indexOf(":");
+      return { objectType: k.slice(0, idx), objectId: k.slice(idx + 1) };
+    });
+    startTransition(async () => {
+      const res = await partialPromoteBranchAction(branch.id, payload);
+      setConfirmAction(null);
+      if (res.ok) {
+        const remaining = res.data.branchStatus === "promoted" ? 0 : -1;
+        setToast({
+          kind: "ok",
+          text:
+            res.data.branchStatus === "promoted"
+              ? `Promoted ${res.data.promotedObjects.length} object${res.data.promotedObjects.length === 1 ? "" : "s"}. Branch fully promoted.`
+              : `Promoted ${res.data.promotedObjects.length} object${res.data.promotedObjects.length === 1 ? "" : "s"}. Branch stays open with remaining work.`,
+        });
+        void remaining;
+        // Partial promote that covered everything → back to list;
+        // otherwise reload the detail page so the remaining diff
+        // reflects what's left.
+        if (res.data.branchStatus === "promoted") {
+          window.location.href = "/app/branches";
+        } else {
+          setSelected(new Set());
+          window.location.reload();
+        }
+      } else {
+        setToast({ kind: "err", text: res.error });
+      }
+    });
+  }
+
   return (
     <CommentsContext.Provider value={commentsCtx}>
+    <SelectionContext.Provider value={selectionCtx}>
     <div className="space-y-5">
       {toast && (
         <div
@@ -362,7 +571,22 @@ export function BranchDetailClient({
               title={promoteGateMessage ?? ((diff.headCount === 0 && diff.pendingOps.length === 0 && diff.folderOverrides.length === 0 && diff.placementChanges.length === 0 && diff.createdNoteLinks.length === 0 && diff.createdAttachments.length === 0) ? "Nothing to promote" : undefined)}
             >
               <PackageOpen className="h-3.5 w-3.5 mr-1" aria-hidden="true" />
-              Promote
+              Promote all
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setConfirmAction("partial_promote")}
+              disabled={pending || Boolean(promoteGateMessage) || selected.size === 0}
+              title={
+                promoteGateMessage ??
+                (selected.size === 0
+                  ? "Check objects below to enable cherry-pick promote"
+                  : `Promote ${selected.size} selected object${selected.size === 1 ? "" : "s"} and leave the rest on the branch`)
+              }
+            >
+              <PackageOpen className="h-3.5 w-3.5 mr-1" aria-hidden="true" />
+              Promote selected ({selected.size})
             </Button>
             <Button
               variant="ghost"
@@ -499,6 +723,46 @@ export function BranchDetailClient({
               {pending ? "Rebasing…" : "Rebase to re-open this branch"}
             </Button>
           )}
+        </div>
+      )}
+
+      {/* Cherry-pick selection toolbar. Lives above the diff blocks.
+          Only renders when the selection context exists (branch open
+          + caller has write access). Viewers and readers of closed
+          branches don't see the selection affordance. */}
+      {selectionCtx && allSelectableKeys.size > 0 && (
+        <div className="flex flex-wrap items-center gap-2 rounded-md border border-border bg-card/50 px-3 py-2 text-[11px]">
+          <span className="text-muted-foreground">
+            Cherry-pick: {selected.size}/{allSelectableKeys.size} selected
+          </span>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-6 px-2 text-[11px]"
+            onClick={selectAll}
+            disabled={pending}
+          >
+            Select all
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-6 px-2 text-[11px]"
+            onClick={selectChangedOnly}
+            disabled={pending}
+            title="Select rows with an actual diff against main"
+          >
+            Select changed only
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-6 px-2 text-[11px]"
+            onClick={selectNone}
+            disabled={pending || selected.size === 0}
+          >
+            Select none
+          </Button>
         </div>
       )}
 
@@ -746,6 +1010,65 @@ export function BranchDetailClient({
         </DialogContent>
       </Dialog>
 
+      {/* Partial-promote confirmation. Lists the selected objects by
+          name so the user can verify the cherry-pick before it runs.
+          After a successful call the branch may stay `open` if
+          anything is left behind — messaging reflects that. */}
+      <Dialog
+        open={confirmAction === "partial_promote"}
+        onOpenChange={(v) => !v && setConfirmAction(null)}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              Promote {selected.size} selected object{selected.size === 1 ? "" : "s"}?
+            </DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            The selected objects will land on main as one grouped
+            history entry. Any unselected heads, overlays, pending
+            ops, or branch-local rows stay on this branch for a
+            later promote or discard.
+          </p>
+          {selected.size > 0 && (
+            <ul className="max-h-60 overflow-auto list-disc pl-5 text-xs text-foreground space-y-0.5">
+              {Array.from(selected).slice(0, 200).map((k) => {
+                const [type] = k.split(":");
+                const name = displayNameByKey.get(k) ?? k;
+                return (
+                  <li key={k}>
+                    <span className="font-medium">{name}</span>
+                    <span className="ml-1 text-muted-foreground">({type})</span>
+                  </li>
+                );
+              })}
+              {selected.size > 200 && (
+                <li className="text-muted-foreground italic">
+                  …and {selected.size - 200} more.
+                </li>
+              )}
+            </ul>
+          )}
+          <DialogFooter>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setConfirmAction(null)}
+              disabled={pending}
+            >
+              Cancel
+            </Button>
+            <Button
+              size="sm"
+              onClick={runPartialPromote}
+              disabled={pending || selected.size === 0}
+            >
+              {pending ? "Promoting…" : `Promote ${selected.size}`}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <Dialog
         open={confirmAction === "discard"}
         onOpenChange={(v) => !v && setConfirmAction(null)}
@@ -860,6 +1183,7 @@ export function BranchDetailClient({
         </DialogContent>
       </Dialog>
     </div>
+    </SelectionContext.Provider>
     </CommentsContext.Provider>
   );
 }
@@ -889,7 +1213,7 @@ function ConflictCard({ conflict }: { conflict: BranchConflict }) {
   );
 }
 
-function HeadCard({ row }: { row: BranchDiffRow }) {
+function HeadCard({ row, selectable = true }: { row: BranchDiffRow; selectable?: boolean }) {
   const meta = typeMeta[row.objectType];
   const Icon = meta.Icon;
   const [open, setOpen] = useState(false);
@@ -902,6 +1226,15 @@ function HeadCard({ row }: { row: BranchDiffRow }) {
         onClick={() => setOpen((o) => !o)}
         className="flex w-full items-start gap-3 px-4 py-3 text-left"
       >
+        {selectable && (
+          <span className="mt-1">
+            <SelectionCheckbox
+              objectType={row.objectType}
+              objectId={row.objectId}
+              label={`Select ${row.displayName}`}
+            />
+          </span>
+        )}
         {open ? (
           <ChevronDown className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
         ) : (
@@ -993,6 +1326,13 @@ function PackageGroupCard({ group }: { group: PackageDiffGroup }) {
         onClick={() => setOpen((o) => !o)}
         className="flex w-full items-start gap-3 px-4 py-3 text-left"
       >
+        <span className="mt-1">
+          <SelectionCheckbox
+            objectType={group.packageType}
+            objectId={group.packageId}
+            label={`Select ${group.packageName}`}
+          />
+        </span>
         {open ? (
           <ChevronDown className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
         ) : (
@@ -1029,7 +1369,9 @@ function PackageGroupCard({ group }: { group: PackageDiffGroup }) {
               <p className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
                 Canonical source
               </p>
-              <HeadCard row={group.canonical} />
+              {/* No checkbox on child rows — the package-level
+                  checkbox governs everything under this group. */}
+              <HeadCard row={group.canonical} selectable={false} />
             </div>
           )}
           {group.children.length > 0 && (
@@ -1040,7 +1382,7 @@ function PackageGroupCard({ group }: { group: PackageDiffGroup }) {
               <ul className="flex flex-col gap-2 list-none">
                 {group.children.map((c) => (
                   <li key={c.branchHeadId}>
-                    <HeadCard row={c} />
+                    <HeadCard row={c} selectable={false} />
                   </li>
                 ))}
               </ul>
@@ -1290,6 +1632,11 @@ function PendingOpRow({ op }: { op: PendingOpDiffRow }) {
 
   return (
     <div className="flex items-center gap-3 rounded-md border border-border bg-card px-3 py-2">
+      <SelectionCheckbox
+        objectType={op.objectType}
+        objectId={op.objectId}
+        label={`Select pending op on ${op.displayName}`}
+      />
       <Badge
         variant="outline"
         className={cn(
@@ -1368,9 +1715,26 @@ function PlacementChangeCard({ row }: { row: PlacementChangeRow }) {
       branchValue: row.after.folderId,
     });
   }
+  // Placement-change selection key mirrors the server-side
+  // cherry-pick rule: attachment overlays select as their own row;
+  // workspace_object overlays select by the inner (objectType,
+  // objectId). When inner identity is missing we just drop the
+  // checkbox — those orphan overlays can't be cherry-picked safely.
+  const selKey = row.targetType === "box_object_attachment"
+    ? { type: "box_object_attachment" as const, id: row.targetId }
+    : row.objectType && row.objectId
+    ? { type: row.objectType, id: row.objectId }
+    : null;
   return (
     <div className="rounded-lg border border-border bg-card px-4 py-3">
       <div className="mb-2 flex items-center gap-2">
+        {selKey && (
+          <SelectionCheckbox
+            objectType={selKey.type}
+            objectId={selKey.id}
+            label={`Select placement change for ${row.displayName}`}
+          />
+        )}
         <PackageOpen className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
         <p className="truncate text-sm font-medium">{row.displayName}</p>
         <Badge variant="outline" className="shrink-0 text-[10px] font-normal">
@@ -1395,6 +1759,11 @@ function CreatedNoteLinkRowCard({ row }: { row: CreatedNoteLinkRow }) {
   return (
     <div className="rounded-lg border border-border bg-card px-4 py-2">
       <div className="flex flex-wrap items-center gap-2 text-sm">
+        <SelectionCheckbox
+          objectType="note_link"
+          objectId={row.id}
+          label={`Select note link ${row.sourceTitle ?? ""} → ${row.targetTitle ?? ""}`}
+        />
         <Link
           href={row.sourceHref}
           className="truncate font-medium hover:underline"
@@ -1423,6 +1792,11 @@ function CreatedAttachmentRowCard({ row }: { row: CreatedAttachmentRow }) {
   return (
     <div className="rounded-lg border border-border bg-card px-4 py-2">
       <div className="flex flex-wrap items-center gap-2 text-sm">
+        <SelectionCheckbox
+          objectType="box_object_attachment"
+          objectId={row.id}
+          label={`Select attachment ${row.objectName ?? row.objectType}`}
+        />
         <Icon className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
         <Link
           href={row.objectHref}
@@ -1449,6 +1823,11 @@ function FolderOverrideCard({ row }: { row: FolderOverrideDiffRow }) {
   return (
     <div className="rounded-lg border border-border bg-card px-4 py-3">
       <div className="mb-2 flex items-center gap-2">
+        <SelectionCheckbox
+          objectType="folder"
+          objectId={row.folderId}
+          label={`Select folder change ${row.folderName}`}
+        />
         <Folder className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
         <p className="truncate text-sm font-medium">{row.folderName}</p>
         <Badge variant="outline" className="shrink-0 text-[10px] font-normal">

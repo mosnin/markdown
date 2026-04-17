@@ -204,15 +204,21 @@ export interface PromotedFolderOverride {
  * Returns `{ folderId, before, after }` per applied overlay so the
  * caller can record change_set_items. Overlays with nothing to write
  * (all override columns NULL) are reported with empty before/after.
+ *
+ * When `filter` is provided, overrides whose folder_id fails the
+ * predicate are skipped — used by partial-promote (cherry-pick) to
+ * leave unselected overrides on the branch for a later promote.
  */
 export async function promoteFolderOverrides(
   supabase: SupabaseClient,
-  branchId: string
+  branchId: string,
+  filter?: (folderId: string) => boolean
 ): Promise<PromotedFolderOverride[]> {
   const overrides = await listFolderOverridesForBranch(supabase, branchId);
   const out: PromotedFolderOverride[] = [];
 
   for (const ov of overrides) {
+    if (filter && !filter(ov.folder_id)) continue;
     const patch: Record<string, unknown> = {};
     if (ov.name !== null) patch.name = ov.name;
     if (ov.parent_folder_id !== null) patch.parent_folder_id = ov.parent_folder_id;

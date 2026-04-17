@@ -904,6 +904,112 @@ never transitions the branch status.
   the service comment and will land alongside the next branch-write
   hardening pass.
 
+## v2.3 — cherry-pick / partial promote
+
+Promote is no longer all-or-nothing. The branch detail page now
+renders a checkbox in the left gutter of every promote-able card
+(heads, Skill / Agent packages, pending ops, folder overrides,
+placement changes, note links, attachments, box-metadata
+overlays). A toolbar above the diff lets the user "Select all",
+"Select none", or "Select changed only". The existing **Promote**
+button becomes **Promote all** and is joined by a **Promote
+selected (N)** companion that calls a distinct server action and
+runs a filtered version of the same promote flow.
+
+### Design
+
+- **Granularity is per-object.** One checkbox per `(objectType,
+  objectId)` pair. Selecting a Skill or Agent package selects the
+  canonical source, every child file, and every metadata field
+  together — cherry-picking inside a package would leave inconsistent
+  packages on main, so the package is the atom. Attachment overlays
+  have their own identity (`box_object_attachment:<id>`) because
+  attachments are first-class objects.
+- **Filter at apply time.** `promoteBranch` takes
+  `selectedObjects?: Array<{ objectType; objectId }>`. When set, each
+  per-overlay loop gates with an `isSelected(type, id)` check before
+  writing, recording change-set items, or applying pending ops.
+  The extracted helpers (`promoteBoxOverlays`, `promoteFolderOverrides`,
+  `promotePlacementOverrides`) gained an optional `filter` predicate
+  so the filter decision stays in the caller.
+- **Branch stays `open` when work remains.** After a partial promote
+  commits, `countUnpromotedForBranch` sums up `branch_heads`, every
+  overlay table, unapplied pending ops, and each branch-local leaf
+  table. If the total is nonzero the branch flips back to `open` so
+  the author can continue editing or promote the rest later. Only
+  when the selection covered everything does it land on `promoted`.
+- **Change-set origin distinguishes the two paths.** Full-promote
+  writes `origin='branch_promotion'`; partial-promote writes
+  `origin='branch_promotion_partial'` and records the selection under
+  `metadata.promoted_objects`. The `change_sets.origin` CHECK picks
+  up the new value in
+  `20260414000007_branch_promotion_partial_origin.sql`.
+- **Rollback works on both origins.** `branch_rollback_service`
+  queries `.in('origin', ['branch_promotion',
+  'branch_promotion_partial']) ` ordered by `created_at DESC`, so the
+  latest promote (full or partial) is the one "Revert this
+  promotion" undoes. The existing status gate still requires
+  `status='promoted'` for rollback via the button — a partially
+  promoted branch that's still `open` has no "revert" button since
+  reverting a partial while the author keeps editing would conflict
+  with further writes.
+
+### Service
+
+`src/server/services/branch_service.ts`:
+
+- `PromoteBranchOptions.selectedObjects?: ReadonlyArray<{ objectType;
+  objectId }>` — undefined runs the full path; a non-empty array
+  runs the cherry-pick path; an empty array is rejected with a
+  clear error.
+- `countUnpromotedForBranch(supabase, branchId)` — new helper used
+  after partial promote to decide the final branch status.
+- The package metadata, branch-local files / object_links /
+  note_links / attachments / notes / folders / boxes loops, and the
+  pending-ops loop each gained an `isSelected(...)` gate.
+
+### Action
+
+`src/app/app/branches/actions.ts`:
+
+- `partialPromoteBranchAction(branchId, selectedObjects)` — validates
+  the selection is non-empty and well-shaped, delegates to
+  `promoteBranch`, re-reads the branch to see whether it flipped to
+  `promoted`, writes a `branch.partial_promoted` audit event, and
+  only clears the active-branch cookie when nothing is left to
+  promote.
+
+### UI
+
+`src/app/app/branches/[branch_id]/branch_detail_client.tsx`:
+
+- `SelectionContext` lives alongside `CommentsContext`. Seeded only
+  for open branches + write-capable callers; nullable otherwise so
+  viewers and closed branches render without checkboxes.
+- `SelectionCheckbox` renders one checkbox per selectable card.
+  `onClick` stops propagation so the checkbox doesn't toggle the
+  expandable parent card.
+- Selection toolbar above the diff surfaces count + "Select all /
+  none / changed only" buttons.
+- The partial-promote confirmation dialog lists the selected
+  objects by resolved display name so the author can spot-check
+  before confirming.
+
+### Tests
+
+`src/tests/unit/branch_partial_promote.test.ts` (10 cases):
+
+- Selection filter actually skips unselected heads.
+- Change-set origin + metadata for partial vs full paths.
+- Branch status stays `open` with remaining work; flips to
+  `promoted` when the selection covers everything.
+- Pending ops on unselected objects are preserved.
+- Empty selection is rejected.
+- Overlay helpers receive a filter predicate under partial, none
+  under full.
+- Rollback query uses `.in(origin, [...both])` so partial promote
+  change sets are eligible for the "Revert this promotion" flow.
+
 ## Related docs
 
 - [branch_aware_writes_v1.md](branch_aware_writes_v1.md)

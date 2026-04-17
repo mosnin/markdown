@@ -59,6 +59,7 @@ const originIcons: Record<
   rollback:          { Icon: RotateCcw,  label: "Rollback" },
   restore:           { Icon: Undo2,      label: "Restore" },
   branch_promotion:  { Icon: PackageOpen, label: "Branch promotion" },
+  branch_promotion_partial: { Icon: PackageOpen, label: "Branch partial promote" },
   system:            { Icon: UserIcon,   label: "System" },
 };
 

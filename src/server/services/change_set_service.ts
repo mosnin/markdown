@@ -41,6 +41,7 @@ export type ChangeSetOrigin =
   | "rollback"
   | "restore"
   | "branch_promotion"
+  | "branch_promotion_partial"
   | "system";
 
 export type ChangeSetStatus = "open" | "committed" | "aborted";

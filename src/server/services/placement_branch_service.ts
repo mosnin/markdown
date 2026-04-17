@@ -252,15 +252,23 @@ export interface PromotedPlacementOverride {
  * attachment overlays write to `box_object_attachments`. Rows with
  * nothing to apply (no sort override AND no folder override) are
  * reported with empty before/after so the caller can skip them.
+ *
+ * When `filter` is provided, overlays whose inner object (object_type
+ * + object_id for workspace_object overlays, or the attachment id
+ * paired with 'box_object_attachment' for attachment overlays) fails
+ * the predicate are skipped — used by partial-promote to leave
+ * unselected placement intents on the branch for a later promote.
  */
 export async function promotePlacementOverrides(
   supabase: SupabaseClient,
-  branchId: string
+  branchId: string,
+  filter?: (ov: PlacementOverride) => boolean
 ): Promise<PromotedPlacementOverride[]> {
   const overrides = await listPlacementOverridesForBranch(supabase, branchId);
   const out: PromotedPlacementOverride[] = [];
 
   for (const ov of overrides) {
+    if (filter && !filter(ov)) continue;
     const patch: Record<string, unknown> = {};
     if (ov.sort_order !== null) patch.sort_order = ov.sort_order;
     if (ov.folder_id_overridden) patch.folder_id = ov.folder_id;
