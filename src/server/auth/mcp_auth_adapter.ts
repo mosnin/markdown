@@ -1,4 +1,5 @@
 import { createHash, timingSafeEqual } from "node:crypto";
+import * as Sentry from "@sentry/nextjs";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { log } from "@/lib/logger";
 import {
@@ -146,7 +147,14 @@ export async function resolveMcpRequestAuth(
   request: Request
 ): Promise<McpAuthContext | null> {
   const header = request.headers.get("authorization");
-  if (!header || !header.startsWith("Bearer ")) return null;
+  if (!header || !header.startsWith("Bearer ")) {
+    Sentry.addBreadcrumb({
+      category: "auth",
+      message: "resolveMcpRequestAuth: missing or malformed Authorization header",
+      level: "warning",
+    });
+    return null;
+  }
   const raw = header.slice(7).trim();
 
   // Path 1 — OAuth.
@@ -158,11 +166,21 @@ export async function resolveMcpRequestAuth(
   if (raw.startsWith("csk_v1_")) {
     if (!legacyCskEnabled()) {
       log.warn("mcp_auth_legacy_token_rejected_env_off");
+      Sentry.addBreadcrumb({
+        category: "auth",
+        message: "resolveMcpRequestAuth: legacy csk token rejected (env off)",
+        level: "warning",
+      });
       return null;
     }
     return await resolveLegacyCsk(raw);
   }
 
+  Sentry.addBreadcrumb({
+    category: "auth",
+    message: "resolveMcpRequestAuth: unrecognised token prefix",
+    level: "warning",
+  });
   return null;
 }
 

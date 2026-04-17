@@ -1,4 +1,5 @@
 import type { NextConfig } from "next";
+import { withSentryConfig } from "@sentry/nextjs";
 
 // ─── Content Security Policy ──────────────────────────────────────────────────
 //
@@ -54,7 +55,7 @@ const ContentSecurityPolicy = [
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' data: https:",
   "font-src 'self'",
-  "connect-src 'self' https://*.supabase.co wss://*.supabase.co",
+  "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://*.ingest.sentry.io",
   "frame-src 'none'",
   "object-src 'none'",
   "base-uri 'self'",
@@ -106,4 +107,8 @@ const nextConfig: NextConfig = {
   },
 };
 
-export default nextConfig;
+export default withSentryConfig(nextConfig, {
+  // Suppress Sentry source-map upload logs in CI — they are noisy and
+  // not actionable. Upload will still run when SENTRY_AUTH_TOKEN is set.
+  silent: true,
+});

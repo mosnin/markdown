@@ -1,5 +1,6 @@
 "use server";
 
+import * as Sentry from "@sentry/nextjs";
 import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
@@ -198,6 +199,13 @@ export async function promoteBranchAction(
   branchId: string,
   options: { skip_gates?: boolean } = {}
 ): Promise<ActionResult<PromoteBranchResult>> {
+  Sentry.addBreadcrumb({
+    category: "branch",
+    message: `promoteBranchAction started`,
+    level: "info",
+    data: { branchId, skip_gates: options.skip_gates ?? false },
+  });
+
   const gate = await requireWriteRoleResult();
   if (!gate.ok) return { ok: false, error: gate.error };
   const { ctx } = gate;
@@ -287,6 +295,13 @@ export async function promoteBranchAction(
     revalidatePath("/app");
     return { ok: true, data: result };
   } catch (err) {
+    Sentry.addBreadcrumb({
+      category: "branch",
+      message: "promoteBranchAction failed",
+      level: "error",
+      data: { branchId, error: err instanceof Error ? err.message : String(err) },
+    });
+    Sentry.captureException(err);
     return { ok: false, error: err instanceof Error ? err.message : "Promote failed" };
   }
 }
