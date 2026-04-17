@@ -4,6 +4,17 @@ This document describes the intended module layout for Context Store and the rea
 
 ---
 
+## V2 state
+
+After the v2 sprint Context Store is branch-aware end-to-end: every
+content-bearing table overlays on a `branch_id`, promote is atomic and
+undoable, and the MCP surface runs on OAuth 2.1 + PKCE instead of
+pasted `csk_v1_` tokens. For the rollup of what landed, the focused
+docs, and the "where do I start" map, see
+[docs/v2_overview.md](v2_overview.md).
+
+---
+
 ## Guiding principles
 
 1. **Server by default.** All data fetching happens on the server. Client components exist only for interactivity (menus, toggles, controlled inputs).
