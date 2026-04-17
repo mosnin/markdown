@@ -592,8 +592,9 @@ export async function promoteBranch(
     throw new Error("Partial promote requires at least one selected object");
   }
 
-  const { openChangeSet, commitChangeSet, abortChangeSet, recordChangeSetItem } =
-    await import("./change_set_service");
+  const csModule = await import("./change_set_service");
+  const { openChangeSet, commitChangeSet, abortChangeSet, recordChangeSetItemsBatch } = csModule;
+  type RecordItemInput = Parameters<typeof recordChangeSetItemsBatch>[1][number];
   const cs = await openChangeSet(supabase, {
     workspace_id: workspaceId,
     origin: isPartial ? "branch_promotion_partial" : "branch_promotion",
@@ -618,6 +619,7 @@ export async function promoteBranch(
   });
 
   const promoted: PromoteBranchResult["promotedObjects"] = [];
+  const batchItems: RecordItemInput[] = [];
 
   try {
     // ── Promote branch heads (notes + file/skill/agent) ─────────────
@@ -663,7 +665,7 @@ export async function promoteBranch(
           .update({ change_set_id: cs.id })
           .eq("id", branchVer.id);
 
-        await recordChangeSetItem(supabase, {
+        batchItems.push({
           change_set_id: cs.id,
           workspace_id: workspaceId,
           operation: "update",
@@ -724,7 +726,7 @@ export async function promoteBranch(
           .update({ change_set_id: cs.id })
           .eq("id", branchVer.id);
 
-        await recordChangeSetItem(supabase, {
+        batchItems.push({
           change_set_id: cs.id,
           workspace_id: workspaceId,
           operation: "update",
@@ -799,7 +801,7 @@ export async function promoteBranch(
           .eq("object_id", ov.package_id);
       }
 
-      await recordChangeSetItem(supabase, {
+      batchItems.push({
         change_set_id: cs.id,
         workspace_id: workspaceId,
         operation: "update",
@@ -827,10 +829,11 @@ export async function promoteBranch(
       .from("files")
       .select("id, name, box_id, parent_skill_id, parent_agent_id")
       .eq("branch_id", branchId);
+    const selFileIds = (branchFiles ?? []).filter(f => isSelected("file", f.id)).map(f => f.id);
+    if (selFileIds.length) await supabase.from("files").update({ branch_id: null }).in("id", selFileIds);
     for (const f of branchFiles ?? []) {
       if (!isSelected("file", f.id)) continue;
-      await supabase.from("files").update({ branch_id: null }).eq("id", f.id);
-      await recordChangeSetItem(supabase, {
+      batchItems.push({
         change_set_id: cs.id,
         workspace_id: workspaceId,
         operation: "create",
@@ -856,13 +859,11 @@ export async function promoteBranch(
       .from("object_links")
       .select("id, source_object_type, source_object_id, target_object_type, target_object_id, relationship_type")
       .eq("branch_id", branchId);
+    const selLinkIds = (branchLinks ?? []).filter(l => isSelected("object_link", l.id)).map(l => l.id);
+    if (selLinkIds.length) await supabase.from("object_links").update({ branch_id: null }).in("id", selLinkIds);
     for (const link of branchLinks ?? []) {
       if (!isSelected("object_link", link.id)) continue;
-      await supabase
-        .from("object_links")
-        .update({ branch_id: null })
-        .eq("id", link.id);
-      await recordChangeSetItem(supabase, {
+      batchItems.push({
         change_set_id: cs.id,
         workspace_id: workspaceId,
         operation: "link_create",
@@ -888,13 +889,11 @@ export async function promoteBranch(
       .from("note_links")
       .select("id, source_note_id, target_note_id, relationship_type")
       .eq("branch_id", branchId);
+    const selNlIds = (branchNoteLinks ?? []).filter(nl => isSelected("note_link", nl.id)).map(nl => nl.id);
+    if (selNlIds.length) await supabase.from("note_links").update({ branch_id: null }).in("id", selNlIds);
     for (const nl of branchNoteLinks ?? []) {
       if (!isSelected("note_link", nl.id)) continue;
-      await supabase
-        .from("note_links")
-        .update({ branch_id: null })
-        .eq("id", nl.id);
-      await recordChangeSetItem(supabase, {
+      batchItems.push({
         change_set_id: cs.id,
         workspace_id: workspaceId,
         operation: "link_create",
@@ -919,13 +918,11 @@ export async function promoteBranch(
       .from("box_object_attachments")
       .select("id, box_id, folder_id, object_type, object_id, sort_order")
       .eq("branch_id", branchId);
+    const selAttIds = (branchAttachments ?? []).filter(a => isSelected("box_object_attachment", a.id)).map(a => a.id);
+    if (selAttIds.length) await supabase.from("box_object_attachments").update({ branch_id: null }).in("id", selAttIds);
     for (const att of branchAttachments ?? []) {
       if (!isSelected("box_object_attachment", att.id)) continue;
-      await supabase
-        .from("box_object_attachments")
-        .update({ branch_id: null })
-        .eq("id", att.id);
-      await recordChangeSetItem(supabase, {
+      batchItems.push({
         change_set_id: cs.id,
         workspace_id: workspaceId,
         operation: "attach",
@@ -953,15 +950,13 @@ export async function promoteBranch(
         .from(table)
         .select("id")
         .eq("branch_id", branchId);
+      const itemObjectType =
+        table === "notes" ? "note" as const : table === "folders" ? "folder" as const : "box" as const;
+      const selIds = (rows ?? []).filter(r => isSelected(itemObjectType, r.id)).map(r => r.id);
+      if (selIds.length) await supabase.from(table).update({ branch_id: null }).in("id", selIds);
       for (const row of rows ?? []) {
-        const itemObjectType =
-          table === "notes" ? "note" : table === "folders" ? "folder" : "box";
         if (!isSelected(itemObjectType, row.id)) continue;
-        await supabase
-          .from(table)
-          .update({ branch_id: null })
-          .eq("id", row.id);
-        await recordChangeSetItem(supabase, {
+        batchItems.push({
           change_set_id: cs.id,
           workspace_id: workspaceId,
           operation: "create",
@@ -986,7 +981,7 @@ export async function promoteBranch(
       selectedKeys ? (boxId) => isSelected("box", boxId) : undefined
     );
     for (const ch of boxOverlayChanges) {
-      await recordChangeSetItem(supabase, {
+      batchItems.push({
         change_set_id: cs.id,
         workspace_id: workspaceId,
         operation: "update",
@@ -1016,7 +1011,7 @@ export async function promoteBranch(
       ) {
         continue; // empty overlay — nothing to record
       }
-      await recordChangeSetItem(supabase, {
+      batchItems.push({
         change_set_id: cs.id,
         workspace_id: workspaceId,
         operation: "update",
@@ -1085,7 +1080,7 @@ export async function promoteBranch(
           ? "box_object_attachment"
           : (ch.objectType ?? "box_object_attachment");
       const itemObjectId = ch.objectId ?? ch.targetId;
-      await recordChangeSetItem(supabase, {
+      batchItems.push({
         change_set_id: cs.id,
         workspace_id: workspaceId,
         operation: op,
@@ -1125,7 +1120,7 @@ export async function promoteBranch(
         op.op_type === "unarchive" ? "unarchive" as const :
         op.op_type === "detach" ? "detach" as const :
         "move" as const;
-      await recordChangeSetItem(supabase, {
+      batchItems.push({
         change_set_id: cs.id,
         workspace_id: workspaceId,
         operation: opToItemOp,
@@ -1138,6 +1133,7 @@ export async function promoteBranch(
       });
     }
 
+    await recordChangeSetItemsBatch(supabase, batchItems);
     await commitChangeSet(supabase, cs.id);
 
     // Status flip. Full-promote (no selection) always lands on

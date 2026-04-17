@@ -19,6 +19,7 @@ vi.mock("@/server/services/change_set_service", async () => ({
   commitChangeSet: vi.fn().mockResolvedValue(undefined),
   abortChangeSet: vi.fn().mockResolvedValue(undefined),
   recordChangeSetItem: vi.fn().mockResolvedValue(undefined),
+  recordChangeSetItemsBatch: vi.fn().mockResolvedValue(undefined),
 }));
 vi.mock("@/server/services/box_branch_metadata_service", () => ({
   promoteBoxOverlays: vi.fn().mockResolvedValue([]),

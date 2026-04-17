@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-vi.mock("@/server/services/change_set_service", async () => ({ openChangeSet: vi.fn().mockResolvedValue({ id: "cs-atomic", status: "open" }), commitChangeSet: vi.fn().mockResolvedValue(undefined), abortChangeSet: vi.fn().mockResolvedValue(undefined), recordChangeSetItem: vi.fn().mockResolvedValue(undefined) }));
+vi.mock("@/server/services/change_set_service", async () => ({ openChangeSet: vi.fn().mockResolvedValue({ id: "cs-atomic", status: "open" }), commitChangeSet: vi.fn().mockResolvedValue(undefined), abortChangeSet: vi.fn().mockResolvedValue(undefined), recordChangeSetItem: vi.fn().mockResolvedValue(undefined), recordChangeSetItemsBatch: vi.fn().mockResolvedValue(undefined) }));
 vi.mock("@/server/services/box_branch_metadata_service", () => ({ promoteBoxOverlays: vi.fn().mockResolvedValue([]) }));
 vi.mock("@/server/services/folder_branch_service", () => ({ promoteFolderOverrides: vi.fn().mockResolvedValue([]) }));
 vi.mock("@/server/services/placement_branch_service", () => ({ promotePlacementOverrides: vi.fn().mockResolvedValue([]) }));

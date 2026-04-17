@@ -262,6 +262,25 @@ export async function recordChangeSetItem(
   return data as ChangeSetItem;
 }
 
+export async function recordChangeSetItemsBatch(
+  supabase: SupabaseClient,
+  items: RecordItemInput[]
+): Promise<void> {
+  if (items.length === 0) return;
+  const rows = items.map((i) => ({
+    change_set_id: i.change_set_id,
+    workspace_id: i.workspace_id,
+    operation: i.operation,
+    object_type: i.object_type,
+    object_id: i.object_id,
+    version_id: i.version_id ?? null,
+    before_snapshot: i.before_snapshot ?? null,
+    after_snapshot: i.after_snapshot ?? null,
+  }));
+  const { error } = await supabase.from("change_set_items").insert(rows);
+  if (error) throw new Error(error.message ?? "Failed to batch-record change set items");
+}
+
 // ─── Structural event recording ──────────────────────────────────────────────
 
 export interface RecordStructuralInput {
