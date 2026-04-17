@@ -80,6 +80,14 @@ export interface DraftBranch {
   authored_by_connection_id: string | null;
   /** OAuth client_id that created this branch via MCP, if any. */
   authored_by_client_id: string | null;
+  /**
+   * Lifecycle instrumentation (Feature #8 — branch auto-cleanup).
+   * Nullable so callers reading rows written before the
+   * `20260414000004_branch_lifecycle` migration still typecheck.
+   */
+  last_activity_at: string | null;
+  last_warned_at: string | null;
+  warning_count: number;
 }
 
 export type BranchHeadObjectType = "note" | "file" | "skill" | "agent";
@@ -218,6 +226,14 @@ export async function upsertBranchHead(
     .single();
   if (error || !data) {
     throw new Error(error?.message ?? "Failed to upsert branch head");
+  }
+  // Branch-activity touch (Feature #8). Errors are swallowed so a
+  // lifecycle-table failure never blocks the content write.
+  try {
+    const { touchBranchActivity } = await import("./branch_lifecycle_service");
+    await touchBranchActivity(supabase, input.branch_id, "");
+  } catch {
+    // swallowed on purpose
   }
   return data as BranchHead;
 }

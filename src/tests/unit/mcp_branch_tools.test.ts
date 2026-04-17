@@ -181,6 +181,9 @@ describe("DraftBranch type — authored_by fields", () => {
       rollback_change_set_id: null,
       authored_by_connection_id: null,
       authored_by_client_id: "my-client",
+      last_activity_at: null,
+      last_warned_at: null,
+      warning_count: 0,
     };
     // Verify the fields exist.
     expect(mockBranch.authored_by_client_id).toBe("my-client");

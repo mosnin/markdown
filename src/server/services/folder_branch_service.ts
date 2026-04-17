@@ -99,6 +99,14 @@ export async function upsertFolderOverride(
   if (error || !data) {
     throw new Error(error?.message ?? "Failed to upsert folder override");
   }
+  // Branch-activity touch (Feature #8). Swallow errors so a lifecycle
+  // failure never blocks the overlay write.
+  try {
+    const { touchBranchActivity } = await import("./branch_lifecycle_service");
+    await touchBranchActivity(supabase, input.branchId, input.actorId);
+  } catch {
+    // swallowed on purpose
+  }
   return data as FolderBranchOverride;
 }
 

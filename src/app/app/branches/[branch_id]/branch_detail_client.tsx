@@ -54,6 +54,7 @@ import {
   runPromotionGatesAction,
   listActivePromotionGatesAction,
 } from "../actions";
+import { dismissStaleWarningAction } from "@/app/app/settings/workspace/branch_retention/actions";
 import type { DraftBranch } from "@/server/services/branch_service";
 import type {
   BranchReviewWithReviewer,
@@ -193,6 +194,7 @@ export function BranchDetailClient({
   reviews,
   comments,
   currentUserId,
+  retentionPolicy,
 }: {
   branch: DraftBranch;
   diff: BranchDiff;
@@ -203,6 +205,15 @@ export function BranchDetailClient({
   reviews: BranchReviewWithReviewer[];
   comments: BranchComment[];
   currentUserId: string;
+  /**
+   * Workspace retention policy (Feature #8). Optional — when
+   * undefined or `enabled=false` the stale banner never renders.
+   */
+  retentionPolicy?: {
+    enabled: boolean;
+    warn_after_idle_days: number;
+    auto_discard_after_days: number;
+  };
 }) {
   const [confirmAction, setConfirmAction] = useState<"promote" | "discard" | "rollback" | "partial_promote" | null>(null);
   const [toast, setToast] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
@@ -659,6 +670,76 @@ export function BranchDetailClient({
           </div>
         </div>
       )}
+
+      {/* Stale-warning banner (Feature #8). Renders when the branch
+          is open, has been warned within the last 7 days, and the
+          workspace retention policy is enabled. Two actions: "Keep
+          active" touches activity and clears the warning; "Discard
+          now" triggers the canonical discard flow via the existing
+          confirm dialog. Additive only — the surrounding banner stack
+          is intentionally left as-is. */}
+      {(() => {
+        if (!retentionPolicy?.enabled) return null;
+        if (branch.status !== "open") return null;
+        if (!branch.last_warned_at) return null;
+        const warnedMs = new Date(branch.last_warned_at).getTime();
+        const WARN_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
+        if (!Number.isFinite(warnedMs) || Date.now() - warnedMs > WARN_WINDOW_MS) return null;
+        const activityISO = branch.last_activity_at ?? branch.created_at;
+        const idleDays = Math.floor(
+          (Date.now() - new Date(activityISO).getTime()) / (24 * 60 * 60 * 1000)
+        );
+        const daysUntilDiscard = Math.max(
+          0,
+          retentionPolicy.auto_discard_after_days - idleDays
+        );
+        return (
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-warning/40 bg-warning/5 px-4 py-3">
+            <div className="flex items-start gap-2 text-sm">
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" aria-hidden="true" />
+              <div className="space-y-0.5">
+                <p className="font-medium text-warning">
+                  This branch has been idle for {idleDays} day{idleDays === 1 ? "" : "s"}.
+                </p>
+                <p className="text-[11px] text-muted-foreground">
+                  It will auto-discard in {daysUntilDiscard} day{daysUntilDiscard === 1 ? "" : "s"} if no activity.
+                </p>
+              </div>
+            </div>
+            {canWrite && (
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={pending}
+                  onClick={() => {
+                    startTransition(async () => {
+                      const res = await dismissStaleWarningAction(branch.id);
+                      if (res.ok) {
+                        setToast({ kind: "ok", text: "Branch marked active. Warning cleared." });
+                        window.location.reload();
+                      } else {
+                        setToast({ kind: "err", text: res.error });
+                      }
+                    });
+                  }}
+                >
+                  Keep active
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  disabled={pending}
+                  onClick={() => setConfirmAction("discard")}
+                  className="text-xs text-muted-foreground hover:text-destructive"
+                >
+                  Discard now
+                </Button>
+              </div>
+            )}
+          </div>
+        );
+      })()}
 
       {/* Promoted / rolled-back status banners.
           The state machine guarantees these statuses are mutually

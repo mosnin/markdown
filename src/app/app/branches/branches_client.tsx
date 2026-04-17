@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import Link from "next/link";
 import {
+  AlertTriangle,
   Bot,
   Check,
   GitBranch,
@@ -33,6 +34,12 @@ import type { DraftBranch } from "@/server/services/branch_service";
 
 type Row = DraftBranch & { head_count: number; authored_by_client_name: string | null };
 
+interface RetentionPolicyShape {
+  enabled: boolean;
+  warn_after_idle_days: number;
+  auto_discard_after_days: number;
+}
+
 /**
  * Client UI for the /app/branches page.
  *
@@ -51,10 +58,12 @@ export function BranchesClient({
   rows,
   activeBranchId,
   canWrite,
+  retentionPolicy,
 }: {
   rows: Row[];
   activeBranchId: string | null;
   canWrite: boolean;
+  retentionPolicy?: RetentionPolicyShape;
 }) {
   const [createOpen, setCreateOpen] = useState(false);
   const [promoteId, setPromoteId] = useState<string | null>(null);
@@ -121,6 +130,7 @@ export function BranchesClient({
                   row={b}
                   active={activeBranchId === b.id}
                   canWrite={canWrite}
+                  retentionPolicy={retentionPolicy}
                   onSwitch={async (id) => {
                     const res = await setActiveBranchAction(id);
                     if (res.ok) {
@@ -229,6 +239,7 @@ function BranchRow({
   row,
   active,
   canWrite,
+  retentionPolicy,
   onSwitch,
   onPromote,
   onDiscard,
@@ -236,11 +247,28 @@ function BranchRow({
   row: Row;
   active: boolean;
   canWrite: boolean;
+  retentionPolicy?: RetentionPolicyShape;
   onSwitch?: (id: string | null) => void;
   onPromote?: () => void;
   onDiscard?: () => void;
 }) {
   const created = new Date(row.created_at).toLocaleString();
+
+  // Stale indicator (Feature #8). Renders when the branch is open AND
+  // has been warned within the last 7 days.
+  const WARN_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
+  let staleIndicator: { daysUntilDiscard: number } | null = null;
+  if (row.status === "open" && row.last_warned_at) {
+    const warnedMs = new Date(row.last_warned_at).getTime();
+    if (Number.isFinite(warnedMs) && Date.now() - warnedMs < WARN_WINDOW_MS) {
+      const activityISO = row.last_activity_at ?? row.created_at;
+      const idleDays = Math.floor(
+        (Date.now() - new Date(activityISO).getTime()) / (24 * 60 * 60 * 1000)
+      );
+      const autoDays = retentionPolicy?.auto_discard_after_days ?? 60;
+      staleIndicator = { daysUntilDiscard: Math.max(0, autoDays - idleDays) };
+    }
+  }
   return (
     <div
       className={cn(
@@ -286,6 +314,15 @@ function BranchRow({
         <p className="mt-1 text-[10px] text-muted-foreground">
           {row.head_count} head{row.head_count === 1 ? "" : "s"} · Created {created}
         </p>
+        {staleIndicator && (
+          <p className="mt-1 flex items-center gap-1 text-[10px] text-muted-foreground/80">
+            <AlertTriangle className="h-3 w-3 shrink-0" aria-hidden="true" />
+            <span>
+              Stale — will auto-discard in {staleIndicator.daysUntilDiscard} day
+              {staleIndicator.daysUntilDiscard === 1 ? "" : "s"}
+            </span>
+          </p>
+        )}
       </div>
       {canWrite && row.status === "open" && (
         <div className="flex shrink-0 gap-1">

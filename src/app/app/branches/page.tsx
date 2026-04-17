@@ -1,6 +1,7 @@
 import { requireAuthenticatedUser } from "@/server/auth/require_authenticated_user";
 import { createClient } from "@/lib/supabase/server";
 import { listDraftBranches, listBranchHeads } from "@/server/services/branch_service";
+import { getRetentionPolicy } from "@/server/services/branch_lifecycle_service";
 import { canAdmin } from "@/server/auth/require_role";
 import { PageHeader } from "@/components/product/page_header";
 import { BranchesClient } from "./branches_client";
@@ -39,6 +40,10 @@ export default async function BranchesPage() {
       clientNameMap.set(c.client_id, c.name);
     }
   }
+
+  // Retention policy feeds the "will auto-discard in N days" indicator
+  // on each stale row.
+  const retention = await getRetentionPolicy(supabase, ctx.workspace.id);
 
   const rows = [];
   for (const b of branches) {
@@ -88,6 +93,11 @@ export default async function BranchesPage() {
             rows={rows}
             activeBranchId={ctx.activeBranchId}
             canWrite={canWrite}
+            retentionPolicy={{
+              enabled: retention.enabled,
+              warn_after_idle_days: retention.warn_after_idle_days,
+              auto_discard_after_days: retention.auto_discard_after_days,
+            }}
           />
           {isAdmin && <PurgeOverlaysPanel overlayCount={overlayCount} />}
         </div>

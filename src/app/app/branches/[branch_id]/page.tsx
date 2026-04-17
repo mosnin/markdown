@@ -5,6 +5,7 @@ import { requireAuthenticatedUser } from "@/server/auth/require_authenticated_us
 import { createClient } from "@/lib/supabase/server";
 import { getDraftBranch } from "@/server/services/branch_service";
 import { getBranchDiff } from "@/server/services/branch_diff_service";
+import { getRetentionPolicy } from "@/server/services/branch_lifecycle_service";
 import { listReviews } from "@/server/services/branch_review_service";
 import { listCommentsForBranch } from "@/server/services/branch_comment_service";
 import { PageHeader } from "@/components/product/page_header";
@@ -58,6 +59,9 @@ export default async function BranchDetailPage({
   const reviews = await listReviews(supabase, branch_id);
   const comments = await listCommentsForBranch(supabase, branch_id);
 
+  // Retention policy for the stale banner (Feature #8).
+  const retention = await getRetentionPolicy(supabase, ctx.workspace.id);
+
   return (
     <div className="flex h-full flex-col overflow-hidden">
       <PageHeader
@@ -87,6 +91,11 @@ export default async function BranchDetailPage({
             reviews={reviews}
             comments={comments}
             currentUserId={ctx.user.id}
+            retentionPolicy={{
+              enabled: retention.enabled,
+              warn_after_idle_days: retention.warn_after_idle_days,
+              auto_discard_after_days: retention.auto_discard_after_days,
+            }}
           />
         </div>
       </div>

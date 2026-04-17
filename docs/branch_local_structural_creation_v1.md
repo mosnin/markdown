@@ -1010,6 +1010,124 @@ runs a filtered version of the same promote flow.
 - Rollback query uses `.in(origin, [...both])` so partial promote
   change sets are eligible for the "Revert this promotion" flow.
 
+## v2.2 — Branch lifecycle + auto-cleanup
+
+Workspaces accumulate draft branches forever by default — including
+AI-authored branches from MCP sessions that never come back to
+promote or discard. v2.2 adds an opt-in retention policy and the
+machinery to warn authors and auto-discard branches that have been
+idle past a configurable threshold.
+
+### Schema
+
+`20260414000004_branch_lifecycle.sql`:
+
+- `workspace_branch_retention_policies` — one row per workspace that
+  has opted in. Columns: `enabled` (defaults false),
+  `warn_after_idle_days` (default 30), `auto_discard_after_days`
+  (default 60), `updated_by`. A table-level CHECK enforces
+  `auto >= warn` at the DB level so the invariant isn't app-only.
+- RLS mirrors the workspace_memberships pattern: any member can
+  SELECT, only admins (`can_admin_workspace(wid)`) can INSERT /
+  UPDATE / DELETE.
+- `draft_branches.last_activity_at` — `timestamptz` nullable,
+  backfilled to `GREATEST(updated_at, created_at)` for existing
+  rows.
+- `draft_branches.last_warned_at`, `draft_branches.warning_count` —
+  bookkeeping for the warning loop.
+- Composite index `draft_branches_last_activity_idx` on
+  `(workspace_id, status, last_activity_at)` so the stale-scan is a
+  cheap range over open branches in one workspace.
+
+### Service
+
+`branch_lifecycle_service` exposes:
+
+- `getRetentionPolicy(ws)` — stored row or a disabled default.
+- `setRetentionPolicy(ws, actor, patch)` — upsert. Validates
+  `auto >= warn` and positive days. Admin gating lives in the
+  action layer, not the service — the cron endpoint reuses the
+  service with a platform-level secret.
+- `touchBranchActivity(branchId)` — stamps `last_activity_at = now()`
+  on the branch. Called from every branch-local write seam.
+- `listStaleBranches(ws, { idleDays })` — open branches whose
+  `last_activity_at` (or `created_at` fallback) is older than the
+  cutoff. Sorted most-stale first.
+- `warnStaleBranches(ws)` — warns stale-past-threshold branches that
+  haven't been warned in the cooldown window (warn window / 3,
+  min 1d). Caps at `MAX_WARNING_COUNT` (2) warnings per branch.
+  Emits `branch.stale_warned` audit per warned branch.
+- `autoDiscardExpiredBranches(ws)` — discards stale-past-auto
+  branches that have at least one prior warning. Runs the full
+  discard cleanup (matches the user-facing `discardBranchAction`
+  path). Emits `branch.auto_discarded` audit.
+- `dismissStaleWarning(branchId)` — user action "keep this branch
+  active"; zeroes the warning and touches activity.
+
+### Integration — touch points
+
+`touchBranchActivity` is invoked at the common write seams so every
+branch-aware edit path feeds the same activity timestamp:
+
+- `upsertBranchHead` — every content edit (notes, files, skills,
+  agents).
+- `recordPendingOp` — trash / archive / unarchive / move / detach.
+- `upsertFolderOverride`, `upsertPlacementOverride`.
+- `upsertBoxMetadataOverlay`, `upsertPackageMetadataOverlay`.
+
+Each call is wrapped in try/catch so a rare lifecycle-table failure
+never blocks the user's write.
+
+### UI
+
+- `/app/settings/workspace/branch_retention` — admin surface with
+  an editable policy card + a stale-branch panel that exposes
+  per-row "Dismiss" / "Discard now" and a bulk "Run cleanup now"
+  action for admins. Any member can view; only admins can save.
+- `/app/branches` — each open branch whose `last_warned_at` is
+  within the last 7d renders a dimmed "Stale — will auto-discard
+  in X days" indicator under the head count.
+- Branch detail page — same-criteria branches show one additional
+  banner above the Promoted / rolled-back banners, with two
+  actions: "Keep active" (touches activity + clears warning) and
+  "Discard now" (opens the canonical discard confirm dialog).
+
+### Background runner
+
+`POST /api/internal/branch_cleanup` — authenticated via a bearer
+token stored in `BRANCH_CLEANUP_CRON_TOKEN`. Iterates every
+workspace with `enabled = true` and runs `warnStaleBranches` +
+`autoDiscardExpiredBranches` against each. Returns
+`{ ok, workspaces, warned, discarded }`.
+
+Wiring for Vercel Cron (the endpoint itself ships; the cron config
+does not):
+
+```json
+{
+  "crons": [
+    { "path": "/api/internal/branch_cleanup", "schedule": "0 * * * *" }
+  ]
+}
+```
+
+Any external cron (cron-job.org, systemd timer, GitHub Action, etc.)
+that can POST with the bearer token set in the env var will also
+work. The endpoint is idempotent — warn cooldown and
+warning-gated auto-discard keep repeated calls from over-acting.
+
+### Audit events
+
+- `branch.stale_warned` — per warn tick. Metadata includes
+  `warning_count`, `days_idle`, `warn_after_idle_days`,
+  `auto_discard_after_days`.
+- `branch.auto_discarded` — per auto-discard. Metadata includes
+  `days_idle`, `warning_count`, `auto_discard_after_days`, `name`.
+- `branch.retention_policy_updated` — admin saved a new policy.
+- `branch.cleanup_run` — admin pressed "Run cleanup now".
+- `branch.stale_warning_dismissed` — user pressed "Keep active" on
+  a warned branch.
+
 ## Related docs
 
 - [branch_aware_writes_v1.md](branch_aware_writes_v1.md)
