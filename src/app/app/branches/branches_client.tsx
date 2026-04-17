@@ -31,6 +31,8 @@ import {
   setActiveBranchAction,
 } from "./actions";
 import type { DraftBranch } from "@/server/services/branch_service";
+import { useWorkspacePresenceForBranches } from "@/lib/hooks/use_branch_presence";
+import { BranchPresenceAvatars } from "@/components/product/branch_presence_avatars";
 
 type Row = DraftBranch & { head_count: number; authored_by_client_name: string | null };
 
@@ -58,11 +60,20 @@ export function BranchesClient({
   rows,
   activeBranchId,
   canWrite,
+  workspaceId,
+  currentUserId,
+  currentUserEmail,
   retentionPolicy,
 }: {
   rows: Row[];
   activeBranchId: string | null;
   canWrite: boolean;
+  /** Workspace id for the shared realtime presence channel. Optional
+   * so older callers / tests don't break; absence disables presence
+   * subscription. */
+  workspaceId?: string;
+  currentUserId?: string;
+  currentUserEmail?: string | null;
   retentionPolicy?: RetentionPolicyShape;
 }) {
   const [createOpen, setCreateOpen] = useState(false);
@@ -72,6 +83,19 @@ export function BranchesClient({
 
   const openBranches = rows.filter((r) => r.status === "open");
   const closedBranches = rows.filter((r) => r.status !== "open");
+
+  // Workspace-wide presence channel. Empty map when we lack the data
+  // needed to subscribe (e.g. unauthenticated test harness). Hook
+  // cleans up on unmount so navigating off the list immediately drops
+  // us from the roster without waiting for a heartbeat timeout.
+  const presenceDisplayName =
+    currentUserEmail && currentUserEmail.includes("@")
+      ? currentUserEmail.split("@")[0]
+      : currentUserEmail ?? currentUserId ?? "";
+  const presenceByBranch = useWorkspacePresenceForBranches(workspaceId ?? "", {
+    user_id: currentUserId ?? "",
+    display_name: presenceDisplayName,
+  });
 
   return (
     <div className="space-y-5">
@@ -131,6 +155,7 @@ export function BranchesClient({
                   active={activeBranchId === b.id}
                   canWrite={canWrite}
                   retentionPolicy={retentionPolicy}
+                  presentUsers={presenceByBranch[b.id] ?? []}
                   onSwitch={async (id) => {
                     const res = await setActiveBranchAction(id);
                     if (res.ok) {
@@ -155,7 +180,7 @@ export function BranchesClient({
           <ul className="flex flex-col gap-2 list-none">
             {closedBranches.map((b) => (
               <li key={b.id}>
-                <BranchRow row={b} active={false} canWrite={false} />
+                <BranchRow row={b} active={false} canWrite={false} presentUsers={[]} />
               </li>
             ))}
           </ul>
@@ -240,6 +265,7 @@ function BranchRow({
   active,
   canWrite,
   retentionPolicy,
+  presentUsers,
   onSwitch,
   onPromote,
   onDiscard,
@@ -248,6 +274,9 @@ function BranchRow({
   active: boolean;
   canWrite: boolean;
   retentionPolicy?: RetentionPolicyShape;
+  /** Users currently viewing this branch (from the shared workspace
+   * presence channel). Empty array renders nothing. */
+  presentUsers: import("@/lib/hooks/use_branch_presence").PresentUser[];
   onSwitch?: (id: string | null) => void;
   onPromote?: () => void;
   onDiscard?: () => void;
@@ -306,6 +335,9 @@ function BranchRow({
               <Bot className="h-3 w-3" aria-hidden="true" />
               {row.authored_by_client_name}
             </Badge>
+          )}
+          {presentUsers.length > 0 && (
+            <BranchPresenceAvatars users={presentUsers} max={2} />
           )}
         </div>
         {row.description && (

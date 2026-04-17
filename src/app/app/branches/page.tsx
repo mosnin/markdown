@@ -93,6 +93,9 @@ export default async function BranchesPage() {
             rows={rows}
             activeBranchId={ctx.activeBranchId}
             canWrite={canWrite}
+            workspaceId={ctx.workspace.id}
+            currentUserId={ctx.user.id}
+            currentUserEmail={ctx.user.email ?? null}
             retentionPolicy={{
               enabled: retention.enabled,
               warn_after_idle_days: retention.warn_after_idle_days,

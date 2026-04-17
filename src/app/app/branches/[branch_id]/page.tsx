@@ -91,6 +91,7 @@ export default async function BranchDetailPage({
             reviews={reviews}
             comments={comments}
             currentUserId={ctx.user.id}
+            currentUserEmail={ctx.user.email ?? null}
             retentionPolicy={{
               enabled: retention.enabled,
               warn_after_idle_days: retention.warn_after_idle_days,

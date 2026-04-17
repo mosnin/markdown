@@ -73,6 +73,8 @@ import type {
 } from "@/server/services/branch_diff_service";
 import type { BranchConflict } from "@/server/services/branch_conflict_service";
 import type { RebaseStrategy } from "@/server/services/branch_rebase_service";
+import { useBranchPresence } from "@/lib/hooks/use_branch_presence";
+import { BranchPresenceAvatars } from "@/components/product/branch_presence_avatars";
 
 /**
  * Branch detail + diff preview.
@@ -194,6 +196,7 @@ export function BranchDetailClient({
   reviews,
   comments,
   currentUserId,
+  currentUserEmail,
   retentionPolicy,
 }: {
   branch: DraftBranch;
@@ -205,6 +208,10 @@ export function BranchDetailClient({
   reviews: BranchReviewWithReviewer[];
   comments: BranchComment[];
   currentUserId: string;
+  /** Current viewer's email. Only used to compute a human-readable
+   * display name for the realtime presence roster (email-prefix
+   * fallback). Safe to leave null. */
+  currentUserEmail?: string | null;
   /**
    * Workspace retention policy (Feature #8). Optional — when
    * undefined or `enabled=false` the stale banner never renders.
@@ -243,6 +250,21 @@ export function BranchDetailClient({
 
   const closed = branch.status !== "open";
   const conflictCount = diff.rows.filter((r) => r.mainMovedAhead).length;
+
+  // Realtime branch presence roster. Empty array until the channel
+  // subscribes and the first `sync` event arrives. The hook cleanly
+  // untracks + removes the channel on unmount, so navigating away
+  // (back button, link click, closing the tab) immediately drops us
+  // from every other viewer's roster instead of waiting for the
+  // heartbeat timeout.
+  const presenceDisplayName =
+    currentUserEmail && currentUserEmail.includes("@")
+      ? currentUserEmail.split("@")[0]
+      : currentUserEmail ?? currentUserId;
+  const presentUsers = useBranchPresence(branch.id, {
+    user_id: currentUserId,
+    display_name: presenceDisplayName,
+  });
 
   // Promote gating — mirror the server-side gate so the button is
   // disabled *before* the user clicks it. The action itself also
@@ -562,6 +584,9 @@ export function BranchDetailClient({
               <Bot className="h-3 w-3" aria-hidden="true" />
               Authored by {authoredByClientName} via MCP
             </Badge>
+          )}
+          {presentUsers.length > 0 && (
+            <BranchPresenceAvatars users={presentUsers} />
           )}
         </div>
 
