@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import {
   AppWindow,
   ArrowLeft,
+  ArrowRightLeft,
   Bell,
   Building2,
   Code2,
@@ -55,6 +56,12 @@ const developerNav = [
     label: "Connected Apps",
     subLabel: "Apps with access to your workspace",
     icon: AppWindow,
+  },
+  {
+    href: "/app/settings/connections/migration",
+    label: "Legacy migration",
+    subLabel: "Migrate csk_v1_ tokens to OAuth",
+    icon: ArrowRightLeft,
   },
 ];
 
