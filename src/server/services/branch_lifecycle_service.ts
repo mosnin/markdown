@@ -339,6 +339,10 @@ export async function autoDiscardExpiredBranches(
     const warningCount = branch.warning_count ?? 0;
     if (warningCount < 1) continue;
 
+    // Only auto-discard branches with no active review. Branches
+    // under review should be resolved by humans.
+    if (branch.review_status !== "draft") continue;
+
     try {
       await supabase.from("files").delete().eq("branch_id", branch.id);
       await supabase.from("object_links").delete().eq("branch_id", branch.id);

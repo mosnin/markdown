@@ -399,11 +399,25 @@ export async function promoteBranch(
   // Unresolved-comments gate. Callers can override with { force: true }
   // (admin-only at the action layer). The count query is cheap and
   // short-circuits before we open a change set.
+  //
+  // For partial promotes (cherry-pick), only count unresolved comments
+  // on the selected objects — unrelated threads should not block a
+  // cherry-pick of objects that have no open comments.
   if (!options.force) {
     const { countUnresolvedComments } = await import(
       "./branch_comment_service"
     );
-    const unresolvedCount = await countUnresolvedComments(supabase, branchId);
+    const commentFilter = options.selectedObjects
+      ? options.selectedObjects.map((s) => ({
+          objectType: s.objectType,
+          objectId: s.objectId,
+        }))
+      : undefined;
+    const unresolvedCount = await countUnresolvedComments(
+      supabase,
+      branchId,
+      commentFilter
+    );
     if (unresolvedCount > 0) {
       throw new Error(
         `Cannot promote: ${unresolvedCount} unresolved comment${unresolvedCount === 1 ? "" : "s"} on this branch. Resolve all threads or retry with force.`

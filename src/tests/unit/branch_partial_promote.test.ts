@@ -27,6 +27,11 @@ vi.mock("@/server/services/change_set_service", async () => ({
   recordChangeSetItem: vi.fn().mockResolvedValue(undefined),
 }));
 
+const mockCountUnresolvedComments = vi.fn();
+vi.mock("@/server/services/branch_comment_service", () => ({
+  countUnresolvedComments: (...args: unknown[]) => mockCountUnresolvedComments(...args),
+}));
+
 const mockPromoteBoxOverlays = vi.fn();
 const mockPromoteFolderOverrides = vi.fn();
 const mockPromotePlacementOverrides = vi.fn();
@@ -202,6 +207,7 @@ function makeMock(opts: {
 beforeEach(() => {
   vi.clearAllMocks();
   openedChangeSets.length = 0;
+  mockCountUnresolvedComments.mockResolvedValue(0);
   mockPromoteBoxOverlays.mockResolvedValue([]);
   mockPromoteFolderOverrides.mockResolvedValue([]);
   mockPromotePlacementOverrides.mockResolvedValue([]);
@@ -373,6 +379,63 @@ describe("promoteBranch — partial promote selection filter", () => {
     expect(mockPromoteBoxOverlays.mock.calls[0][2]).toBeUndefined();
     expect(mockPromoteFolderOverrides.mock.calls[0][2]).toBeUndefined();
     expect(mockPromotePlacementOverrides.mock.calls[0][2]).toBeUndefined();
+  });
+});
+
+describe("promoteBranch — partial promote scoped comment gate", () => {
+  it("cherry-pick succeeds when unresolved comments exist only on OTHER objects", async () => {
+    // n1 is selected for promote; n2 has unresolved comments but is
+    // NOT in the selection. The scoped comment gate should count zero
+    // unresolved comments for the selection and let the promote through.
+    const heads = [
+      { id: "h1", object_type: "note", object_id: "n1", version_id: "v1" },
+      { id: "h2", object_type: "note", object_id: "n2", version_id: "v2" },
+    ];
+    // countUnresolvedComments receives the objectFilter for partial
+    // promote and should return 0 because n1 has no comments.
+    mockCountUnresolvedComments.mockResolvedValue(0);
+    const { client } = makeMock({ heads, remainingAfter: 1 });
+
+    // Should succeed — the unresolved comments are on n2, not n1.
+    const result = await promoteBranch(client, WS, UID, BID, {
+      selectedObjects: [{ objectType: "note", objectId: "n1" }],
+    });
+    expect(result.promotedObjects.map((p) => p.object_id)).toEqual(["n1"]);
+
+    // Verify countUnresolvedComments was called with the objectFilter
+    // scoped to the selection (n1 only).
+    expect(mockCountUnresolvedComments).toHaveBeenCalledTimes(1);
+    const filterArg = mockCountUnresolvedComments.mock.calls[0][2];
+    expect(filterArg).toEqual([{ objectType: "note", objectId: "n1" }]);
+  });
+
+  it("cherry-pick is blocked when the SELECTED object has unresolved comments", async () => {
+    const heads = [
+      { id: "h1", object_type: "note", object_id: "n1", version_id: "v1" },
+    ];
+    // The scoped gate finds 1 unresolved comment on the selected n1.
+    mockCountUnresolvedComments.mockResolvedValue(1);
+    const { client } = makeMock({ heads, remainingAfter: 0 });
+
+    await expect(
+      promoteBranch(client, WS, UID, BID, {
+        selectedObjects: [{ objectType: "note", objectId: "n1" }],
+      })
+    ).rejects.toThrow(/unresolved comment/i);
+  });
+
+  it("full promote does NOT pass objectFilter to countUnresolvedComments", async () => {
+    const heads = [
+      { id: "h1", object_type: "note", object_id: "n1", version_id: "v1" },
+    ];
+    mockCountUnresolvedComments.mockResolvedValue(0);
+    const { client } = makeMock({ heads, remainingAfter: 0 });
+    await promoteBranch(client, WS, UID, BID);
+
+    expect(mockCountUnresolvedComments).toHaveBeenCalledTimes(1);
+    // Full promote: no objectFilter (second arg after branchId should
+    // be undefined).
+    expect(mockCountUnresolvedComments.mock.calls[0][2]).toBeUndefined();
   });
 });
 

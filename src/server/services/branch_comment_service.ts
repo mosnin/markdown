@@ -221,16 +221,36 @@ export async function deleteComment(
  * Count unresolved comments for a branch. Used by `promoteBranch`'s
  * gate — a branch with open threads cannot land unless the caller
  * sets `force: true`.
+ *
+ * When `objectFilter` is provided, only comments on the listed
+ * `(objectType, objectId)` pairs are counted. This powers the
+ * partial-promote (cherry-pick) path: unresolved comments on objects
+ * NOT in the selection should not block a cherry-pick of unrelated
+ * objects. When `objectFilter` is omitted (full promote), every
+ * unresolved comment on the branch is counted as before.
  */
 export async function countUnresolvedComments(
   supabase: SupabaseClient,
-  branchId: string
+  branchId: string,
+  objectFilter?: ReadonlyArray<{ objectType: string; objectId: string }>
 ): Promise<number> {
   const { data, error } = await supabase
     .from("branch_comments")
-    .select("id")
+    .select("id, object_type, object_id")
     .eq("branch_id", branchId)
     .eq("resolved", false);
   if (error) throw new Error(error.message);
-  return (data ?? []).length;
+  const rows = data ?? [];
+
+  // No filter → count all unresolved comments (full promote).
+  if (!objectFilter) return rows.length;
+
+  // Build a fast lookup set from the filter pairs.
+  const selected = new Set(
+    objectFilter.map((f) => `${f.objectType}:${f.objectId}`)
+  );
+  return rows.filter(
+    (r: { object_type: string; object_id: string }) =>
+      selected.has(`${r.object_type}:${r.object_id}`)
+  ).length;
 }

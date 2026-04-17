@@ -660,10 +660,13 @@ async function dispatchTool(
       // The authored_by_connection_id column stays null for OAuth
       // and is populated by the legacy-csk code path when/if it
       // gains branch support.
+      //
+      /** AI-authored branches auto-enter review — humans must approve before promote. */
       await admin
         .from("draft_branches")
         .update({
           authored_by_client_id: ctx.clientId,
+          review_status: "review_requested",
         })
         .eq("id", branch.id);
 

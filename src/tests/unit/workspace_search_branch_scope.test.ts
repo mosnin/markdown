@@ -133,6 +133,33 @@ const otherBranchNote = {
 // boxMap is provided explicitly to avoid the loadBoxMap round-trip.
 const boxMap = new Map<string, string>();
 
+describe("searchWorkspace branch_scope — branch_only guard", () => {
+  it("branch_only with no branchId returns empty results (not main data)", async () => {
+    const mock = makeMockSupabase({
+      notes: [mainNote, branchNote],
+    });
+    const hits = await searchWorkspace(mock.client, WS, "alpha", {
+      boxMap,
+      branchScope: "branch_only",
+      branchId: undefined,
+    });
+    // Must return zero hits — not silently fall back to main.
+    expect(hits).toEqual([]);
+  });
+
+  it("branch_only with null branchId returns empty results", async () => {
+    const mock = makeMockSupabase({
+      notes: [mainNote, branchNote],
+    });
+    const hits = await searchWorkspace(mock.client, WS, "alpha", {
+      boxMap,
+      branchScope: "branch_only",
+      branchId: null,
+    });
+    expect(hits).toEqual([]);
+  });
+});
+
 describe("searchWorkspace branch_scope", () => {
   it("main_only filters notes to branch_id IS NULL", async () => {
     const mock = makeMockSupabase({

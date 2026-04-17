@@ -112,6 +112,14 @@ export async function searchWorkspace(
   const q = rawQuery.trim();
   if (!q) return [];
 
+  // branch_only without a branchId is a logic error on the caller's
+  // side — there is no branch to scope to. Return empty results
+  // instead of silently falling back to main (branch_id IS NULL),
+  // which would leak main-only data into a branch-only search.
+  if (opts.branchScope === "branch_only" && !opts.branchId) {
+    return [];
+  }
+
   const perType = opts.limitPerType ?? MAX_PER_TYPE;
   const like = `%${q.replace(/[%_]/g, "\\$&")}%`;
   const branchId = opts.branchId ?? null;
@@ -146,7 +154,12 @@ export async function searchWorkspace(
       return q.is("branch_id", null);
     }
     if (branchScope === "branch_only") {
-      if (!branchId) return q.is("branch_id", null);
+      // When branch_only is requested without a branchId, return the
+      // query unchanged — but we short-circuit the entire search to
+      // empty results before this point (see early return below).
+      // This guard is defensive; the early return in searchWorkspace
+      // handles the real case.
+      if (!branchId) return q.eq("branch_id", "__no_branch__");
       return q.eq("branch_id", branchId);
     }
     if (branchScope === "main_plus_branch") {

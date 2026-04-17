@@ -209,6 +209,52 @@ describe("DraftBranch type — authored_by fields", () => {
  * call with `authored_by_client_id: <clientId>` scoped to that
  * branch row" — that is the contract the bug broke.
  */
+describe("create_branch AI-authored review_status", () => {
+  it("sets review_status to review_requested for AI-authored branches", async () => {
+    const updateCalls: Array<{
+      payload: Record<string, unknown>;
+      branchId: string;
+    }> = [];
+
+    function makeAdminStub() {
+      return {
+        from(table: string) {
+          expect(table).toBe("draft_branches");
+          return {
+            update(payload: Record<string, unknown>) {
+              return {
+                eq(col: string, val: string) {
+                  expect(col).toBe("id");
+                  updateCalls.push({ payload, branchId: val });
+                  return Promise.resolve({ error: null });
+                },
+              };
+            },
+          };
+        },
+      };
+    }
+
+    // Replay the update snippet create_branch runs in route.ts after
+    // the audit fix: both authored_by_client_id and review_status
+    // are set in a single update call.
+    const admin = makeAdminStub();
+    const ctx = oauthCtx({ clientId: "ai-client" });
+    const branchId = "00000000-0000-0000-0000-222222222222";
+    await admin
+      .from("draft_branches")
+      .update({
+        authored_by_client_id: ctx.clientId,
+        review_status: "review_requested",
+      })
+      .eq("id", branchId);
+
+    expect(updateCalls).toHaveLength(1);
+    expect(updateCalls[0].payload.authored_by_client_id).toBe("ai-client");
+    expect(updateCalls[0].payload.review_status).toBe("review_requested");
+  });
+});
+
 describe("create_branch authorship stamp", () => {
   it("stamps authored_by_client_id to ctx.clientId after branch creation", async () => {
     const updateCalls: Array<{

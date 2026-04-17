@@ -71,6 +71,7 @@ function baseBranch(overrides: Partial<DraftBranch> = {}): DraftBranch {
     base_change_set_id: null,
     created_by: ACTOR,
     status: "open",
+    review_status: "draft",
     created_at: new Date().toISOString(),
     promoted_at: null,
     discarded_at: null,
@@ -435,6 +436,33 @@ describe("autoDiscardExpiredBranches", () => {
     });
     const n = await autoDiscardExpiredBranches(supabase, WS);
     expect(n).toBe(0);
+  });
+
+  it("skips branches with review_status !== 'draft'", async () => {
+    const now = Date.now();
+    for (const reviewStatus of ["review_requested", "approved", "changes_requested"] as const) {
+      const branch = baseBranch({
+        id: `b-review-${reviewStatus}`,
+        last_activity_at: new Date(now - 100 * DAY_MS).toISOString(),
+        warning_count: 2,
+        last_warned_at: new Date(now - 40 * DAY_MS).toISOString(),
+        review_status: reviewStatus,
+      });
+      const { supabase } = makeSupabase({
+        policies: {
+          workspace_id: WS,
+          enabled: true,
+          warn_after_idle_days: 30,
+          auto_discard_after_days: 60,
+          updated_by: null,
+          updated_at: null,
+          created_at: null,
+        },
+        branches: [branch],
+      });
+      const n = await autoDiscardExpiredBranches(supabase, WS);
+      expect(n).toBe(0);
+    }
   });
 });
 
