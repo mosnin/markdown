@@ -315,6 +315,29 @@ export interface PromoteBranchResult {
  * overlays in `branch_package_metadata` are also merged onto their
  * canonical skills / agents rows in the same change set.
  */
+
+/**
+ * Progress event emitted by {@link promoteBranch} when an
+ * `onProgress` callback is provided. Consumers (e.g. the SSE
+ * streaming endpoint) serialise these as newline-delimited JSON.
+ */
+export type PromoteProgressEvent =
+  | { step: "gates"; status: "running" }
+  | {
+      step: "gates";
+      status: "passed";
+      results: Array<{
+        gate_id: string;
+        gate_name: string;
+        status: string;
+        reason: string | null;
+      }>;
+    }
+  | { step: "gates"; status: "skipped" }
+  | { step: "promoting"; current: number; total: number; object_type: string }
+  | { step: "done"; change_set_id: string }
+  | { step: "error"; message: string };
+
 export interface PromoteBranchOptions {
   /**
    * When true, skip the unresolved-comments gate. The review-status
@@ -370,6 +393,13 @@ export interface PromoteBranchOptions {
    * identical to pre-cherry-pick behavior.
    */
   selectedObjects?: ReadonlyArray<{ objectType: string; objectId: string }>;
+  /**
+   * Optional progress callback. When provided, the promote flow
+   * emits {@link PromoteProgressEvent} objects at key milestones.
+   * The callback is fire-and-forget — errors thrown inside it are
+   * swallowed so they never derail the promote transaction.
+   */
+  onProgress?: (event: PromoteProgressEvent) => void;
 }
 
 export async function promoteBranch(
@@ -379,6 +409,17 @@ export async function promoteBranch(
   branchId: string,
   options: PromoteBranchOptions = {}
 ): Promise<PromoteBranchResult> {
+  // Fire-and-forget progress emitter. Swallows errors so a broken
+  // callback never derails the promote transaction.
+  const emit = (event: PromoteProgressEvent): void => {
+    if (!options.onProgress) return;
+    try {
+      options.onProgress(event);
+    } catch {
+      /* swallowed */
+    }
+  };
+
   const branch = await getDraftBranch(supabase, branchId);
   if (!branch) throw new Error("Branch not found");
   if (branch.workspace_id !== workspaceId) throw new Error("Branch not in this workspace");
@@ -445,7 +486,9 @@ export async function promoteBranch(
   let gatesSkipped = false;
   if (options.skip_gates) {
     gatesSkipped = true;
+    emit({ step: "gates", status: "skipped" });
   } else {
+    emit({ step: "gates", status: "running" });
     const { runGates, GatePromotionError } = await import(
       "./branch_promotion_gate_service"
     );
@@ -471,6 +514,14 @@ export async function promoteBranch(
       status: r.status,
       reason: r.response_body,
     }));
+    emit({
+      step: "gates",
+      status: "passed",
+      results: gateRunsReport.map((r) => ({
+        ...r,
+        status: String(r.status),
+      })),
+    });
     if (!gateResult.allPassed) {
       // Roll the CAS back to 'open' so the user can fix the gate and
       // retry. We do NOT open a change set, so there is nothing to
@@ -569,7 +620,16 @@ export async function promoteBranch(
   const promoted: PromoteBranchResult["promotedObjects"] = [];
 
   try {
+    // ── Promote branch heads (notes + file/skill/agent) ─────────────
+    let headIdx = 0;
     for (const head of heads) {
+      headIdx++;
+      emit({
+        step: "promoting",
+        current: headIdx,
+        total: heads.length,
+        object_type: head.object_type,
+      });
       if (head.object_type === "note") {
         // Read the prior canonical head so we can record a correct
         // before_snapshot for the change set item.
@@ -1102,6 +1162,8 @@ export async function promoteBranch(
       .eq("status", "promoting");
     if (promotedErr) throw new Error(promotedErr.message);
 
+    emit({ step: "done", change_set_id: cs.id });
+
     return {
       branchId,
       promotedObjects: promoted,
@@ -1110,6 +1172,10 @@ export async function promoteBranch(
       gatesSkipped,
     };
   } catch (err) {
+    emit({
+      step: "error",
+      message: err instanceof Error ? err.message : "promote failed",
+    });
     await abortChangeSet(
       supabase,
       cs.id,
