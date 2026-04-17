@@ -75,6 +75,8 @@ import type { BranchConflict } from "@/server/services/branch_conflict_service";
 import type { RebaseStrategy } from "@/server/services/branch_rebase_service";
 import { useBranchPresence } from "@/lib/hooks/use_branch_presence";
 import { BranchPresenceAvatars } from "@/components/product/branch_presence_avatars";
+import { ProseDiff, DiffViewToggle } from "@/components/product/prose_diff";
+import type { DiffViewMode } from "@/components/product/prose_diff";
 
 /**
  * Branch detail + diff preview.
@@ -1323,6 +1325,7 @@ function HeadCard({ row, selectable = true }: { row: BranchDiffRow; selectable?:
   const meta = typeMeta[row.objectType];
   const Icon = meta.Icon;
   const [open, setOpen] = useState(false);
+  const [diffMode, setDiffMode] = useState<DiffViewMode>("unified");
   const delta = row.branchBytes - row.mainBytes;
 
   return (
@@ -1393,19 +1396,23 @@ function HeadCard({ row, selectable = true }: { row: BranchDiffRow; selectable?:
 
       {open && (
         <div className="border-t border-border">
-          <div className="grid grid-cols-1 gap-0 md:grid-cols-2 md:divide-x md:divide-border">
-            <PreviewColumn
-              heading="Main"
-              subheading={row.mainVersionId ? `version id ${row.mainVersionId.slice(0, 8)}` : "no version"}
-              content={row.mainContent}
-              bytes={row.mainBytes}
-            />
-            <PreviewColumn
-              heading="Branch"
-              subheading={`version id ${row.branchVersionId.slice(0, 8)}`}
-              content={row.branchContent}
-              bytes={row.branchBytes}
-              highlight
+          {/* Diff header with version info + view mode toggle */}
+          <div className="flex items-center justify-between px-4 py-2 border-b border-border">
+            <p className="text-[10px] text-muted-foreground">
+              {row.mainVersionId ? `main ${row.mainVersionId.slice(0, 8)}` : "new on branch"}
+              {" → "}
+              {`branch ${row.branchVersionId.slice(0, 8)}`}
+              {" · "}{row.mainBytes}b → {row.branchBytes}b
+            </p>
+            <DiffViewToggle mode={diffMode} onChange={setDiffMode} />
+          </div>
+
+          {/* Prose diff */}
+          <div className="px-4 py-3">
+            <ProseDiff
+              before={row.mainContent}
+              after={row.branchContent}
+              mode={diffMode}
             />
           </div>
           <CommentThread objectType={row.objectType} objectId={row.objectId} />
