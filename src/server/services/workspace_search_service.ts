@@ -30,6 +30,21 @@ export type WorkspaceSearchObjectType =
   | "folder"
   | "box";
 
+/**
+ * Explicit branch-visibility selector for search.
+ *
+ *   - `main_only`         → workspace rows with branch_id IS NULL only.
+ *   - `main_plus_branch`  → main rows overlaid with the active branch's
+ *                           draft rows (same shape as the default
+ *                           reader overlay when a branch is active).
+ *   - `branch_only`       → only rows authored on the active branch
+ *                           (branch_id = <activeBranchId>).
+ *
+ * When unset, `searchWorkspace` falls back to the legacy behaviour
+ * (branchId null → main only; branchId set → main+branch overlay).
+ */
+export type BranchScope = "main_only" | "main_plus_branch" | "branch_only";
+
 export interface WorkspaceSearchHit {
   objectType: WorkspaceSearchObjectType;
   id: string;
@@ -91,6 +106,7 @@ export async function searchWorkspace(
     boxMap?: Map<string, string>;
     limitPerType?: number;
     branchId?: string | null;
+    branchScope?: BranchScope;
   } = {}
 ): Promise<WorkspaceSearchHit[]> {
   const q = rawQuery.trim();
@@ -99,6 +115,7 @@ export async function searchWorkspace(
   const perType = opts.limitPerType ?? MAX_PER_TYPE;
   const like = `%${q.replace(/[%_]/g, "\\$&")}%`;
   const branchId = opts.branchId ?? null;
+  const branchScope = opts.branchScope;
 
   const boxMap = opts.boxMap
     ?? (await loadBoxMap(supabase, workspaceId));
@@ -106,13 +123,41 @@ export async function searchWorkspace(
   // Branch filter helper: attach the branch_id predicate uniformly to
   // any ilike/or'd query builder. Boxes are workspace-scoped and not
   // branch-partitioned — they never carry branch_id.
-  const applyBranch = <Q extends { or: (e: string) => Q; is: (c: string, v: unknown) => Q }>(
-    query: Q
-  ): Q => {
-    if (branchId) {
-      return query.or(`branch_id.is.null,branch_id.eq.${branchId}`);
+  //
+  // When `branchScope` is explicitly provided, it overrides the legacy
+  // branchId-derived behaviour:
+  //   - main_only         → branch_id IS NULL
+  //   - main_plus_branch  → main + branchId (requires branchId)
+  //   - branch_only       → branch_id = branchId (requires branchId)
+  // The PostgREST chainable builder is heavily overloaded; a narrow
+  // `Q extends {...}` inference explodes the type checker (TS2589), so
+  // accept it as a generic and return the same Q.
+  const applyBranch = <Q>(query: Q): Q => {
+    // Tell TS that `query` responds to the three filter methods we
+    // need. We don't depend on the real postgrest filter types here —
+    // just the runtime contract.
+    type Filterable = {
+      or: (e: string) => Q;
+      is: (c: string, v: unknown) => Q;
+      eq: (c: string, v: unknown) => Q;
+    };
+    const q = query as unknown as Filterable;
+    if (branchScope === "main_only") {
+      return q.is("branch_id", null);
     }
-    return query.is("branch_id", null);
+    if (branchScope === "branch_only") {
+      if (!branchId) return q.is("branch_id", null);
+      return q.eq("branch_id", branchId);
+    }
+    if (branchScope === "main_plus_branch") {
+      if (!branchId) return q.is("branch_id", null);
+      return q.or(`branch_id.is.null,branch_id.eq.${branchId}`);
+    }
+    // Legacy default: branchId null → main only; branchId set → overlay.
+    if (branchId) {
+      return q.or(`branch_id.is.null,branch_id.eq.${branchId}`);
+    }
+    return q.is("branch_id", null);
   };
 
   const [notes, files, skills, agents, folders, boxes] = await Promise.all([
@@ -185,8 +230,10 @@ export async function searchWorkspace(
   // Pending-op overlay: when a branch is active, drop rows the branch
   // has soft-trashed. Matches the reader semantic in
   // note_repository.listNotesByBox and file_repository.listFilesByBox.
+  // Skip the overlay when the caller explicitly asked for `main_only`
+  // — that scope shouldn't be influenced by any branch's trash ops.
   let hidden: Set<string> | null = null;
-  if (branchId) {
+  if (branchId && branchScope !== "main_only") {
     const { getHiddenByPendingOps } = await import("./pending_op_service");
     hidden = await getHiddenByPendingOps(supabase, branchId);
   }

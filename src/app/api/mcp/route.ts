@@ -151,7 +151,9 @@ const TOOLS: ToolDef[] = [
   {
     name: "search_workspace",
     description:
-      "Cross-type search (notes, files, skills, agents, folders, boxes) in the authorized workspace. Returns ranked hits.",
+      "Cross-type search (notes, files, skills, agents, folders, boxes) in the authorized workspace. Returns ranked hits. " +
+      "Optional branch_scope controls branch visibility: main_only restricts to workspace/main rows, main_plus_branch overlays the active branch's draft rows, branch_only returns only the active branch's drafts. " +
+      "When branch_scope is main_plus_branch or branch_only, branch_id selects which branch to overlay.",
     scope: "context:search",
     writes: false,
     inputSchema: {
@@ -159,6 +161,11 @@ const TOOLS: ToolDef[] = [
       properties: {
         query: { type: "string" },
         limit: { type: "number" },
+        branch_scope: {
+          type: "string",
+          enum: ["main_only", "main_plus_branch", "branch_only"],
+        },
+        branch_id: { type: "string" },
       },
       required: ["query"],
       additionalProperties: false,
@@ -406,7 +413,16 @@ async function dispatchTool(
     case "search_workspace": {
       const query = String(args.query ?? "");
       if (!query) throw toolError(-32602, "query is required");
-      const hits = await searchWorkspace(admin, ctx.workspaceId, query);
+      const rawScope = args.branch_scope;
+      const branchScope =
+        rawScope === "main_only" || rawScope === "main_plus_branch" || rawScope === "branch_only"
+          ? rawScope
+          : undefined;
+      const branchId = args.branch_id ? String(args.branch_id) : null;
+      const hits = await searchWorkspace(admin, ctx.workspaceId, query, {
+        branchScope,
+        branchId,
+      });
       // Filter hits whose box_id is outside the token's granted box
       // set. Hits that have no box_id (box-level hits themselves)
       // match on the hit's id.
