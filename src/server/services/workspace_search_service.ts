@@ -122,6 +122,9 @@ export async function searchWorkspace(
 
   const perType = opts.limitPerType ?? MAX_PER_TYPE;
   const like = `%${q.replace(/[%_]/g, "\\$&")}%`;
+  // PostgREST plfts (plainto_tsquery) value — escape parens / colons so
+  // the tsquery parser doesn't choke on user input.
+  const ftsQ = q.replace(/[():&|!<>]/g, " ").trim();
   const branchId = opts.branchId ?? null;
   const branchScope = opts.branchScope;
 
@@ -174,7 +177,9 @@ export async function searchWorkspace(
   };
 
   const [notes, files, skills, agents, folders, boxes] = await Promise.all([
-    // Notes: name + body
+    // Notes: name + body (notes still use ILIKE — notes FTS is handled
+    // by the dedicated search_notes RPC; this cross-type surface keeps
+    // the simpler approach for now).
     applyBranch(
       supabase
         .from("notes")
@@ -186,6 +191,7 @@ export async function searchWorkspace(
       .limit(perType)
       .then((r) => r.data ?? []),
 
+    // Files: FTS via search_vector (name A, description B, source_content C)
     applyBranch(
       supabase
         .from("files")
@@ -193,10 +199,11 @@ export async function searchWorkspace(
         .eq("workspace_id", workspaceId)
         .neq("status", "trashed")
     )
-      .or(`name.ilike.${like},source_content.ilike.${like}`)
+      .or(`name.ilike.${like},search_vector.plfts.${ftsQ}`)
       .limit(perType)
       .then((r) => r.data ?? []),
 
+    // Skills: FTS via search_vector (name+tags A, description B, source_content C)
     applyBranch(
       supabase
         .from("skills")
@@ -204,10 +211,11 @@ export async function searchWorkspace(
         .eq("workspace_id", workspaceId)
         .neq("status", "trashed")
     )
-      .or(`name.ilike.${like},source_content.ilike.${like}`)
+      .or(`name.ilike.${like},search_vector.plfts.${ftsQ}`)
       .limit(perType)
       .then((r) => r.data ?? []),
 
+    // Agents: FTS via search_vector (name+tags A, description+system_prompt B, source_content C)
     applyBranch(
       supabase
         .from("agents")
@@ -215,7 +223,7 @@ export async function searchWorkspace(
         .eq("workspace_id", workspaceId)
         .neq("status", "trashed")
     )
-      .or(`name.ilike.${like},source_content.ilike.${like},system_prompt.ilike.${like}`)
+      .or(`name.ilike.${like},search_vector.plfts.${ftsQ}`)
       .limit(perType)
       .then((r) => r.data ?? []),
 
