@@ -605,12 +605,18 @@ async function dispatchTool(
         created_by: ctx.userId,
       });
 
-      // Stamp MCP authorship metadata onto the branch row.
+      // Stamp MCP authorship onto the branch row so the UI can
+      // display "Authored by <client> via MCP". The
+      // `authored_by_connection_id` column references `connections(id)`
+      // which is the legacy csk_v1_ connection table; OAuth callers
+      // don't have a row there, so we only stamp the client id here.
+      // The authored_by_connection_id column stays null for OAuth
+      // and is populated by the legacy-csk code path when/if it
+      // gains branch support.
       await admin
         .from("draft_branches")
         .update({
           authored_by_client_id: ctx.clientId,
-          authored_by_connection_id: ctx.scope.length > 0 ? null : null,
         })
         .eq("id", branch.id);
 
@@ -810,12 +816,17 @@ async function dispatchTool(
     case "list_branches": {
       const { listDraftBranches } = await import("@/server/services/branch_service");
       const status = typeof args.status === "string" ? args.status : undefined;
-      const validStatuses = ["open", "promoted", "discarded"];
+      const validStatuses = ["open", "promoted", "discarded", "rolled_back"];
       if (status && !validStatuses.includes(status)) {
         throw toolError(-32602, `status must be one of: ${validStatuses.join(", ")}`);
       }
       const branches = await listDraftBranches(admin, ctx.workspaceId, {
-        status: status as "open" | "promoted" | "discarded" | undefined,
+        status: status as
+          | "open"
+          | "promoted"
+          | "discarded"
+          | "rolled_back"
+          | undefined,
       });
       return {
         branches: branches.map((b) => ({

@@ -771,6 +771,39 @@ The branch detail page (`branch_detail_client.tsx`) now shows:
 
 Baseline 495 → 504 tests after the batch.
 
+### Branch status state machine
+
+With v2.0 (conflict resolution + rebase) plus the rollback and
+"rebase to re-open" paths, the full set of status transitions is:
+
+```
+open ──promote──▶ promoting ──┬──▶ promoted ──rollback──▶ rolled_back ──rebase──▶ open
+                              │                                                  │
+                              └──(failure)──▶ open                               │
+                                                                                 │
+open ──discard──▶ discarded (terminal)                                           │
+                                                                                 │
+rolled_back ──rebase──▶ open  ◀──────────────────────────────────────────────────┘
+promoted ──rollback──▶ rolled_back
+```
+
+Notes on the transitions:
+
+- `open → promoting` uses a CAS (update ... where status = 'open')
+  so two concurrent promote calls can't both win.
+- `promoting → open` is the failure-recovery path; the promote
+  service aborts the change set and flips the status back.
+- `promoted → rolled_back` is the user-facing "undo promote" path
+  handled by the restore engine. It records a
+  `rollback_change_set_id` so the revert is itself reversible.
+- `rolled_back → open` is the "rebase to re-open this branch" path
+  (v2.0 audit fix): after rebasing a rolled-back branch on main's
+  latest state, its status flips back to `open` and it becomes
+  re-promotable. A `branch.reopened_via_rebase` audit event is
+  recorded alongside the standard `branch.rebased` event.
+- `discarded` is terminal. The branch row stays as audit trail;
+  there is no path out.
+
 ## Related docs
 
 - [branch_aware_writes_v1.md](branch_aware_writes_v1.md)

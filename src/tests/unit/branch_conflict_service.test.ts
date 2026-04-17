@@ -486,4 +486,241 @@ describe("rebaseBranch", () => {
       })
     ).rejects.toThrow("promoted");
   });
+
+  it("allows rebasing a rolled_back branch and flips it back to open", async () => {
+    // Audit-finding regression: a rolled_back branch must be
+    // rebasable so the user can re-anchor it on latest main and
+    // re-promote. After rebase the status must transition back to
+    // 'open' so promote becomes available again.
+    vi.mocked(branchService.getDraftBranch).mockResolvedValue({
+      id: BRANCH_ID,
+      workspace_id: WORKSPACE_ID,
+      name: "test",
+      status: "rolled_back",
+      description: null,
+      base_change_set_id: null,
+      created_by: ACTOR_ID,
+      created_at: new Date().toISOString(),
+      promoted_at: new Date().toISOString(),
+      discarded_at: null,
+      rolled_back_at: new Date().toISOString(),
+      rollback_change_set_id: "cs-rollback",
+      authored_by_connection_id: null,
+      authored_by_client_id: null,
+    } as never);
+    vi.mocked(branchService.listBranchHeads).mockResolvedValue([
+      {
+        id: "head-1",
+        branch_id: BRANCH_ID,
+        object_type: "note",
+        object_id: "note-1",
+        version_id: "ver-branch",
+        updated_at: new Date().toISOString(),
+      } as never,
+    ]);
+    const auditCalls: Array<{ event_type: string }> = [];
+    vi.mocked(auditRepo.createAuditEvent).mockImplementation(
+      async (_sb, input) => {
+        auditCalls.push({ event_type: input.event_type });
+        return {} as never;
+      }
+    );
+
+    const supabase = makeMockSupabase({
+      noteMain: {
+        id: "note-1",
+        title: "Doc",
+        markdown_content: "main advanced",
+        current_version_id: "ver-main-newer",
+      },
+      noteBranchVer: {
+        id: "ver-branch",
+        parent_version_id: "ver-main-original",
+        markdown_content: "branch body",
+      },
+      noteBaseVer: {
+        markdown_content: "original body",
+      },
+      branchStatus: "rolled_back",
+    });
+
+    const result = await rebaseBranch(supabase, BRANCH_ID, WORKSPACE_ID, ACTOR_ID, {
+      strategy: "rebase_branch_on_main",
+    });
+    expect(result.rebased).toBe(1);
+    expect(result.conflicts).toBe(1);
+
+    // Status must have flipped back to 'open' via an UPDATE scoped
+    // to status='rolled_back' (CAS against a concurrent reopen).
+    const updated = (supabase as unknown as {
+      _updatedRows: Array<{ table: string; data: Record<string, unknown>; filters: Record<string, unknown> }>;
+    })._updatedRows;
+    const reopenUpdate = updated.find(
+      (u) =>
+        u.table === "draft_branches" &&
+        u.data.status === "open" &&
+        u.filters.status === "rolled_back"
+    );
+    expect(reopenUpdate).toBeDefined();
+
+    // branch.reopened_via_rebase audit event must be recorded
+    // alongside the standard branch.rebased event.
+    expect(auditCalls.map((c) => c.event_type)).toEqual(
+      expect.arrayContaining(["branch.rebased", "branch.reopened_via_rebase"])
+    );
+  });
+
+  it("reopens a rolled_back branch even when there are no conflicts", async () => {
+    // Zero-conflict edge case: a rolled_back branch that main
+    // hasn't diverged from still needs a path back to 'open', so
+    // the rebase call flips the status even when there's nothing to
+    // re-anchor.
+    vi.mocked(branchService.getDraftBranch).mockResolvedValue({
+      id: BRANCH_ID,
+      workspace_id: WORKSPACE_ID,
+      name: "test",
+      status: "rolled_back",
+      description: null,
+      base_change_set_id: null,
+      created_by: ACTOR_ID,
+      created_at: new Date().toISOString(),
+      promoted_at: new Date().toISOString(),
+      discarded_at: null,
+      rolled_back_at: new Date().toISOString(),
+      rollback_change_set_id: "cs-rollback",
+    } as never);
+    vi.mocked(branchService.listBranchHeads).mockResolvedValue([
+      {
+        id: "head-1",
+        branch_id: BRANCH_ID,
+        object_type: "note",
+        object_id: "note-1",
+        version_id: "ver-branch",
+        updated_at: new Date().toISOString(),
+      } as never,
+    ]);
+    const auditCalls: Array<{ event_type: string }> = [];
+    vi.mocked(auditRepo.createAuditEvent).mockImplementation(
+      async (_sb, input) => {
+        auditCalls.push({ event_type: input.event_type });
+        return {} as never;
+      }
+    );
+
+    const supabase = makeMockSupabase({
+      noteMain: {
+        id: "note-1",
+        title: "Doc",
+        markdown_content: "body",
+        current_version_id: "ver-main", // matches branch parent → no conflict
+      },
+      noteBranchVer: {
+        id: "ver-branch",
+        parent_version_id: "ver-main",
+        markdown_content: "branch body",
+      },
+      branchStatus: "rolled_back",
+    });
+
+    const result = await rebaseBranch(supabase, BRANCH_ID, WORKSPACE_ID, ACTOR_ID, {
+      strategy: "rebase_branch_on_main",
+    });
+    expect(result.rebased).toBe(0);
+    expect(result.conflicts).toBe(0);
+
+    const updated = (supabase as unknown as {
+      _updatedRows: Array<{ table: string; data: Record<string, unknown>; filters: Record<string, unknown> }>;
+    })._updatedRows;
+    expect(
+      updated.some(
+        (u) =>
+          u.table === "draft_branches" &&
+          u.data.status === "open" &&
+          u.filters.status === "rolled_back"
+      )
+    ).toBe(true);
+    expect(auditCalls.some((c) => c.event_type === "branch.reopened_via_rebase")).toBe(
+      true
+    );
+  });
+
+  it("does not reopen an already-open branch after rebase", async () => {
+    // Guard: the reopen path must only fire when the starting
+    // status was rolled_back. Rebasing an already-open branch must
+    // not record branch.reopened_via_rebase.
+    vi.mocked(branchService.getDraftBranch).mockResolvedValue({
+      id: BRANCH_ID,
+      workspace_id: WORKSPACE_ID,
+      name: "test",
+      status: "open",
+      description: null,
+      base_change_set_id: null,
+      created_by: ACTOR_ID,
+      created_at: new Date().toISOString(),
+      promoted_at: null,
+      discarded_at: null,
+    } as never);
+    vi.mocked(branchService.listBranchHeads).mockResolvedValue([
+      {
+        id: "head-1",
+        branch_id: BRANCH_ID,
+        object_type: "note",
+        object_id: "note-1",
+        version_id: "ver-branch",
+        updated_at: new Date().toISOString(),
+      } as never,
+    ]);
+    const auditCalls: Array<{ event_type: string }> = [];
+    vi.mocked(auditRepo.createAuditEvent).mockImplementation(
+      async (_sb, input) => {
+        auditCalls.push({ event_type: input.event_type });
+        return {} as never;
+      }
+    );
+
+    const supabase = makeMockSupabase({
+      noteMain: {
+        id: "note-1",
+        title: "Doc",
+        markdown_content: "main advanced",
+        current_version_id: "ver-main-newer",
+      },
+      noteBranchVer: {
+        id: "ver-branch",
+        parent_version_id: "ver-main-original",
+        markdown_content: "branch body",
+      },
+    });
+
+    await rebaseBranch(supabase, BRANCH_ID, WORKSPACE_ID, ACTOR_ID, {
+      strategy: "rebase_branch_on_main",
+    });
+
+    expect(
+      auditCalls.some((c) => c.event_type === "branch.reopened_via_rebase")
+    ).toBe(false);
+  });
+
+  it("throws when branch is discarded (terminal, not rebasable)", async () => {
+    vi.mocked(branchService.getDraftBranch).mockResolvedValue({
+      id: BRANCH_ID,
+      workspace_id: WORKSPACE_ID,
+      name: "test",
+      status: "discarded",
+      description: null,
+      base_change_set_id: null,
+      created_by: ACTOR_ID,
+      created_at: new Date().toISOString(),
+      promoted_at: null,
+      discarded_at: new Date().toISOString(),
+    } as never);
+
+    const supabase = makeMockSupabase({ branchStatus: "discarded" });
+
+    await expect(
+      rebaseBranch(supabase, BRANCH_ID, WORKSPACE_ID, ACTOR_ID, {
+        strategy: "rebase_branch_on_main",
+      })
+    ).rejects.toThrow("discarded");
+  });
 });

@@ -296,7 +296,14 @@ export function BranchDetailClient({
         </div>
       )}
 
-      {/* Promoted / rolled-back status banners */}
+      {/* Promoted / rolled-back status banners.
+          The state machine guarantees these statuses are mutually
+          exclusive (a branch is in exactly one of open / promoting /
+          promoted / rolled_back / discarded). We check each
+          independently rather than an if/else chain: if the database
+          were ever corrupted into an invalid state, we'd rather show
+          both banners as informational output than silently hide one.
+          Under normal operation at most one of these renders. */}
       {branch.status === "promoted" && (
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-card px-4 py-3">
           <div className="flex items-center gap-2 text-sm">
@@ -324,14 +331,34 @@ export function BranchDetailClient({
       )}
 
       {branch.status === "rolled_back" && (
-        <div className="flex items-center gap-2 rounded-lg border border-border bg-card px-4 py-3 text-sm">
-          <RefreshCw className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-          <span className="text-foreground">
-            This branch&apos;s promotion was reverted
-            {branch.rolled_back_at && (
-              <> on {new Date(branch.rolled_back_at).toLocaleDateString()}</>
-            )}
-          </span>
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-card px-4 py-3">
+          <div className="flex items-start gap-2 text-sm">
+            <RefreshCw className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+            <div className="space-y-0.5">
+              <p className="text-foreground">
+                This branch&apos;s promotion was reverted
+                {branch.rolled_back_at && (
+                  <> on {new Date(branch.rolled_back_at).toLocaleDateString()}</>
+                )}
+              </p>
+              {canWrite && (
+                <p className="text-[11px] text-muted-foreground">
+                  Rebase re-anchors your branch on the latest main state
+                  so you can edit and re-promote.
+                </p>
+              )}
+            </div>
+          </div>
+          {canWrite && (
+            <Button
+              size="sm"
+              onClick={() => handleRebase("rebase_branch_on_main")}
+              disabled={pending}
+            >
+              <GitMerge className="h-3.5 w-3.5 mr-1" aria-hidden="true" />
+              {pending ? "Rebasing…" : "Rebase to re-open this branch"}
+            </Button>
+          )}
         </div>
       )}
 

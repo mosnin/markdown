@@ -42,10 +42,26 @@ export async function rebaseBranch(
   const branch = await getDraftBranch(supabase, branchId);
   if (!branch) throw new Error("Branch not found");
   if (branch.workspace_id !== workspaceId) throw new Error("Branch not in this workspace");
-  if (branch.status !== "open") throw new Error(`Branch is ${branch.status}, cannot rebase`);
+  // Both 'open' and 'rolled_back' branches may rebase: 'open' is the
+  // usual pre-promote conflict resolution path; 'rolled_back' re-
+  // anchors a previously-reverted branch so the user can edit and
+  // re-promote it. Terminal states ('promoted', 'discarded',
+  // 'promoting') are not rebasable.
+  const startingStatus = branch.status;
+  if (startingStatus !== "open" && startingStatus !== "rolled_back") {
+    throw new Error(`Branch is ${startingStatus}, cannot rebase`);
+  }
 
   const conflicts = await detectConflicts(supabase, branchId);
   if (conflicts.length === 0) {
+    // No conflicts means no work to do. A rolled_back branch with no
+    // conflicts still needs to transition back to 'open' so it
+    // becomes re-promotable — otherwise the user is stuck with no
+    // path forward after a revert. This is the "re-anchor a
+    // rolled-back branch that main hasn't diverged from" case.
+    if (startingStatus === "rolled_back") {
+      await reopenRolledBackBranch(supabase, branchId, workspaceId, actorId, 0, options.strategy);
+    }
     return { rebased: 0, conflicts: 0 };
   }
 
@@ -84,7 +100,60 @@ export async function rebaseBranch(
     },
   });
 
+  // If the branch started in 'rolled_back', flip it back to 'open'
+  // so promote becomes available again. This is the undo-a-revert
+  // path — the user reverts, then rebases to re-anchor on the
+  // latest main, then promotes again with fresh content.
+  if (startingStatus === "rolled_back") {
+    await reopenRolledBackBranch(
+      supabase,
+      branchId,
+      workspaceId,
+      actorId,
+      rebased,
+      options.strategy
+    );
+  }
+
   return { rebased, conflicts: conflicts.length };
+}
+
+/**
+ * Flip a rolled_back branch back to 'open' after a successful
+ * rebase, and record a `branch.reopened_via_rebase` audit event so
+ * the revert→rebase→re-promote trail is legible in the audit log.
+ *
+ * The CAS on status (`.eq("status", "rolled_back")`) protects
+ * against a concurrent caller having already reopened the branch.
+ */
+async function reopenRolledBackBranch(
+  supabase: SupabaseClient,
+  branchId: string,
+  workspaceId: string,
+  actorId: string,
+  rebasedCount: number,
+  strategy: RebaseStrategy
+): Promise<void> {
+  await supabase
+    .from("draft_branches")
+    .update({ status: "open" })
+    .eq("id", branchId)
+    .eq("status", "rolled_back");
+
+  await createAuditEvent(supabase, {
+    workspace_id: workspaceId,
+    actor_type: "user",
+    actor_id: actorId,
+    object_type: "draft_branch",
+    object_id: branchId,
+    event_type: "branch.reopened_via_rebase",
+    metadata: {
+      strategy,
+      rebased_count: rebasedCount,
+      from_status: "rolled_back",
+      to_status: "open",
+    },
+  });
 }
 
 /**

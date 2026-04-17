@@ -383,6 +383,26 @@ export async function discardBranchAction(
 
 // ─── Conflict detection ─────────────────────────────────────────────────────
 
+/**
+ * Read-only conflict detection. Exposes the set of objects where
+ * main has moved ahead of the branch's fork point.
+ *
+ * Auth model — intentional:
+ *   - Gated by `requireAuthenticatedUser()` rather than
+ *     `requireWriteRole()`. Viewers *can* read this data.
+ *   - Rationale: conflict rows are read-only state; viewing them
+ *     cannot mutate anything. Viewers seeing conflicts is acceptable
+ *     and mirrors how they can already see the diff itself. Gating
+ *     this behind write would gratuitously hide information the
+ *     viewer's role entitles them to.
+ *   - The workspace check below (`branch.workspace_id !== ctx.workspace.id`)
+ *     is load-bearing: it prevents a cross-workspace information leak
+ *     where an authenticated user could probe branches in workspaces
+ *     they don't belong to. Do not remove.
+ *
+ * Mutations (rebase / promote / discard) remain gated by the write
+ * role in their respective actions.
+ */
 export async function detectBranchConflictsAction(
   branchId: string
 ): Promise<ActionResult<BranchConflict[]>> {
@@ -394,6 +414,8 @@ export async function detectBranchConflictsAction(
       .select("workspace_id")
       .eq("id", branchId)
       .maybeSingle();
+    // Workspace-scoped check prevents information leak across
+    // workspaces even though the caller is authenticated.
     if (!branch || branch.workspace_id !== ctx.workspace.id) {
       return { ok: false, error: "Branch not found" };
     }
