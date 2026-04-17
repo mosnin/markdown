@@ -25,10 +25,31 @@ export default async function BranchesPage() {
 
   // Denormalize head counts so the page renders without a per-row
   // round trip.
+  // Resolve MCP client names for authored branches in one lookup.
+  const authoredClientIds = branches
+    .map((b) => b.authored_by_client_id)
+    .filter((id): id is string => id !== null);
+  const clientNameMap = new Map<string, string>();
+  if (authoredClientIds.length > 0) {
+    const { data: clients } = await supabase
+      .from("oauth_clients")
+      .select("client_id, name")
+      .in("client_id", authoredClientIds);
+    for (const c of clients ?? []) {
+      clientNameMap.set(c.client_id, c.name);
+    }
+  }
+
   const rows = [];
   for (const b of branches) {
     const heads = await listBranchHeads(supabase, b.id);
-    rows.push({ ...b, head_count: heads.length });
+    rows.push({
+      ...b,
+      head_count: heads.length,
+      authored_by_client_name: b.authored_by_client_id
+        ? clientNameMap.get(b.authored_by_client_id) ?? b.authored_by_client_id
+        : null,
+    });
   }
 
   const canWrite = ctx.workspace.role !== "viewer";

@@ -320,9 +320,14 @@ export default async function AuthorizePage({ searchParams }: PageProps) {
                 What {client!.name} will be able to do
               </h2>
               <div className="mt-3 space-y-4">
-                {(["read", "propose", "generate"] as const).map((g) => {
+                {(["read", "propose", "generate", "branch"] as const).map((g) => {
                   const bucket = groups[g];
                   if (bucket.length === 0) return null;
+                  const badgeLabel =
+                    g === "read" ? "Read" :
+                    g === "propose" ? "Propose" :
+                    g === "branch" ? "Branch" :
+                    "Write";
                   return (
                     <div key={g}>
                       <p className="text-[11px] font-medium text-muted-foreground">
@@ -340,7 +345,7 @@ export default async function AuthorizePage({ searchParams }: PageProps) {
                                 variant={d.badgeVariant}
                                 className="mt-0.5 shrink-0 text-[10px]"
                               >
-                                {g === "read" ? "Read" : g === "propose" ? "Propose" : "Write"}
+                                {badgeLabel}
                               </Badge>
                               <div className="min-w-0">
                                 <p className="text-sm font-medium">{d.title}</p>

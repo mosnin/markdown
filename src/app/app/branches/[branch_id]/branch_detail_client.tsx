@@ -82,11 +82,13 @@ export function BranchDetailClient({
   diff,
   canWrite,
   isActive,
+  authoredByClientName,
 }: {
   branch: DraftBranch;
   diff: BranchDiff;
   canWrite: boolean;
   isActive: boolean;
+  authoredByClientName?: string | null;
 }) {
   const [confirmAction, setConfirmAction] = useState<"promote" | "discard" | null>(null);
   const [toast, setToast] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
@@ -173,6 +175,12 @@ export function BranchDetailClient({
             <Badge variant="secondary" className="gap-1 text-[10px]">
               <Check className="h-3 w-3" aria-hidden="true" />
               active
+            </Badge>
+          )}
+          {authoredByClientName && (
+            <Badge variant="outline" className="gap-1 text-[10px]">
+              <Bot className="h-3 w-3" aria-hidden="true" />
+              Authored by {authoredByClientName} via MCP
             </Badge>
           )}
         </div>

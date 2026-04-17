@@ -171,6 +171,7 @@ describe("oauth_scope_service — registry invariants", () => {
         "context:bundles",
         "context:propose",
         "context:generate",
+        "context:branch",
       ])
     );
   });

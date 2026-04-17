@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import Link from "next/link";
 import {
+  Bot,
   Check,
   GitBranch,
   PackageOpen,
@@ -29,7 +30,7 @@ import {
 } from "./actions";
 import type { DraftBranch } from "@/server/services/branch_service";
 
-type Row = DraftBranch & { head_count: number };
+type Row = DraftBranch & { head_count: number; authored_by_client_name: string | null };
 
 /**
  * Client UI for the /app/branches page.
@@ -266,6 +267,12 @@ function BranchRow({
           {row.status !== "open" && (
             <Badge variant="outline" className="shrink-0 text-[10px] font-normal capitalize">
               {row.status}
+            </Badge>
+          )}
+          {row.authored_by_client_name && (
+            <Badge variant="outline" className="shrink-0 gap-1 text-[10px] font-normal">
+              <Bot className="h-3 w-3" aria-hidden="true" />
+              {row.authored_by_client_name}
             </Badge>
           )}
         </div>

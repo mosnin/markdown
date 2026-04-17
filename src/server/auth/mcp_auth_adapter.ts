@@ -440,25 +440,45 @@ export class BranchTargetingNotAllowedError extends Error {
 
 /**
  * Fail a v1/write route early if an OAuth caller tries to target a
- * non-main branch. OAuth-backed writes land on main by design; any
- * `branch_id` in the request body is a client bug or an attempted
- * scope escalation, and should 400 with a clear code.
+ * non-main branch WITHOUT the `context:branch` scope, or targets a
+ * branch it does not own.
+ *
+ * When the caller has `context:branch` AND the branch was authored by
+ * the same client, targeting is allowed — this is the AI-authored
+ * branch flow. All other OAuth branch-targeting is rejected.
  *
  * Legacy csk_v1_ callers are not gated here — branch targeting is
  * unreachable from that path in V1, and if a future route adds a
  * branch param for legacy callers we will revisit this guard.
  *
+ * @param branch - When provided, used for ownership check. When null,
+ *   the function cannot verify ownership and rejects unless the caller
+ *   explicitly passes `skipOwnershipCheck: true`.
  * @throws {BranchTargetingNotAllowedError} when the caller is OAuth-
- *   backed and `requestedBranchId` is a non-empty string.
+ *   backed and targeting is not permitted.
  */
 export function requireNoBranchTargeting(
   ctx: McpAuthContext,
-  requestedBranchId: string | null | undefined
+  requestedBranchId: string | null | undefined,
+  branch?: { authored_by_client_id: string | null; created_by: string | null } | null,
 ): void {
   if (ctx.source !== "oauth") return;
   if (requestedBranchId === null || requestedBranchId === undefined) return;
   const normalized = String(requestedBranchId).trim();
   if (!normalized) return;
+
+  // If the caller has context:branch scope AND we can verify ownership,
+  // allow the targeting.
+  if (hasScope(ctx.scopes, "context:branch") && branch) {
+    const ownsViaClient =
+      ctx.clientId !== null &&
+      branch.authored_by_client_id === ctx.clientId;
+    const ownsViaUser =
+      ctx.userId !== null &&
+      branch.created_by === ctx.userId;
+    if (ownsViaClient || ownsViaUser) return;
+  }
+
   throw new BranchTargetingNotAllowedError(normalized);
 }
 

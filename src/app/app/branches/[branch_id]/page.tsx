@@ -37,6 +37,17 @@ export default async function BranchDetailPage({
   const canWrite = ctx.workspace.role !== "viewer";
   const isActive = ctx.activeBranchId === branch_id;
 
+  // Resolve MCP client name for the "authored by" badge.
+  let authoredByClientName: string | null = null;
+  if (branch.authored_by_client_id) {
+    const { data: client } = await supabase
+      .from("oauth_clients")
+      .select("name")
+      .eq("client_id", branch.authored_by_client_id)
+      .maybeSingle();
+    authoredByClientName = client?.name ?? branch.authored_by_client_id;
+  }
+
   return (
     <div className="flex h-full flex-col overflow-hidden">
       <PageHeader
@@ -61,6 +72,7 @@ export default async function BranchDetailPage({
             diff={diff}
             canWrite={canWrite}
             isActive={isActive}
+            authoredByClientName={authoredByClientName}
           />
         </div>
       </div>

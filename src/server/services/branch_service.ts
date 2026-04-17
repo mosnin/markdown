@@ -42,6 +42,10 @@ export interface DraftBranch {
   created_at: string;
   promoted_at: string | null;
   discarded_at: string | null;
+  /** OAuth connection that created this branch via MCP, if any. */
+  authored_by_connection_id: string | null;
+  /** OAuth client_id that created this branch via MCP, if any. */
+  authored_by_client_id: string | null;
 }
 
 export type BranchHeadObjectType = "note" | "file" | "skill" | "agent";

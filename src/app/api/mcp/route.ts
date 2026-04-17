@@ -73,11 +73,15 @@ function rpcError(id: JsonRpcRequest["id"], code: number, message: string, data?
  * Tool → OAuth scope map. Every tool declares the minimum scope it
  * needs; tools that write also declare `writes: true` so the role gate
  * (viewer rejection) fires uniformly.
+ *
+ * `extraScopes` optionally declares additional scopes beyond `scope`
+ * that must ALL be present for the tool to be callable.
  */
 interface ToolDef {
   name: string;
   description: string;
   scope: OAuthCapabilityScope;
+  extraScopes?: OAuthCapabilityScope[];
   writes: boolean;
   inputSchema: object;
 }
@@ -221,6 +225,84 @@ const TOOLS: ToolDef[] = [
       additionalProperties: false,
     },
   },
+  {
+    name: "create_branch",
+    description:
+      "Create a new draft branch owned by this MCP client. The branch is the unit of AI-generated work — batch writes onto it, then hand it off for human review at /app/branches.",
+    scope: "context:branch",
+    writes: true,
+    inputSchema: {
+      type: "object",
+      properties: {
+        name: { type: "string" },
+        description: { type: "string" },
+      },
+      required: ["name"],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "write_to_branch",
+    description:
+      "Batch-write operations (create, update, append notes) onto a branch this client owns. Each operation lands as a branch head; nothing touches main until a human promotes.",
+    scope: "context:branch",
+    extraScopes: ["context:propose"],
+    writes: true,
+    inputSchema: {
+      type: "object",
+      properties: {
+        branch_id: { type: "string" },
+        operations: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              type: { type: "string", enum: ["create_note", "update_note", "append_note"] },
+              note_id: { type: "string" },
+              title: { type: "string" },
+              content: { type: "string" },
+              folder_id: { type: "string" },
+              box_id: { type: "string" },
+            },
+            required: ["type", "content"],
+            additionalProperties: false,
+          },
+        },
+      },
+      required: ["branch_id", "operations"],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "get_branch_diff",
+    description:
+      "Preview what a branch will change when promoted: per-head content diffs, byte deltas, pending ops, and metadata changes.",
+    scope: "context:branch",
+    extraScopes: ["context:read"],
+    writes: false,
+    inputSchema: {
+      type: "object",
+      properties: {
+        branch_id: { type: "string" },
+      },
+      required: ["branch_id"],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "list_branches",
+    description:
+      "List draft branches in the workspace, optionally filtered by status.",
+    scope: "context:branch",
+    writes: false,
+    inputSchema: {
+      type: "object",
+      properties: {
+        status: { type: "string", enum: ["open", "promoted", "discarded"] },
+      },
+      additionalProperties: false,
+    },
+  },
 ];
 
 // ─── Auth context ────────────────────────────────────────────────────────────
@@ -277,6 +359,14 @@ async function dispatchTool(
   // Scope gate first.
   if (!hasScope(ctx.scope, tool.scope)) {
     throw toolError(-32002, `Token does not have required scope: ${tool.scope}`);
+  }
+  // Check additional required scopes if any.
+  if (tool.extraScopes) {
+    for (const extra of tool.extraScopes) {
+      if (!hasScope(ctx.scope, extra)) {
+        throw toolError(-32002, `Token does not have required scope: ${extra}`);
+      }
+    }
   }
   // Role gate — viewers cannot write regardless of scope.
   if (tool.writes && ctx.role === "viewer") {
@@ -500,6 +590,243 @@ async function dispatchTool(
         tags: Array.isArray(args.tags) ? (args.tags as string[]) : [],
       });
       return { note: result };
+    }
+
+    case "create_branch": {
+      const name = String(args.name ?? "").trim();
+      if (!name) throw toolError(-32602, "name is required");
+      const description = typeof args.description === "string" ? args.description : null;
+
+      const { createDraftBranch } = await import("@/server/services/branch_service");
+      const branch = await createDraftBranch(admin, {
+        workspace_id: ctx.workspaceId,
+        name,
+        description,
+        created_by: ctx.userId,
+      });
+
+      // Stamp MCP authorship metadata onto the branch row.
+      await admin
+        .from("draft_branches")
+        .update({
+          authored_by_client_id: ctx.clientId,
+          authored_by_connection_id: ctx.scope.length > 0 ? null : null,
+        })
+        .eq("id", branch.id);
+
+      await auditMcp(admin, {
+        workspaceId: ctx.workspaceId,
+        userId: ctx.userId,
+        clientId: ctx.clientId,
+        source: "oauth",
+        objectType: "branch",
+        objectId: branch.id,
+        eventType: "branch.mcp_created",
+        metadata: { branch_name: name },
+      });
+
+      return { branch_id: branch.id, name: branch.name };
+    }
+
+    case "write_to_branch": {
+      const branchId = String(args.branch_id ?? "");
+      if (!branchId) throw toolError(-32602, "branch_id is required");
+      const operations = args.operations;
+      if (!Array.isArray(operations) || operations.length === 0) {
+        throw toolError(-32602, "operations must be a non-empty array");
+      }
+
+      // Enforce per-request operation limit.
+      const MAX_OPS_PER_REQUEST = 50;
+      if (operations.length > MAX_OPS_PER_REQUEST) {
+        throw toolError(-32602, `At most ${MAX_OPS_PER_REQUEST} operations per request`);
+      }
+
+      // Verify branch ownership.
+      const { getDraftBranch } = await import("@/server/services/branch_service");
+      const branch = await getDraftBranch(admin, branchId);
+      if (!branch || branch.workspace_id !== ctx.workspaceId) {
+        throw toolError(-32003, "Branch not found");
+      }
+      if (branch.status !== "open") {
+        throw toolError(-32003, `Branch is ${branch.status}, cannot write`);
+      }
+      if (branch.authored_by_client_id !== ctx.clientId) {
+        throw toolError(-32003, "Cannot write to a branch owned by another client");
+      }
+
+      const { createNoteOnBranch, updateNoteOnBranch } = await import(
+        "@/server/services/note_service"
+      );
+      const { listBranchHeads } = await import("@/server/services/branch_service");
+      const MAX_CONTENT_LENGTH = 500_000;
+
+      let applied = 0;
+      for (const op of operations as Array<Record<string, unknown>>) {
+        const opType = String(op.type ?? "");
+        const content = String(op.content ?? "");
+        if (content.length > MAX_CONTENT_LENGTH) {
+          throw toolError(-32602, `Content exceeds maximum length (${MAX_CONTENT_LENGTH} chars)`);
+        }
+
+        if (opType === "create_note") {
+          const title = String(op.title ?? "Untitled");
+          const folderId = typeof op.folder_id === "string" ? op.folder_id : null;
+          const boxId = typeof op.box_id === "string" ? op.box_id : null;
+
+          // Resolve a box_id: either explicitly provided or the first box
+          // in the workspace.
+          let resolvedBoxId = boxId;
+          if (!resolvedBoxId) {
+            const { data: boxes } = await admin
+              .from("boxes")
+              .select("id")
+              .eq("workspace_id", ctx.workspaceId)
+              .neq("status", "trashed")
+              .limit(1);
+            resolvedBoxId = boxes?.[0]?.id ?? null;
+          }
+          if (!resolvedBoxId) {
+            throw toolError(-32003, "No box found in workspace for note creation");
+          }
+
+          await createNoteOnBranch(admin, ctx.userId, ctx.workspaceId, branchId, {
+            title,
+            markdownContent: content,
+            boxId: resolvedBoxId,
+            folderId,
+            kind: "note",
+          });
+          applied++;
+        } else if (opType === "update_note") {
+          const noteId = String(op.note_id ?? "");
+          if (!noteId) throw toolError(-32602, "note_id is required for update_note");
+          const title = typeof op.title === "string" ? op.title : undefined;
+
+          // Fetch current note to get title if not provided.
+          const { getNoteById } = await import("@/server/repositories/note_repository");
+          const note = await getNoteById(admin, noteId);
+          if (!note) throw toolError(-32003, "Note not found");
+
+          await updateNoteOnBranch(admin, ctx.userId, ctx.workspaceId, branchId, noteId, {
+            title: title ?? note.title,
+            markdownContent: content,
+          });
+          applied++;
+        } else if (opType === "append_note") {
+          const noteId = String(op.note_id ?? "");
+          if (!noteId) throw toolError(-32602, "note_id is required for append_note");
+
+          // Read current content (branch-aware), append, then update.
+          const { getNoteById } = await import("@/server/repositories/note_repository");
+          const { resolveBranchVersion } = await import("@/server/services/branch_service");
+          const note = await getNoteById(admin, noteId);
+          if (!note) throw toolError(-32003, "Note not found");
+
+          // Check if there's already a branch version.
+          const branchVersionId = await resolveBranchVersion(admin, branchId, "note", noteId);
+          let currentContent = note.markdown_content ?? "";
+          if (branchVersionId) {
+            const { data: bv } = await admin
+              .from("note_versions")
+              .select("markdown_content")
+              .eq("id", branchVersionId)
+              .maybeSingle();
+            if (bv) currentContent = bv.markdown_content;
+          }
+
+          const appended = currentContent + "\n" + content;
+          if (appended.length > MAX_CONTENT_LENGTH) {
+            throw toolError(-32602, `Appended content exceeds maximum length (${MAX_CONTENT_LENGTH} chars)`);
+          }
+
+          const title = typeof op.title === "string" ? op.title : note.title;
+          await updateNoteOnBranch(admin, ctx.userId, ctx.workspaceId, branchId, noteId, {
+            title,
+            markdownContent: appended,
+          });
+          applied++;
+        } else {
+          throw toolError(-32602, `Unknown operation type: ${opType}`);
+        }
+      }
+
+      const heads = await listBranchHeads(admin, branchId);
+
+      await auditMcp(admin, {
+        workspaceId: ctx.workspaceId,
+        userId: ctx.userId,
+        clientId: ctx.clientId,
+        source: "oauth",
+        objectType: "branch",
+        objectId: branchId,
+        eventType: "branch.mcp_write",
+        metadata: { applied, head_count: heads.length },
+      });
+
+      return { applied, branch_id: branchId, head_count: heads.length };
+    }
+
+    case "get_branch_diff": {
+      const branchId = String(args.branch_id ?? "");
+      if (!branchId) throw toolError(-32602, "branch_id is required");
+
+      const { getDraftBranch } = await import("@/server/services/branch_service");
+      const branch = await getDraftBranch(admin, branchId);
+      if (!branch || branch.workspace_id !== ctx.workspaceId) {
+        throw toolError(-32003, "Branch not found");
+      }
+
+      const { getBranchDiff } = await import("@/server/services/branch_diff_service");
+      const diff = await getBranchDiff(admin, branchId, ctx.workspaceId);
+      if (!diff) throw toolError(-32003, "Branch not found");
+
+      return {
+        branch_id: diff.branchId,
+        branch_name: diff.branchName,
+        head_count: diff.headCount,
+        total_bytes_added: diff.totalBytesAdded,
+        total_bytes_removed: diff.totalBytesRemoved,
+        rows: diff.rows.map((r) => ({
+          object_type: r.objectType,
+          object_id: r.objectId,
+          display_name: r.displayName,
+          branch_version_id: r.branchVersionId,
+          branch_bytes: r.branchBytes,
+          main_version_id: r.mainVersionId,
+          main_bytes: r.mainBytes,
+          main_moved_ahead: r.mainMovedAhead,
+          main_trashed: r.mainTrashed,
+        })),
+        pending_ops: diff.pendingOps.map((op) => ({
+          op_type: op.opType,
+          object_type: op.objectType,
+          object_id: op.objectId,
+          display_name: op.displayName,
+        })),
+      };
+    }
+
+    case "list_branches": {
+      const { listDraftBranches } = await import("@/server/services/branch_service");
+      const status = typeof args.status === "string" ? args.status : undefined;
+      const validStatuses = ["open", "promoted", "discarded"];
+      if (status && !validStatuses.includes(status)) {
+        throw toolError(-32602, `status must be one of: ${validStatuses.join(", ")}`);
+      }
+      const branches = await listDraftBranches(admin, ctx.workspaceId, {
+        status: status as "open" | "promoted" | "discarded" | undefined,
+      });
+      return {
+        branches: branches.map((b) => ({
+          id: b.id,
+          name: b.name,
+          description: b.description,
+          status: b.status,
+          created_at: b.created_at,
+          authored_by_client_id: b.authored_by_client_id ?? null,
+        })),
+      };
     }
 
     case "create_write_proposal": {

@@ -34,7 +34,7 @@ import {
 
 export type ScopeRiskTier = "safe" | "propose-write" | "generate";
 
-export type ScopeGroup = "read" | "propose" | "generate";
+export type ScopeGroup = "read" | "propose" | "generate" | "branch";
 
 export interface ScopeDescription {
   /** Canonical scope string, e.g. "context:read". */
@@ -104,6 +104,16 @@ export const SCOPE_DESCRIPTIONS: Record<OAuthCapabilityScope, ScopeDescription> 
     writeCapable: true,
     badgeVariant: "error",
   },
+  "context:branch": {
+    scope: "context:branch",
+    title: "Create and write to branches",
+    description:
+      "Create draft branches and batch-write notes onto them for human review. Branch content does not touch main until a human promotes it.",
+    group: "branch",
+    tier: "propose-write",
+    writeCapable: true,
+    badgeVariant: "warning",
+  },
 };
 
 /** Human-readable label for a group header in the consent UI. */
@@ -111,6 +121,7 @@ export const SCOPE_GROUP_LABELS: Record<ScopeGroup, string> = {
   read: "Read",
   propose: "Propose writes",
   generate: "Generate",
+  branch: "Branch",
 };
 
 /** Returns true if the capability-scope set contains at least one writer. */
@@ -193,24 +204,27 @@ export function groupScopes(scopes: readonly OAuthScope[]): {
   read: OAuthCapabilityScope[];
   propose: OAuthCapabilityScope[];
   generate: OAuthCapabilityScope[];
+  branch: OAuthCapabilityScope[];
   narrow: string[];
 } {
   const read: OAuthCapabilityScope[] = [];
   const propose: OAuthCapabilityScope[] = [];
   const generate: OAuthCapabilityScope[] = [];
+  const branch: OAuthCapabilityScope[] = [];
   const narrow: string[] = [];
   for (const s of scopes) {
     if (isCapabilityScope(s)) {
       const g = SCOPE_DESCRIPTIONS[s].group;
       if (g === "read") read.push(s);
       else if (g === "propose") propose.push(s);
+      else if (g === "branch") branch.push(s);
       else generate.push(s);
     } else if (isBoxScope(s)) {
       const id = parseBoxScope(s);
       if (id) narrow.push(id);
     }
   }
-  return { read, propose, generate, narrow };
+  return { read, propose, generate, branch, narrow };
 }
 
 /**

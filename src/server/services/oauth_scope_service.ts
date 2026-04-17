@@ -44,7 +44,8 @@ export type OAuthCapabilityScope =
   | "context:search"
   | "context:bundles"
   | "context:propose"
-  | "context:generate";
+  | "context:generate"
+  | "context:branch";
 
 /**
  * A box-narrowing scope. The full scope string is `context:box:<uuid>`;
@@ -80,6 +81,12 @@ export const OAUTH_SCOPES: Record<OAuthCapabilityScope, { label: string; descrip
     label: "Generate in allowed folders",
     description:
       "Write notes directly into folders that are explicitly marked as accepting generated content. Reusable skills and agents still require proposals.",
+    minRole: "member",
+  },
+  "context:branch": {
+    label: "Create and write to branches",
+    description:
+      "Create draft branches and batch-write notes onto them for human review. Branch content does not touch main until a human promotes it.",
     minRole: "member",
   },
 };

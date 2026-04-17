@@ -95,6 +95,53 @@ Available to connections with `propose_writes` or `generate_in_allowed_folders` 
 
 No export tools. Resources and prompts are not registered in V1.
 
+### Branch tools (4)
+
+Available to connections with `context:branch` scope (OAuth only, not legacy csk_v1_).
+
+| Tool | Scopes required | Description |
+|---|---|---|
+| `create_branch` | `context:branch` | Create a draft branch owned by this MCP client |
+| `write_to_branch` | `context:branch` + `context:propose` | Batch-write operations (create/update/append notes) onto an owned branch |
+| `get_branch_diff` | `context:branch` + `context:read` | Preview what the branch will change when promoted |
+| `list_branches` | `context:branch` | List branches in the workspace, optionally filtered by status |
+
+**Branch tool constraints:**
+- Branches are the unit of AI-generated work. Each branch is owned by the MCP client that created it.
+- Cross-client writes are rejected: client A cannot write to a branch created by client B.
+- Writes to promoted or discarded branches are rejected.
+- `write_to_branch` supports three operation types: `create_note`, `update_note`, `append_note`.
+- At most 50 operations per `write_to_branch` call.
+- Content size limit: 500,000 characters per operation (same as write proposals).
+- Nothing touches main until a human promotes the branch at `/app/branches/<id>`.
+
+---
+
+## AI-authored branches (end-to-end flow)
+
+MCP clients can create a branch, batch-write changes onto it, and hand it off for human review. This is the recommended pattern for AI-generated work that involves multiple related changes.
+
+```
+1. Register OAuth client with scopes: context:branch context:propose context:read
+2. Authorize via /oauth/authorize
+3. tools/call create_branch { name: "Refactor Q4 notes" }
+   → { branch_id: "abc-123", name: "Refactor Q4 notes" }
+4. tools/call write_to_branch {
+     branch_id: "abc-123",
+     operations: [
+       { type: "create_note", title: "Q4 Summary", content: "...", box_id: "..." },
+       { type: "update_note", note_id: "existing-note-id", content: "..." },
+       { type: "append_note", note_id: "other-note-id", content: "\n## New section\n..." }
+     ]
+   }
+   → { applied: 3, branch_id: "abc-123", head_count: 3 }
+5. tools/call get_branch_diff { branch_id: "abc-123" }
+   → { head_count: 3, rows: [...], total_bytes_added: 1234, ... }
+6. Human reviews at /app/branches/abc-123 and promotes or discards.
+```
+
+The branch detail page shows an "Authored by [client name] via MCP" badge so reviewers know the branch was machine-authored.
+
 ---
 
 ## File map

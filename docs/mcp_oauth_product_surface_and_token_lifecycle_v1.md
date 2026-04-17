@@ -218,9 +218,19 @@ and apply consistent scope + role + box-narrowing guards:
 | `POST /api/v1/write_proposals` | `context:propose` | ✓ | ✓ |
 | `POST /api/v1/generated_notes` | `context:generate` | ✓ | ✓ |
 
+**MCP branch tools** (JSON-RPC via `POST /api/mcp`):
+
+| Tool | Scope(s) | Write? |
+|---|---|---|
+| `create_branch` | `context:branch` | ✓ |
+| `write_to_branch` | `context:branch` + `context:propose` | ✓ |
+| `get_branch_diff` | `context:branch` + `context:read` | — |
+| `list_branches` | `context:branch` | — |
+
 Write routes additionally enforce `requireWrite(ctx)` (viewers
 rejected) and `requireNoBranchTargeting(ctx, body.branch_id)` (400 if
-OAuth-backed with a branch id).
+OAuth-backed with a branch id, unless the caller has `context:branch`
+scope and owns the target branch).
 
 The pre-existing `apiWriteLimit(connectionId)` 20-writes-per-minute
 limit is preserved. The reusable-Skill/Agent proposal-only barrier
