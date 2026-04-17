@@ -10,6 +10,7 @@ import {
   Building2,
   Code2,
   CreditCard,
+  Fingerprint,
   GitBranch,
   Key,
   Palette,
@@ -74,6 +75,18 @@ const workspaceAdminNav = [
     label: "Branch retention",
     subLabel: "Auto-discard idle branches",
     icon: GitBranch,
+  },
+];
+
+/**
+ * Security nav — dedicated routes for security features like passkeys.
+ */
+const securityNav = [
+  {
+    href: "/app/settings/security/passkeys",
+    label: "Passkeys",
+    subLabel: "Passwordless sign-in",
+    icon: Fingerprint,
   },
 ];
 
@@ -208,6 +221,39 @@ export function SettingsSidebar({
         </div>
         <ul className="flex flex-col gap-0.5 list-none">
           {workspaceAdminNav.map(({ href, label, subLabel, icon: Icon }) => {
+            const active = pathname === href;
+            return (
+              <li key={href}>
+                <Link
+                  href={href}
+                  aria-current={active ? "page" : undefined}
+                  className={cn(
+                    "flex items-start gap-2.5 rounded-md px-2.5 py-2 text-sm transition-fast",
+                    "text-foreground/70 hover:bg-accent/60 hover:text-foreground",
+                    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                    active && "bg-accent/60 text-foreground",
+                  )}
+                >
+                  <Icon className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+                  <span className="flex min-w-0 flex-col leading-tight">
+                    <span className="truncate">{label}</span>
+                    <span className="truncate text-[10px] text-foreground/40">
+                      {subLabel}
+                    </span>
+                  </span>
+                </Link>
+              </li>
+            );
+          })}
+        </ul>
+
+        <div className="mt-4 mb-1 flex items-center px-2.5">
+          <span className="text-[11px] font-semibold uppercase tracking-wider text-foreground/40">
+            Security
+          </span>
+        </div>
+        <ul className="flex flex-col gap-0.5 list-none">
+          {securityNav.map(({ href, label, subLabel, icon: Icon }) => {
             const active = pathname === href;
             return (
               <li key={href}>

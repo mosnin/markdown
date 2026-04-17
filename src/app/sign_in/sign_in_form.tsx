@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useActionState, useState } from "react";
-import { Eye, EyeOff } from "lucide-react";
+import { Eye, EyeOff, Fingerprint } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { signIn, signUp, requestPasswordReset, type AuthState } from "./actions";
@@ -146,6 +146,84 @@ function ForgotPasswordForm({ onBack }: { onBack: () => void }) {
   );
 }
 
+// ─── Passkey sign-in button ──────────────────────────────────────────────────
+
+function PasskeySignInButton() {
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handlePasskeySignIn() {
+    setError(null);
+    setLoading(true);
+
+    try {
+      // Dynamically import the browser module to avoid SSR issues.
+      const { startAuthentication } = await import("@simplewebauthn/browser");
+
+      // 1. Get authentication options.
+      const optionsRes = await fetch(
+        "/api/auth/webauthn/authenticate/options",
+        { method: "POST" },
+      );
+      if (!optionsRes.ok) throw new Error("Failed to get authentication options");
+      const options = await optionsRes.json();
+
+      // 2. Start the browser WebAuthn ceremony.
+      const credential = await startAuthentication({ optionsJSON: options });
+
+      // 3. Verify with the server (creates a session).
+      const verifyRes = await fetch(
+        "/api/auth/webauthn/authenticate/verify",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ response: credential }),
+        },
+      );
+
+      if (!verifyRes.ok) {
+        const data = await verifyRes.json();
+        throw new Error(data.error ?? "Authentication failed");
+      }
+
+      // 4. Redirect to the app.
+      window.location.href = "/welcome";
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Passkey sign-in failed";
+      // Don't show error for user cancellation.
+      if (
+        !message.includes("cancelled") &&
+        !message.includes("canceled") &&
+        !message.includes("AbortError")
+      ) {
+        setError(message);
+      }
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-2">
+      {error && (
+        <p role="alert" className="text-xs text-destructive">
+          {error}
+        </p>
+      )}
+      <Button
+        type="button"
+        variant="outline"
+        disabled={loading}
+        className="w-full"
+        onClick={handlePasskeySignIn}
+      >
+        <Fingerprint className="mr-2 h-4 w-4" />
+        {loading ? "Authenticating..." : "Sign in with passkey"}
+      </Button>
+    </div>
+  );
+}
+
 // ─── Login form ──────────────────────────────────────────────────────────────
 
 function LoginForm({
@@ -210,6 +288,18 @@ function LoginForm({
       <Button type="submit" disabled={pending} className="mt-1 w-full">
         {pending ? "Signing in…" : "Sign in"}
       </Button>
+
+      {/* Passkey sign-in */}
+      <div className="relative my-1">
+        <div className="absolute inset-0 flex items-center">
+          <span className="w-full border-t border-border" />
+        </div>
+        <div className="relative flex justify-center text-xs uppercase">
+          <span className="bg-background px-2 text-muted-foreground">or</span>
+        </div>
+      </div>
+
+      <PasskeySignInButton />
 
       <p className="text-center text-xs text-muted-foreground">
         Don&apos;t have an account?{" "}
