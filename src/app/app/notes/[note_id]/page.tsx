@@ -14,11 +14,15 @@ import { requireAuthenticatedUser } from "@/server/auth/require_authenticated_us
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getNoteById, listNotesByBox } from "@/server/repositories/note_repository";
-import { getBoxById } from "@/server/repositories/box_repository";
 import { getFolderById } from "@/server/repositories/folder_repository";
 import { getConnectionById } from "@/server/repositories/connection_repository";
 import { listLinksForNote } from "@/server/services/link_service";
 import { assembleContextBundle } from "@/server/services/context_bundle_service";
+import {
+  getCachedNoteById,
+  getCachedBoxById,
+  getCachedContextBundle,
+} from "@/server/services/cached_reads";
 import { auditBundleRead } from "@/server/services/audit_service";
 import { listVersionsForNote } from "@/server/services/version_history_service";
 import { NoteEditor } from "@/components/product/note_editor";
@@ -459,10 +463,10 @@ export default async function NotePage({
   const supabase = await createClient();
   const adminClient = createAdminClient();
 
-  const note = await getNoteById(supabase, note_id);
+  const note = await getCachedNoteById(supabase, note_id);
   if (!note) notFound();
 
-  const box = await getBoxById(supabase, note.box_id);
+  const box = await getCachedBoxById(supabase, note.box_id);
   if (!box || box.workspace_id !== ctx.workspace.id) notFound();
 
   const [folder, allBoxNotes, links, historyResult, generatingConnection] =
@@ -482,7 +486,7 @@ export default async function NotePage({
         : Promise.resolve(null),
     ]);
 
-  const initialBundle = await assembleContextBundle(
+  const initialBundle = await getCachedContextBundle(
     supabase,
     ctx.workspace.id,
     note_id
