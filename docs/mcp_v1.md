@@ -283,6 +283,54 @@ For focused retrieval on a known note:
 2. `get_linked_notes` — follow the graph from a specific note
 3. `get_note` — retrieve a specific note's full content
 
+### Branch-aware context bundles
+
+`get_context_bundle` accepts an opt-in `include_user_branches` flag. When set to `true`, the returned bundle is annotated with a `pending_branch_changes` array listing every open draft branch the *authenticated user* owns whose heads touch an object in the bundle (the target note, linked notes, guide note, or ancestor summary). This lets an AI reason about in-flight drafts, not just main.
+
+Example request (JSON-RPC `tools/call` payload on `/api/mcp`, or `POST /api/v1/context_bundles`):
+
+```json
+{
+  "note_id": "note-abc",
+  "include_user_branches": true
+}
+```
+
+Example response fragment:
+
+```json
+{
+  "target_note": { "id": "note-abc", "...": "..." },
+  "linked_notes": [ "..." ],
+  "pending_branch_changes": [
+    {
+      "branch_id": "branch-1",
+      "branch_name": "Refactor onboarding",
+      "branch_created_at": "2026-04-01T12:00:00.000Z",
+      "touched": [
+        {
+          "object_type": "note",
+          "object_id": "note-abc",
+          "main_version_id": "ver-main",
+          "branch_version_id": "ver-branch-head",
+          "branch_content_preview": "# Onboarding (draft)\n\n..."
+        }
+      ]
+    }
+  ]
+}
+```
+
+Semantics:
+
+- Opt-in per request. Default `false` preserves existing client behavior.
+- Scope unchanged: still `context:bundles`. The overlay is scoped to the caller's own branches, so no new scope is needed.
+- Privacy: only branches where `draft_branches.created_by = <authenticated user>` are listed. Other workspace members' branches never appear here.
+- Legacy `csk_v1_` tokens have no user identity, so the flag is silently inert on those; use an OAuth token to consume the overlay.
+- `branch_content_preview` is trimmed to 1000 characters per touched object to keep bundle size bounded.
+- The main bundle fields (`target_note`, `linked_notes`, `guide_note`, `ancestor_summary_note`, `relationship_edges`) always reflect canonical main — the overlay is strictly additive.
+- `assembly_metadata.include_user_branches` reflects whether the server actually applied the overlay. Consumers can use this to distinguish "opted in, no drafts" (`pending_branch_changes: []`) from "didn't opt in" (field omitted).
+
 ---
 
 ## Design decisions

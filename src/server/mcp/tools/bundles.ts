@@ -51,9 +51,22 @@ export function registerGetContextBundleTool(server: McpServer, client: ApiClien
           .describe(
             "Maximum number of linked notes to include (default 10, max 10)"
           ),
+        include_user_branches: z
+          .boolean()
+          .optional()
+          .describe(
+            "Overlay open draft branches the authenticated user owns that touch objects in this bundle (default false). When true, the returned bundle includes a `pending_branch_changes` array with one entry per branch and trimmed content previews."
+          ),
       },
     },
-    async ({ note_id, include_guide, include_ancestor_summary, include_archived, linked_limit }) => {
+    async ({
+      note_id,
+      include_guide,
+      include_ancestor_summary,
+      include_archived,
+      linked_limit,
+      include_user_branches,
+    }) => {
       try {
         const bundle = await client.getContextBundle({
           note_id,
@@ -61,6 +74,7 @@ export function registerGetContextBundleTool(server: McpServer, client: ApiClien
           include_ancestor_summary: include_ancestor_summary ?? true,
           include_archived: include_archived ?? false,
           linked_limit: linked_limit ?? 10,
+          include_user_branches: include_user_branches ?? false,
         });
         return {
           content: [

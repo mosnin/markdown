@@ -36,6 +36,7 @@ export async function POST(request: NextRequest) {
     include_ancestor_summary?: boolean;
     include_archived?: boolean;
     linked_limit?: number;
+    include_user_branches?: boolean;
   };
   try {
     body = await request.json();
@@ -55,6 +56,16 @@ export async function POST(request: NextRequest) {
     return E_FORBIDDEN();
   }
 
+  // Branch overlay is scoped to the authenticated user's own
+  // branches. Legacy csk_v1_ tokens don't have a user identity, so
+  // the overlay is silently inert there — the flag requires an
+  // OAuth-resolved userId.
+  const includeUserBranches = body.include_user_branches === true;
+  const overlayUserId =
+    includeUserBranches && ctx.source === "oauth" && ctx.userId
+      ? ctx.userId
+      : undefined;
+
   try {
     const bundle = await assembleContextBundle(
       adminClient,
@@ -65,6 +76,8 @@ export async function POST(request: NextRequest) {
         includeAncestorSummary: body.include_ancestor_summary ?? true,
         includeArchived: body.include_archived ?? false,
         linkedLimit: body.linked_limit ?? 10,
+        includeUserBranches: overlayUserId !== undefined,
+        userId: overlayUserId,
       }
     );
 
@@ -88,6 +101,8 @@ export async function POST(request: NextRequest) {
           guide_included: bundle.guide_note !== null,
           ancestor_summary_included: bundle.ancestor_summary_note !== null,
           truncated: bundle.truncated,
+          include_user_branches: includeUserBranches,
+          pending_branch_count: bundle.pending_branch_changes?.length ?? 0,
         },
       });
     } else {

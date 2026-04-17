@@ -6,6 +6,8 @@ import {
   type BundleLinkedNote,
   type BundleParentPath,
   type BundleVersionInfo,
+  type BundlePendingBranchChanges,
+  type BundleBranchTouchedObject,
 } from "@/server/domain/types/context_bundle";
 import { getNoteById, getNotesByIds, listNotesByBox } from "@/server/repositories/note_repository";
 import { getBoxById } from "@/server/repositories/box_repository";
@@ -49,6 +51,14 @@ import {
 
 /** Maximum number of linked notes to include in any bundle. Hard ceiling. */
 const LINKED_LIMIT_MAX = 10;
+
+/**
+ * Maximum characters of branch-head content returned per touched
+ * object in `pending_branch_changes`. This keeps the overlay payload
+ * bounded — callers that need the full branch body should fetch it
+ * through the dedicated branch surfaces.
+ */
+const BRANCH_CONTENT_PREVIEW_MAX = 1000;
 
 /**
  * Maximum folder levels to walk during ancestor summary resolution.
@@ -306,6 +316,208 @@ export interface AssembleBundleOptions {
   linkedLimit?: number;
   /** Attempt to resolve an ancestor summary note. Default: true. */
   includeAncestorSummary?: boolean;
+  /**
+   * When true, annotate the bundle with any open draft branches the
+   * requesting user owns that touch objects inside the bundle. The
+   * annotation lands under `pending_branch_changes` and never mutates
+   * the main bundle fields. Requires `userId` to also be set;
+   * otherwise the flag is silently ignored — the service cannot
+   * filter by ownership without knowing who is asking, and returning
+   * every workspace branch here would be a privacy violation.
+   *
+   * Default: false (keep existing clients unchanged).
+   */
+  includeUserBranches?: boolean;
+  /**
+   * The requesting user id. Required when `includeUserBranches` is
+   * true so the overlay is restricted to branches owned by this
+   * user. Never populated from another user's token.
+   */
+  userId?: string;
+}
+
+// ─── Pending branch changes ───────────────────────────────────────────────────
+
+/**
+ * Truncate a branch version's content to a bounded preview. Applies
+ * to note markdown bodies and skill / agent source_content alike.
+ * Returns null when the underlying content is null/empty.
+ */
+function truncateBranchPreview(content: string | null | undefined): string | null {
+  if (content === null || content === undefined) return null;
+  if (content.length === 0) return null;
+  if (content.length <= BRANCH_CONTENT_PREVIEW_MAX) return content;
+  return content.slice(0, BRANCH_CONTENT_PREVIEW_MAX);
+}
+
+interface BundleObjectRef {
+  object_type: "note" | "skill" | "agent";
+  object_id: string;
+  /** Canonical current_version_id at assembly time, if known. */
+  main_version_id: string | null;
+}
+
+/**
+ * Collect the ids of every object that appears in the bundle so we
+ * can cross-reference them against branch heads.
+ *
+ * V1 includes note ids (target, guide, linked notes, ancestor
+ * summary) — the bundle does not surface skills or agents directly,
+ * but the branch head shape supports both, so we keep the helper
+ * object-type-polymorphic for future use.
+ */
+function collectBundleObjects(
+  targetNote: Note,
+  guide: BundleNoteRef | null,
+  linked: BundleLinkedNote[],
+  ancestor: BundleNoteRef | null
+): BundleObjectRef[] {
+  const objects: BundleObjectRef[] = [];
+  const seen = new Set<string>();
+
+  const pushNote = (id: string, versionId: string | null) => {
+    const key = `note:${id}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    objects.push({
+      object_type: "note",
+      object_id: id,
+      main_version_id: versionId,
+    });
+  };
+
+  pushNote(targetNote.id, targetNote.current_version_id ?? null);
+  if (guide) pushNote(guide.id, null);
+  for (const ln of linked) pushNote(ln.id, null);
+  if (ancestor) pushNote(ancestor.id, null);
+
+  return objects;
+}
+
+/**
+ * Build the `pending_branch_changes` overlay for the user.
+ *
+ * Strategy:
+ *   1. List the user's open branches in the workspace (created_by =
+ *      userId, status = 'open'). Other users' branches are invisible
+ *      here — this is a per-user draft surface.
+ *   2. For each branch, fetch its `branch_heads` rows that match an
+ *      id in the bundle (object_type IN ('note','skill','agent')).
+ *      Branch head rows for 'file' are intentionally skipped — files
+ *      are never direct bundle members.
+ *   3. For each match, fetch the branch version's content and trim
+ *      it to `BRANCH_CONTENT_PREVIEW_MAX`.
+ *   4. Drop branches with no matches so consumers don't see empty
+ *      entries.
+ */
+async function collectPendingBranchChanges(
+  supabase: SupabaseClient,
+  workspaceId: string,
+  userId: string,
+  bundleObjects: BundleObjectRef[]
+): Promise<BundlePendingBranchChanges[]> {
+  if (bundleObjects.length === 0) return [];
+
+  // Index bundle objects for quick membership checks per object_type.
+  const bundleIndex = new Map<string, BundleObjectRef>();
+  for (const obj of bundleObjects) {
+    bundleIndex.set(`${obj.object_type}:${obj.object_id}`, obj);
+  }
+
+  // Open branches the requesting user owns in this workspace.
+  const { data: branches } = await supabase
+    .from("draft_branches")
+    .select("id, name, created_at")
+    .eq("workspace_id", workspaceId)
+    .eq("status", "open")
+    .eq("created_by", userId)
+    .order("created_at", { ascending: false });
+
+  if (!branches || branches.length === 0) return [];
+
+  const out: BundlePendingBranchChanges[] = [];
+
+  for (const branch of branches as Array<{ id: string; name: string; created_at: string }>) {
+    const objectIds = bundleObjects.map((o) => o.object_id);
+    const { data: heads } = await supabase
+      .from("branch_heads")
+      .select("object_type, object_id, version_id")
+      .eq("branch_id", branch.id)
+      .in("object_type", ["note", "skill", "agent"])
+      .in("object_id", objectIds);
+
+    if (!heads || heads.length === 0) continue;
+
+    const touched: BundleBranchTouchedObject[] = [];
+
+    for (const head of heads as Array<{
+      object_type: "note" | "skill" | "agent";
+      object_id: string;
+      version_id: string;
+    }>) {
+      const ref = bundleIndex.get(`${head.object_type}:${head.object_id}`);
+      if (!ref) continue; // branch head for an object not actually in the bundle
+
+      let preview: string | null = null;
+
+      if (head.object_type === "note") {
+        const { data: ver } = await supabase
+          .from("note_versions")
+          .select("markdown_content, title")
+          .eq("id", head.version_id)
+          .maybeSingle();
+        if (ver) {
+          const body = typeof ver.markdown_content === "string" ? ver.markdown_content : "";
+          const title = typeof ver.title === "string" ? ver.title : "";
+          // Prepend the branch head's title so consumers see renames
+          // without a second fetch. `#` keeps the preview valid
+          // markdown and self-descriptive.
+          const combined = title ? `# ${title}\n\n${body}` : body;
+          preview = truncateBranchPreview(combined);
+        }
+      } else {
+        const { data: ver } = await supabase
+          .from("object_versions")
+          .select("source_content")
+          .eq("id", head.version_id)
+          .maybeSingle();
+        if (ver) {
+          const body =
+            typeof ver.source_content === "string" ? ver.source_content : "";
+          preview = truncateBranchPreview(body);
+        }
+      }
+
+      touched.push({
+        object_type: head.object_type,
+        object_id: head.object_id,
+        main_version_id: ref.main_version_id,
+        branch_version_id: head.version_id,
+        branch_content_preview: preview,
+      });
+    }
+
+    if (touched.length === 0) continue;
+
+    // Stable ordering by (object_type, object_id) so the overlay is
+    // reproducible across calls. Matches the "deterministic assembly"
+    // contract the main bundle already honors.
+    touched.sort((a, b) => {
+      if (a.object_type !== b.object_type) {
+        return a.object_type.localeCompare(b.object_type);
+      }
+      return a.object_id.localeCompare(b.object_id);
+    });
+
+    out.push({
+      branch_id: branch.id,
+      branch_name: branch.name,
+      branch_created_at: branch.created_at,
+      touched,
+    });
+  }
+
+  return out;
 }
 
 /**
@@ -325,7 +537,16 @@ export async function assembleContextBundle(
     includeArchived = false,
     linkedLimit = LINKED_LIMIT_MAX,
     includeAncestorSummary = true,
+    includeUserBranches = false,
+    userId,
   } = options;
+
+  // Opting in to branch overlays without passing a user id is a
+  // programming error: returning the full workspace set would leak
+  // other users' drafts. Degrade gracefully to "no overlay" so the
+  // main bundle still renders.
+  const branchOverlayEnabled =
+    includeUserBranches === true && typeof userId === "string" && userId.length > 0;
 
   const effectiveLinkedLimit = Math.min(
     Math.max(1, linkedLimit),
@@ -542,7 +763,29 @@ export async function assembleContextBundle(
       relationship_note: l.relationship_note,
     }));
 
-  // ── 9. Assemble bundle ──────────────────────────────────────────────────
+  // ── 9. Pending branch changes (opt-in) ──────────────────────────────────
+  //
+  // Resolved AFTER the main bundle is fully assembled so it can
+  // cross-reference every object id the caller will see. This keeps
+  // the overlay perfectly consistent with the main bundle shape even
+  // when truncation or options change which objects are present.
+  let pendingBranchChanges: BundlePendingBranchChanges[] | undefined;
+  if (branchOverlayEnabled) {
+    const bundleObjects = collectBundleObjects(
+      targetNote,
+      guideNote,
+      linkedNotes,
+      ancestorSummaryNote
+    );
+    pendingBranchChanges = await collectPendingBranchChanges(
+      supabase,
+      workspaceId,
+      userId as string,
+      bundleObjects
+    );
+  }
+
+  // ── 10. Assemble bundle ─────────────────────────────────────────────────
   const uniqueReasons = [...new Set(truncationReasons)];
   const truncated = uniqueReasons.length > 0;
 
@@ -570,6 +813,10 @@ export async function assembleContextBundle(
       include_ancestor_summary: includeAncestorSummary,
       linked_limit: effectiveLinkedLimit,
       total_linked_available: totalLinkedAvailable,
+      include_user_branches: branchOverlayEnabled,
     },
+    ...(pendingBranchChanges !== undefined
+      ? { pending_branch_changes: pendingBranchChanges }
+      : {}),
   };
 }

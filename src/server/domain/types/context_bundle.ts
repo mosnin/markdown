@@ -128,6 +128,51 @@ export interface BundleVersionInfo {
   change_origin: string | null;
 }
 
+// ─── Pending branch changes ───────────────────────────────────────────────────
+
+/**
+ * A single object (note / skill / agent) that the requesting user has
+ * pending edits for on one of their open branches — something that
+ * overrides what main shows for that object.
+ *
+ * `main_version_id` reflects the canonical current version id at
+ * assembly time; `branch_version_id` is the branch head. Consumers can
+ * compare them to detect whether the branch has in-flight drafts they
+ * should reason about.
+ *
+ * `branch_content_preview` is a char-capped excerpt of the branch's
+ * version content (title + markdown for notes; source_content for
+ * skills / agents). It exists so AI consumers can see the draft
+ * without a follow-up round trip, while keeping bundle size bounded.
+ */
+export interface BundleBranchTouchedObject {
+  object_type: "note" | "skill" | "agent";
+  object_id: string;
+  main_version_id: string | null;
+  branch_version_id: string;
+  /**
+   * Trimmed preview of the branch head's content. Null if the branch
+   * version row is missing content (e.g. truncated audit trail).
+   */
+  branch_content_preview: string | null;
+}
+
+/**
+ * An open draft branch the requesting user owns that touches at least
+ * one object present in the assembled bundle (target note, linked
+ * notes, guide, or ancestor summary). Only surfaced when the caller
+ * opted in via `includeUserBranches`.
+ *
+ * Only branches where `draft_branches.created_by = userId` are listed
+ * — other users' open branches are never leaked through this surface.
+ */
+export interface BundlePendingBranchChanges {
+  branch_id: string;
+  branch_name: string;
+  branch_created_at: string;
+  touched: BundleBranchTouchedObject[];
+}
+
 // ─── Assembly metadata ────────────────────────────────────────────────────────
 
 /**
@@ -150,6 +195,13 @@ export interface BundleAssemblyMetadata {
    * Use this to show "showing N of M" in the UI.
    */
   total_linked_available: number;
+  /**
+   * True when the caller requested user-owned branch overlays via
+   * `includeUserBranches` AND the service had a userId to filter by.
+   * Consumers can use this flag to distinguish "opted in, nothing to
+   * show" from "didn't opt in".
+   */
+  include_user_branches: boolean;
 }
 
 // ─── Context bundle ───────────────────────────────────────────────────────────
@@ -250,4 +302,22 @@ export interface ContextBundle {
    * Assembly options and scope statistics.
    */
   assembly_metadata: BundleAssemblyMetadata;
+
+  /**
+   * Opt-in overlay describing open draft branches owned by the
+   * requesting user whose heads touch any object in this bundle
+   * (target note, linked notes, guide note, or ancestor summary).
+   *
+   * Semantics:
+   *   - Present only when assembly was invoked with
+   *     `includeUserBranches: true` and a `userId`.
+   *   - Empty array when the caller opted in but has no branches
+   *     touching the bundle — distinguishes "asked and none" from
+   *     "didn't ask" (undefined).
+   *   - Only branches with `created_by = userId` and `status = 'open'`
+   *     are included. Other users' branches are never surfaced here.
+   *   - The main bundle shape (`target_note`, `linked_notes`, ...) is
+   *     untouched: these fields always reflect canonical main.
+   */
+  pending_branch_changes?: BundlePendingBranchChanges[];
 }

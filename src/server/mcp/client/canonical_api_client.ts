@@ -188,6 +188,13 @@ export interface ContextBundleOptions {
   include_ancestor_summary?: boolean;
   include_archived?: boolean;
   linked_limit?: number;
+  /**
+   * Opt-in: overlay the bundle with the authenticated user's own
+   * open draft branches that touch any object in the bundle. Server
+   * identifies "the user" from the connection token — this client
+   * does not need to pass a user id.
+   */
+  include_user_branches?: boolean;
 }
 
 // ─── Write types ──────────────────────────────────────────────────────────────

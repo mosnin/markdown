@@ -274,7 +274,7 @@ noisy); audits fire on meaningful lifecycle transitions only.
 | `rate_limit.tripped` | Any bucket exceeded | `bucket_key`, `limit` |
 | `mcp.write_proposal.created` | Proposal submitted via OAuth | `oauth_client_id`, `proposal_id` |
 | `mcp.note.generated` | Note created via OAuth | `oauth_client_id`, `note_id`, `folder_id` |
-| `bundle.read` | Context bundle read via OAuth | `oauth_client_id`, `box_id`, `bundle_size` |
+| `bundle.read` | Context bundle read via OAuth | `oauth_client_id`, `box_id`, `linked_count`, `guide_included`, `ancestor_summary_included`, `truncated`, `include_user_branches`, `pending_branch_count` |
 
 ## Branch behavior for OAuth writes
 

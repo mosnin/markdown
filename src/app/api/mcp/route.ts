@@ -167,7 +167,8 @@ const TOOLS: ToolDef[] = [
   {
     name: "get_context_bundle",
     description:
-      "Deterministic context bundle centered on a note: guide note, ancestor summary, linked notes. Bounded size, deduplicated.",
+      "Deterministic context bundle centered on a note: guide note, ancestor summary, linked notes. Bounded size, deduplicated. " +
+      "Set include_user_branches=true to overlay open draft branches the authenticated user owns that touch any object in the bundle — useful for reasoning about in-flight drafts, not just main.",
     scope: "context:bundles",
     writes: false,
     inputSchema: {
@@ -176,6 +177,7 @@ const TOOLS: ToolDef[] = [
         note_id: { type: "string" },
         linked_limit: { type: "number" },
         include_archived: { type: "boolean" },
+        include_user_branches: { type: "boolean" },
       },
       required: ["note_id"],
       additionalProperties: false,
@@ -508,10 +510,39 @@ async function dispatchTool(
       const { assembleContextBundle } = await import(
         "@/server/services/context_bundle_service"
       );
+      // Branch overlay is scoped to the authenticated user's own
+      // branches — safe under the existing context:bundles trust
+      // boundary (no new scope required). Default false keeps the
+      // shape stable for existing clients that didn't opt in.
+      const includeUserBranches = args.include_user_branches === true;
       try {
         const bundle = await assembleContextBundle(admin, ctx.workspaceId, noteId, {
           linkedLimit: typeof args.linked_limit === "number" ? args.linked_limit : undefined,
           includeArchived: args.include_archived === true,
+          includeUserBranches,
+          userId: includeUserBranches ? ctx.userId : undefined,
+        });
+        // Audit the read so observability captures whether the caller
+        // opted in to branch overlays. Emits after assembly so the
+        // metadata can reflect the actual overlay size.
+        auditMcp(admin, {
+          workspaceId: ctx.workspaceId,
+          userId: ctx.userId,
+          clientId: ctx.clientId,
+          connectionId: null,
+          source: "oauth",
+          objectType: "note",
+          objectId: noteId,
+          eventType: "bundle.read",
+          metadata: {
+            box_id: bundle.box.id,
+            linked_count: bundle.linked_notes.length,
+            guide_included: bundle.guide_note !== null,
+            ancestor_summary_included: bundle.ancestor_summary_note !== null,
+            truncated: bundle.truncated,
+            include_user_branches: includeUserBranches,
+            pending_branch_count: bundle.pending_branch_changes?.length ?? 0,
+          },
         });
         return { bundle };
       } catch (err) {
