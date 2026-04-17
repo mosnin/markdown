@@ -19,6 +19,15 @@ import {
   type PromoteBranchResult,
 } from "@/server/services/branch_service";
 import { createAuditEvent } from "@/server/repositories/audit_event_repository";
+import {
+  detectConflicts,
+  type BranchConflict,
+} from "@/server/services/branch_conflict_service";
+import {
+  rebaseBranch,
+  type RebaseStrategy,
+  type RebaseResult,
+} from "@/server/services/branch_rebase_service";
 
 export type ActionResult<T = void> =
   | { ok: true; data: T }
@@ -309,5 +318,62 @@ export async function discardBranchAction(
     return { ok: true, data: undefined };
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : "Discard failed" };
+  }
+}
+
+// ─── Conflict detection ─────────────────────────────────────────────────────
+
+export async function detectBranchConflictsAction(
+  branchId: string
+): Promise<ActionResult<BranchConflict[]>> {
+  try {
+    const ctx = await requireAuthenticatedUser();
+    const supabase = await createClient();
+    const { data: branch } = await supabase
+      .from("draft_branches")
+      .select("workspace_id")
+      .eq("id", branchId)
+      .maybeSingle();
+    if (!branch || branch.workspace_id !== ctx.workspace.id) {
+      return { ok: false, error: "Branch not found" };
+    }
+    const conflicts = await detectConflicts(supabase, branchId);
+    return { ok: true, data: conflicts };
+  } catch (err) {
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : "Failed to detect conflicts",
+    };
+  }
+}
+
+// ─── Rebase ─────────────────────────────────────────────────────────────────
+
+export async function rebaseBranchAction(
+  branchId: string,
+  strategy: RebaseStrategy
+): Promise<ActionResult<RebaseResult>> {
+  const gate = await requireWriteRoleResult();
+  if (!gate.ok) return { ok: false, error: gate.error };
+  const { ctx } = gate;
+
+  try {
+    const supabase = await createClient();
+    const result = await rebaseBranch(
+      supabase,
+      branchId,
+      ctx.workspace.id,
+      ctx.user.id,
+      { strategy }
+    );
+
+    revalidatePath("/app/branches");
+    revalidatePath(`/app/branches/${branchId}`);
+    return { ok: true, data: result };
+  } catch (err) {
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : "Rebase failed",
+    };
   }
 }

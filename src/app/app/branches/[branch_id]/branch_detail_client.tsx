@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import Link from "next/link";
 import {
   AlertCircle,
+  AlertTriangle,
   Archive,
   ArchiveRestore,
   ChevronDown,
@@ -12,6 +13,7 @@ import {
   FileText,
   File as FileIcon,
   Folder,
+  GitMerge,
   Link2Off,
   Move,
   Zap,
@@ -37,6 +39,8 @@ import {
   promoteBranchAction,
   discardBranchAction,
   setActiveBranchAction,
+  detectBranchConflictsAction,
+  rebaseBranchAction,
 } from "../actions";
 import type { DraftBranch } from "@/server/services/branch_service";
 import type {
@@ -50,6 +54,8 @@ import type {
   PendingOpDiffRow,
   PlacementChangeRow,
 } from "@/server/services/branch_diff_service";
+import type { BranchConflict } from "@/server/services/branch_conflict_service";
+import type { RebaseStrategy } from "@/server/services/branch_rebase_service";
 
 /**
  * Branch detail + diff preview.
@@ -93,14 +99,21 @@ export function BranchDetailClient({
   const [confirmAction, setConfirmAction] = useState<"promote" | "discard" | null>(null);
   const [toast, setToast] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
   const [pending, startTransition] = useTransition();
+  const [conflicts, setConflicts] = useState<BranchConflict[] | null>(null);
+  const [conflictPanelOpen, setConflictPanelOpen] = useState(false);
+  const [rebaseConfirmOpen, setRebaseConfirmOpen] = useState(false);
+  const [conflictDismissed, setConflictDismissed] = useState(false);
+  const [prePromoteConflicts, setPrePromoteConflicts] = useState<BranchConflict[] | null>(null);
 
   const closed = branch.status !== "open";
+  const conflictCount = diff.rows.filter((r) => r.mainMovedAhead).length;
 
   function run(kind: "promote" | "discard") {
     startTransition(async () => {
       if (kind === "promote") {
         const res = await promoteBranchAction(branch.id);
         setConfirmAction(null);
+        setPrePromoteConflicts(null);
         if (res.ok) {
           setToast({
             kind: "ok",
@@ -125,6 +138,29 @@ export function BranchDetailClient({
     });
   }
 
+  function handlePromoteClick() {
+    if (conflictCount === 0) { setConfirmAction("promote"); return; }
+    startTransition(async () => {
+      const res = await detectBranchConflictsAction(branch.id);
+      if (res.ok && res.data.length > 0) setPrePromoteConflicts(res.data);
+      else setConfirmAction("promote");
+    });
+  }
+  function handleResolveConflicts() {
+    startTransition(async () => {
+      const res = await detectBranchConflictsAction(branch.id);
+      if (res.ok) { setConflicts(res.data); setConflictPanelOpen(true); setConflictDismissed(false); setPrePromoteConflicts(null); }
+      else setToast({ kind: "err", text: res.error });
+    });
+  }
+  function handleRebase(strategy: RebaseStrategy) {
+    startTransition(async () => {
+      const res = await rebaseBranchAction(branch.id, strategy);
+      setRebaseConfirmOpen(false); setConflictPanelOpen(false); setPrePromoteConflicts(null);
+      if (res.ok) { setToast({ kind: "ok", text: `Rebased ${res.data.rebased} object${res.data.rebased === 1 ? "" : "s"}.` }); setConflicts(null); setConflictDismissed(false); window.location.reload(); }
+      else setToast({ kind: "err", text: res.error });
+    });
+  }
   async function switchActive() {
     const res = await setActiveBranchAction(isActive ? null : branch.id);
     if (res.ok) window.location.reload();
@@ -197,7 +233,7 @@ export function BranchDetailClient({
             </Button>
             <Button
               size="sm"
-              onClick={() => setConfirmAction("promote")}
+              onClick={handlePromoteClick}
               disabled={pending || (diff.headCount === 0 && diff.pendingOps.length === 0 && diff.folderOverrides.length === 0 && diff.placementChanges.length === 0 && diff.createdNoteLinks.length === 0 && diff.createdAttachments.length === 0)}
               title={(diff.headCount === 0 && diff.pendingOps.length === 0 && diff.folderOverrides.length === 0 && diff.placementChanges.length === 0 && diff.createdNoteLinks.length === 0 && diff.createdAttachments.length === 0) ? "Nothing to promote" : undefined}
             >
@@ -216,6 +252,47 @@ export function BranchDetailClient({
           </div>
         )}
       </div>
+
+      {/* Conflict banner */}
+      {conflictCount > 0 && !closed && canWrite && !conflictDismissed && (
+        <div className="rounded-lg border border-warning/40 bg-warning/5 px-4 py-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-2 text-sm">
+              <AlertTriangle className="h-4 w-4 shrink-0 text-warning" aria-hidden="true" />
+              <span className="font-medium text-warning">{conflictCount} conflict{conflictCount === 1 ? "" : "s"} detected</span>
+              <span className="text-xs text-muted-foreground">— main has changed since you branched</span>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button variant="outline" size="sm" onClick={handleResolveConflicts} disabled={pending}>Resolve conflicts</Button>
+              <Button variant="outline" size="sm" onClick={() => setRebaseConfirmOpen(true)} disabled={pending}>
+                <GitMerge className="h-3.5 w-3.5 mr-1" aria-hidden="true" />Rebase on latest main
+              </Button>
+              <Button variant="ghost" size="sm" onClick={() => setConflictDismissed(true)} disabled={pending} className="text-xs text-muted-foreground" title="Dismiss this warning. Promoting will overwrite main's newer changes.">Keep my branch as-is</Button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Conflict resolution panel */}
+      {conflictPanelOpen && conflicts && conflicts.length > 0 && (
+        <div className="rounded-lg border border-warning/40 bg-card px-4 py-4 space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-semibold text-foreground">Conflict resolution — {conflicts.length} object{conflicts.length === 1 ? "" : "s"}</h2>
+            <Button variant="ghost" size="sm" onClick={() => setConflictPanelOpen(false)} className="text-xs text-muted-foreground">Close</Button>
+          </div>
+          <ul className="flex flex-col gap-3 list-none">
+            {conflicts.map((c) => (
+              <li key={`${c.objectType}:${c.objectId}`}><ConflictCard conflict={c} /></li>
+            ))}
+          </ul>
+          <div className="flex flex-wrap gap-2 pt-2 border-t border-border">
+            <Button size="sm" onClick={() => handleRebase("keep_main")} disabled={pending} variant="outline">Keep all from main</Button>
+            <Button size="sm" onClick={() => handleRebase("keep_branch")} disabled={pending} variant="outline">Keep all from branch</Button>
+            <Button size="sm" onClick={() => handleRebase("rebase_branch_on_main")} disabled={pending}>
+              <GitMerge className="h-3.5 w-3.5 mr-1" aria-hidden="true" />Rebase all on main
+            </Button>
+          </div>
+        </div>
+      )}
 
       {/* Head list. Rendered in two passes — packaged (Skills /
           Agents with canonical source + child files + metadata
@@ -430,6 +507,63 @@ export function BranchDetailClient({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Rebase confirmation dialog */}
+      <Dialog open={rebaseConfirmOpen} onOpenChange={(v) => !v && setRebaseConfirmOpen(false)}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Rebase on latest main?</DialogTitle></DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            This will re-anchor your branch changes on top of the latest main versions. Your content stays; the version history is extended.
+            {conflictCount > 0 && <> {conflictCount} object{conflictCount === 1 ? "" : "s"} will be rebased.</>}
+          </p>
+          <DialogFooter>
+            <Button variant="outline" size="sm" onClick={() => setRebaseConfirmOpen(false)} disabled={pending}>Cancel</Button>
+            <Button size="sm" onClick={() => handleRebase("rebase_branch_on_main")} disabled={pending}>{pending ? "Rebasing..." : "Rebase"}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Pre-promote conflict warning */}
+      <Dialog open={prePromoteConflicts !== null} onOpenChange={(v) => !v && setPrePromoteConflicts(null)}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Conflicts detected</DialogTitle></DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            {prePromoteConflicts?.length ?? 0} object{(prePromoteConflicts?.length ?? 0) === 1 ? " has" : "s have"} been
+            changed on main since you branched. Promoting will overwrite
+            main&apos;s changes for those objects. Any overwritten work remains
+            reachable via version history.
+          </p>
+          <DialogFooter>
+            <Button variant="outline" size="sm" onClick={() => { setPrePromoteConflicts(null); handleResolveConflicts(); }} disabled={pending}>Resolve first</Button>
+            <Button size="sm" onClick={() => { setPrePromoteConflicts(null); setConfirmAction("promote"); }} disabled={pending}>Promote anyway</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
+function ConflictCard({ conflict }: { conflict: BranchConflict }) {
+  const meta = typeMeta[conflict.objectType];
+  const Icon = meta.Icon;
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="rounded-lg border border-warning/30 bg-card">
+      <button type="button" onClick={() => setOpen((o) => !o)} className="flex w-full items-center gap-3 px-4 py-3 text-left">
+        {open ? <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" /> : <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />}
+        <Icon className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+        <p className="truncate text-sm font-medium flex-1">{conflict.displayName}</p>
+        <Badge variant="outline" className="shrink-0 text-[10px] font-normal border-warning/40 text-warning">conflict</Badge>
+      </button>
+      {open && (
+        <div className="border-t border-border">
+          <div className="grid grid-cols-1 gap-0 md:grid-cols-3 md:divide-x md:divide-border">
+            <PreviewColumn heading="Base (fork point)" subheading={`version ${conflict.branchParentVersionId.slice(0, 8)}`} content={conflict.baseContent} bytes={conflict.baseContent?.length ?? 0} />
+            <PreviewColumn heading="Main (current)" subheading={`version ${conflict.mainVersionId.slice(0, 8)}`} content={conflict.mainContent} bytes={conflict.mainContent?.length ?? 0} />
+            <PreviewColumn heading="Branch (yours)" subheading={`version ${conflict.branchVersionId.slice(0, 8)}`} content={conflict.branchContent} bytes={conflict.branchContent?.length ?? 0} highlight />
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -689,6 +689,88 @@ confirm dialog mentions the counts.
 
 Baseline 377 → 393 tests after the batch.
 
+## v2.0 — Conflict resolution + rebase
+
+When both main and a branch have edited the same object, the branch
+detail page previously showed a read-only "main moved ahead" warning
+badge with no resolution options. v2.0 closes that gap with three
+new services and a resolution UI.
+
+### Conflict detection
+
+`src/server/services/branch_conflict_service.ts` exports
+`detectConflicts(supabase, branchId)` which returns a
+`BranchConflict[]`. For each `branch_heads` row it compares the
+branch version's `parent_version_id` (the fork point) against the
+canonical object's `current_version_id` (main's head). When they
+differ, and main's head is not the branch head itself, a conflict
+exists. The returned struct carries three content snapshots — base
+(fork point), main (current), and branch — so the UI can render a
+3-way comparison.
+
+### Rebase service
+
+`src/server/services/branch_rebase_service.ts` exports
+`rebaseBranch(supabase, branchId, workspaceId, actorId, { strategy })`
+with three strategies:
+
+- **`keep_main`**: deletes the `branch_heads` row for each conflicting
+  object so promote won't overwrite main's newer work.
+- **`keep_branch`** / **`rebase_branch_on_main`**: creates a NEW
+  version row whose `parent_version_id` points at main's current head
+  and whose content is the branch's content. Updates the branch head
+  to point at this new version. The old branch version stays in the
+  immutable version chain. This effectively re-anchors the branch on
+  top of main.
+
+All strategies record a `branch.rebased` audit event with the
+strategy and affected count.
+
+### Server actions
+
+Two new actions in `src/app/app/branches/actions.ts`:
+
+- `detectBranchConflictsAction(branchId)` — read-only, any workspace
+  member. Returns `BranchConflict[]`.
+- `rebaseBranchAction(branchId, strategy)` — requires write role.
+  Validates branch is open.
+
+### UI
+
+The branch detail page (`branch_detail_client.tsx`) now shows:
+
+1. **Conflict banner** at the top when any diff row has
+   `mainMovedAhead`. Offers three buttons: "Resolve conflicts"
+   (opens the per-object panel), "Rebase on latest main" (opens
+   a confirmation dialog), and "Keep my branch as-is" (dismisses
+   the warning — the user intends to overwrite on promote).
+
+2. **Per-object conflict resolution panel** with a 3-column layout
+   (Base | Main | Branch) for each conflicting object. Bottom
+   action bar offers "Keep all from main" / "Keep all from branch" /
+   "Rebase all on main".
+
+3. **Pre-promote conflict check**: the Promote button now runs
+   `detectBranchConflictsAction` first when conflicts are present.
+   If conflicts exist, a dialog warns "N objects have been changed on
+   main" with "Resolve first" and "Promote anyway" options.
+
+### Tests
+
+`src/tests/unit/branch_conflict_service.test.ts` — 9 cases:
+
+- No conflict when main hasn't changed
+- Conflict detected when main version differs from branch parent
+- Empty when branch has no heads
+- File head conflict detection through object_versions
+- Rebase `rebase_branch_on_main` creates a new version
+- Rebase `keep_main` removes the branch head
+- Rebase `keep_branch` re-anchors (creates new version)
+- No rebased when no conflicts exist
+- Throws when branch is not open
+
+Baseline 495 → 504 tests after the batch.
+
 ## Related docs
 
 - [branch_aware_writes_v1.md](branch_aware_writes_v1.md)
