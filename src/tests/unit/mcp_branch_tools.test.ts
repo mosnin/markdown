@@ -176,6 +176,8 @@ describe("DraftBranch type — authored_by fields", () => {
       created_at: new Date().toISOString(),
       promoted_at: null,
       discarded_at: null,
+      rolled_back_at: null,
+      rollback_change_set_id: null,
       authored_by_connection_id: null,
       authored_by_client_id: "my-client",
     };

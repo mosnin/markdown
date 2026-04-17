@@ -29,7 +29,12 @@ import { type SupabaseClient } from "@supabase/supabase-js";
  * incrementally without another breaking migration.
  */
 
-export type DraftBranchStatus = "open" | "promoting" | "promoted" | "discarded";
+export type DraftBranchStatus =
+  | "open"
+  | "promoting"
+  | "promoted"
+  | "discarded"
+  | "rolled_back";
 
 export interface DraftBranch {
   id: string;
@@ -42,6 +47,8 @@ export interface DraftBranch {
   created_at: string;
   promoted_at: string | null;
   discarded_at: string | null;
+  rolled_back_at: string | null;
+  rollback_change_set_id: string | null;
   /** OAuth connection that created this branch via MCP, if any. */
   authored_by_connection_id: string | null;
   /** OAuth client_id that created this branch via MCP, if any. */

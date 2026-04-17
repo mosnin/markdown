@@ -8,6 +8,7 @@ import {
   GitBranch,
   PackageOpen,
   Plus,
+  RefreshCw,
   Trash2,
   X,
 } from "lucide-react";
@@ -266,7 +267,10 @@ function BranchRow({
           )}
           {row.status !== "open" && (
             <Badge variant="outline" className="shrink-0 text-[10px] font-normal capitalize">
-              {row.status}
+              {row.status === "rolled_back" && (
+                <RefreshCw className="h-3 w-3 mr-1" aria-hidden="true" />
+              )}
+              {row.status === "rolled_back" ? "Rolled back" : row.status}
             </Badge>
           )}
           {row.authored_by_client_name && (

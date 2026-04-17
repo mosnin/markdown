@@ -224,6 +224,66 @@ export async function promoteBranchAction(
   }
 }
 
+// ─── Rollback ───────────────────────────────────────────────────────────────
+
+export async function rollbackBranchPromotionAction(
+  branchId: string
+): Promise<ActionResult<{ rolledBack: number; changeSetId: string }>> {
+  const gate = await requireWriteRoleResult();
+  if (!gate.ok) return { ok: false, error: gate.error };
+  const { ctx } = gate;
+
+  try {
+    const supabase = await createClient();
+    const { data: branch } = await supabase
+      .from("draft_branches")
+      .select("workspace_id, status, name")
+      .eq("id", branchId)
+      .maybeSingle();
+    if (!branch || branch.workspace_id !== ctx.workspace.id) {
+      return { ok: false, error: "Branch not found" };
+    }
+    if (branch.status !== "promoted") {
+      return {
+        ok: false,
+        error: `Cannot rollback branch in status '${branch.status}'. Only promoted branches can be rolled back.`,
+      };
+    }
+
+    const { rollbackBranchPromotion } = await import(
+      "@/server/services/branch_rollback_service"
+    );
+    const result = await rollbackBranchPromotion(
+      supabase,
+      branchId,
+      ctx.user.id
+    );
+
+    await createAuditEvent(supabase, {
+      workspace_id: ctx.workspace.id,
+      actor_type: "user",
+      actor_id: ctx.user.id,
+      object_type: "draft_branch",
+      object_id: branchId,
+      event_type: "branch.promotion_rolled_back",
+      metadata: {
+        change_set_id: result.changeSetId,
+        rolled_back_count: result.rolledBack,
+      },
+    });
+
+    revalidatePath("/app/branches");
+    revalidatePath(`/app/branches/${branchId}`);
+    revalidatePath("/app");
+    return { ok: true, data: result };
+  } catch (err) {
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : "Rollback failed",
+    };
+  }
+}
+
 // ─── Discard ─────────────────────────────────────────────────────────────────
 
 export async function discardBranchAction(

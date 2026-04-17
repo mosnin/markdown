@@ -24,6 +24,7 @@ import {
   Check,
   Minus,
   Plus,
+  RefreshCw,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
@@ -41,6 +42,7 @@ import {
   setActiveBranchAction,
   detectBranchConflictsAction,
   rebaseBranchAction,
+  rollbackBranchPromotionAction,
 } from "../actions";
 import type { DraftBranch } from "@/server/services/branch_service";
 import type {
@@ -96,7 +98,7 @@ export function BranchDetailClient({
   isActive: boolean;
   authoredByClientName?: string | null;
 }) {
-  const [confirmAction, setConfirmAction] = useState<"promote" | "discard" | null>(null);
+  const [confirmAction, setConfirmAction] = useState<"promote" | "discard" | "rollback" | null>(null);
   const [toast, setToast] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
   const [pending, startTransition] = useTransition();
   const [conflicts, setConflicts] = useState<BranchConflict[] | null>(null);
@@ -291,6 +293,45 @@ export function BranchDetailClient({
               <GitMerge className="h-3.5 w-3.5 mr-1" aria-hidden="true" />Rebase all on main
             </Button>
           </div>
+        </div>
+      )}
+
+      {/* Promoted / rolled-back status banners */}
+      {branch.status === "promoted" && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-card px-4 py-3">
+          <div className="flex items-center gap-2 text-sm">
+            <Check className="h-4 w-4 shrink-0 text-emerald-600" aria-hidden="true" />
+            <span className="text-foreground">
+              This branch was promoted
+              {branch.promoted_at && (
+                <> on {new Date(branch.promoted_at).toLocaleDateString()}</>
+              )}
+            </span>
+          </div>
+          {canWrite && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setConfirmAction("rollback")}
+              disabled={pending}
+              className="text-destructive border-destructive/30 hover:bg-destructive/10"
+            >
+              <RefreshCw className="h-3.5 w-3.5 mr-1" aria-hidden="true" />
+              Revert this promotion
+            </Button>
+          )}
+        </div>
+      )}
+
+      {branch.status === "rolled_back" && (
+        <div className="flex items-center gap-2 rounded-lg border border-border bg-card px-4 py-3 text-sm">
+          <RefreshCw className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+          <span className="text-foreground">
+            This branch&apos;s promotion was reverted
+            {branch.rolled_back_at && (
+              <> on {new Date(branch.rolled_back_at).toLocaleDateString()}</>
+            )}
+          </span>
         </div>
       )}
 
@@ -536,6 +577,54 @@ export function BranchDetailClient({
           <DialogFooter>
             <Button variant="outline" size="sm" onClick={() => { setPrePromoteConflicts(null); handleResolveConflicts(); }} disabled={pending}>Resolve first</Button>
             <Button size="sm" onClick={() => { setPrePromoteConflicts(null); setConfirmAction("promote"); }} disabled={pending}>Promote anyway</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={confirmAction === "rollback"}
+        onOpenChange={(v) => !v && setConfirmAction(null)}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Revert branch promotion</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            This will undo all changes from this promotion, restoring the
+            previous state. A rollback record will be created so this
+            revert is also reversible.
+          </p>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setConfirmAction(null)}
+              disabled={pending}
+            >
+              Cancel
+            </Button>
+            <Button
+              size="sm"
+              onClick={() => {
+                startTransition(async () => {
+                  const res = await rollbackBranchPromotionAction(branch.id);
+                  setConfirmAction(null);
+                  if (res.ok) {
+                    setToast({
+                      kind: "ok",
+                      text: `Promotion reverted. ${res.data.rolledBack} object${res.data.rolledBack === 1 ? "" : "s"} restored to their previous state.`,
+                    });
+                    window.location.reload();
+                  } else {
+                    setToast({ kind: "err", text: res.error });
+                  }
+                });
+              }}
+              disabled={pending}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {pending ? "Reverting…" : "Revert"}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

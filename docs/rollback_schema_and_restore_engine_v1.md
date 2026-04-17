@@ -334,6 +334,64 @@ revert sort + folder back to the canonical pre-state.
 
 See [`docs/branch_local_sort_order_and_reorder_isolation_v1.md`](branch_local_sort_order_and_reorder_isolation_v1.md).
 
+## v1.1 — User-facing branch promotion rollback
+
+Users can now revert a branch promotion directly from the branch
+detail page. The feature exposes the existing restore engine
+(`restoreFromChangeSet`) through a thin service layer, with no new
+restore logic required.
+
+### How it works
+
+1. `rollbackBranchPromotion(supabase, branchId, actorId)` in
+   `src/server/services/branch_rollback_service.ts` validates the
+   branch is in `promoted` status, locates the `origin:
+   'branch_promotion'` change set via `metadata.branch_id`, and
+   delegates to `restoreFromChangeSet`.
+2. The restore engine opens a child change set (`origin: 'restore'`,
+   `parent_change_set_id` pointing at the promotion), replays every
+   item and structural event in reverse, and commits. This means the
+   rollback itself is a first-class change set — it is auditable and
+   reversible.
+3. The branch status moves to `rolled_back` with `rolled_back_at`
+   and `rollback_change_set_id` columns (migration
+   `20260414000002_branch_rollback_status.sql`).
+
+### Schema changes
+
+* `draft_branches.status` CHECK constraint expanded to include
+  `'rolled_back'`.
+* `draft_branches.rolled_back_at timestamptz` — when the rollback
+  occurred.
+* `draft_branches.rollback_change_set_id uuid REFERENCES
+  change_sets(id)` — links the branch to the restore change set for
+  audit traceability.
+
+### Role gate
+
+Write role (not admin-only). Consistent with the promote action's
+own gate — any member who can promote can also revert. The decision
+is documented here because rollback is a destructive-looking action,
+but it is fully reversible through the restore engine, which makes
+admin-gating unnecessarily restrictive.
+
+### UI
+
+* `/app/branches/[id]`: promoted branches show a "Revert this
+  promotion" button with a confirmation dialog. On success, the page
+  reloads showing the `rolled_back` status.
+* `/app/branches/[id]`: rolled-back branches show a status banner
+  with the rollback date.
+* `/app/branches`: rolled-back branches appear in the Closed section
+  with a "Rolled back" badge and a distinct icon.
+
+### Test coverage
+
+`src/tests/unit/branch_rollback.test.ts` — 7 tests covering:
+happy-path restore, status transition, change-set creation,
+rejection of non-promoted / already-rolled-back / discarded
+branches, missing promotion change set, and restore engine failure.
+
 ## Referenced docs
 
 * [`docs/rollback_architecture_v1.md`](rollback_architecture_v1.md) — conceptual model
