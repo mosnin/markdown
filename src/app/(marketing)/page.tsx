@@ -6,6 +6,12 @@ import { Button } from "@/components/ui/button";
 import { NotificationCenterFeed } from "@/components/ui/live-feed";
 import { AnomalyHeatmap } from "@/components/ui/anomaly-heatmap";
 
+// ─── Static generation ───────────────────────────────────────────────────────
+// Marketing home page is public content — pre-render at build time and
+// revalidate every hour via ISR so pricing / copy changes propagate quickly.
+export const dynamic = "force-static";
+export const revalidate = 3600;
+
 // ─── App visuals ──────────────────────────────────────────────────────────────
 
 function AppMockup() {

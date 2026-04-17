@@ -44,6 +44,56 @@ const nextConfig: NextConfig = {
         source: "/(.*)",
         headers: securityHeaders,
       },
+      // ── Edge caching for public marketing pages ────────────────────────
+      // These pages are statically generated with ISR (revalidate=3600)
+      // but we also set s-maxage so CDN / edge proxies in front of the
+      // origin can serve cached HTML without hitting the origin at all.
+      {
+        source: "/",
+        headers: [
+          {
+            key: "Cache-Control",
+            value: "public, s-maxage=3600, stale-while-revalidate=86400",
+          },
+        ],
+      },
+      {
+        source: "/features",
+        headers: [
+          {
+            key: "Cache-Control",
+            value: "public, s-maxage=3600, stale-while-revalidate=86400",
+          },
+        ],
+      },
+      {
+        source: "/pricing",
+        headers: [
+          {
+            key: "Cache-Control",
+            value: "public, s-maxage=3600, stale-while-revalidate=86400",
+          },
+        ],
+      },
+      // ── Stable API / discovery endpoints ───────────────────────────────
+      {
+        source: "/.well-known/:path*",
+        headers: [
+          {
+            key: "Cache-Control",
+            value: "public, s-maxage=3600, stale-while-revalidate=86400",
+          },
+        ],
+      },
+      {
+        source: "/api/v1/system_guide",
+        headers: [
+          {
+            key: "Cache-Control",
+            value: "public, s-maxage=3600, stale-while-revalidate=86400",
+          },
+        ],
+      },
     ];
   },
 };

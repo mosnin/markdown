@@ -22,5 +22,12 @@ export async function GET(request: NextRequest) {
   }
 
   const guide = getSystemGuide();
-  return apiOk(guide);
+  const res = apiOk(guide);
+  // The system guide is static reference content — cache aggressively at the
+  // edge and let stale copies serve while revalidating in the background.
+  res.headers.set(
+    "Cache-Control",
+    "public, s-maxage=3600, stale-while-revalidate=86400",
+  );
+  return res;
 }
