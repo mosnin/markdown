@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { createContext, useContext, useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import {
   AlertCircle,
@@ -43,8 +43,19 @@ import {
   detectBranchConflictsAction,
   rebaseBranchAction,
   rollbackBranchPromotionAction,
+  requestBranchReviewAction,
+  submitBranchReviewAction,
+  resetBranchReviewAction,
+  createBranchCommentAction,
+  resolveBranchCommentAction,
+  unresolveBranchCommentAction,
+  deleteBranchCommentAction,
 } from "../actions";
 import type { DraftBranch } from "@/server/services/branch_service";
+import type {
+  BranchReviewWithReviewer,
+} from "@/server/services/branch_review_service";
+import type { BranchComment } from "@/server/services/branch_comment_service";
 import type {
   BranchDiff,
   BranchDiffRow,
@@ -75,6 +86,28 @@ import type { RebaseStrategy } from "@/server/services/branch_rebase_service";
  * viewers see the page but don't see the write controls.
  */
 
+/**
+ * Context plumbing for the per-diff-row comment threads. The
+ * `BranchDetailClient` root loads all comments once and groups them
+ * by `(objectType, objectId)`; child cards pull their slice through
+ * this context so nothing has to be prop-drilled five levels deep.
+ */
+interface CommentsCtxValue {
+  branchId: string;
+  currentUserId: string;
+  /** Keyed by `${objectType}:${objectId}` — all comments for that thread. */
+  byKey: Map<string, BranchComment[]>;
+}
+const CommentsContext = createContext<CommentsCtxValue | null>(null);
+
+function useComments(): CommentsCtxValue | null {
+  return useContext(CommentsContext);
+}
+
+function commentKey(objectType: string, objectId: string): string {
+  return `${objectType}:${objectId}`;
+}
+
 const typeMeta: Record<
   BranchDiffRow["objectType"],
   { label: string; Icon: React.ComponentType<{ className?: string }> }
@@ -90,13 +123,21 @@ export function BranchDetailClient({
   diff,
   canWrite,
   isActive,
+  isAuthor,
   authoredByClientName,
+  reviews,
+  comments,
+  currentUserId,
 }: {
   branch: DraftBranch;
   diff: BranchDiff;
   canWrite: boolean;
   isActive: boolean;
+  isAuthor: boolean;
   authoredByClientName?: string | null;
+  reviews: BranchReviewWithReviewer[];
+  comments: BranchComment[];
+  currentUserId: string;
 }) {
   const [confirmAction, setConfirmAction] = useState<"promote" | "discard" | "rollback" | null>(null);
   const [toast, setToast] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
@@ -109,6 +150,22 @@ export function BranchDetailClient({
 
   const closed = branch.status !== "open";
   const conflictCount = diff.rows.filter((r) => r.mainMovedAhead).length;
+
+  // Promote gating — mirror the server-side gate so the button is
+  // disabled *before* the user clicks it. The action itself also
+  // enforces this; the local check is a UX affordance.
+  const unresolvedCommentCount = comments.filter((c) => !c.resolved).length;
+  const reviewGateBlocks =
+    branch.review_status === "review_requested" ||
+    branch.review_status === "changes_requested";
+  const commentGateBlocks = unresolvedCommentCount > 0;
+  const promoteGateMessage = reviewGateBlocks
+    ? branch.review_status === "review_requested"
+      ? "Waiting for an approving review before promote."
+      : "Reviewer requested changes. Address them and re-request review."
+    : commentGateBlocks
+    ? `Resolve ${unresolvedCommentCount} comment thread${unresolvedCommentCount === 1 ? "" : "s"} before promoting.`
+    : null;
 
   function run(kind: "promote" | "discard") {
     startTransition(async () => {
@@ -169,7 +226,26 @@ export function BranchDetailClient({
     else setToast({ kind: "err", text: res.error });
   }
 
+  // Group comments by their (objectType, objectId) thread key.
+  // Memoized so HeadCards don't re-group on every render.
+  const commentsByKey = useMemo(() => {
+    const m = new Map<string, BranchComment[]>();
+    for (const c of comments) {
+      const k = commentKey(c.object_type, c.object_id);
+      const arr = m.get(k) ?? [];
+      arr.push(c);
+      m.set(k, arr);
+    }
+    return m;
+  }, [comments]);
+
+  const commentsCtx: CommentsCtxValue = useMemo(
+    () => ({ branchId: branch.id, currentUserId, byKey: commentsByKey }),
+    [branch.id, currentUserId, commentsByKey]
+  );
+
   return (
+    <CommentsContext.Provider value={commentsCtx}>
     <div className="space-y-5">
       {toast && (
         <div
@@ -236,8 +312,8 @@ export function BranchDetailClient({
             <Button
               size="sm"
               onClick={handlePromoteClick}
-              disabled={pending || (diff.headCount === 0 && diff.pendingOps.length === 0 && diff.folderOverrides.length === 0 && diff.placementChanges.length === 0 && diff.createdNoteLinks.length === 0 && diff.createdAttachments.length === 0)}
-              title={(diff.headCount === 0 && diff.pendingOps.length === 0 && diff.folderOverrides.length === 0 && diff.placementChanges.length === 0 && diff.createdNoteLinks.length === 0 && diff.createdAttachments.length === 0) ? "Nothing to promote" : undefined}
+              disabled={pending || Boolean(promoteGateMessage) || (diff.headCount === 0 && diff.pendingOps.length === 0 && diff.folderOverrides.length === 0 && diff.placementChanges.length === 0 && diff.createdNoteLinks.length === 0 && diff.createdAttachments.length === 0)}
+              title={promoteGateMessage ?? ((diff.headCount === 0 && diff.pendingOps.length === 0 && diff.folderOverrides.length === 0 && diff.placementChanges.length === 0 && diff.createdNoteLinks.length === 0 && diff.createdAttachments.length === 0) ? "Nothing to promote" : undefined)}
             >
               <PackageOpen className="h-3.5 w-3.5 mr-1" aria-hidden="true" />
               Promote
@@ -254,6 +330,24 @@ export function BranchDetailClient({
           </div>
         )}
       </div>
+
+      {/* Review status banner */}
+      {!closed && branch.review_status !== "draft" && (
+        <ReviewStatusBanner status={branch.review_status} />
+      )}
+
+      {/* Review actions + review list panel */}
+      {!closed && (
+        <ReviewPanel
+          branchId={branch.id}
+          reviewStatus={branch.review_status}
+          isAuthor={isAuthor}
+          canWrite={canWrite}
+          reviews={reviews}
+          currentUserId={currentUserId}
+          setToast={setToast}
+        />
+      )}
 
       {/* Conflict banner */}
       {conflictCount > 0 && !closed && canWrite && !conflictDismissed && (
@@ -656,6 +750,7 @@ export function BranchDetailClient({
         </DialogContent>
       </Dialog>
     </div>
+    </CommentsContext.Provider>
   );
 }
 
@@ -764,6 +859,7 @@ function HeadCard({ row }: { row: BranchDiffRow }) {
               highlight
             />
           </div>
+          <CommentThread objectType={row.objectType} objectId={row.objectId} />
         </div>
       )}
     </div>
@@ -1301,6 +1397,506 @@ function PreviewColumn({
         <pre className="max-h-80 overflow-auto rounded-md border border-border bg-muted/30 px-3 py-2 font-mono text-[11px] leading-relaxed whitespace-pre-wrap break-words">
           {content}
         </pre>
+      )}
+    </div>
+  );
+}
+
+// ─── Review banner ──────────────────────────────────────────────────────────
+
+function ReviewStatusBanner({
+  status,
+}: {
+  status: DraftBranch["review_status"];
+}) {
+  if (status === "review_requested") {
+    return (
+      <div className="flex items-center gap-2 rounded-lg border border-warning/40 bg-warning/5 px-4 py-3 text-sm">
+        <AlertCircle className="h-4 w-4 shrink-0 text-warning" aria-hidden="true" />
+        <span className="text-foreground">
+          Review requested — waiting for approval
+        </span>
+      </div>
+    );
+  }
+  if (status === "changes_requested") {
+    return (
+      <div className="flex items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm">
+        <AlertCircle className="h-4 w-4 shrink-0 text-destructive" aria-hidden="true" />
+        <span className="text-foreground">
+          Changes requested by reviewer — please address and re-request review
+        </span>
+      </div>
+    );
+  }
+  if (status === "approved") {
+    return (
+      <div className="flex items-center gap-2 rounded-lg border border-emerald-600/40 bg-emerald-600/5 px-4 py-3 text-sm">
+        <Check className="h-4 w-4 shrink-0 text-emerald-600" aria-hidden="true" />
+        <span className="text-foreground">Approved — ready to promote</span>
+      </div>
+    );
+  }
+  return null;
+}
+
+// ─── Review actions + list panel ────────────────────────────────────────────
+
+function ReviewPanel({
+  branchId,
+  reviewStatus,
+  isAuthor,
+  canWrite,
+  reviews,
+  currentUserId,
+  setToast,
+}: {
+  branchId: string;
+  reviewStatus: DraftBranch["review_status"];
+  isAuthor: boolean;
+  canWrite: boolean;
+  reviews: BranchReviewWithReviewer[];
+  currentUserId: string;
+  setToast: (t: { kind: "ok" | "err"; text: string }) => void;
+}) {
+  const [pending, startTransition] = useTransition();
+  const [note, setNote] = useState("");
+
+  function requestReviewNow() {
+    startTransition(async () => {
+      const res = await requestBranchReviewAction(branchId);
+      if (res.ok) {
+        setToast({ kind: "ok", text: "Review requested." });
+        window.location.reload();
+      } else {
+        setToast({ kind: "err", text: res.error });
+      }
+    });
+  }
+
+  function resetReviewNow() {
+    startTransition(async () => {
+      const res = await resetBranchReviewAction(branchId);
+      if (res.ok) {
+        setToast({ kind: "ok", text: "Review reset." });
+        window.location.reload();
+      } else {
+        setToast({ kind: "err", text: res.error });
+      }
+    });
+  }
+
+  function submitDecision(decision: "approved" | "changes_requested") {
+    startTransition(async () => {
+      const res = await submitBranchReviewAction(
+        branchId,
+        decision,
+        note.trim() || null
+      );
+      if (res.ok) {
+        setNote("");
+        setToast({
+          kind: "ok",
+          text:
+            decision === "approved"
+              ? "Approved."
+              : "Changes requested.",
+        });
+        window.location.reload();
+      } else {
+        setToast({ kind: "err", text: res.error });
+      }
+    });
+  }
+
+  const hasAnyReview = reviews.length > 0;
+  // The "Reset after edits" button is shown to the author whenever
+  // any review exists (to clear stale approvals) or whenever review
+  // is in a non-draft state.
+  const showResetButton =
+    isAuthor && canWrite && (hasAnyReview || reviewStatus !== "draft");
+
+  return (
+    <div className="rounded-lg border border-border bg-card px-4 py-3 space-y-3">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="text-sm">
+          <p className="font-medium text-foreground">Review</p>
+          <p className="text-[11px] text-muted-foreground capitalize">
+            Status: {reviewStatus.replace(/_/g, " ")}
+          </p>
+        </div>
+        {isAuthor && canWrite && (
+          <div className="flex flex-wrap gap-2">
+            {reviewStatus === "draft" && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={requestReviewNow}
+                disabled={pending}
+              >
+                Request review
+              </Button>
+            )}
+            {showResetButton && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={resetReviewNow}
+                disabled={pending}
+                className="text-muted-foreground"
+                title="Mark every prior review as superseded so reviewers take another look."
+              >
+                Reset after edits
+              </Button>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Reviewer action form — non-authors only */}
+      {!isAuthor && canWrite && (
+        <div className="rounded-md border border-border bg-background px-3 py-3 space-y-2">
+          <p className="text-xs font-semibold text-foreground">
+            Your review
+          </p>
+          <textarea
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            placeholder="Optional review note…"
+            className="w-full rounded-md border border-border bg-background px-2 py-1.5 text-xs outline-none focus:ring-1 focus:ring-ring resize-y min-h-[3rem]"
+            disabled={pending}
+          />
+          <div className="flex flex-wrap gap-2">
+            <Button
+              size="sm"
+              onClick={() => submitDecision("approved")}
+              disabled={pending}
+            >
+              <Check className="h-3.5 w-3.5 mr-1" aria-hidden="true" />
+              Approve
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => submitDecision("changes_requested")}
+              disabled={pending}
+              className="text-destructive border-destructive/30 hover:bg-destructive/10"
+            >
+              Request changes
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* Review list */}
+      {hasAnyReview && (
+        <ul className="flex flex-col gap-2 list-none">
+          {reviews.map((r) => (
+            <li key={r.id}>
+              <ReviewRow review={r} highlightSelf={r.reviewer_id === currentUserId} />
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+function ReviewRow({
+  review,
+  highlightSelf,
+}: {
+  review: BranchReviewWithReviewer;
+  highlightSelf: boolean;
+}) {
+  const name =
+    review.reviewer_display_name ?? review.reviewer_email ?? review.reviewer_id.slice(0, 8);
+  return (
+    <div
+      className={cn(
+        "rounded-md border border-border bg-background px-3 py-2",
+        highlightSelf && "border-primary/40"
+      )}
+    >
+      <div className="flex flex-wrap items-center gap-2 text-xs">
+        <span className="font-medium">{name}</span>
+        {review.decision === "approved" ? (
+          <Badge
+            variant="outline"
+            className="gap-1 border-emerald-600/40 text-emerald-600 text-[10px]"
+          >
+            <Check className="h-2.5 w-2.5" aria-hidden="true" />
+            approved
+          </Badge>
+        ) : (
+          <Badge
+            variant="outline"
+            className="gap-1 border-destructive/40 text-destructive text-[10px]"
+          >
+            changes requested
+          </Badge>
+        )}
+        <span className="text-muted-foreground">
+          {new Date(review.created_at).toLocaleString()}
+        </span>
+      </div>
+      {review.note && (
+        <p className="mt-1 whitespace-pre-wrap text-xs text-muted-foreground">
+          {review.note}
+        </p>
+      )}
+    </div>
+  );
+}
+
+// ─── Comment threads ────────────────────────────────────────────────────────
+
+/**
+ * Per-diff-row comment thread component. Reads its slice from the
+ * `CommentsContext` so every expandable diff row (notes, files,
+ * skills, agents, folders, …) can drop this in by passing the two
+ * coordinates.
+ *
+ * UI layout:
+ *   - Unresolved comments first (prominent).
+ *   - Resolved comments collapsed behind a toggle.
+ *   - One-level nesting: replies live directly under the parent with
+ *     a visual indent; replies-to-replies roll up visually but the
+ *     service layer still preserves `parent_comment_id` pointing at
+ *     the nearest explicit parent.
+ *   - "Add a comment" textarea at the bottom.
+ */
+function CommentThread({
+  objectType,
+  objectId,
+}: {
+  objectType: string;
+  objectId: string;
+}) {
+  const ctx = useComments();
+  const all = ctx ? ctx.byKey.get(commentKey(objectType, objectId)) ?? [] : [];
+  const [showResolved, setShowResolved] = useState(false);
+  const [pending, startTransition] = useTransition();
+  const [body, setBody] = useState("");
+  const [replyTo, setReplyTo] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  // Build a tree: top-level comments with their direct replies.
+  const topLevel = all.filter((c) => !c.parent_comment_id);
+  const repliesByParent = new Map<string, BranchComment[]>();
+  for (const c of all) {
+    if (c.parent_comment_id) {
+      const arr = repliesByParent.get(c.parent_comment_id) ?? [];
+      arr.push(c);
+      repliesByParent.set(c.parent_comment_id, arr);
+    }
+  }
+
+  const unresolvedTop = topLevel.filter((c) => !c.resolved);
+  const resolvedTop = topLevel.filter((c) => c.resolved);
+
+  function submitBody() {
+    if (!ctx) return;
+    const trimmed = body.trim();
+    if (!trimmed) return;
+    startTransition(async () => {
+      const res = await createBranchCommentAction(
+        ctx.branchId,
+        objectType,
+        objectId,
+        trimmed,
+        replyTo
+      );
+      if (res.ok) {
+        setBody("");
+        setReplyTo(null);
+        setError(null);
+        window.location.reload();
+      } else {
+        setError(res.error);
+      }
+    });
+  }
+
+  if (!ctx) return null;
+
+  return (
+    <div className="border-t border-border bg-muted/20 px-4 py-3 space-y-3">
+      <div className="flex items-center justify-between">
+        <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+          Comments ({unresolvedTop.length}
+          {resolvedTop.length > 0 && ` · ${resolvedTop.length} resolved`})
+        </p>
+        {resolvedTop.length > 0 && (
+          <button
+            type="button"
+            onClick={() => setShowResolved((v) => !v)}
+            className="text-[10px] text-muted-foreground hover:text-foreground transition-fast"
+          >
+            {showResolved ? "Hide resolved" : "Show resolved"}
+          </button>
+        )}
+      </div>
+
+      {unresolvedTop.length === 0 && resolvedTop.length === 0 && (
+        <p className="text-xs italic text-muted-foreground">
+          No comments yet.
+        </p>
+      )}
+
+      {unresolvedTop.map((c) => (
+        <CommentItem
+          key={c.id}
+          comment={c}
+          replies={repliesByParent.get(c.id) ?? []}
+          currentUserId={ctx.currentUserId}
+          onReply={() => setReplyTo(c.id)}
+        />
+      ))}
+
+      {showResolved &&
+        resolvedTop.map((c) => (
+          <CommentItem
+            key={c.id}
+            comment={c}
+            replies={repliesByParent.get(c.id) ?? []}
+            currentUserId={ctx.currentUserId}
+            onReply={() => setReplyTo(c.id)}
+          />
+        ))}
+
+      {/* Add a comment */}
+      <div className="rounded-md border border-border bg-background px-3 py-2 space-y-2">
+        {replyTo && (
+          <p className="text-[10px] text-muted-foreground">
+            Replying to a comment.{" "}
+            <button
+              type="button"
+              onClick={() => setReplyTo(null)}
+              className="underline"
+            >
+              Cancel
+            </button>
+          </p>
+        )}
+        <textarea
+          value={body}
+          onChange={(e) => setBody(e.target.value)}
+          placeholder="Add a comment…"
+          className="w-full rounded-md border border-border bg-background px-2 py-1.5 text-xs outline-none focus:ring-1 focus:ring-ring resize-y min-h-[2.5rem]"
+          disabled={pending}
+        />
+        {error && (
+          <p className="text-[10px] text-destructive">{error}</p>
+        )}
+        <div className="flex justify-end">
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={submitBody}
+            disabled={pending || body.trim().length === 0}
+          >
+            {pending ? "Posting…" : replyTo ? "Reply" : "Comment"}
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function CommentItem({
+  comment,
+  replies,
+  currentUserId,
+  onReply,
+}: {
+  comment: BranchComment;
+  replies: BranchComment[];
+  currentUserId: string;
+  onReply: () => void;
+}) {
+  const [pending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+  const canDelete = comment.author_id === currentUserId;
+
+  function handleResolve() {
+    startTransition(async () => {
+      const res = comment.resolved
+        ? await unresolveBranchCommentAction(comment.id)
+        : await resolveBranchCommentAction(comment.id);
+      if (res.ok) window.location.reload();
+      else setError(res.error);
+    });
+  }
+
+  function handleDelete() {
+    startTransition(async () => {
+      const res = await deleteBranchCommentAction(comment.id);
+      if (res.ok) window.location.reload();
+      else setError(res.error);
+    });
+  }
+
+  return (
+    <div className={cn("space-y-2", comment.resolved && "opacity-60")}>
+      <div className="rounded-md border border-border bg-background px-3 py-2">
+        <div className="flex flex-wrap items-center gap-2 text-[10px] text-muted-foreground">
+          <span className="font-medium text-foreground">
+            {comment.author_id.slice(0, 8)}
+          </span>
+          <span>{new Date(comment.created_at).toLocaleString()}</span>
+          {comment.resolved && (
+            <Badge variant="outline" className="text-[9px]">
+              resolved
+            </Badge>
+          )}
+        </div>
+        <p className="mt-1 whitespace-pre-wrap text-xs">{comment.body}</p>
+        <div className="mt-1 flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={onReply}
+            disabled={pending}
+            className="text-[10px] text-muted-foreground hover:text-foreground transition-fast"
+          >
+            Reply
+          </button>
+          <button
+            type="button"
+            onClick={handleResolve}
+            disabled={pending}
+            className="text-[10px] text-muted-foreground hover:text-foreground transition-fast"
+          >
+            {comment.resolved ? "Unresolve" : "Resolve"}
+          </button>
+          {canDelete && (
+            <button
+              type="button"
+              onClick={handleDelete}
+              disabled={pending}
+              className="text-[10px] text-muted-foreground hover:text-destructive transition-fast"
+            >
+              Delete
+            </button>
+          )}
+        </div>
+        {error && (
+          <p className="mt-1 text-[10px] text-destructive">{error}</p>
+        )}
+      </div>
+      {replies.length > 0 && (
+        <ul className="ml-4 flex flex-col gap-2 list-none border-l-2 border-border pl-3">
+          {replies.map((r) => (
+            <li key={r.id}>
+              <CommentItem
+                comment={r}
+                replies={[]}
+                currentUserId={currentUserId}
+                onReply={onReply}
+              />
+            </li>
+          ))}
+        </ul>
       )}
     </div>
   );

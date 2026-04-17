@@ -5,6 +5,8 @@ import { requireAuthenticatedUser } from "@/server/auth/require_authenticated_us
 import { createClient } from "@/lib/supabase/server";
 import { getDraftBranch } from "@/server/services/branch_service";
 import { getBranchDiff } from "@/server/services/branch_diff_service";
+import { listReviews } from "@/server/services/branch_review_service";
+import { listCommentsForBranch } from "@/server/services/branch_comment_service";
 import { PageHeader } from "@/components/product/page_header";
 import { BranchDetailClient } from "./branch_detail_client";
 
@@ -36,6 +38,7 @@ export default async function BranchDetailPage({
 
   const canWrite = ctx.workspace.role !== "viewer";
   const isActive = ctx.activeBranchId === branch_id;
+  const isAuthor = branch.created_by === ctx.user.id;
 
   // Resolve MCP client name for the "authored by" badge.
   let authoredByClientName: string | null = null;
@@ -47,6 +50,13 @@ export default async function BranchDetailPage({
       .maybeSingle();
     authoredByClientName = client?.name ?? branch.authored_by_client_id;
   }
+
+  // Review workflow data — all workspace members can see this, and
+  // it's cheap to load. Reviews is typically small (one row per
+  // reviewer on a branch); comments may be larger but are grouped
+  // per-diff-row in the client.
+  const reviews = await listReviews(supabase, branch_id);
+  const comments = await listCommentsForBranch(supabase, branch_id);
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
@@ -72,7 +82,11 @@ export default async function BranchDetailPage({
             diff={diff}
             canWrite={canWrite}
             isActive={isActive}
+            isAuthor={isAuthor}
             authoredByClientName={authoredByClientName}
+            reviews={reviews}
+            comments={comments}
+            currentUserId={ctx.user.id}
           />
         </div>
       </div>

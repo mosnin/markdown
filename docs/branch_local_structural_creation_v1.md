@@ -804,6 +804,106 @@ Notes on the transitions:
 - `discarded` is terminal. The branch row stays as audit trail;
   there is no path out.
 
+## v2.1 — review workflow
+
+Branches gained a lightweight review gate that sits in front of
+`promoteBranch`. The author requests review, reviewers approve or
+request changes, and promote is blocked until a branch has either
+an explicit approval or the author opts to skip review entirely.
+
+### Schema
+
+Migration `20260414000003_branch_reviews.sql`:
+
+- `draft_branches.review_status text NOT NULL DEFAULT 'draft'` —
+  single source of truth read by `promoteBranch`. Values:
+  `'draft' | 'review_requested' | 'approved' | 'changes_requested'`.
+- `branch_reviews` — one row per submitted review with a
+  `superseded_at` timestamp. Re-reviews by the same reviewer stamp
+  the prior row superseded rather than mutate it, so history is
+  append-only. A partial index
+  `branch_reviews_branch_idx WHERE superseded_at IS NULL` backs the
+  listReviews read path.
+- `branch_comments` — per-diff-row comment threads keyed by
+  `(branch_id, object_type, object_id)`. `parent_comment_id` threads
+  replies; `resolved` is the source of truth for promote's comment
+  gate.
+
+RLS mirrors `folder_branch_overrides` — workspace-member SELECT,
+`can_write_workspace` for writes. Comment "only author can delete"
+is enforced in the service layer on top of the workspace gate.
+
+### State machine — review_status
+
+```
+draft ──request──▶ review_requested
+review_requested ──approve──▶ approved
+review_requested ──reject──▶ changes_requested
+changes_requested ──approve──▶ approved  (subsequent approving review)
+approved ──reset──▶ draft                (author reset, no prior reviews)
+approved ──reset──▶ review_requested     (author reset, with prior reviews)
+```
+
+- `draft` is the pre-review "author going solo" state — promote
+  passes. This preserves the previous no-review workflow for
+  branches whose authors don't opt into review.
+- `approved` passes. One approval is enough; additional approvals
+  don't weaken it.
+- `review_requested` and `changes_requested` both block promote
+  with a clear error surfaced in the UI banner.
+
+### Promote gates
+
+`promoteBranch` now runs two pre-flight gates before the CAS:
+
+1. **Review gate** — rejects `review_requested` and
+   `changes_requested`. Not bypassable by `force: true`.
+2. **Unresolved-comments gate** — rejects when any
+   `branch_comments.resolved = false` row exists for the branch.
+   Bypassable via the new `PromoteBranchOptions.force` flag (wired
+   admin-only at the action layer).
+
+The existing CAS guard (`open → promoting → promoted`) stays
+intact; review gating runs before the CAS so a blocked promote
+never transitions the branch status.
+
+### Service layer
+
+- `branch_review_service` — `requestReview`, `submitReview`,
+  `listReviews`, `resetReview`. Audit events:
+  `branch.review_requested`, `branch.review_approved`,
+  `branch.review_changes_requested`, `branch.review_reset`.
+- `branch_comment_service` — `createComment`, `listCommentsForBranch`,
+  `listCommentsForObject`, `resolveComment`, `unresolveComment`,
+  `deleteComment`, `countUnresolvedComments`.
+- `branch_service.promoteBranch(supabase, wid, uid, bid, opts?)` —
+  signature gained an optional `PromoteBranchOptions` param.
+
+### UI
+
+`src/app/app/branches/[branch_id]/branch_detail_client.tsx`:
+
+- Review status banner (warning / destructive / success palette for
+  `review_requested` / `changes_requested` / `approved`).
+- Review panel with author-only "Request review" / "Reset after
+  edits" buttons and non-author-only "Approve" / "Request changes"
+  form with optional note textarea.
+- Non-superseded review list with reviewer, decision badge, note,
+  timestamp.
+- Per-diff-row `CommentThread` component rendered inside every
+  expandable `HeadCard`. Supports unresolved + collapsed-resolved
+  views, nested replies (1 level of indentation — deeper replies
+  roll up visually), and author-only delete.
+- Promote button `disabled` and `title` reflect the same gates the
+  server enforces.
+
+### Deferred (TODO)
+
+- Auto-`resetReview` inside write hooks. Currently surfaced as an
+  explicit "Reset after edits" action; the hook wiring is noted in
+  the service comment and will land alongside the next branch-write
+  hardening pass.
+
 ## Related docs
 
 - [branch_aware_writes_v1.md](branch_aware_writes_v1.md)

@@ -36,6 +36,28 @@ export type DraftBranchStatus =
   | "discarded"
   | "rolled_back";
 
+/**
+ * Review gate on a draft branch. Source of truth read by
+ * {@link promoteBranch} to decide whether a branch may land.
+ *
+ * Transitions are driven by `branch_review_service`:
+ *
+ *   draft ──request──▶ review_requested
+ *   review_requested ──approve──▶ approved
+ *   review_requested ──reject──▶ changes_requested
+ *   approved / changes_requested ──reset──▶ review_requested | draft
+ *
+ * 'draft' is the pre-review "author going solo" state — promote is
+ * allowed. 'approved' passes. 'review_requested' and
+ * 'changes_requested' both block promote with a clear error; the
+ * author resolves via the review actions.
+ */
+export type BranchReviewStatus =
+  | "draft"
+  | "review_requested"
+  | "approved"
+  | "changes_requested";
+
 export interface DraftBranch {
   id: string;
   workspace_id: string;
@@ -44,6 +66,11 @@ export interface DraftBranch {
   base_change_set_id: string | null;
   created_by: string | null;
   status: DraftBranchStatus;
+  /**
+   * Review gate state. Defaults to 'draft' for newly created branches
+   * in the migration. See {@link BranchReviewStatus}.
+   */
+  review_status: BranchReviewStatus;
   created_at: string;
   promoted_at: string | null;
   discarded_at: string | null;
@@ -258,16 +285,55 @@ export interface PromoteBranchResult {
  * overlays in `branch_package_metadata` are also merged onto their
  * canonical skills / agents rows in the same change set.
  */
+export interface PromoteBranchOptions {
+  /**
+   * When true, skip the unresolved-comments gate. The review-status
+   * gate still applies — force does not bypass `changes_requested` /
+   * `review_requested`. Callers should role-gate this upstream
+   * (admin-only) since it overrides the "all threads resolved"
+   * invariant.
+   */
+  force?: boolean;
+}
+
 export async function promoteBranch(
   supabase: SupabaseClient,
   workspaceId: string,
   actorId: string,
-  branchId: string
+  branchId: string,
+  options: PromoteBranchOptions = {}
 ): Promise<PromoteBranchResult> {
   const branch = await getDraftBranch(supabase, branchId);
   if (!branch) throw new Error("Branch not found");
   if (branch.workspace_id !== workspaceId) throw new Error("Branch not in this workspace");
   if (branch.status !== "open") throw new Error(`Branch is ${branch.status}, cannot promote`);
+
+  // Review gate. 'draft' (no review was requested — author going
+  // solo) and 'approved' both pass. The two pending states block
+  // promote with a clear error the UI surfaces next to the button.
+  if (
+    branch.review_status === "review_requested" ||
+    branch.review_status === "changes_requested"
+  ) {
+    throw new Error(
+      `Cannot promote: review_status is ${branch.review_status}. At least one approval required.`
+    );
+  }
+
+  // Unresolved-comments gate. Callers can override with { force: true }
+  // (admin-only at the action layer). The count query is cheap and
+  // short-circuits before we open a change set.
+  if (!options.force) {
+    const { countUnresolvedComments } = await import(
+      "./branch_comment_service"
+    );
+    const unresolvedCount = await countUnresolvedComments(supabase, branchId);
+    if (unresolvedCount > 0) {
+      throw new Error(
+        `Cannot promote: ${unresolvedCount} unresolved comment${unresolvedCount === 1 ? "" : "s"} on this branch. Resolve all threads or retry with force.`
+      );
+    }
+  }
 
   // Concurrent-promote guard via check-and-swap.
   const { data: casRows, error: casError } = await supabase

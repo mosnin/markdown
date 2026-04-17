@@ -173,6 +173,7 @@ describe("DraftBranch type — authored_by fields", () => {
       base_change_set_id: null,
       created_by: "u1",
       status: "open",
+      review_status: "draft",
       created_at: new Date().toISOString(),
       promoted_at: null,
       discarded_at: null,

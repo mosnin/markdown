@@ -28,6 +28,20 @@ import {
   type RebaseStrategy,
   type RebaseResult,
 } from "@/server/services/branch_rebase_service";
+import {
+  requestReview,
+  submitReview,
+  resetReview,
+  type BranchReviewDecision,
+  type BranchReviewStatus,
+} from "@/server/services/branch_review_service";
+import {
+  createComment,
+  resolveComment,
+  unresolveComment,
+  deleteComment,
+  type BranchComment,
+} from "@/server/services/branch_comment_service";
 
 export type ActionResult<T = void> =
   | { ok: true; data: T }
@@ -456,6 +470,277 @@ export async function rebaseBranchAction(
     return {
       ok: false,
       error: err instanceof Error ? err.message : "Rebase failed",
+    };
+  }
+}
+
+// ─── Review workflow ────────────────────────────────────────────────────────
+
+/**
+ * Helper used by every review / comment action below: loads the
+ * branch row and confirms it belongs to the caller's workspace. Keeps
+ * the cross-workspace information-leak guard readable and consistent.
+ */
+async function loadBranchForAction(
+  branchId: string,
+  workspaceId: string
+): Promise<
+  | { ok: true; branch: { workspace_id: string; created_by: string | null } }
+  | { ok: false; error: string }
+> {
+  const supabase = await createClient();
+  const { data: branch } = await supabase
+    .from("draft_branches")
+    .select("workspace_id, created_by")
+    .eq("id", branchId)
+    .maybeSingle();
+  if (!branch || branch.workspace_id !== workspaceId) {
+    return { ok: false, error: "Branch not found" };
+  }
+  return { ok: true, branch: branch as { workspace_id: string; created_by: string | null } };
+}
+
+/**
+ * Branch author flips a branch from draft → review_requested (or
+ * re-opens review after resetReview). Gated by write role because
+ * the state change is a workspace-visible intent.
+ */
+export async function requestBranchReviewAction(
+  branchId: string
+): Promise<ActionResult<{ reviewStatus: BranchReviewStatus }>> {
+  const gate = await requireWriteRoleResult();
+  if (!gate.ok) return { ok: false, error: gate.error };
+  const { ctx } = gate;
+
+  const loaded = await loadBranchForAction(branchId, ctx.workspace.id);
+  if (!loaded.ok) return loaded;
+
+  try {
+    const supabase = await createClient();
+    const result = await requestReview(supabase, branchId, ctx.user.id);
+    revalidatePath(`/app/branches/${branchId}`);
+    revalidatePath("/app/branches");
+    return { ok: true, data: { reviewStatus: result.reviewStatus } };
+  } catch (err) {
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : "Failed to request review",
+    };
+  }
+}
+
+/**
+ * Reviewer records a decision. Non-authors only — self-approve is
+ * rejected in the service layer as well, but catching it at the
+ * action layer means the UI never even sees a surprise error toast
+ * when the button was incorrectly rendered.
+ */
+export async function submitBranchReviewAction(
+  branchId: string,
+  decision: BranchReviewDecision,
+  note?: string | null
+): Promise<ActionResult<{ reviewStatus: BranchReviewStatus }>> {
+  const gate = await requireWriteRoleResult();
+  if (!gate.ok) return { ok: false, error: gate.error };
+  const { ctx } = gate;
+
+  const loaded = await loadBranchForAction(branchId, ctx.workspace.id);
+  if (!loaded.ok) return loaded;
+
+  if (loaded.branch.created_by === ctx.user.id) {
+    return { ok: false, error: "Authors cannot review their own branch" };
+  }
+
+  try {
+    const supabase = await createClient();
+    const result = await submitReview(
+      supabase,
+      branchId,
+      ctx.user.id,
+      decision,
+      note ?? null
+    );
+    revalidatePath(`/app/branches/${branchId}`);
+    revalidatePath("/app/branches");
+    return { ok: true, data: { reviewStatus: result.reviewStatus } };
+  } catch (err) {
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : "Failed to submit review",
+    };
+  }
+}
+
+/**
+ * Author resets the review after pushing fresh changes. Authors
+ * only: resetting someone else's review request would be a
+ * confusing workflow override.
+ */
+export async function resetBranchReviewAction(
+  branchId: string
+): Promise<ActionResult<{ reviewStatus: BranchReviewStatus }>> {
+  const gate = await requireWriteRoleResult();
+  if (!gate.ok) return { ok: false, error: gate.error };
+  const { ctx } = gate;
+
+  const loaded = await loadBranchForAction(branchId, ctx.workspace.id);
+  if (!loaded.ok) return loaded;
+
+  if (loaded.branch.created_by !== ctx.user.id) {
+    return {
+      ok: false,
+      error: "Only the branch author can reset the review",
+    };
+  }
+
+  try {
+    const supabase = await createClient();
+    const result = await resetReview(supabase, branchId, ctx.user.id);
+    revalidatePath(`/app/branches/${branchId}`);
+    revalidatePath("/app/branches");
+    return { ok: true, data: { reviewStatus: result.reviewStatus } };
+  } catch (err) {
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : "Failed to reset review",
+    };
+  }
+}
+
+// ─── Comment threads ────────────────────────────────────────────────────────
+
+/**
+ * Any workspace member (including viewers — this is the one
+ * explicitly participatory read-path verb) can post a comment.
+ * Gating here uses `requireAuthenticatedUser` rather than
+ * `requireWriteRole` so viewers can participate in review
+ * discussions without being able to mutate the underlying content.
+ */
+export async function createBranchCommentAction(
+  branchId: string,
+  objectType: string,
+  objectId: string,
+  body: string,
+  parentCommentId?: string | null
+): Promise<ActionResult<BranchComment>> {
+  try {
+    const ctx = await requireAuthenticatedUser();
+    const loaded = await loadBranchForAction(branchId, ctx.workspace.id);
+    if (!loaded.ok) return loaded;
+    const supabase = await createClient();
+    const comment = await createComment(supabase, {
+      branchId,
+      objectType,
+      objectId,
+      parentCommentId: parentCommentId ?? null,
+      authorId: ctx.user.id,
+      body,
+    });
+    revalidatePath(`/app/branches/${branchId}`);
+    return { ok: true, data: comment };
+  } catch (err) {
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : "Failed to post comment",
+    };
+  }
+}
+
+export async function resolveBranchCommentAction(
+  commentId: string
+): Promise<ActionResult<BranchComment>> {
+  try {
+    const ctx = await requireAuthenticatedUser();
+    const supabase = await createClient();
+    // Cross-workspace guard: load the comment's branch and verify
+    // the caller owns that workspace. Without this an authenticated
+    // user could resolve comments on foreign branches given a guessable
+    // comment_id.
+    const { data: commentRow } = await supabase
+      .from("branch_comments")
+      .select("branch_id")
+      .eq("id", commentId)
+      .maybeSingle();
+    if (!commentRow) return { ok: false, error: "Comment not found" };
+    const loaded = await loadBranchForAction(
+      (commentRow as { branch_id: string }).branch_id,
+      ctx.workspace.id
+    );
+    if (!loaded.ok) return loaded;
+
+    const comment = await resolveComment(supabase, commentId, ctx.user.id);
+    revalidatePath(`/app/branches/${comment.branch_id}`);
+    return { ok: true, data: comment };
+  } catch (err) {
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : "Failed to resolve comment",
+    };
+  }
+}
+
+export async function unresolveBranchCommentAction(
+  commentId: string
+): Promise<ActionResult<BranchComment>> {
+  try {
+    const ctx = await requireAuthenticatedUser();
+    const supabase = await createClient();
+    const { data: commentRow } = await supabase
+      .from("branch_comments")
+      .select("branch_id")
+      .eq("id", commentId)
+      .maybeSingle();
+    if (!commentRow) return { ok: false, error: "Comment not found" };
+    const loaded = await loadBranchForAction(
+      (commentRow as { branch_id: string }).branch_id,
+      ctx.workspace.id
+    );
+    if (!loaded.ok) return loaded;
+
+    const comment = await unresolveComment(supabase, commentId, ctx.user.id);
+    revalidatePath(`/app/branches/${comment.branch_id}`);
+    return { ok: true, data: comment };
+  } catch (err) {
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : "Failed to unresolve comment",
+    };
+  }
+}
+
+/**
+ * Delete a comment. Only the original author may delete; the
+ * service enforces this as well. Cascades to replies via the FK's
+ * ON DELETE CASCADE.
+ */
+export async function deleteBranchCommentAction(
+  commentId: string
+): Promise<ActionResult> {
+  try {
+    const ctx = await requireAuthenticatedUser();
+    const supabase = await createClient();
+    const { data: commentRow } = await supabase
+      .from("branch_comments")
+      .select("branch_id, author_id")
+      .eq("id", commentId)
+      .maybeSingle();
+    if (!commentRow) return { ok: false, error: "Comment not found" };
+    const row = commentRow as { branch_id: string; author_id: string };
+    const loaded = await loadBranchForAction(row.branch_id, ctx.workspace.id);
+    if (!loaded.ok) return loaded;
+    if (row.author_id !== ctx.user.id) {
+      return {
+        ok: false,
+        error: "Only the comment author can delete this comment",
+      };
+    }
+    await deleteComment(supabase, commentId, ctx.user.id);
+    revalidatePath(`/app/branches/${row.branch_id}`);
+    return { ok: true, data: undefined };
+  } catch (err) {
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : "Failed to delete comment",
     };
   }
 }
