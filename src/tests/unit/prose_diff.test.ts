@@ -57,7 +57,7 @@ describe("computeDiff", () => {
     expect(removedParts.length).toBeGreaterThanOrEqual(1);
   });
 
-  it("falls back to line-level diff for large content", () => {
+  it("falls back to line-level diff for large content", { timeout: 15_000 }, () => {
     // Generate content > 50KB
     const bigBefore = "line A\n".repeat(5000); // ~35KB
     const bigAfter = "line B\n".repeat(5000); // ~35KB

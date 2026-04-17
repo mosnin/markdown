@@ -1,0 +1,18 @@
+{
+  "name": "context-store-diff-worker",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy"
+  },
+  "dependencies": {
+    "diff": "^9.0.0"
+  },
+  "devDependencies": {
+    "@types/diff": "^8.0.0",
+    "wrangler": "^4.14.0",
+    "typescript": "^5.8.0",
+    "@cloudflare/workers-types": "^4.20250410.0"
+  }
+}

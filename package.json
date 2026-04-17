@@ -14,7 +14,9 @@
     "ci": "pnpm typecheck && pnpm lint && pnpm test && pnpm build",
     "mcp": "tsx src/server/mcp/index.ts",
     "build:mcp": "tsc --project tsconfig.mcp.json",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "workers:dev": "cd workers/diff-worker && wrangler dev & cd workers/bundle-cache-worker && wrangler dev",
+    "workers:deploy": "cd workers/diff-worker && wrangler deploy && cd workers/bundle-cache-worker && wrangler deploy"
   },
   "dependencies": {
     "@base-ui/react": "^1.3.0",

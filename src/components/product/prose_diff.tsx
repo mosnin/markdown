@@ -1,9 +1,10 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { diffWords, diffLines } from "diff";
 import type { Change } from "diff";
 import { cn } from "@/lib/utils";
+import { computeDiffViaWorker, type DiffResult } from "@/lib/diff_worker_client";
 
 // ─── Constants ──────────────────────────────────────────────────────────────
 
@@ -62,6 +63,22 @@ export function computeDiff(
   return { parts, isLineFallback };
 }
 
+// ─── Worker result normalizer ───────────────────────────────────────────────
+
+function workerResultToLocal(result: DiffResult): {
+  parts: DiffPart[];
+  isLineFallback: boolean;
+} {
+  return {
+    parts: result.parts.map((p) => ({
+      value: p.value,
+      added: p.added ?? false,
+      removed: p.removed ?? false,
+    })),
+    isLineFallback: result.fallback,
+  };
+}
+
 // ─── Component ──────────────────────────────────────────────────────────────
 
 interface ProseDiffProps {
@@ -71,10 +88,34 @@ interface ProseDiffProps {
 }
 
 export function ProseDiff({ before, after, mode = "unified" }: ProseDiffProps) {
-  const { parts, isLineFallback } = useMemo(
+  // Show local result immediately (optimistic)
+  const localResult = useMemo(
     () => computeDiff(before, after),
     [before, after],
   );
+
+  const [workerResult, setWorkerResult] = useState<{
+    parts: DiffPart[];
+    isLineFallback: boolean;
+  } | null>(null);
+
+  // Try worker in the background; replace local result if it arrives
+  useEffect(() => {
+    let cancelled = false;
+    setWorkerResult(null);
+
+    computeDiffViaWorker(before, after).then((result) => {
+      if (!cancelled && result) {
+        setWorkerResult(workerResultToLocal(result));
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [before, after]);
+
+  const { parts, isLineFallback } = workerResult ?? localResult;
 
   if (parts.length === 0) {
     return (

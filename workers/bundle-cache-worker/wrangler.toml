@@ -1,0 +1,11 @@
+name = "context-store-bundle-cache"
+main = "src/index.ts"
+compatibility_date = "2026-04-01"
+
+[[kv_namespaces]]
+binding = "BUNDLE_CACHE"
+id = "REPLACE_WITH_KV_NAMESPACE_ID"
+
+[vars]
+# BUNDLE_CACHE_SECRET should be set via `wrangler secret put BUNDLE_CACHE_SECRET`
+# ALLOWED_ORIGIN should be set via `wrangler secret put ALLOWED_ORIGIN`

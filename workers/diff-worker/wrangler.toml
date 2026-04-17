@@ -1,0 +1,7 @@
+name = "context-store-diff"
+main = "src/index.ts"
+compatibility_date = "2026-04-01"
+
+[vars]
+# DIFF_WORKER_SECRET should be set via `wrangler secret put DIFF_WORKER_SECRET`
+# ALLOWED_ORIGIN should be set via `wrangler secret put ALLOWED_ORIGIN`

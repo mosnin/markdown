@@ -17,6 +17,11 @@ import {
   listLinksFromNote,
   listLinksToNote,
 } from "@/server/repositories/note_link_repository";
+import {
+  getCachedBundle,
+  setCachedBundle,
+  bundleCacheKey,
+} from "@/lib/bundle_cache_client";
 
 /**
  * Context Bundle Service.
@@ -541,6 +546,13 @@ export async function assembleContextBundle(
     userId,
   } = options;
 
+  // ── Cache check ────────────────────────────────────────────────────────
+  // Cache key includes branchId (via userId) so branch-aware bundles
+  // never serve stale main data.
+  const cacheKey = bundleCacheKey(noteId, workspaceId, userId);
+  const cached = await getCachedBundle<ContextBundle>(cacheKey);
+  if (cached) return cached;
+
   // Opting in to branch overlays without passing a user id is a
   // programming error: returning the full workspace set would leak
   // other users' drafts. Degrade gracefully to "no overlay" so the
@@ -789,7 +801,7 @@ export async function assembleContextBundle(
   const uniqueReasons = [...new Set(truncationReasons)];
   const truncated = uniqueReasons.length > 0;
 
-  return {
+  const bundle: ContextBundle = {
     target_note: toNoteRef(targetNote),
     box: {
       id: box.id,
@@ -819,4 +831,10 @@ export async function assembleContextBundle(
       ? { pending_branch_changes: pendingBranchChanges }
       : {}),
   };
+
+  // ── 11. Store in edge cache (best-effort, 5 min TTL) ───────────────────
+  // Fire-and-forget so cache failures never block bundle delivery.
+  setCachedBundle(cacheKey, bundle, 300).catch(() => {});
+
+  return bundle;
 }
