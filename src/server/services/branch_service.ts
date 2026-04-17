@@ -263,6 +263,38 @@ export interface PromoteBranchResult {
   promotedObjects: Array<{ object_type: BranchHeadObjectType; object_id: string; new_version_id: string }>;
   /** Change set that wrapped the promote, for history traceability. */
   changeSetId: string;
+  /**
+   * Webhook gate runs that fired before the promote. Empty when the
+   * workspace has no active gates or when the caller set
+   * {@link PromoteBranchOptions.skip_gates}. Populated so the action
+   * layer can echo the pass/fail matrix back to the UI.
+   */
+  gateRuns?: Array<{
+    gate_id: string;
+    gate_name: string;
+    status: "pending" | "passed" | "failed" | "error" | "timeout";
+    reason: string | null;
+  }>;
+  /** True when the caller elected to bypass gates (admin override). */
+  gatesSkipped?: boolean;
+}
+
+export interface PromoteBranchOptions {
+  /**
+   * Admin override: skip the pre-promote webhook gate run. The branch
+   * row still moves through the CAS guard and the change-set flow
+   * exactly as for a normal promote. The override is audited with
+   * the `branch.promotion_gates_skipped` event type by the action
+   * layer. Caller must role-gate upstream.
+   */
+  skip_gates?: boolean;
+  /**
+   * Condensed diff handed to each webhook. Computed by the action
+   * layer via `branch_diff_service.buildBranchDiff`. When undefined
+   * (e.g. a programmatic caller), the gate payload falls back to a
+   * minimal summary built from the branch heads.
+   */
+  gate_diff_summary?: import("./branch_promotion_gate_service").GateDiffSummary;
 }
 
 /**
@@ -294,6 +326,21 @@ export interface PromoteBranchOptions {
    * invariant.
    */
   force?: boolean;
+  /**
+   * Admin override: skip the pre-promote webhook gate run. The branch
+   * row still moves through the CAS guard and the change-set flow
+   * exactly as for a normal promote. The override is audited with
+   * the `branch.promotion_gates_skipped` event type by the action
+   * layer. Caller must role-gate upstream.
+   */
+  skip_gates?: boolean;
+  /**
+   * Condensed diff handed to each webhook. Computed by the action
+   * layer via `branch_diff_service.getBranchDiff`. When undefined
+   * (e.g. a programmatic caller), the gate payload falls back to a
+   * minimal summary built from the branch heads.
+   */
+  gate_diff_summary?: import("./branch_promotion_gate_service").GateDiffSummary;
 }
 
 export async function promoteBranch(
@@ -345,6 +392,61 @@ export async function promoteBranch(
   if (casError) throw new Error(casError.message);
   if (!casRows || casRows.length === 0) {
     throw new Error("Branch promote is already in progress or branch is not open");
+  }
+
+  // ── Webhook gate run ────────────────────────────────────────────────────
+  // Fires after the CAS guard so a losing concurrent promote doesn't
+  // burn webhook budget, and before we open the change set so a fail
+  // cleanly rolls the status back to 'open' without needing an abort.
+  let gateRunsReport: PromoteBranchResult["gateRuns"];
+  let gatesSkipped = false;
+  if (options.skip_gates) {
+    gatesSkipped = true;
+  } else {
+    const { runGates, GatePromotionError } = await import(
+      "./branch_promotion_gate_service"
+    );
+    const diffSummary = options.gate_diff_summary ?? {
+      head_count: 0,
+      pending_op_count: 0,
+      folder_override_count: 0,
+      placement_change_count: 0,
+      created_note_link_count: 0,
+      created_attachment_count: 0,
+      changed_objects: [],
+    };
+    const gateResult = await runGates(
+      supabase,
+      workspaceId,
+      branchId,
+      branch.name,
+      diffSummary
+    );
+    gateRunsReport = gateResult.runs.map((r) => ({
+      gate_id: r.gate_id,
+      gate_name: r.gate_name,
+      status: r.status,
+      reason: r.response_body,
+    }));
+    if (!gateResult.allPassed) {
+      // Roll the CAS back to 'open' so the user can fix the gate and
+      // retry. We do NOT open a change set, so there is nothing to
+      // abort — the gate run rows themselves are the audit trail.
+      await supabase
+        .from("draft_branches")
+        .update({ status: "open" })
+        .eq("id", branchId)
+        .eq("status", "promoting");
+      const failed = gateResult.runs.filter((r) => r.status !== "passed");
+      throw new GatePromotionError(
+        failed.map((f) => ({
+          gate_id: f.gate_id,
+          gate_name: f.gate_name,
+          status: f.status,
+          reason: f.response_body,
+        }))
+      );
+    }
   }
 
   const heads = await listBranchHeads(supabase, branchId);
@@ -850,7 +952,13 @@ export async function promoteBranch(
       .eq("status", "promoting");
     if (promotedErr) throw new Error(promotedErr.message);
 
-    return { branchId, promotedObjects: promoted, changeSetId: cs.id };
+    return {
+      branchId,
+      promotedObjects: promoted,
+      changeSetId: cs.id,
+      gateRuns: gateRunsReport,
+      gatesSkipped,
+    };
   } catch (err) {
     await abortChangeSet(
       supabase,

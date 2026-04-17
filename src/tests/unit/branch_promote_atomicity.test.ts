@@ -4,6 +4,7 @@ vi.mock("@/server/services/box_branch_metadata_service", () => ({ promoteBoxOver
 vi.mock("@/server/services/folder_branch_service", () => ({ promoteFolderOverrides: vi.fn().mockResolvedValue([]) }));
 vi.mock("@/server/services/placement_branch_service", () => ({ promotePlacementOverrides: vi.fn().mockResolvedValue([]) }));
 vi.mock("@/server/services/pending_op_service", () => ({ listPendingOps: vi.fn().mockResolvedValue([]), applyPendingOp: vi.fn() }));
+vi.mock("@/server/services/branch_promotion_gate_service", () => ({ runGates: vi.fn().mockResolvedValue({ allPassed: true, runs: [] }), GatePromotionError: class GatePromotionError extends Error {} }));
 import { promoteBranch } from "@/server/services/branch_service";
 import * as changeSet from "@/server/services/change_set_service";
 const WS = "ws-a", UID = "u-a", BID = "b-a";

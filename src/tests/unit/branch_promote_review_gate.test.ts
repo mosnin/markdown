@@ -33,6 +33,10 @@ vi.mock("@/server/services/pending_op_service", () => ({
   listPendingOps: vi.fn().mockResolvedValue([]),
   applyPendingOp: vi.fn(),
 }));
+vi.mock("@/server/services/branch_promotion_gate_service", () => ({
+  runGates: vi.fn().mockResolvedValue({ allPassed: true, runs: [] }),
+  GatePromotionError: class GatePromotionError extends Error {},
+}));
 
 import { promoteBranch } from "@/server/services/branch_service";
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useMemo, useState, useTransition } from "react";
+import { createContext, useContext, useEffect, useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import {
   AlertCircle,
@@ -50,6 +50,8 @@ import {
   resolveBranchCommentAction,
   unresolveBranchCommentAction,
   deleteBranchCommentAction,
+  runPromotionGatesAction,
+  listActivePromotionGatesAction,
 } from "../actions";
 import type { DraftBranch } from "@/server/services/branch_service";
 import type {
@@ -147,6 +149,20 @@ export function BranchDetailClient({
   const [rebaseConfirmOpen, setRebaseConfirmOpen] = useState(false);
   const [conflictDismissed, setConflictDismissed] = useState(false);
   const [prePromoteConflicts, setPrePromoteConflicts] = useState<BranchConflict[] | null>(null);
+  // Pre-promote webhook gates: minimal state for the panel below the
+  // promote confirmation dialog. See docs/branch_promotion_gates_v1.md.
+  const [gatesPanelOpen, setGatesPanelOpen] = useState(false);
+  const [activeGatesCount, setActiveGatesCount] = useState<number | null>(null);
+  const [gateRunResults, setGateRunResults] = useState<
+    Array<{
+      gate_id: string;
+      gate_name: string;
+      webhook_url: string;
+      status: "pending" | "passed" | "failed" | "error" | "timeout";
+      response_body: string | null;
+    }>
+  | null
+  >(null);
 
   const closed = branch.status !== "open";
   const conflictCount = diff.rows.filter((r) => r.mainMovedAhead).length;
@@ -166,6 +182,28 @@ export function BranchDetailClient({
     : commentGateBlocks
     ? `Resolve ${unresolvedCommentCount} comment thread${unresolvedCommentCount === 1 ? "" : "s"} before promoting.`
     : null;
+
+  // Fetch active gate count once on mount so the promote button can
+  // route through the gates panel when the workspace has any gates
+  // configured. No gates → skip the panel entirely.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const res = await listActivePromotionGatesAction();
+      if (!cancelled && res.ok) setActiveGatesCount(res.data.length);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  function runGates() {
+    startTransition(async () => {
+      const res = await runPromotionGatesAction(branch.id);
+      if (res.ok) setGateRunResults(res.data.runs);
+      else setToast({ kind: "err", text: res.error });
+    });
+  }
 
   function run(kind: "promote" | "discard") {
     startTransition(async () => {
@@ -198,6 +236,14 @@ export function BranchDetailClient({
   }
 
   function handlePromoteClick() {
+    // If the workspace has active gates, surface the gates panel
+    // first so the user can run + review them before the final
+    // confirmation dialog. Conflict check still runs from inside the
+    // gates panel's "Proceed" button.
+    if ((activeGatesCount ?? 0) > 0) {
+      setGatesPanelOpen(true);
+      return;
+    }
     if (conflictCount === 0) { setConfirmAction("promote"); return; }
     startTransition(async () => {
       const res = await detectBranchConflictsAction(branch.id);
@@ -580,6 +626,70 @@ export function BranchDetailClient({
           )}
         </div>
       )}
+
+      {/* Pre-promote gates panel — branch promotion gates v1. Opens
+          when the workspace has any active gates and the user clicks
+          Promote. Renders a "Run gates" button + the latest pass/fail
+          matrix. Only allows the user to proceed to the confirm
+          dialog if every gate passed (admin-level skip is a separate
+          server-action option). */}
+      <Dialog open={gatesPanelOpen} onOpenChange={(v) => !v && setGatesPanelOpen(false)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Run promotion gates</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            {activeGatesCount} gate{activeGatesCount === 1 ? "" : "s"} are configured for this workspace. Each must return a
+            {" "}<code className="text-[11px]">pass</code> response before the branch can be promoted.
+          </p>
+          {gateRunResults && gateRunResults.length > 0 && (
+            <ul className="flex flex-col gap-1 list-none">
+              {gateRunResults.map((r) => (
+                <li key={r.gate_id} className="flex items-start gap-2 rounded-md border border-border bg-card px-3 py-2 text-xs">
+                  <Badge
+                    variant="outline"
+                    className={cn(
+                      "shrink-0 text-[10px]",
+                      r.status === "passed"
+                        ? "border-emerald-600/40 text-emerald-700"
+                        : "border-destructive/40 text-destructive"
+                    )}
+                  >
+                    {r.status}
+                  </Badge>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate font-medium">{r.gate_name}</p>
+                    {r.response_body && (
+                      <p className="truncate text-[10px] text-muted-foreground" title={r.response_body}>
+                        {r.response_body.slice(0, 200)}
+                      </p>
+                    )}
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+          <DialogFooter>
+            <Button variant="outline" size="sm" onClick={() => setGatesPanelOpen(false)} disabled={pending}>
+              Cancel
+            </Button>
+            <Button variant="outline" size="sm" onClick={runGates} disabled={pending}>
+              {pending ? "Running…" : gateRunResults ? "Re-run gates" : "Run gates"}
+            </Button>
+            <Button
+              size="sm"
+              onClick={() => {
+                setGatesPanelOpen(false);
+                setGateRunResults(null);
+                setConfirmAction("promote");
+              }}
+              disabled={pending || !gateRunResults || gateRunResults.some((r) => r.status !== "passed")}
+            >
+              Proceed to promote
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Confirm dialogs */}
       <Dialog

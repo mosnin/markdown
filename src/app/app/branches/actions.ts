@@ -195,19 +195,59 @@ export async function createBranchAction(
 // ─── Promote ─────────────────────────────────────────────────────────────────
 
 export async function promoteBranchAction(
-  branchId: string
+  branchId: string,
+  options: { skip_gates?: boolean } = {}
 ): Promise<ActionResult<PromoteBranchResult>> {
   const gate = await requireWriteRoleResult();
   if (!gate.ok) return { ok: false, error: gate.error };
   const { ctx } = gate;
 
+  // skip_gates is an admin-only override. We still call promote with
+  // skip_gates=false for non-admins to avoid a "viewers-can-skip-gates"
+  // footgun in case of a future UI regression.
+  const { canAdmin } = await import("@/server/auth/require_role");
+  const effectiveSkip = options.skip_gates === true && canAdmin(ctx.workspace.role);
+
   try {
     const supabase = await createClient();
+
+    // Build the condensed diff summary that gates receive. If the diff
+    // build fails for any reason we fall back to no summary — the
+    // promote still runs gates, just with an empty payload.
+    let gateDiffSummary:
+      | import("@/server/services/branch_promotion_gate_service").GateDiffSummary
+      | undefined;
+    if (!effectiveSkip) {
+      try {
+        const { getBranchDiff } = await import(
+          "@/server/services/branch_diff_service"
+        );
+        const diff = await getBranchDiff(supabase, branchId, ctx.workspace.id);
+        if (diff) {
+          gateDiffSummary = {
+            head_count: diff.headCount,
+            pending_op_count: diff.pendingOps.length,
+            folder_override_count: diff.folderOverrides.length,
+            placement_change_count: diff.placementChanges.length,
+            created_note_link_count: diff.createdNoteLinks.length,
+            created_attachment_count: diff.createdAttachments.length,
+            changed_objects: diff.rows.map((r) => ({
+              object_type: r.objectType,
+              display_name: r.displayName,
+            })),
+          };
+        }
+      } catch {
+        gateDiffSummary = undefined;
+      }
+    }
+
     const result = await promoteBranch(
       supabase,
       ctx.workspace.id,
       ctx.user.id,
-      branchId
+      branchId,
+      { skip_gates: effectiveSkip, gate_diff_summary: gateDiffSummary }
     );
 
     await createAuditEvent(supabase, {
@@ -220,8 +260,21 @@ export async function promoteBranchAction(
       metadata: {
         change_set_id: result.changeSetId,
         promoted_object_count: result.promotedObjects.length,
+        gate_runs: result.gateRuns ?? [],
+        gates_skipped: result.gatesSkipped ?? false,
       },
     });
+    if (result.gatesSkipped) {
+      await createAuditEvent(supabase, {
+        workspace_id: ctx.workspace.id,
+        actor_type: "user",
+        actor_id: ctx.user.id,
+        object_type: "draft_branch",
+        object_id: branchId,
+        event_type: "branch.promotion_gates_skipped",
+        metadata: { reason: "admin_override" },
+      });
+    }
 
     // If the promoted branch was the active one, clear the cookie so
     // subsequent edits go back to main without a stale pointer.
@@ -235,6 +288,113 @@ export async function promoteBranchAction(
     return { ok: true, data: result };
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : "Promote failed" };
+  }
+}
+
+/**
+ * Run the workspace's active pre-promote gates against this branch
+ * WITHOUT promoting. Used by the branch detail UI's "Run gates" panel
+ * so users can preview the pass/fail matrix before committing. The
+ * result is the same gate_runs audit rows the real promote path would
+ * produce.
+ */
+export async function runPromotionGatesAction(
+  branchId: string
+): Promise<
+  ActionResult<{
+    allPassed: boolean;
+    runs: Array<{
+      gate_id: string;
+      gate_name: string;
+      webhook_url: string;
+      status: "pending" | "passed" | "failed" | "error" | "timeout";
+      response_body: string | null;
+      duration_ms: number | null;
+    }>;
+  }>
+> {
+  const gate = await requireWriteRoleResult();
+  if (!gate.ok) return { ok: false, error: gate.error };
+  const { ctx } = gate;
+
+  try {
+    const supabase = await createClient();
+    const { data: branch } = await supabase
+      .from("draft_branches")
+      .select("workspace_id, name")
+      .eq("id", branchId)
+      .maybeSingle();
+    if (!branch || branch.workspace_id !== ctx.workspace.id) {
+      return { ok: false, error: "Branch not found" };
+    }
+
+    const { getBranchDiff } = await import(
+      "@/server/services/branch_diff_service"
+    );
+    const diff = await getBranchDiff(supabase, branchId, ctx.workspace.id);
+    if (!diff) return { ok: false, error: "Branch not found" };
+
+    const { runGates } = await import(
+      "@/server/services/branch_promotion_gate_service"
+    );
+    const res = await runGates(supabase, ctx.workspace.id, branchId, branch.name, {
+      head_count: diff.headCount,
+      pending_op_count: diff.pendingOps.length,
+      folder_override_count: diff.folderOverrides.length,
+      placement_change_count: diff.placementChanges.length,
+      created_note_link_count: diff.createdNoteLinks.length,
+      created_attachment_count: diff.createdAttachments.length,
+      changed_objects: diff.rows.map((r) => ({
+        object_type: r.objectType,
+        display_name: r.displayName,
+      })),
+    });
+
+    return {
+      ok: true,
+      data: {
+        allPassed: res.allPassed,
+        runs: res.runs.map((r) => ({
+          gate_id: r.gate_id,
+          gate_name: r.gate_name,
+          webhook_url: r.webhook_url,
+          status: r.status,
+          response_body: r.response_body,
+          duration_ms: r.duration_ms,
+        })),
+      },
+    };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Gate run failed" };
+  }
+}
+
+/**
+ * List active gates for the current workspace. Used by the branch
+ * detail UI to decide whether to render the pre-promote gates panel
+ * at all (no gates → no panel).
+ */
+export async function listActivePromotionGatesAction(): Promise<
+  ActionResult<Array<{ id: string; name: string; webhook_url: string; timeout_seconds: number }>>
+> {
+  try {
+    const ctx = await requireAuthenticatedUser();
+    const supabase = await createClient();
+    const { listActiveGates } = await import(
+      "@/server/services/branch_promotion_gate_service"
+    );
+    const gates = await listActiveGates(supabase, ctx.workspace.id);
+    return {
+      ok: true,
+      data: gates.map((g) => ({
+        id: g.id,
+        name: g.name,
+        webhook_url: g.webhook_url,
+        timeout_seconds: g.timeout_seconds,
+      })),
+    };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Failed" };
   }
 }
 
