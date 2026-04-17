@@ -327,3 +327,19 @@ for the full architecture, including the scope table, token model,
 and legacy migration guidance. The stdio transport is preserved for
 local development and deployments already using env-var auth; new
 connector-style integrations should use HTTP + OAuth.
+
+### Setup wizard
+
+The in-app guided setup for a new OAuth client lives at
+[`/app/settings/oauth_clients/new`](../src/app/app/settings/oauth_clients/new/page.tsx).
+It walks the developer through six steps — basics, redirect URIs,
+scopes, review, credentials, and done — and finishes by displaying
+the `client_id` (and, for confidential clients, the one-shot
+`client_secret`) alongside a copyable sample authorize URL with a
+PKCE placeholder. The wizard is the primary CTA on
+`/app/settings/oauth_clients`; the older register-modal flow is
+preserved but no longer surfaced from the list page. Redirect URIs
+are client-side validated as HTTPS-or-loopback only (OAuth 2.1
+§4.1.2); scope selection shows an amber warning the moment a
+write-capable scope is ticked so the registering developer sees
+what the user will see on the consent screen.

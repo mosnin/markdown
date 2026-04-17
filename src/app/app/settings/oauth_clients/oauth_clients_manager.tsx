@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState, useTransition } from "react";
 import {
   AlertTriangle,
@@ -94,10 +95,12 @@ export function OauthClientsManager({
         <p className="text-xs text-muted-foreground">
           {rows.length} client{rows.length === 1 ? "" : "s"} registered
         </p>
-        <Button size="sm" onClick={() => setCreateOpen(true)}>
-          <Plus className="mr-1 h-3.5 w-3.5" aria-hidden="true" />
-          Register new client
-        </Button>
+        <Link href="/app/settings/oauth_clients/new">
+          <Button size="sm" type="button">
+            <Plus className="mr-1 h-3.5 w-3.5" aria-hidden="true" />
+            Register new client
+          </Button>
+        </Link>
       </div>
 
       {rows.length === 0 ? (
