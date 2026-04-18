@@ -25,6 +25,7 @@ import {
   Minus,
   Plus,
   RefreshCw,
+  XCircle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
@@ -831,6 +832,13 @@ export function BranchDetailClient({
               {pending ? "Rebasing…" : "Rebase to re-open this branch"}
             </Button>
           )}
+        </div>
+      )}
+
+      {branch.status === "discarded" && (
+        <div className="flex items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-muted-foreground">
+          <XCircle className="h-4 w-4 shrink-0 text-destructive/60" aria-hidden="true" />
+          <p>This branch was discarded{branch.discarded_at && <> on {new Date(branch.discarded_at).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" })}</>}. Its changes are no longer available.</p>
         </div>
       )}
 
