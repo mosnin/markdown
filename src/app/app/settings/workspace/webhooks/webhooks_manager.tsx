@@ -2,12 +2,15 @@
 
 import { useState, useTransition } from "react";
 import {
+  AlertCircle,
   AlertTriangle,
   Check,
   Copy,
   Pause,
   Play,
   Plus,
+  Send,
+  ShieldCheck,
   Trash2,
   X,
 } from "lucide-react";
@@ -27,6 +30,7 @@ import {
   createContentWebhookAction,
   deleteContentWebhookAction,
   listContentWebhooksAction,
+  sendTestWebhookEventAction,
   updateContentWebhookAction,
   type ContentWebhookRow,
 } from "./actions";
@@ -47,6 +51,7 @@ export function ContentWebhooksManager({
 }) {
   const [rows, setRows] = useState<ContentWebhookRow[]>(initialWebhooks);
   const [error, setError] = useState<string | null>(null);
+  const [toast, setToast] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [justCreated, setJustCreated] = useState<{ name: string; secret: string } | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<ContentWebhookRow | null>(null);
@@ -74,6 +79,36 @@ export function ContentWebhooksManager({
         >
           {error}
         </p>
+      )}
+
+      {toast && (
+        <div
+          className={cn(
+            "flex items-start gap-2 rounded-md border px-3 py-2 text-xs",
+            toast.kind === "ok"
+              ? "border-border bg-accent/40"
+              : "border-destructive/30 bg-destructive/5 text-destructive",
+          )}
+          role={toast.kind === "ok" ? "status" : "alert"}
+        >
+          {toast.kind === "err" ? (
+            <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+          ) : (
+            <ShieldCheck
+              className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-600"
+              aria-hidden="true"
+            />
+          )}
+          <p className="flex-1">{toast.text}</p>
+          <button
+            type="button"
+            onClick={() => setToast(null)}
+            className="shrink-0 text-muted-foreground hover:text-foreground"
+            aria-label="Dismiss"
+          >
+            <X className="h-3 w-3" aria-hidden="true" />
+          </button>
+        </div>
       )}
 
       <div className="flex items-center justify-between gap-3">
@@ -105,6 +140,7 @@ export function ContentWebhooksManager({
                 onChanged={refresh}
                 onDelete={() => setConfirmDelete(r)}
                 onError={setError}
+                onToast={setToast}
                 isDeliveryExpanded={expandedDeliveries === r.id}
                 onToggleDeliveries={() =>
                   setExpandedDeliveries((prev) => (prev === r.id ? null : r.id))
@@ -154,6 +190,7 @@ function WebhookRow({
   onChanged,
   onDelete,
   onError,
+  onToast,
   isDeliveryExpanded,
   onToggleDeliveries,
 }: {
@@ -161,14 +198,28 @@ function WebhookRow({
   onChanged: () => void;
   onDelete: () => void;
   onError: (msg: string) => void;
+  onToast: (t: { kind: "ok" | "err"; text: string }) => void;
   isDeliveryExpanded: boolean;
   onToggleDeliveries: () => void;
 }) {
   const [pending, startTransition] = useTransition();
+  const [testing, startTest] = useTransition();
   const [editing, setEditing] = useState(false);
   const [draftName, setDraftName] = useState(row.name);
   const [draftUrl, setDraftUrl] = useState(row.url);
   const [draftEventTypes, setDraftEventTypes] = useState<string[]>(row.event_types);
+
+  function sendTest() {
+    startTest(async () => {
+      const res = await sendTestWebhookEventAction(row.id);
+      if (res.ok) {
+        onToast({ kind: "ok", text: "Test event sent — check delivery log" });
+        onChanged();
+      } else {
+        onToast({ kind: "err", text: res.error });
+      }
+    });
+  }
 
   function toggleStatus() {
     startTransition(async () => {
@@ -238,8 +289,22 @@ function WebhookRow({
             <Button
               variant="ghost"
               size="sm"
+              onClick={sendTest}
+              disabled={pending || testing || isDisabled}
+              title={
+                isDisabled
+                  ? "Re-enable the webhook to send a test event"
+                  : "Send a signed test.event to this endpoint"
+              }
+            >
+              <Send className="mr-1 h-3.5 w-3.5" aria-hidden="true" />
+              {testing ? "Sending..." : "Send test"}
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
               onClick={() => setEditing((v) => !v)}
-              disabled={pending}
+              disabled={pending || testing}
               title="Edit webhook"
             >
               Edit
@@ -248,7 +313,7 @@ function WebhookRow({
               variant="ghost"
               size="sm"
               onClick={toggleStatus}
-              disabled={pending}
+              disabled={pending || testing}
               title={isDisabled ? "Re-enable webhook" : "Disable webhook"}
             >
               {isDisabled ? (
@@ -261,7 +326,7 @@ function WebhookRow({
               variant="ghost"
               size="sm"
               onClick={onToggleDeliveries}
-              disabled={pending}
+              disabled={pending || testing}
               title="Recent deliveries"
             >
               Deliveries
@@ -270,7 +335,7 @@ function WebhookRow({
               variant="ghost"
               size="sm"
               onClick={onDelete}
-              disabled={pending}
+              disabled={pending || testing}
               className="text-destructive hover:text-destructive"
               title="Delete webhook"
             >

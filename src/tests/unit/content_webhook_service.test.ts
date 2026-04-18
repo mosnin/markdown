@@ -19,6 +19,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import {
   createWebhook,
   generateSecret,
+  sendTestEvent,
   signBody,
   SUPPORTED_EVENT_TYPES,
   type ContentWebhook,
@@ -430,6 +431,94 @@ describe("content_webhook_service", () => {
     expect(SUPPORTED_EVENT_TYPES).toContain("branch.discarded");
     expect(SUPPORTED_EVENT_TYPES).toContain("member.joined");
     expect(SUPPORTED_EVENT_TYPES).toHaveLength(11);
+  });
+
+  // ── Send test event ───────────────────────────────────────────────────
+
+  it("sendTestEvent records a delivery row marked with is_test and does not schedule a retry", async () => {
+    state.webhooks = [
+      {
+        id: "wh-test",
+        workspace_id: WORKSPACE_ID,
+        name: "Test hook",
+        url: "https://example.com/hook",
+        secret: "a".repeat(64),
+        event_types: ["note.created"],
+        status: "active",
+        created_by: USER_ID,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      },
+    ];
+
+    const captured: Array<{ url: string; headers: Headers; body: string }> = [];
+    globalThis.fetch = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+      const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+      captured.push({
+        url,
+        headers: new Headers(init?.headers),
+        body: String(init?.body ?? ""),
+      });
+      return new Response("OK", { status: 200 });
+    }) as any;
+
+    const supabase = makeSupabaseMock(state) as any;
+    const result = await sendTestEvent(supabase, {
+      workspaceId: WORKSPACE_ID,
+      webhookId: "wh-test",
+    });
+
+    // 1. Dispatch succeeded and reused the HMAC signing path.
+    expect(result.delivered).toBe(true);
+    expect(result.responseStatus).toBe(200);
+    expect(captured).toHaveLength(1);
+    expect(captured[0].url).toBe("https://example.com/hook");
+    expect(captured[0].headers.get("x-contextstore-signature")).toMatch(/^v1=[0-9a-f]{64}$/);
+    expect(captured[0].headers.get("x-contextstore-timestamp")).toBeTruthy();
+
+    // 2. The request body is the synthetic test.event payload.
+    const parsed = JSON.parse(captured[0].body);
+    expect(parsed.event_type).toBe("test.event");
+    expect(parsed.payload).toMatchObject({
+      is_test: true,
+      message: "This is a test event from Context Store",
+      workspace_id: WORKSPACE_ID,
+      webhook_id: "wh-test",
+    });
+
+    // 3. A delivery row was recorded, flagged via the payload, with
+    //    status delivered and next_retry_at=null so it's excluded from
+    //    the retry budget/sweep.
+    expect(state.deliveries).toHaveLength(1);
+    const delivery = state.deliveries[0];
+    expect(delivery.webhook_id).toBe("wh-test");
+    expect(delivery.event_type).toBe("test.event");
+    expect(delivery.status).toBe("delivered");
+    expect(delivery.attempts).toBe(1);
+    expect(delivery.next_retry_at).toBeNull();
+    expect(delivery.payload).toMatchObject({ is_test: true });
+  });
+
+  it("sendTestEvent refuses to send when the webhook is disabled", async () => {
+    state.webhooks = [
+      {
+        id: "wh-off",
+        workspace_id: WORKSPACE_ID,
+        name: "Disabled hook",
+        url: "https://example.com/hook",
+        secret: "a".repeat(64),
+        event_types: ["note.created"],
+        status: "disabled",
+        created_by: USER_ID,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      },
+    ];
+
+    const supabase = makeSupabaseMock(state) as any;
+    await expect(
+      sendTestEvent(supabase, { workspaceId: WORKSPACE_ID, webhookId: "wh-off" }),
+    ).rejects.toThrow(/Re-enable/);
   });
 
   // ── URL validation ────────────────────────────────────────────────────

@@ -8,6 +8,7 @@ import {
   deleteWebhook,
   listWebhooks,
   listRecentDeliveries,
+  sendTestEvent,
   updateWebhook,
   type ContentWebhook,
   type ContentWebhookDelivery,
@@ -136,6 +137,49 @@ export async function updateContentWebhookAction(
     return { ok: true, data: undefined };
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : "Failed to update webhook" };
+  }
+}
+
+export async function sendTestWebhookEventAction(
+  webhookId: string,
+): Promise<ActionResult<{ delivered: boolean; responseStatus: number | null }>> {
+  const gate = await requireAdminRoleResult();
+  if (!gate.ok) return { ok: false, error: gate.error };
+  const { ctx } = gate;
+
+  try {
+    const supabase = await createClient();
+    // Ownership check: sendTestEvent also verifies workspace_id match,
+    // but we surface a clean error here before hitting the service.
+    const { data: existing } = await supabase
+      .from("content_webhooks")
+      .select("workspace_id")
+      .eq("id", webhookId)
+      .maybeSingle();
+    if (!existing || existing.workspace_id !== ctx.workspace.id) {
+      return { ok: false, error: "Webhook not found" };
+    }
+
+    const result = await sendTestEvent(supabase, {
+      workspaceId: ctx.workspace.id,
+      webhookId,
+    });
+    revalidatePath("/app/settings/workspace/webhooks");
+    if (!result.delivered) {
+      const suffix = result.responseStatus
+        ? ` (HTTP ${result.responseStatus})`
+        : "";
+      return {
+        ok: false,
+        error: `Endpoint did not accept the test event${suffix}`,
+      };
+    }
+    return {
+      ok: true,
+      data: { delivered: result.delivered, responseStatus: result.responseStatus },
+    };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Failed to send test event" };
   }
 }
 

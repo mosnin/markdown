@@ -348,6 +348,130 @@ async function deliverWebhook(
   );
 }
 
+// ─── Test event ─────────────────────────────────────────────────────────────
+
+/**
+ * Dispatch a one-off synthetic "test.event" to a specific webhook so the
+ * admin can verify their endpoint receives signed payloads correctly.
+ *
+ * Differences from `dispatchEvent`:
+ *   - Targets a single webhook by id (not all matching subscribers).
+ *   - Ignores the webhook's `event_types` subscription list (always sent).
+ *   - Refuses disabled webhooks so behaviour mirrors production — a
+ *     disabled hook would not receive live traffic either. Callers
+ *     must re-enable first.
+ *   - Payload is flagged with `is_test: true` so the deliveries row is
+ *     identifiable without a schema change.
+ *   - On failure we record the attempt but do NOT schedule a retry
+ *     (`next_retry_at` stays null) and set final status to "failed".
+ *     This keeps the test out of the retry budget and avoids the
+ *     retry sweep touching it.
+ *   - This call is awaited (not fire-and-forget) so the caller can
+ *     surface success/failure to the UI.
+ *
+ * HMAC signing reuses `signBody` — we do NOT duplicate the signing
+ * logic here.
+ */
+export async function sendTestEvent(
+  supabase: SupabaseClient,
+  input: { workspaceId: string; webhookId: string },
+): Promise<{ delivered: boolean; responseStatus: number | null; responseBody: string | null }> {
+  const { data: webhook, error } = await supabase
+    .from("content_webhooks")
+    .select("*")
+    .eq("id", input.webhookId)
+    .eq("workspace_id", input.workspaceId)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  if (!webhook) throw new Error("Webhook not found");
+
+  const wh = webhook as ContentWebhook;
+  if (wh.status === "disabled") {
+    throw new Error("Re-enable the webhook before sending a test event");
+  }
+
+  const timestamp = new Date().toISOString();
+  const eventType = "test.event";
+  const payload: Record<string, unknown> = {
+    is_test: true,
+    message: "This is a test event from Context Store",
+    workspace_id: input.workspaceId,
+    webhook_id: wh.id,
+  };
+  const body = { event_type: eventType, timestamp, payload };
+  const bodyJson = JSON.stringify(body);
+  const signature = signBody(wh.secret, timestamp, bodyJson);
+
+  // Record delivery row first so we always have a trace. Mark is_test in
+  // the payload (no schema change required).
+  const { data: deliveryRow } = await supabase
+    .from("content_webhook_deliveries")
+    .insert({
+      webhook_id: wh.id,
+      event_type: eventType,
+      payload,
+      status: "pending",
+      attempts: 1,
+    })
+    .select()
+    .single();
+  const deliveryId = (deliveryRow as ContentWebhookDelivery | null)?.id;
+
+  let status: "delivered" | "failed" = "failed";
+  let responseStatus: number | null = null;
+  let responseBody: string | null = null;
+
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10_000);
+    try {
+      const res = await fetch(wh.url, {
+        method: "POST",
+        signal: controller.signal,
+        headers: {
+          "Content-Type": "application/json",
+          "X-ContextStore-Signature": `v1=${signature}`,
+          "X-ContextStore-Timestamp": timestamp,
+        },
+        body: bodyJson,
+      });
+      responseStatus = res.status;
+      const rawText = await res.text();
+      responseBody =
+        rawText.length > MAX_RESPONSE_BODY_LEN
+          ? rawText.slice(0, MAX_RESPONSE_BODY_LEN)
+          : rawText;
+      if (res.ok) status = "delivered";
+    } finally {
+      clearTimeout(timeoutId);
+    }
+  } catch (err) {
+    responseBody = err instanceof Error ? err.message : String(err);
+  }
+
+  if (deliveryId) {
+    // Test events never retry: we finalize status immediately with
+    // next_retry_at=null so the retry sweep won't pick this row up.
+    await supabase
+      .from("content_webhook_deliveries")
+      .update({
+        status,
+        response_status: responseStatus,
+        response_body: responseBody,
+        attempts: 1,
+        next_retry_at: null,
+      })
+      .eq("id", deliveryId);
+  }
+
+  logger.info(
+    { webhookId: wh.id, eventType, status, responseStatus, isTest: true },
+    "content webhook test delivery",
+  );
+
+  return { delivered: status === "delivered", responseStatus, responseBody };
+}
+
 // ─── Retry ──────────────────────────────────────────────────────────────────
 
 /**
