@@ -79,6 +79,7 @@ export function NoteEditor({ note, initialMode = "document", currentUser }: Note
     showWarning: showConcurrentWarning,
     savedBy: concurrentSavedBy,
     broadcastSave,
+    broadcastEdit,
     dismiss: dismissConcurrentWarning,
   } = useConcurrentEditWarning(note.id, currentUser?.userId ?? "");
 
@@ -131,6 +132,38 @@ export function NoteEditor({ note, initialMode = "document", currentUser }: Note
       .map((t) => t.trim().toLowerCase())
       .filter(Boolean);
   }
+
+  /**
+   * Compute the 1-indexed line number of the caret inside a textarea.
+   * Used to feed `broadcastEdit` so collaborators see cursor movement
+   * even when typing is sparse. Falls back to 1 if the caret can't be
+   * read (e.g. event fired from a programmatic change).
+   */
+  function caretLine(el: HTMLTextAreaElement): number {
+    const pos = el.selectionStart;
+    if (typeof pos !== "number" || pos < 0) return 1;
+    // Count newlines in the prefix. Simple, allocation-light, and
+    // accurate for the CodeMirror-free textareas we use here.
+    let line = 1;
+    const src = el.value;
+    for (let i = 0; i < pos && i < src.length; i++) {
+      if (src.charCodeAt(i) === 10 /* \n */) line++;
+    }
+    return line;
+  }
+
+  /**
+   * Fire a throttled edit-in-progress broadcast. The hook itself
+   * enforces the "3s OR >5 line delta" rule via `shouldBroadcast`, so
+   * this wrapper is just a no-op when presence isn't wired up.
+   */
+  const notifyEdit = useCallback(
+    (el: HTMLTextAreaElement) => {
+      if (!currentUser) return;
+      broadcastEdit(currentUser.userId, currentUser.displayName, caretLine(el));
+    },
+    [broadcastEdit, currentUser]
+  );
 
   // Reading refs during render is intentional here: lastSavedSnapshot tracks the
   // last persisted state for dirty-checking without causing re-renders on every
@@ -373,7 +406,10 @@ export function NoteEditor({ note, initialMode = "document", currentUser }: Note
           <div role="tabpanel" aria-label="Document view" className="flex h-full flex-col">
             <textarea
               value={content}
-              onChange={(e) => setContent(e.target.value)}
+              onChange={(e) => {
+                setContent(e.target.value);
+                notifyEdit(e.currentTarget);
+              }}
               data-editor-dirty={isDirty}
               placeholder="Start writing…"
               spellCheck
@@ -408,7 +444,10 @@ export function NoteEditor({ note, initialMode = "document", currentUser }: Note
             {/* Editable textarea */}
             <textarea
               value={content}
-              onChange={(e) => setContent(e.target.value)}
+              onChange={(e) => {
+                setContent(e.target.value);
+                notifyEdit(e.currentTarget);
+              }}
               data-editor-dirty={isDirty}
               placeholder="Write in Markdown…"
               spellCheck
