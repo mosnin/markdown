@@ -23,10 +23,16 @@ interface AppShellSidebarProps {
  * tree. Navigating away (via the "Back to workspace" link or any other
  * primary-nav destination) restores the main sidebar automatically via
  * pathname change.
+ *
+ * The analytics page (/app/analytics) also shows the settings sidebar
+ * because it is linked from the workspace-admin section there.
  */
 export function AppShellSidebar(props: AppShellSidebarProps) {
   const pathname = usePathname();
-  const isSettings = pathname === "/app/settings" || pathname.startsWith("/app/settings/");
+  const isSettings =
+    pathname === "/app/settings" ||
+    pathname.startsWith("/app/settings/") ||
+    pathname === "/app/analytics";
 
   if (isSettings) {
     return (

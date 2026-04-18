@@ -16,6 +16,7 @@ import {
   Palette,
   Shield,
   User,
+  Users,
 } from "lucide-react";
 import { AccountSetting01Icon } from "hugeicons-react";
 import { cn } from "@/lib/utils";
@@ -70,6 +71,12 @@ const developerNav = [
  * Workspace-admin nav — workspace-level policy pages.
  */
 const workspaceAdminNav = [
+  {
+    href: "/app/settings/workspace/members",
+    label: "Members",
+    subLabel: "Invite & manage team members",
+    icon: Users,
+  },
   {
     href: "/app/settings/workspace/branch_retention",
     label: "Branch retention",

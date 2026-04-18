@@ -6,6 +6,7 @@ import {
   searchWorkspace,
   type WorkspaceSearchHit,
 } from "@/server/services/workspace_search_service";
+import { recordSearchQuery } from "@/server/services/workspace_analytics_service";
 
 export type SearchActionResult =
   | { ok: true; data: WorkspaceSearchHit[] }
@@ -31,6 +32,16 @@ export async function searchWorkspaceAction(
     const hits = await searchWorkspace(supabase, ctx.workspace.id, query, {
       branchId: ctx.activeBranchId ?? null,
     });
+
+    // Fire-and-forget analytics recording — never block the response.
+    recordSearchQuery(supabase, {
+      workspaceId: ctx.workspace.id,
+      userId: ctx.user.id,
+      query,
+      resultCount: hits.length,
+      searchType: "keyword",
+    }).catch(() => {});
+
     return { ok: true, data: hits };
   } catch (err) {
     return {

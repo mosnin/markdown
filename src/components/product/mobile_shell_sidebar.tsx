@@ -20,7 +20,7 @@ interface MobileShellSidebarProps {
  */
 export function MobileShellSidebar(props: MobileShellSidebarProps) {
   const pathname = usePathname();
-  const isSettings = pathname === "/app/settings" || pathname.startsWith("/app/settings/");
+  const isSettings = pathname === "/app/settings" || pathname.startsWith("/app/settings/") || pathname === "/app/analytics";
 
   if (isSettings) {
     return (
