@@ -1,4 +1,5 @@
 import { type SupabaseClient } from "@supabase/supabase-js";
+import { logger } from "@/lib/logger";
 
 /**
  * Draft branch foundation service.
@@ -409,6 +410,9 @@ export async function promoteBranch(
   branchId: string,
   options: PromoteBranchOptions = {}
 ): Promise<PromoteBranchResult> {
+  const promoteStart = Date.now();
+  logger.info({ branchId, workspaceId }, "promoteBranch started");
+
   // Fire-and-forget progress emitter. Swallows errors so a broken
   // callback never derails the promote transaction.
   const emit = (event: PromoteProgressEvent): void => {
@@ -1160,6 +1164,11 @@ export async function promoteBranch(
 
     emit({ step: "done", change_set_id: cs.id });
 
+    logger.info(
+      { branchId, headCount: heads.length, durationMs: Date.now() - promoteStart },
+      "promoteBranch complete",
+    );
+
     return {
       branchId,
       promotedObjects: promoted,
@@ -1168,6 +1177,10 @@ export async function promoteBranch(
       gatesSkipped,
     };
   } catch (err) {
+    logger.error(
+      { branchId, headCount: heads.length, durationMs: Date.now() - promoteStart, error: err instanceof Error ? err.message : "promote failed" },
+      "promoteBranch failed",
+    );
     emit({
       step: "error",
       message: err instanceof Error ? err.message : "promote failed",

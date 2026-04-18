@@ -13,6 +13,18 @@ export async function register() {
     const { validateServerEnv } = await import("@/lib/env");
     validateServerEnv();
 
+    // Warn when Sentry is unconfigured in production so operators
+    // notice before real errors go untracked.
+    if (
+      process.env.NODE_ENV === "production" &&
+      !process.env.NEXT_PUBLIC_SENTRY_DSN
+    ) {
+      const { logger } = await import("@/lib/logger");
+      logger.warn(
+        "Sentry DSN not configured — error tracking disabled in production",
+      );
+    }
+
     // Sentry server-side init — loaded dynamically so the config file
     // is only evaluated in the Node.js runtime.
     await import("../sentry.server.config");

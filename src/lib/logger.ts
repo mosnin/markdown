@@ -1,14 +1,18 @@
 /**
- * Structured server-side logger.
+ * Structured server-side logger backed by pino.
  *
  * All log output is JSON-formatted so production log drains (Vercel, Datadog,
- * Axiom, etc.) can parse fields without regex.
+ * Axiom, etc.) can parse fields without regex.  In local dev, `pino-pretty`
+ * renders human-readable lines.
  *
  * Usage:
- *   import { log } from "@/lib/logger";
- *   log.error("import_failed", { box_id, filename, reason: err.message });
- *   log.warn("auth_token_expired", { token_prefix });
- *   log.info("proposal_approved", { proposal_id, workspace_id });
+ *   import { logger } from "@/lib/logger";
+ *   logger.error({ box_id, filename, reason: err.message }, "import_failed");
+ *   logger.warn({ token_prefix }, "auth_token_expired");
+ *   logger.info({ proposal_id, workspace_id }, "proposal_approved");
+ *
+ * The named export `log` preserves backward compatibility with the
+ * pre-pino call-sites that use `log.info(event, ctx?)`.
  *
  * Rules:
  *   - NEVER log raw secrets, tokens, passwords, or service role keys.
@@ -16,37 +20,34 @@
  *   - Log token_prefix only (first 8 hex chars), never the hash.
  *   - Include request_id when available for correlation.
  */
+import pino from "pino";
 
-type LogLevel = "debug" | "info" | "warn" | "error";
+export const logger = pino({
+  level:
+    process.env.LOG_LEVEL ??
+    (process.env.NODE_ENV === "production" ? "info" : "debug"),
+  transport:
+    process.env.NODE_ENV !== "production"
+      ? { target: "pino-pretty" }
+      : undefined,
+  // Silence output during tests unless LOG_LEVEL is explicitly set.
+  enabled: !(
+    process.env.NODE_ENV === "test" && !process.env.LOG_LEVEL
+  ),
+});
+
+// ── Backward-compatible `log` export ────────────────────────────────────────
+//
+// Existing call-sites use `log.info("event_name", { key: value })`.
+// Pino's native API is `logger.info({ key: value }, "message")`.
+// This thin adapter bridges the two so we don't need to rewrite every
+// call-site in a single PR.
 
 type LogContext = Record<string, unknown>;
 
-function emit(level: LogLevel, event: string, ctx: LogContext = {}): void {
-  // In production (or any non-test environment), write JSON to stdout/stderr.
-  // Tests suppress output unless LOG_LEVEL=debug is set.
-  if (process.env.NODE_ENV === "test" && process.env.LOG_LEVEL !== "debug") {
-    return;
-  }
-
-  const entry = {
-    ts: new Date().toISOString(),
-    level,
-    event,
-    ...ctx,
-  };
-
-  const line = JSON.stringify(entry);
-
-  if (level === "error" || level === "warn") {
-    process.stderr.write(line + "\n");
-  } else {
-    process.stdout.write(line + "\n");
-  }
-}
-
 export const log = {
-  debug: (event: string, ctx?: LogContext) => emit("debug", event, ctx),
-  info: (event: string, ctx?: LogContext) => emit("info", event, ctx),
-  warn: (event: string, ctx?: LogContext) => emit("warn", event, ctx),
-  error: (event: string, ctx?: LogContext) => emit("error", event, ctx),
+  debug: (event: string, ctx?: LogContext) => logger.debug(ctx ?? {}, event),
+  info: (event: string, ctx?: LogContext) => logger.info(ctx ?? {}, event),
+  warn: (event: string, ctx?: LogContext) => logger.warn(ctx ?? {}, event),
+  error: (event: string, ctx?: LogContext) => logger.error(ctx ?? {}, event),
 };

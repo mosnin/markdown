@@ -1,5 +1,6 @@
 import { type SupabaseClient } from "@supabase/supabase-js";
 import { createHmac, randomBytes } from "crypto";
+import { logger } from "@/lib/logger";
 
 /**
  * Branch promotion gate service.
@@ -323,6 +324,13 @@ export async function runGates(
       });
     }
   }
+  for (const run of runs) {
+    logger.info(
+      { gateId: run.gate_id, status: run.status, durationMs: run.duration_ms },
+      "promotion gate result",
+    );
+  }
+
   return { allPassed, runs };
 }
 

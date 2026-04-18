@@ -1,7 +1,7 @@
 import { createHash, timingSafeEqual } from "node:crypto";
 import * as Sentry from "@sentry/nextjs";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { log } from "@/lib/logger";
+import { log, logger } from "@/lib/logger";
 import {
   parseBearerAccessToken,
   resolveAccessToken,
@@ -220,6 +220,11 @@ async function resolveOAuth(
       ? "propose_writes"
       : "read_only";
 
+  logger.info(
+    { source: "oauth" as const, userId: resolved.userId, scopes: resolved.scope },
+    "mcp auth resolved",
+  );
+
   return {
     source: "oauth",
     userId: resolved.userId,
@@ -275,6 +280,11 @@ async function resolveLegacyCsk(
     tokenPrefix,
     lastWarnedAt: tokenRecord.last_warned_at ?? null,
   });
+
+  logger.info(
+    { source: "legacy_csk" as const, userId: null, scopes: [] },
+    "mcp auth resolved",
+  );
 
   return {
     source: "legacy_csk",

@@ -5,6 +5,7 @@ import {
   serializeScopes,
   type OAuthScope,
 } from "./oauth_scope_service";
+import { logger } from "@/lib/logger";
 
 /**
  * OAuth 2.1 token minting and verification.
@@ -256,6 +257,11 @@ export async function issueTokenPair(
     throw new Error(refErr?.message ?? "Failed to issue refresh token");
   }
 
+  logger.info(
+    { clientId: input.clientId, userId: input.userId, grantType: "authorization_code" },
+    "oauth token pair issued",
+  );
+
   return {
     accessToken: accessRaw,
     accessTokenExpiresAt: accessExpiresAt,
@@ -361,6 +367,11 @@ export async function refreshTokenPair(
     .from("oauth_refresh_tokens")
     .update({ replaced_by_token_id: newPair.refreshTokenId })
     .eq("id", row.id);
+
+  logger.info(
+    { clientId: input.clientId, userId: row.user_id, grantType: "refresh_token" },
+    "oauth token pair refreshed",
+  );
 
   return {
     ...newPair,
@@ -491,6 +502,7 @@ export async function revokeConsentTokens(
   input: { userId: string; clientId: string; workspaceId: string }
 ): Promise<void> {
   const { userId, clientId, workspaceId } = input;
+  logger.info({ clientId, userId, grantType: "revoke" }, "oauth consent tokens revoked");
   await supabase
     .from("oauth_access_tokens")
     .update({ revoked_at: new Date().toISOString() })

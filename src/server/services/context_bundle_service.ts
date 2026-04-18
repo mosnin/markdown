@@ -1,4 +1,5 @@
 import { type SupabaseClient } from "@supabase/supabase-js";
+import { logger } from "@/lib/logger";
 import { type Note } from "@/server/domain/types/note";
 import {
   type ContextBundle,
@@ -537,6 +538,8 @@ export async function assembleContextBundle(
   noteId: string,
   options: AssembleBundleOptions = {}
 ): Promise<ContextBundle> {
+  const bundleStart = Date.now();
+
   const {
     includeGuide = true,
     includeArchived = false,
@@ -831,6 +834,11 @@ export async function assembleContextBundle(
       ? { pending_branch_changes: pendingBranchChanges }
       : {}),
   };
+
+  logger.info(
+    { noteId, linkedNoteCount: linkedNotes.length, durationMs: Date.now() - bundleStart },
+    "context bundle assembled",
+  );
 
   // ── 11. Store in edge cache (best-effort, 5 min TTL) ───────────────────
   // Fire-and-forget so cache failures never block bundle delivery.
