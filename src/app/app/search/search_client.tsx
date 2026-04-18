@@ -19,15 +19,18 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import {
   searchWorkspaceAction,
-  semanticSearchAction,
+  hybridSearchAction,
   type SearchActionResult,
-  type SemanticSearchActionResult,
+  type HybridSearchActionResult,
 } from "./actions";
 import {
   type WorkspaceSearchHit,
   type WorkspaceSearchObjectType,
 } from "@/server/services/workspace_search_service";
-import { type SemanticSearchResult } from "@/server/services/embedding_service";
+import {
+  type HybridMatchType,
+  type HybridSearchResult,
+} from "@/server/services/embedding_service";
 
 /**
  * Workspace search client.
@@ -67,7 +70,7 @@ export function WorkspaceSearchClient({
   const [query, setQuery] = useState(initialQuery);
   const [mode, setMode] = useState<SearchMode>("keyword");
   const [hits, setHits] = useState<WorkspaceSearchHit[]>([]);
-  const [semanticHits, setSemanticHits] = useState<SemanticSearchResult[]>([]);
+  const [semanticHits, setSemanticHits] = useState<HybridSearchResult[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const [highlighted, setHighlighted] = useState(0);
@@ -98,7 +101,7 @@ export function WorkspaceSearchClient({
     const t = window.setTimeout(() => {
       startTransition(async () => {
         if (mode === "semantic") {
-          const res: SemanticSearchActionResult = await semanticSearchAction(q);
+          const res: HybridSearchActionResult = await hybridSearchAction(q);
           setHasSearched(true);
           if (res.ok) {
             setSemanticHits(res.data);
@@ -385,11 +388,39 @@ function HitRow({
   );
 }
 
+/**
+ * Visual metadata for each hybrid match type. Rendered as a compact
+ * badge on each semantic/hybrid result so users can see whether a hit
+ * came from the vector index, keyword FTS, or both.
+ */
+const MATCH_TYPE_META: Record<
+  HybridMatchType,
+  { label: string; variant: "secondary" | "outline" | "info" }
+> = {
+  semantic: { label: "Semantic", variant: "info" },
+  keyword: { label: "Keyword", variant: "outline" },
+  both: { label: "Hybrid", variant: "secondary" },
+};
+
+function MatchTypeBadge({ matchType }: { matchType: HybridMatchType }) {
+  const meta = MATCH_TYPE_META[matchType];
+  return (
+    <Badge
+      variant={meta.variant}
+      className="shrink-0 text-[10px] font-normal"
+      aria-label={`Match type: ${meta.label}`}
+    >
+      <Sparkles className="mr-1 h-3 w-3" aria-hidden="true" />
+      {meta.label}
+    </Badge>
+  );
+}
+
 function SemanticHitRow({
   hit,
   active,
 }: {
-  hit: SemanticSearchResult;
+  hit: HybridSearchResult;
   active: boolean;
 }) {
   const similarity = Math.round(hit.similarity * 100);
@@ -410,12 +441,14 @@ function SemanticHitRow({
           <p className="truncate text-sm font-medium text-foreground">
             {hit.title}
           </p>
-          <Badge
-            variant="outline"
-            className="shrink-0 text-[10px] font-normal tabular-nums"
-          >
-            {similarity}% match
-          </Badge>
+          {hit.matchType !== "keyword" && similarity > 0 && (
+            <Badge
+              variant="outline"
+              className="shrink-0 text-[10px] font-normal tabular-nums"
+            >
+              {similarity}% match
+            </Badge>
+          )}
         </div>
         {hit.snippet && (
           <p className="mt-1.5 text-xs text-muted-foreground/90 line-clamp-2">
@@ -423,13 +456,7 @@ function SemanticHitRow({
           </p>
         )}
       </div>
-      <Badge
-        variant="secondary"
-        className="shrink-0 text-[10px] font-normal"
-      >
-        <Sparkles className="mr-1 h-3 w-3" aria-hidden="true" />
-        Semantic
-      </Badge>
+      <MatchTypeBadge matchType={hit.matchType} />
     </Link>
   );
 }

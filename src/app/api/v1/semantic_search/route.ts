@@ -81,6 +81,7 @@ export async function POST(request: NextRequest) {
           similarity: r.similarity,
           keyword_score: r.keywordScore,
           combined_score: r.combinedScore,
+          match_type: r.matchType,
         })),
       });
     }

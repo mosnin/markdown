@@ -15,6 +15,7 @@ import {
   Key,
   Palette,
   Shield,
+  Sparkles,
   User,
   Users,
 } from "lucide-react";
@@ -82,6 +83,12 @@ const workspaceAdminNav = [
     label: "Branch retention",
     subLabel: "Auto-discard idle branches",
     icon: GitBranch,
+  },
+  {
+    href: "/app/settings/workspace/semantic_search",
+    label: "Semantic search",
+    subLabel: "Reindex vector embeddings",
+    icon: Sparkles,
   },
 ];
 

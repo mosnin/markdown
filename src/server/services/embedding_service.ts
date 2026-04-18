@@ -27,9 +27,21 @@ export interface SemanticSearchResult {
   similarity: number;
 }
 
+/**
+ * Per-result provenance signal: which underlying index produced the hit.
+ *   - "semantic" — only the vector similarity search matched
+ *   - "keyword"  — only the keyword FTS matched
+ *   - "both"     — both sources matched (highest confidence)
+ *
+ * Useful for rendering small "match type" badges in search UI so users
+ * can see why a result ranked where it did.
+ */
+export type HybridMatchType = "semantic" | "keyword" | "both";
+
 export interface HybridSearchResult extends SemanticSearchResult {
   keywordScore: number;
   combinedScore: number;
+  matchType: HybridMatchType;
 }
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -222,7 +234,9 @@ export async function hybridSearch(
     fetchKeywordResults(supabase, workspaceId, query, limit),
   ]);
 
-  // Build a map of note_id → best scores from each source.
+  // Build a map of note_id → best scores from each source, tracking
+  // which source(s) contributed the hit so the UI can render match-type
+  // badges ("semantic", "keyword", or "both").
   const merged = new Map<
     string,
     {
@@ -231,6 +245,8 @@ export async function hybridSearch(
       snippet: string | null;
       similarity: number;
       keywordScore: number;
+      fromSemantic: boolean;
+      fromKeyword: boolean;
     }
   >();
 
@@ -247,6 +263,8 @@ export async function hybridSearch(
       snippet: r.snippet,
       similarity: r.similarity,
       keywordScore: 0,
+      fromSemantic: true,
+      fromKeyword: false,
     });
   }
 
@@ -255,6 +273,7 @@ export async function hybridSearch(
     const normalizedScore = r.rank / maxKeyword;
     if (existing) {
       existing.keywordScore = normalizedScore;
+      existing.fromKeyword = true;
       // Prefer keyword title/snippet if semantic didn't have good ones.
       if (!existing.snippet && r.snippet) {
         existing.snippet = r.snippet;
@@ -266,6 +285,8 @@ export async function hybridSearch(
         snippet: r.snippet,
         similarity: 0,
         keywordScore: normalizedScore,
+        fromSemantic: false,
+        fromKeyword: true,
       });
     }
   }
@@ -278,6 +299,12 @@ export async function hybridSearch(
     similarity: r.similarity,
     keywordScore: r.keywordScore,
     combinedScore: r.keywordScore * 0.3 + r.similarity * 0.7,
+    matchType:
+      r.fromSemantic && r.fromKeyword
+        ? "both"
+        : r.fromSemantic
+          ? "semantic"
+          : "keyword",
   }));
 
   results.sort((a, b) => b.combinedScore - a.combinedScore);

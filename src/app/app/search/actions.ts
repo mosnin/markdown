@@ -7,7 +7,9 @@ import {
   type WorkspaceSearchHit,
 } from "@/server/services/workspace_search_service";
 import {
+  hybridSearch,
   semanticSearch,
+  type HybridSearchResult,
   type SemanticSearchResult,
 } from "@/server/services/embedding_service";
 import { recordSearchQuery } from "@/server/services/workspace_analytics_service";
@@ -18,6 +20,10 @@ export type SearchActionResult =
 
 export type SemanticSearchActionResult =
   | { ok: true; data: SemanticSearchResult[] }
+  | { ok: false; error: string };
+
+export type HybridSearchActionResult =
+  | { ok: true; data: HybridSearchResult[] }
   | { ok: false; error: string };
 
 /**
@@ -79,6 +85,32 @@ export async function semanticSearchAction(
     return {
       ok: false,
       error: err instanceof Error ? err.message : "Semantic search failed",
+    };
+  }
+}
+
+/**
+ * Hybrid search: blends keyword FTS and vector similarity.
+ *
+ * Each result carries a `matchType` signal ("semantic" | "keyword" |
+ * "both") so the UI can render a small badge explaining why the hit
+ * surfaced. Gracefully degrades to keyword-only when the embedding
+ * provider isn't configured.
+ */
+export async function hybridSearchAction(
+  query: string
+): Promise<HybridSearchActionResult> {
+  try {
+    const ctx = await requireAuthenticatedUser();
+    const supabase = await createClient();
+    const results = await hybridSearch(supabase, ctx.workspace.id, query, {
+      limit: 20,
+    });
+    return { ok: true, data: results };
+  } catch (err) {
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : "Hybrid search failed",
     };
   }
 }

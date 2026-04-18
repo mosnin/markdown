@@ -14,6 +14,7 @@ import {
   Menu,
   Palette,
   Shield,
+  Sparkles,
   User,
   Users,
   X,
@@ -59,6 +60,12 @@ const workspaceAdminNav = [
     label: "Members",
     subLabel: "Invite & manage team members",
     icon: Users,
+  },
+  {
+    href: "/app/settings/workspace/semantic_search",
+    label: "Semantic search",
+    subLabel: "Reindex vector embeddings",
+    icon: Sparkles,
   },
 ];
 

@@ -309,6 +309,41 @@ describe("embedding_service", () => {
       }
     });
 
+    it("tags keyword-only hits with matchType 'keyword' when embeddings are off", async () => {
+      delete process.env.EMBEDDING_API_KEY;
+
+      const { hybridSearch } = await import(
+        "@/server/services/embedding_service"
+      );
+
+      const supabase = makeFakeSupabase({
+        notes: [
+          {
+            id: "note-a",
+            title: "Machine Learning Basics",
+            summary: null,
+            markdown_content: "Content about machine learning",
+            status: "active",
+            updated_at: "2026-01-01T00:00:00Z",
+            workspace_id: "ws-1",
+            branch_id: null,
+          },
+        ],
+      });
+
+      const results = await hybridSearch(
+        supabase as never,
+        "ws-1",
+        "machine learning",
+        { limit: 10 }
+      );
+
+      expect(results.length).toBeGreaterThan(0);
+      for (const r of results) {
+        expect(r.matchType).toBe("keyword");
+      }
+    });
+
     it("produces correct weight formula", () => {
       // Pure unit test of the weight constants.
       const keywordScore = 0.8;
