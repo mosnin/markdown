@@ -1,9 +1,21 @@
 import { type SupabaseClient } from "@supabase/supabase-js";
 import { createAuditEvent } from "@/server/repositories/audit_event_repository";
+import {
+  dispatchEvent as dispatchContentWebhook,
+  SUPPORTED_EVENT_TYPES,
+} from "@/server/services/content_webhook_service";
+
+/** Event types that trigger content webhook dispatch. */
+const WEBHOOK_EVENT_SET = new Set<string>(SUPPORTED_EVENT_TYPES);
 
 /**
  * Internal helper — all audit writes go through this.
  * Errors are swallowed: audit failure must not abort the primary operation.
+ *
+ * After writing the audit event, if the event_type is in the set of
+ * supported content webhook events, fire-and-forget a dispatch to
+ * matching webhooks. This centralizes the webhook dispatch point so
+ * callers don't need to know about webhooks.
  */
 async function write(
   supabase: SupabaseClient,
@@ -26,6 +38,20 @@ async function write(
     });
   } catch (err) {
     console.error(`[audit] Failed to write ${eventType} for ${objectType}/${objectId}`, err);
+  }
+
+  // Post-audit hook: dispatch content webhook if applicable.
+  if (WEBHOOK_EVENT_SET.has(eventType)) {
+    try {
+      dispatchContentWebhook(supabase, workspaceId, eventType, {
+        object_type: objectType,
+        object_id: objectId,
+        actor_id: actorId,
+        ...(metadata ?? {}),
+      });
+    } catch {
+      // Webhook dispatch must never abort the primary operation.
+    }
   }
 }
 

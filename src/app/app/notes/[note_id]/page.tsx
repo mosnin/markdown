@@ -34,6 +34,7 @@ import { NoteHistoryPanel } from "@/components/product/note_history_panel";
 import { NoteExportMenu } from "@/components/product/export_menu";
 import { NoteImportButton } from "@/components/product/note_import_dialog";
 import { NoteLifecycleMenu } from "@/components/product/note_lifecycle_menu";
+import { SaveAsTemplateButton } from "@/components/product/save_as_template_button";
 import { NoteCommentsPanel } from "@/components/product/note_comments_panel";
 import { GeneratedNoteBanner } from "@/components/product/generated_note_banner";
 import { RetrievalHintBadge } from "@/components/product/retrieval_hint_badge";
@@ -604,6 +605,7 @@ export default async function NotePage({
                 note.status as "draft" | "active" | "archived" | "trashed"
               }
             />
+            <SaveAsTemplateButton noteId={note_id} noteTitle={note.title} />
             <NoteImportButton noteId={note_id} noteTitle={note.title} />
             <NoteExportMenu noteId={note_id} noteTitle={note.title} />
           </div>

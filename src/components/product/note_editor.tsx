@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { Code2, Eye } from "lucide-react";
+import { AlertTriangle, Code2, Eye } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
@@ -13,6 +13,9 @@ import {
   type AutosaveState,
 } from "@/components/product/autosave_status";
 import { formatAbsoluteDate } from "@/lib/format_date";
+import { useNotePresence } from "@/lib/hooks/use_note_presence";
+import { useConcurrentEditWarning } from "@/lib/hooks/use_concurrent_edit_warning";
+import { NotePresenceAvatars } from "@/components/product/note_presence_avatars";
 
 /**
  * Autosave debounce: 1500ms after the last content change.
@@ -41,9 +44,11 @@ interface NoteEditorProps {
   note: Note;
   /** Initial view mode — defaults to "document" (rendered, human reading experience). */
   initialMode?: NoteViewMode;
+  /** Current user info for presence tracking. When absent, presence is disabled. */
+  currentUser?: { userId: string; displayName: string };
 }
 
-export function NoteEditor({ note, initialMode = "document" }: NoteEditorProps) {
+export function NoteEditor({ note, initialMode = "document", currentUser }: NoteEditorProps) {
   const [title, setTitle] = useState(note.title);
   const [content, setContent] = useState(note.markdown_content);
   const [summary, setSummary] = useState(note.summary ?? "");
@@ -60,6 +65,22 @@ export function NoteEditor({ note, initialMode = "document" }: NoteEditorProps) 
   const isSavingRef = useRef(false);
   // Ref to track the status-fade timeout so we can cancel it before setting a new one (Bug 4)
   const statusTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // ── Presence & concurrent-edit awareness ────────────────────────────────────
+  const presenceUsers = useNotePresence(
+    note.id,
+    {
+      userId: currentUser?.userId ?? "",
+      displayName: currentUser?.displayName ?? "",
+    }
+  );
+
+  const {
+    showWarning: showConcurrentWarning,
+    savedBy: concurrentSavedBy,
+    broadcastSave,
+    dismiss: dismissConcurrentWarning,
+  } = useConcurrentEditWarning(note.id, currentUser?.userId ?? "");
 
   const router = useRouter();
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -163,6 +184,10 @@ export function NoteEditor({ note, initialMode = "document" }: NoteEditorProps) 
         if (titleChanged) {
           router.refresh();
         }
+        // Broadcast save to other editors so they see a concurrent-edit warning.
+        if (currentUser) {
+          broadcastSave(currentUser.userId, currentUser.displayName, note.current_version_id ?? "");
+        }
         // Bug 4: Cancel the previous status-fade timeout before scheduling a new one
         if (statusTimeoutRef.current) clearTimeout(statusTimeoutRef.current);
         statusTimeoutRef.current = setTimeout(() => {
@@ -179,7 +204,7 @@ export function NoteEditor({ note, initialMode = "document" }: NoteEditorProps) 
       isSavingRef.current = false;
       setIsSaving(false);
     }
-  }, [note.id, title, content, summary, tagsInput, readHint, router]);
+  }, [note.id, note.current_version_id, title, content, summary, tagsInput, readHint, router, broadcastSave, currentUser]);
 
   /**
    * Autosave debounce effect.
@@ -275,8 +300,11 @@ export function NoteEditor({ note, initialMode = "document" }: NoteEditorProps) 
           />
         </div>
 
-        {/* Save state + retry */}
+        {/* Presence + Save state + retry */}
         <div className="flex items-center gap-2">
+          {presenceUsers.length > 0 && (
+            <NotePresenceAvatars users={presenceUsers} />
+          )}
           <span
             className={cn(
               "transition-opacity duration-300",
@@ -303,6 +331,39 @@ export function NoteEditor({ note, initialMode = "document" }: NoteEditorProps) 
           )}
         </div>
       </div>
+
+      {/* ── Concurrent edit warning ──────────────────────────────────────── */}
+      {showConcurrentWarning && (
+        <div className="flex items-center gap-2 border-b border-amber-300/50 bg-amber-50/40 px-8 py-2 dark:border-amber-600/30 dark:bg-amber-900/10">
+          <AlertTriangle
+            className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-500"
+            aria-hidden="true"
+          />
+          <p className="flex-1 text-xs text-amber-700 dark:text-amber-400">
+            {concurrentSavedBy ?? "Someone"} just saved changes to this note.
+            Reload to see their version.
+          </p>
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-7 text-xs"
+            onClick={() => {
+              dismissConcurrentWarning();
+              router.refresh();
+            }}
+          >
+            Reload
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-7 text-xs text-muted-foreground"
+            onClick={dismissConcurrentWarning}
+          >
+            Dismiss
+          </Button>
+        </div>
+      )}
 
       {/* ── Content area ──────────────────────────────────────────────────── */}
       <div className="flex-1 overflow-auto">
