@@ -134,13 +134,14 @@ export async function createWebhook(
 export async function listWebhooks(
   supabase: SupabaseClient,
   workspaceId: string,
-): Promise<ContentWebhook[]> {
+): Promise<Omit<ContentWebhook, "secret">[]> {
   const { data } = await supabase
     .from("content_webhooks")
     .select("*")
     .eq("workspace_id", workspaceId)
     .order("created_at", { ascending: false });
-  return (data ?? []) as ContentWebhook[];
+  const rows = (data ?? []) as ContentWebhook[];
+  return rows.map(({ secret: _secret, ...rest }) => rest);
 }
 
 export interface UpdateWebhookPatch {

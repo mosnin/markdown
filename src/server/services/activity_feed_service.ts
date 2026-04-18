@@ -190,24 +190,12 @@ export async function markAsRead(
 ): Promise<void> {
   const now = new Date().toISOString();
 
-  const { data: existing } = await supabase
+  await supabase
     .from("user_feed_read_cursors")
-    .select("user_id")
-    .eq("user_id", userId)
-    .eq("workspace_id", workspaceId)
-    .maybeSingle();
-
-  if (existing) {
-    await supabase
-      .from("user_feed_read_cursors")
-      .update({ last_read_at: now })
-      .eq("user_id", userId)
-      .eq("workspace_id", workspaceId);
-  } else {
-    await supabase
-      .from("user_feed_read_cursors")
-      .insert({ user_id: userId, workspace_id: workspaceId, last_read_at: now });
-  }
+    .upsert(
+      { user_id: userId, workspace_id: workspaceId, last_read_at: now },
+      { onConflict: "user_id,workspace_id" }
+    );
 }
 
 /**

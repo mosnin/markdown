@@ -1,10 +1,12 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireAuthenticatedUser } from "@/server/auth/require_authenticated_user";
 import { suggestLinks } from "@/server/services/link_suggestion_service";
 import { createLink } from "@/server/services/link_service";
+import { createAuditEvent } from "@/server/repositories/audit_event_repository";
 import { type RelationshipType } from "@/server/domain/constants/note_constants";
 import { log } from "@/lib/logger";
 
@@ -153,6 +155,20 @@ export async function acceptLinkSuggestionAction(
       });
     }
 
+    await createAuditEvent(supabase, {
+      workspace_id: ctx.workspace.id,
+      actor_type: "user",
+      actor_id: ctx.user.id,
+      object_type: "link_suggestion",
+      object_id: suggestionId,
+      event_type: "link.suggestion.accepted",
+      metadata: {
+        note_id: suggestion.note_id,
+        target_note_id: suggestion.target_note_id,
+      },
+    });
+
+    revalidatePath(`/app/notes/${suggestion.note_id}`);
     return { success: true, data: undefined };
   } catch (err) {
     const message =
@@ -174,8 +190,16 @@ export async function dismissLinkSuggestionAction(
   suggestionId: string
 ): Promise<ActionResult> {
   try {
-    await requireAuthenticatedUser();
+    const ctx = await requireAuthenticatedUser();
+    const supabase = await createClient();
     const adminClient = createAdminClient();
+
+    // Fetch the suggestion to get note_id for revalidation
+    const { data: suggestion } = await adminClient
+      .from("link_suggestions")
+      .select("note_id, target_note_id")
+      .eq("id", suggestionId)
+      .maybeSingle();
 
     const { error } = await adminClient
       .from("link_suggestions")
@@ -184,6 +208,23 @@ export async function dismissLinkSuggestionAction(
 
     if (error) {
       return { success: false, error: error.message };
+    }
+
+    await createAuditEvent(supabase, {
+      workspace_id: ctx.workspace.id,
+      actor_type: "user",
+      actor_id: ctx.user.id,
+      object_type: "link_suggestion",
+      object_id: suggestionId,
+      event_type: "link.suggestion.dismissed",
+      metadata: {
+        note_id: suggestion?.note_id ?? null,
+        target_note_id: suggestion?.target_note_id ?? null,
+      },
+    });
+
+    if (suggestion?.note_id) {
+      revalidatePath(`/app/notes/${suggestion.note_id}`);
     }
 
     return { success: true, data: undefined };

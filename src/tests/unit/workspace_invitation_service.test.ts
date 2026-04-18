@@ -174,7 +174,22 @@ function makeFakeSupabase(state: MockState) {
   }
 
   function fromMemberships() {
+    let filters: Record<string, unknown> = {};
     const chain: Record<string, unknown> = {};
+    chain.select = (_cols?: string) => {
+      const s: Record<string, unknown> = {};
+      s.eq = (col: string, val: unknown) => {
+        filters[col] = val;
+        return s;
+      };
+      s.maybeSingle = async () => {
+        const row = state.memberships.find((r) =>
+          Object.entries(filters).every(([k, v]) => (r as Record<string, unknown>)[k] === v)
+        );
+        return { data: row ?? null, error: null };
+      };
+      return s;
+    };
     chain.upsert = (payload: Record<string, unknown>, _opts?: unknown) => {
       const existing = state.memberships.find(
         (m) => m.workspace_id === payload.workspace_id && m.user_id === payload.user_id
@@ -304,6 +319,42 @@ describe("workspace_invitation_service", () => {
       expect(state.memberships[0].user_id).toBe("user-bob");
       expect(state.memberships[0].role).toBe("admin");
       expect(state.memberships[0].workspace_id).toBe("ws-1");
+    });
+  });
+
+  // 4b. Accept rejects already-member
+  describe("acceptInvitation — already member", () => {
+    it("rejects if user is already a member of the workspace", async () => {
+      // Seed an existing membership
+      state.memberships.push({
+        workspace_id: "ws-1",
+        user_id: "user-existing",
+        role: "member",
+        invited_by: "user-admin",
+        accepted_at: new Date().toISOString(),
+      });
+
+      // Seed a pending invitation for the same user
+      state.invitations.push({
+        id: "inv-already-member",
+        workspace_id: "ws-1",
+        email: "existing@example.com",
+        role: "admin",
+        token: "already-member-token",
+        invited_by: "user-admin",
+        status: "pending",
+        expires_at: new Date(Date.now() + 86400000).toISOString(),
+        accepted_at: null,
+        created_at: new Date().toISOString(),
+      });
+
+      const sb = makeFakeSupabase(state);
+      await expect(
+        acceptInvitation(sb as never, "already-member-token", "user-existing")
+      ).rejects.toThrow(/already a member/i);
+
+      // No new membership should be created
+      expect(state.memberships).toHaveLength(1);
     });
   });
 

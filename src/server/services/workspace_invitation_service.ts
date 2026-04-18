@@ -121,7 +121,19 @@ export async function acceptInvitation(
     throw new Error("This invitation has expired.");
   }
 
-  // 3. Create the membership
+  // 3. Check if user is already a member
+  const { data: existingMember } = await supabase
+    .from("workspace_memberships")
+    .select("user_id")
+    .eq("workspace_id", inv.workspace_id)
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (existingMember) {
+    throw new Error("User is already a member of this workspace");
+  }
+
+  // 4. Create the membership
   const { error: memberErr } = await supabase
     .from("workspace_memberships")
     .upsert(
@@ -137,7 +149,7 @@ export async function acceptInvitation(
 
   if (memberErr) throw new Error(memberErr.message);
 
-  // 4. Mark accepted
+  // 5. Mark accepted
   const now = new Date().toISOString();
   const { data: updated, error: updateErr } = await supabase
     .from("workspace_invitations")

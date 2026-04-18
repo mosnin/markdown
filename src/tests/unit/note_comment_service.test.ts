@@ -49,6 +49,8 @@ function makeSupabase(opts: {
   commentToDelete?: { id: string; author_id: string } | null;
   listRows?: Array<Record<string, unknown>>;
   unresolvedRows?: Array<{ id: string }>;
+  /** When set, controls whether the note workspace lookup returns a row. Default: true. */
+  noteExistsInWorkspace?: boolean;
 }) {
   const calls: Call[] = [];
   function builder(table: string) {
@@ -125,6 +127,14 @@ function makeSupabase(opts: {
     };
     b.maybeSingle = async () => {
       calls.push({ table, op, filters: [...filters], isFilters: [...isFilters], payload });
+      // Handle the notes table lookup for workspace validation
+      if (op === "select" && table === "notes") {
+        const noteInWs = opts.noteExistsInWorkspace ?? true;
+        return {
+          data: noteInWs ? { id: NOTE_ID } : null,
+          error: null,
+        };
+      }
       if (op === "select" && table === "note_comments") {
         if (opts.parentComment !== undefined) {
           return { data: opts.parentComment, error: null };
@@ -202,6 +212,18 @@ describe("createNoteComment", () => {
         body: "x".repeat(8001),
       })
     ).rejects.toThrow(/8000 characters/i);
+  });
+
+  it("rejects comment when note does not belong to workspace", async () => {
+    const { supabase } = makeSupabase({ noteExistsInWorkspace: false });
+    await expect(
+      createNoteComment(supabase, {
+        noteId: NOTE_ID,
+        workspaceId: "wrong-workspace",
+        authorId: AUTHOR,
+        body: "hi",
+      })
+    ).rejects.toThrow(/does not belong to this workspace/i);
   });
 
   it("rejects reply whose parent is on a different note", async () => {

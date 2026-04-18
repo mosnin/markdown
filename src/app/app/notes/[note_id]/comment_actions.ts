@@ -9,6 +9,7 @@ import {
   unresolveComment,
   deleteComment,
 } from "@/server/services/note_comment_service";
+import { createAuditEvent } from "@/server/repositories/audit_event_repository";
 
 type ActionResult<T = undefined> =
   | { success: true; data: T }
@@ -28,12 +29,21 @@ export async function createNoteCommentAction(
 
   try {
     const supabase = await createClient();
-    await createNoteComment(supabase, {
+    const comment = await createNoteComment(supabase, {
       noteId,
       workspaceId: ctx.workspace.id,
       authorId: ctx.user.id,
       body,
       parentCommentId,
+    });
+    await createAuditEvent(supabase, {
+      workspace_id: ctx.workspace.id,
+      actor_type: "user",
+      actor_id: ctx.user.id,
+      object_type: "note_comment",
+      object_id: comment.id,
+      event_type: "note.comment.created",
+      metadata: { note_id: noteId },
     });
     revalidatePath(`/app/notes/${noteId}`);
     return { success: true, data: undefined };
@@ -59,6 +69,15 @@ export async function resolveNoteCommentAction(
   try {
     const supabase = await createClient();
     await resolveComment(supabase, commentId, ctx.user.id);
+    await createAuditEvent(supabase, {
+      workspace_id: ctx.workspace.id,
+      actor_type: "user",
+      actor_id: ctx.user.id,
+      object_type: "note_comment",
+      object_id: commentId,
+      event_type: "note.comment.resolved",
+      metadata: { note_id: noteId },
+    });
     revalidatePath(`/app/notes/${noteId}`);
     return { success: true, data: undefined };
   } catch (err) {
@@ -106,6 +125,15 @@ export async function deleteNoteCommentAction(
   try {
     const supabase = await createClient();
     await deleteComment(supabase, commentId, ctx.user.id);
+    await createAuditEvent(supabase, {
+      workspace_id: ctx.workspace.id,
+      actor_type: "user",
+      actor_id: ctx.user.id,
+      object_type: "note_comment",
+      object_id: commentId,
+      event_type: "note.comment.deleted",
+      metadata: { note_id: noteId },
+    });
     revalidatePath(`/app/notes/${noteId}`);
     return { success: true, data: undefined };
   } catch (err) {

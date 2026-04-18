@@ -57,6 +57,7 @@ function makeSupabase(opts: {
       filters.push({ col, val });
       return b;
     };
+    b.neq = () => b;
     b.order = () => b;
     b.limit = () => b;
     b.insert = (p: Record<string, unknown>) => {
@@ -192,6 +193,20 @@ describe("note_template_service", () => {
       expect(result.id).toBe("tpl-from-note");
       expect(result.markdown_content).toBe("# Design doc\n\nContent here.");
       expect(result.name).toBe("Template from My design doc");
+    });
+  });
+
+  describe("createTemplateFromNote — trashed note", () => {
+    it("rejects creating a template from a trashed note", async () => {
+      const sb = makeSupabase({
+        tableSingleOverrides: {
+          notes: null, // simulates neq("status","trashed") filtering out the note
+        },
+      });
+
+      await expect(
+        createTemplateFromNote(sb as any, "note-trashed")
+      ).rejects.toThrow(/not found or is trashed/i);
     });
   });
 

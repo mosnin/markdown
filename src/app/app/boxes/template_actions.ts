@@ -10,6 +10,7 @@ import {
   deleteTemplate,
   type UpdateTemplatePatch,
 } from "@/server/services/note_template_service";
+import { createAuditEvent } from "@/server/repositories/audit_event_repository";
 
 export type ActionResult<T = void> =
   | { ok: true; data: T }
@@ -53,6 +54,15 @@ export async function createTemplateAction(
       tags,
       createdBy: userId,
     });
+    await createAuditEvent(supabase, {
+      workspace_id: workspaceId,
+      actor_type: "user",
+      actor_id: userId,
+      object_type: "note_template",
+      object_id: template.id,
+      event_type: "template.created",
+      metadata: { name: template.name, box_id: boxId },
+    });
     revalidatePath(`/app/boxes/${boxId}/templates`);
     return { ok: true, data: { id: template.id } };
   } catch (err) {
@@ -69,10 +79,19 @@ export async function createTemplateFromNoteAction(
   description?: string
 ): Promise<ActionResult<{ id: string }>> {
   try {
-    const { supabase } = await requireWriteContext();
+    const { supabase, userId, workspaceId } = await requireWriteContext();
     const template = await createTemplateFromNote(supabase, noteId, {
       name,
       description,
+    });
+    await createAuditEvent(supabase, {
+      workspace_id: workspaceId,
+      actor_type: "user",
+      actor_id: userId,
+      object_type: "note_template",
+      object_id: template.id,
+      event_type: "template.created",
+      metadata: { name: template.name, box_id: template.box_id, from_note_id: noteId },
     });
     revalidatePath(`/app/boxes/${template.box_id}/templates`);
     return { ok: true, data: { id: template.id } };
@@ -89,8 +108,17 @@ export async function updateTemplateAction(
   patch: UpdateTemplatePatch
 ): Promise<ActionResult> {
   try {
-    const { supabase } = await requireWriteContext();
+    const { supabase, userId, workspaceId } = await requireWriteContext();
     const updated = await updateTemplate(supabase, templateId, patch);
+    await createAuditEvent(supabase, {
+      workspace_id: workspaceId,
+      actor_type: "user",
+      actor_id: userId,
+      object_type: "note_template",
+      object_id: templateId,
+      event_type: "template.updated",
+      metadata: { name: updated.name, box_id: updated.box_id },
+    });
     revalidatePath(`/app/boxes/${updated.box_id}/templates`);
     return { ok: true, data: undefined };
   } catch (err) {
@@ -106,8 +134,17 @@ export async function deleteTemplateAction(
   boxId: string
 ): Promise<ActionResult> {
   try {
-    const { supabase } = await requireWriteContext();
+    const { supabase, userId, workspaceId } = await requireWriteContext();
     await deleteTemplate(supabase, templateId);
+    await createAuditEvent(supabase, {
+      workspace_id: workspaceId,
+      actor_type: "user",
+      actor_id: userId,
+      object_type: "note_template",
+      object_id: templateId,
+      event_type: "template.deleted",
+      metadata: { box_id: boxId },
+    });
     revalidatePath(`/app/boxes/${boxId}/templates`);
     return { ok: true, data: undefined };
   } catch (err) {

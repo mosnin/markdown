@@ -150,6 +150,48 @@ export async function exportWorkspace(
   };
 }
 
+// ─── Import validation ─────────────────────────────────────────────────────
+
+/** Max total objects allowed in a single import payload. */
+const MAX_IMPORT_OBJECTS = 10_000;
+
+/**
+ * Validate the shape and size of an import payload before processing.
+ * Throws on invalid data.
+ */
+export function validateExportSchema(data: unknown): asserts data is WorkspaceExport {
+  if (!data || typeof data !== "object") {
+    throw new Error("Invalid export: payload must be a JSON object");
+  }
+
+  const d = data as Record<string, unknown>;
+
+  if (d.version !== "1.0") {
+    throw new Error(`Invalid export: unsupported version "${String(d.version)}"`);
+  }
+
+  const arrayFields = ["boxes", "folders", "notes", "files", "skills", "agents", "object_links", "note_links"] as const;
+  let totalObjects = 0;
+  for (const field of arrayFields) {
+    if (!Array.isArray(d[field])) {
+      throw new Error(`Invalid export: "${field}" must be an array`);
+    }
+    totalObjects += (d[field] as unknown[]).length;
+  }
+
+  if (totalObjects > MAX_IMPORT_OBJECTS) {
+    throw new Error(`Import too large: ${totalObjects} objects exceeds the ${MAX_IMPORT_OBJECTS} object limit`);
+  }
+
+  if (!d.workspace || typeof d.workspace !== "object") {
+    throw new Error("Invalid export: missing workspace metadata");
+  }
+
+  if (!d.exported_at || typeof d.exported_at !== "string") {
+    throw new Error("Invalid export: missing exported_at timestamp");
+  }
+}
+
 // ─── Import ─────────────────────────────────────────────────────────────────
 
 export async function importWorkspace(
@@ -159,6 +201,7 @@ export async function importWorkspace(
   data: WorkspaceExport,
   collisionMode: "skip" | "overwrite",
 ): Promise<WorkspaceImportResult> {
+  validateExportSchema(data);
   const result: WorkspaceImportResult = {
     boxes: { created: 0, skipped: 0, overwritten: 0 },
     folders: { created: 0, skipped: 0, overwritten: 0 },

@@ -106,11 +106,13 @@ export async function createTemplateFromNote(
 ): Promise<NoteTemplateRow> {
   const { data: note, error: noteError } = await supabase
     .from("notes")
-    .select("title, box_id, workspace_id, tags, created_by")
+    .select("title, box_id, workspace_id, tags, created_by, status")
     .eq("id", noteId)
-    .single();
+    .neq("status", "trashed")
+    .maybeSingle();
 
-  if (noteError || !note) throw new Error("Note not found");
+  if (noteError) throw new Error(noteError.message);
+  if (!note) throw new Error("Note not found or is trashed");
 
   // Fetch the latest version's markdown content
   const { data: version, error: versionError } = await supabase

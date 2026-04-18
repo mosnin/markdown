@@ -11,7 +11,7 @@ import { describe, it, expect, vi } from "vitest";
  * Mocking strategy: in-memory tables behind a fake Supabase client.
  */
 
-import { exportWorkspace, importWorkspace } from "@/server/services/workspace_export_service";
+import { exportWorkspace, importWorkspace, validateExportSchema } from "@/server/services/workspace_export_service";
 import { type WorkspaceExport } from "@/server/domain/types/workspace_export";
 
 // ─── In-memory store ──────────────────────────────────────────────────────
@@ -319,5 +319,67 @@ describe("importWorkspace — round-trip", () => {
 
     // Verify workspace_id was remapped on boxes
     expect(targetStore.boxes[0].workspace_id).toBe("ws-2");
+  });
+});
+
+// ─── Import validation tests ──────────────────────────────────────────────
+
+describe("validateExportSchema", () => {
+  it("rejects non-object payloads", () => {
+    expect(() => validateExportSchema(null)).toThrow(/must be a JSON object/);
+    expect(() => validateExportSchema("string")).toThrow(/must be a JSON object/);
+  });
+
+  it("rejects unsupported version", () => {
+    expect(() =>
+      validateExportSchema({
+        version: "2.0",
+        exported_at: "2026-01-01",
+        workspace: { id: "ws-1", name: "Test", slug: "test" },
+        boxes: [], folders: [], notes: [], files: [],
+        skills: [], agents: [], object_links: [], note_links: [],
+      })
+    ).toThrow(/unsupported version/);
+  });
+
+  it("rejects missing required array fields", () => {
+    expect(() =>
+      validateExportSchema({
+        version: "1.0",
+        exported_at: "2026-01-01",
+        workspace: { id: "ws-1", name: "Test", slug: "test" },
+        boxes: [], folders: [], notes: "not-an-array",
+        files: [], skills: [], agents: [],
+        object_links: [], note_links: [],
+      })
+    ).toThrow(/"notes" must be an array/);
+  });
+
+  it("rejects payloads exceeding 10,000 objects", () => {
+    const boxes = Array.from({ length: 10001 }, (_, i) => ({
+      id: `box-${i}`, name: `Box ${i}`, slug: `box-${i}`,
+      description: null, status: "active", guide_note_id: null,
+    }));
+    expect(() =>
+      validateExportSchema({
+        version: "1.0",
+        exported_at: "2026-01-01",
+        workspace: { id: "ws-1", name: "Test", slug: "test" },
+        boxes, folders: [], notes: [], files: [],
+        skills: [], agents: [], object_links: [], note_links: [],
+      })
+    ).toThrow(/exceeds the 10000 object limit/);
+  });
+
+  it("accepts a valid export", () => {
+    expect(() =>
+      validateExportSchema({
+        version: "1.0",
+        exported_at: "2026-01-01",
+        workspace: { id: "ws-1", name: "Test", slug: "test" },
+        boxes: [], folders: [], notes: [], files: [],
+        skills: [], agents: [], object_links: [], note_links: [],
+      })
+    ).not.toThrow();
   });
 });

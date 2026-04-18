@@ -22,16 +22,14 @@ export default async function ContentWebhooksPage() {
   const initialRows: ContentWebhookRow[] = [];
   for (const wh of webhooks) {
     const deliveries = await listRecentDeliveries(supabase, wh.id, 20);
-    const { secret: _secret, ...stripped } = wh;
-    void _secret;
     initialRows.push({
-      id: stripped.id,
-      name: stripped.name,
-      url: stripped.url,
-      event_types: stripped.event_types,
-      status: stripped.status,
-      created_at: stripped.created_at,
-      updated_at: stripped.updated_at,
+      id: wh.id,
+      name: wh.name,
+      url: wh.url,
+      event_types: wh.event_types,
+      status: wh.status,
+      created_at: wh.created_at,
+      updated_at: wh.updated_at,
       last_delivery_at: deliveries.length > 0 ? deliveries[0].created_at : null,
       recent_deliveries: deliveries,
     });

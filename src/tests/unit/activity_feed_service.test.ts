@@ -102,6 +102,21 @@ function makeFakeSupabase(initialData: {
         rows = arr;
         return chain;
       },
+      upsert: (row: FakeRow | FakeRow[], _opts?: { onConflict?: string }) => {
+        const arr = Array.isArray(row) ? row : [row];
+        for (const r of arr) {
+          const existing = tables[tableName]?.find(
+            (e) => e.user_id === r.user_id && e.workspace_id === r.workspace_id
+          );
+          if (existing) {
+            Object.assign(existing, r);
+          } else {
+            tables[tableName]!.push({ ...r });
+          }
+        }
+        rows = arr;
+        return chain;
+      },
       update: (patch: FakeRow) => {
         // Apply filters, then patch matching rows
         let filtered = [...(tables[tableName] ?? [])];
@@ -354,6 +369,41 @@ describe("activity_feed_service", () => {
       // Now unread count should be 0 (cursor is advanced past all events)
       const countAfter = await getUnreadCount(supabase, workspaceId, userId);
       expect(countAfter).toBe(0);
+    });
+  });
+
+  describe("markAsRead upsert", () => {
+    it("creates cursor on first call and updates on second (idempotent upsert)", async () => {
+      const supabase = makeFakeSupabase({
+        audit_events: [
+          makeAuditEvent({ actor_id: otherUser, event_type: "note.created", created_at: "2026-04-15T01:00:00Z" }),
+        ],
+        user_notification_preferences: [{
+          user_id: userId,
+          workspace_id: workspaceId,
+          note_created: true,
+          note_updated: false,
+          link_created: true,
+          branch_promoted: true,
+          member_joined: true,
+          proposal_submitted: true,
+          email_digest: "none",
+          updated_at: "2026-04-15T00:00:00Z",
+        }],
+      });
+
+      // First markAsRead creates the cursor row
+      await markAsRead(supabase, workspaceId, userId);
+      const tablesRef = (supabase as unknown as { _tables: Record<string, FakeRow[]> })._tables;
+      expect(tablesRef.user_feed_read_cursors).toHaveLength(1);
+
+      // Second markAsRead updates the same row (no duplicates)
+      await markAsRead(supabase, workspaceId, userId);
+      expect(tablesRef.user_feed_read_cursors).toHaveLength(1);
+
+      // Count should be 0 after mark as read
+      const count = await getUnreadCount(supabase, workspaceId, userId);
+      expect(count).toBe(0);
     });
   });
 

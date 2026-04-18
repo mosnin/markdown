@@ -219,8 +219,8 @@ export async function revokeInvitationAction(
       actor_id: ctx.user.id,
       object_type: "workspace",
       object_id: ctx.workspace.id,
-      event_type: "member.declined",
-      metadata: { invitation_id: invitationId, action: "revoked" },
+      event_type: "member.revoked",
+      metadata: { invitation_id: invitationId },
     });
 
     revalidatePath("/app/settings/workspace/members");

@@ -63,6 +63,16 @@ export async function createNoteComment(
     throw new Error("Comment body must be 8000 characters or fewer");
   }
 
+  // Verify the note belongs to the workspace
+  const { data: noteRow, error: noteErr } = await supabase
+    .from("notes")
+    .select("id")
+    .eq("id", input.noteId)
+    .eq("workspace_id", input.workspaceId)
+    .maybeSingle();
+  if (noteErr) throw new Error(noteErr.message);
+  if (!noteRow) throw new Error("Note does not belong to this workspace");
+
   if (input.parentCommentId) {
     const { data: parent, error: parentErr } = await supabase
       .from("note_comments")

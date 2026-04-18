@@ -40,6 +40,12 @@ export function ExportManager() {
   async function handleImport() {
     const file = fileRef.current?.files?.[0];
     if (!file) return;
+
+    if (file.size > 50 * 1024 * 1024) {
+      setImportResult({ ok: false, error: "Import file exceeds the 50 MB size limit" });
+      return;
+    }
+
     setImporting(true);
     setImportResult(null);
     try {
