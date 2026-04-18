@@ -14,6 +14,7 @@ import { getWorkspaceRole } from "@/server/repositories/workspace_membership_rep
 import { listBoxesByWorkspace } from "@/server/repositories/box_repository";
 import { getNoteById } from "@/server/repositories/note_repository";
 import { searchWorkspace } from "@/server/services/workspace_search_service";
+import { semanticSearch } from "@/server/services/embedding_service";
 import { createAuditEvent } from "@/server/repositories/audit_event_repository";
 import { auditMcp } from "@/server/services/audit_service";
 import { getCanonicalBaseUrl } from "@/lib/canonical_url";
@@ -166,6 +167,24 @@ const TOOLS: ToolDef[] = [
           enum: ["main_only", "main_plus_branch", "branch_only"],
         },
         branch_id: { type: "string" },
+      },
+      required: ["query"],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "semantic_search",
+    description:
+      "Semantic search over notes in the authorized workspace using vector embeddings. " +
+      "Finds notes by meaning rather than keyword matching. Returns ranked results with similarity scores.",
+    scope: "context:search",
+    writes: false,
+    inputSchema: {
+      type: "object",
+      properties: {
+        query: { type: "string", description: "Natural-language search query" },
+        limit: { type: "number", description: "Maximum results to return (default 20)" },
+        branch_id: { type: "string", description: "Optional branch id to scope results" },
       },
       required: ["query"],
       additionalProperties: false,
@@ -432,6 +451,25 @@ async function dispatchTool(
         return true;
       });
       return { hits: filtered };
+    }
+
+    case "semantic_search": {
+      const query = String(args.query ?? "");
+      if (!query) throw toolError(-32602, "query is required");
+      const limit = typeof args.limit === "number" ? args.limit : 20;
+      const branchId = args.branch_id ? String(args.branch_id) : null;
+      const results = await semanticSearch(admin, ctx.workspaceId, query, {
+        limit,
+        branchId,
+      });
+      return {
+        hits: results.map((r) => ({
+          note_id: r.noteId,
+          title: r.title,
+          snippet: r.snippet,
+          similarity: r.similarity,
+        })),
+      };
     }
 
     case "get_box_overview": {

@@ -6,10 +6,18 @@ import {
   searchWorkspace,
   type WorkspaceSearchHit,
 } from "@/server/services/workspace_search_service";
+import {
+  semanticSearch,
+  type SemanticSearchResult,
+} from "@/server/services/embedding_service";
 import { recordSearchQuery } from "@/server/services/workspace_analytics_service";
 
 export type SearchActionResult =
   | { ok: true; data: WorkspaceSearchHit[] }
+  | { ok: false; error: string };
+
+export type SemanticSearchActionResult =
+  | { ok: true; data: SemanticSearchResult[] }
   | { ok: false; error: string };
 
 /**
@@ -47,6 +55,30 @@ export async function searchWorkspaceAction(
     return {
       ok: false,
       error: err instanceof Error ? err.message : "Search failed",
+    };
+  }
+}
+
+/**
+ * Semantic search using vector embeddings.
+ *
+ * Returns notes ranked by cosine similarity to the query embedding.
+ * Falls back to empty results when EMBEDDING_API_KEY is not configured.
+ */
+export async function semanticSearchAction(
+  query: string
+): Promise<SemanticSearchActionResult> {
+  try {
+    const ctx = await requireAuthenticatedUser();
+    const supabase = await createClient();
+    const results = await semanticSearch(supabase, ctx.workspace.id, query, {
+      limit: 20,
+    });
+    return { ok: true, data: results };
+  } catch (err) {
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : "Semantic search failed",
     };
   }
 }
