@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 /**
  * Unit tests for the workspace invitation service.
@@ -265,6 +265,124 @@ describe("workspace_invitation_service", () => {
         invitedBy: "user-admin",
       });
       expect(inv.email).toBe("alice@example.com");
+    });
+  });
+
+  // 2b. Invitation email delivery
+  describe("createInvitation — email delivery", () => {
+    const originalFetch = globalThis.fetch;
+    const originalKey = process.env.RESEND_API_KEY;
+    const originalSiteUrl = process.env.NEXT_PUBLIC_SITE_URL;
+    const originalFromDomain = process.env.RESEND_FROM_DOMAIN;
+
+    beforeEach(() => {
+      process.env.NEXT_PUBLIC_SITE_URL = "https://app.example.com";
+      process.env.RESEND_FROM_DOMAIN = "mail.example.com";
+    });
+
+    afterEach(() => {
+      globalThis.fetch = originalFetch;
+      if (originalKey === undefined) delete process.env.RESEND_API_KEY;
+      else process.env.RESEND_API_KEY = originalKey;
+      if (originalSiteUrl === undefined) delete process.env.NEXT_PUBLIC_SITE_URL;
+      else process.env.NEXT_PUBLIC_SITE_URL = originalSiteUrl;
+      if (originalFromDomain === undefined) delete process.env.RESEND_FROM_DOMAIN;
+      else process.env.RESEND_FROM_DOMAIN = originalFromDomain;
+    });
+
+    it("posts to the Resend API when RESEND_API_KEY is set", async () => {
+      process.env.RESEND_API_KEY = "re_test_key_123";
+
+      const fetchSpy = vi.fn(async () =>
+        new Response(JSON.stringify({ id: "email_1" }), { status: 200 })
+      );
+      globalThis.fetch = fetchSpy as unknown as typeof fetch;
+
+      const sb = makeFakeSupabase(state);
+      const inv = await createInvitation(sb as never, {
+        workspaceId: "ws-1",
+        email: "alice@example.com",
+        role: "member",
+        invitedBy: "user-admin",
+        workspaceName: "Acme Engineering",
+        inviterName: "Bob Admin",
+      });
+
+      // Invitation itself committed normally.
+      expect(inv.email).toBe("alice@example.com");
+      expect(state.invitations).toHaveLength(1);
+
+      // Fetch called exactly once against Resend.
+      expect(fetchSpy).toHaveBeenCalledTimes(1);
+      const call = fetchSpy.mock.calls[0] as unknown as [string, RequestInit];
+      const [url, init] = call;
+      expect(url).toBe("https://api.resend.com/emails");
+      expect(init.method).toBe("POST");
+
+      const headers = init.headers as Record<string, string>;
+      expect(headers.Authorization).toBe("Bearer re_test_key_123");
+      expect(headers["Content-Type"]).toBe("application/json");
+
+      const body = JSON.parse(init.body as string) as {
+        from: string;
+        to: string[];
+        subject: string;
+        html: string;
+        text: string;
+      };
+      expect(body.from).toBe("Context Store <invites@mail.example.com>");
+      expect(body.to).toEqual(["alice@example.com"]);
+      expect(body.subject).toBe(
+        "You're invited to Acme Engineering on Context Store"
+      );
+      expect(body.html).toContain(`https://app.example.com/invite/${inv.token}`);
+      expect(body.html).toContain("Acme Engineering");
+      expect(body.html).toContain("Bob Admin");
+      expect(body.text).toContain(`https://app.example.com/invite/${inv.token}`);
+    });
+
+    it("does NOT fail createInvitation when RESEND_API_KEY is unset", async () => {
+      delete process.env.RESEND_API_KEY;
+
+      const fetchSpy = vi.fn(async () => new Response("should not be called"));
+      globalThis.fetch = fetchSpy as unknown as typeof fetch;
+
+      const sb = makeFakeSupabase(state);
+      const inv = await createInvitation(sb as never, {
+        workspaceId: "ws-1",
+        email: "carol@example.com",
+        role: "viewer",
+        invitedBy: "user-admin",
+        workspaceName: "Acme",
+        inviterName: "Bob",
+      });
+
+      // Invitation still persisted and returned.
+      expect(inv.email).toBe("carol@example.com");
+      expect(state.invitations).toHaveLength(1);
+
+      // fetch MUST NOT be called when the key is missing.
+      expect(fetchSpy).not.toHaveBeenCalled();
+    });
+
+    it("swallows Resend HTTP failures so DB insert is not rolled back", async () => {
+      process.env.RESEND_API_KEY = "re_test_key_123";
+
+      // Simulate a Resend 5xx: createInvitation must still resolve.
+      globalThis.fetch = vi.fn(
+        async () => new Response("boom", { status: 500 })
+      ) as unknown as typeof fetch;
+
+      const sb = makeFakeSupabase(state);
+      const inv = await createInvitation(sb as never, {
+        workspaceId: "ws-1",
+        email: "dana@example.com",
+        role: "member",
+        invitedBy: "user-admin",
+      });
+
+      expect(inv.email).toBe("dana@example.com");
+      expect(state.invitations).toHaveLength(1);
     });
   });
 

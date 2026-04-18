@@ -172,11 +172,19 @@ export async function inviteMemberAction(
       };
     }
 
+    const inviterName =
+      (ctx.user.user_metadata?.full_name as string | undefined) ??
+      (ctx.user.user_metadata?.name as string | undefined) ??
+      ctx.user.email ??
+      "A teammate";
+
     const invitation = await createInvitation(supabase, {
       workspaceId: ctx.workspace.id,
       email: cleanEmail,
       role,
       invitedBy: ctx.user.id,
+      workspaceName: ctx.workspace.name,
+      inviterName,
     });
 
     await createAuditEvent(supabase, {

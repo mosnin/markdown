@@ -1,5 +1,6 @@
 import { type SupabaseClient } from "@supabase/supabase-js";
 import { randomBytes } from "crypto";
+import { logger } from "@/lib/logger";
 
 /**
  * Workspace invitation service.
@@ -11,6 +12,11 @@ import { randomBytes } from "crypto";
  *
  * Tokens are 32-byte hex strings (64 chars), generated via Node's
  * crypto.randomBytes for cryptographic strength.
+ *
+ * Email delivery: after a successful DB insert the service attempts to
+ * send an invitation email via Resend's HTTP API (native fetch, no SDK).
+ * Email failures are logged but never roll back the invitation — the
+ * invitation link itself is usable as long as the row exists.
  */
 
 // ─── Types ──────────────────────────────────────────────────────────────────
@@ -33,6 +39,17 @@ export interface CreateInvitationInput {
   email: string;
   role: "viewer" | "member" | "admin";
   invitedBy: string;
+  /**
+   * Display name of the workspace. Used in the invitation email subject
+   * and body. Optional so callers without the workspace loaded (tests,
+   * admin scripts) can still create invitations; a generic fallback is
+   * used when absent.
+   */
+  workspaceName?: string;
+  /**
+   * Display name of the inviter (falls back to "A teammate" in emails).
+   */
+  inviterName?: string;
 }
 
 // ─── Token generation ───────────────────────────────────────────────────────
@@ -81,7 +98,130 @@ export async function createInvitation(
     throw new Error(error.message);
   }
 
+  // Fire the invitation email. Failures here are logged but never
+  // propagate — the invitation row already exists and the admin can
+  // always resend or share the link directly.
+  await sendInvitationEmail(
+    input.email.trim().toLowerCase(),
+    token,
+    input.workspaceName ?? "your workspace",
+    input.inviterName ?? "A teammate"
+  );
+
   return data as WorkspaceInvitation;
+}
+
+// ─── Email delivery ─────────────────────────────────────────────────────────
+
+/**
+ * Send an invitation email via Resend's HTTP API.
+ *
+ * - No-ops (logs info) when RESEND_API_KEY is unset — common in dev/CI.
+ * - Reads NEXT_PUBLIC_SITE_URL to build the invite link.
+ * - Reads RESEND_FROM_DOMAIN with a sensible default so we can swap
+ *   sending domains without a code change.
+ * - Wraps the fetch in try/catch; email failures must NOT roll back
+ *   the invitation (the caller has already committed the DB row).
+ *
+ * Private to this module — not exported.
+ */
+async function sendInvitationEmail(
+  email: string,
+  token: string,
+  workspaceName: string,
+  inviterName: string
+): Promise<void> {
+  const apiKey = process.env.RESEND_API_KEY;
+  if (!apiKey) {
+    logger.info(
+      { email_hint: email.split("@")[1] ?? "redacted", workspaceName },
+      "invitation_email_skipped_no_api_key"
+    );
+    return;
+  }
+
+  const siteUrl = (
+    process.env.NEXT_PUBLIC_SITE_URL ?? "https://contextstore.dev"
+  ).replace(/\/$/, "");
+  const inviteUrl = `${siteUrl}/invite/${token}`;
+  const fromDomain = process.env.RESEND_FROM_DOMAIN ?? "mail.contextstore.dev";
+
+  const subject = `You're invited to ${workspaceName} on Context Store`;
+  const safeWorkspace = escapeHtml(workspaceName);
+  const safeInviter = escapeHtml(inviterName);
+  const html = `<!doctype html>
+<html><body style="margin:0;padding:0;background:#f6f7f9;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;color:#111;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="padding:32px 0;">
+    <tr><td align="center">
+      <table role="presentation" width="480" cellpadding="0" cellspacing="0" style="background:#fff;border-radius:8px;padding:32px;box-shadow:0 1px 3px rgba(0,0,0,0.06);">
+        <tr><td>
+          <h1 style="margin:0 0 16px;font-size:20px;font-weight:600;">You're invited to ${safeWorkspace}</h1>
+          <p style="margin:0 0 16px;font-size:15px;line-height:1.5;color:#333;">${safeInviter} invited you to join <strong>${safeWorkspace}</strong> on Context Store.</p>
+          <p style="margin:0 0 24px;font-size:15px;line-height:1.5;color:#333;">Click the button below to accept the invitation. This link will expire in 7 days.</p>
+          <p style="margin:0 0 24px;"><a href="${inviteUrl}" style="display:inline-block;background:#111;color:#fff;text-decoration:none;padding:10px 18px;border-radius:6px;font-size:14px;font-weight:500;">Accept invitation</a></p>
+          <p style="margin:0;font-size:12px;color:#666;line-height:1.5;">Or copy this link into your browser:<br/><span style="word-break:break-all;color:#444;">${inviteUrl}</span></p>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body></html>`;
+
+  const text = `${inviterName} invited you to join ${workspaceName} on Context Store.\n\nAccept the invitation (expires in 7 days):\n${inviteUrl}\n`;
+
+  try {
+    const res = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        from: `Context Store <invites@${fromDomain}>`,
+        to: [email],
+        subject,
+        html,
+        text,
+      }),
+    });
+
+    if (!res.ok) {
+      const bodyText = await res.text().catch(() => "");
+      logger.error(
+        {
+          status: res.status,
+          // Truncate error body so a verbose provider response doesn't
+          // dominate log lines.
+          body: bodyText.slice(0, 500),
+          workspaceName,
+        },
+        "invitation_email_failed"
+      );
+      return;
+    }
+
+    logger.info(
+      { workspaceName, email_hint: email.split("@")[1] ?? "redacted" },
+      "invitation_email_sent"
+    );
+  } catch (err) {
+    logger.error(
+      {
+        err: err instanceof Error ? err.message : String(err),
+        workspaceName,
+      },
+      "invitation_email_error"
+    );
+  }
+}
+
+/** Minimal HTML escape for values interpolated into the email template. */
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
 }
 
 // ─── Accept ─────────────────────────────────────────────────────────────────
