@@ -17,6 +17,7 @@ import { getNoteById, listNotesByBox } from "@/server/repositories/note_reposito
 import { getFolderById } from "@/server/repositories/folder_repository";
 import { getConnectionById } from "@/server/repositories/connection_repository";
 import { listLinksForNote } from "@/server/services/link_service";
+import { listNoteComments, countUnresolvedComments } from "@/server/services/note_comment_service";
 import { assembleContextBundle } from "@/server/services/context_bundle_service";
 import {
   getCachedNoteById,
@@ -32,6 +33,7 @@ import { NoteHistoryPanel } from "@/components/product/note_history_panel";
 import { NoteExportMenu } from "@/components/product/export_menu";
 import { NoteImportButton } from "@/components/product/note_import_dialog";
 import { NoteLifecycleMenu } from "@/components/product/note_lifecycle_menu";
+import { NoteCommentsPanel } from "@/components/product/note_comments_panel";
 import { GeneratedNoteBanner } from "@/components/product/generated_note_banner";
 import { RetrievalHintBadge } from "@/components/product/retrieval_hint_badge";
 import { Badge } from "@/components/ui/badge";
@@ -116,7 +118,7 @@ function InfoLabel({ children }: { children: React.ReactNode }) {
 
 // ─── Right panel — Note context ───────────────────────────────────────────────
 
-const VALID_TABS = ["info", "links", "bundle", "history"] as const;
+const VALID_TABS = ["info", "links", "bundle", "history", "comments"] as const;
 type NoteContextTab = (typeof VALID_TABS)[number];
 
 function NoteContextPanel({
@@ -131,6 +133,9 @@ function NoteContextPanel({
   allBoxNotes,
   initialBundle,
   historyResult,
+  commentThreads,
+  unresolvedCommentCount,
+  currentUserId,
   defaultTab = "info",
   nowIso,
 }: {
@@ -148,6 +153,9 @@ function NoteContextPanel({
   allBoxNotes: Awaited<ReturnType<typeof listNotesByBox>>;
   initialBundle: Awaited<ReturnType<typeof assembleContextBundle>>;
   historyResult: Awaited<ReturnType<typeof listVersionsForNote>>;
+  commentThreads: Awaited<ReturnType<typeof listNoteComments>>;
+  unresolvedCommentCount: number;
+  currentUserId: string;
   defaultTab?: NoteContextTab;
   /**
    * Wall-clock "now" frozen at the top of the server render so
@@ -206,6 +214,14 @@ function NoteContextPanel({
             </TabsTrigger>
             <TabsTrigger value="history" className="pb-2.5 text-xs">
               History
+            </TabsTrigger>
+            <TabsTrigger value="comments" className="relative pb-2.5 text-xs">
+              Comments
+              {unresolvedCommentCount > 0 && (
+                <span className="ml-1 rounded-full bg-muted px-1 text-[10px] text-muted-foreground">
+                  {unresolvedCommentCount}
+                </span>
+              )}
             </TabsTrigger>
           </TabsList>
         </div>
@@ -433,6 +449,15 @@ function NoteContextPanel({
             currentVersionId={historyResult.current_version_id}
           />
         </TabsContent>
+
+        {/* ── Comments tab ── */}
+        <TabsContent value="comments" className="flex-1 overflow-hidden">
+          <NoteCommentsPanel
+            noteId={note.id}
+            threads={commentThreads}
+            currentUserId={currentUserId}
+          />
+        </TabsContent>
       </Tabs>
     </div>
   );
@@ -469,7 +494,7 @@ export default async function NotePage({
   const box = await getCachedBoxById(supabase, note.box_id);
   if (!box || box.workspace_id !== ctx.workspace.id) notFound();
 
-  const [folder, allBoxNotes, links, historyResult, generatingConnection] =
+  const [folder, allBoxNotes, links, historyResult, generatingConnection, commentThreads, unresolvedCommentCount] =
     await Promise.all([
       note.folder_id
         ? getFolderById(supabase, note.folder_id)
@@ -484,6 +509,8 @@ export default async function NotePage({
             () => null
           )
         : Promise.resolve(null),
+      listNoteComments(supabase, note_id),
+      countUnresolvedComments(supabase, note_id),
     ]);
 
   const initialBundle = await getCachedContextBundle(
@@ -634,6 +661,9 @@ export default async function NotePage({
           allBoxNotes={allBoxNotes}
           initialBundle={initialBundle}
           historyResult={historyResult}
+          commentThreads={commentThreads}
+          unresolvedCommentCount={unresolvedCommentCount}
+          currentUserId={ctx.user!.id}
           defaultTab={defaultTab}
           nowIso={nowIso}
         />
