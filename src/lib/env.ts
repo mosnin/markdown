@@ -11,8 +11,16 @@
  *   SUPABASE_SERVICE_ROLE_KEY      — Server-only service role key (bypasses RLS)
  *   NEXT_PUBLIC_APP_URL            — Application base URL for auth callbacks
  *
- * Optional (must be present in production):
+ * Recommended (warn when missing — should be set in production):
+ *   NEXT_PUBLIC_SENTRY_DSN         — Sentry error tracking DSN
+ *   WEBAUTHN_RP_ID                 — WebAuthn Relying Party ID (defaults to localhost)
+ *   BRANCH_CLEANUP_CRON_TOKEN      — Shared secret for branch cleanup cron
+ *
+ * Optional:
  *   NEXT_PUBLIC_API_BASE_URL       — Used in connection UI to build example curl
+ *   NEXT_PUBLIC_DIFF_WORKER_URL    — Cloudflare diff worker URL
+ *   NEXT_PUBLIC_BUNDLE_CACHE_URL   — Cloudflare bundle cache worker URL
+ *   LOG_LEVEL                      — Application log level
  */
 
 const REQUIRED_SERVER_ENV = [
@@ -22,11 +30,22 @@ const REQUIRED_SERVER_ENV = [
   "NEXT_PUBLIC_APP_URL",
 ] as const;
 
+/**
+ * Variables that should be set in production but have safe defaults for
+ * development. A warning is logged (not thrown) when these are missing.
+ */
+const RECOMMENDED_SERVER_ENV = [
+  "NEXT_PUBLIC_SENTRY_DSN",
+  "WEBAUTHN_RP_ID",
+  "BRANCH_CLEANUP_CRON_TOKEN",
+] as const;
+
 export type RequiredEnvKey = (typeof REQUIRED_SERVER_ENV)[number];
 
 /**
  * Validates that all required server environment variables are present.
  * Throws an Error listing every missing variable on failure.
+ * Logs warnings for recommended variables that are missing.
  *
  * Call this from instrumentation.ts (Next.js 15 startup hook) or at the top
  * of any server bootstrap path. It is safe to call multiple times.
@@ -42,6 +61,19 @@ export function validateServerEnv(): void {
         missing.map((k) => `  - ${k}`).join("\n") +
         `\n\nCopy .env.example to .env.local and fill in all required values.`
     );
+  }
+
+  // Warn about recommended variables that are missing in production
+  if (process.env.NODE_ENV === "production") {
+    const missingRecommended = RECOMMENDED_SERVER_ENV.filter(
+      (key) => !process.env[key]?.trim()
+    );
+    if (missingRecommended.length > 0) {
+      console.warn(
+        `[env] Recommended environment variables not set (safe defaults used):\n` +
+          missingRecommended.map((k) => `  - ${k}`).join("\n")
+      );
+    }
   }
 }
 
