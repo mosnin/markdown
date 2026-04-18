@@ -52,10 +52,12 @@ async function storeChallenge(
   challenge: string,
   type: "registration" | "authentication",
 ): Promise<void> {
+  const expiresAt = new Date(Date.now() + 5 * 60 * 1000).toISOString();
   const { error } = await supabase.from("webauthn_challenges").insert({
     user_id: userId,
     challenge,
     type,
+    expires_at: expiresAt,
   });
   if (error) throw new Error(`Failed to store challenge: ${error.message}`);
 }
