@@ -525,13 +525,12 @@ function BoxTree({
 
   // Disable drop onto non-folder nodes (only folders and root can receive children)
   const disableDrop = (args: {
-    parentNode: NodeApi<TreeNodeData>;
+    parentNode: NodeApi<TreeNodeData> | null;
     dragNodes: NodeApi<TreeNodeData>[];
     index: number;
   }) => {
     const parent = args.parentNode;
-    // Root is always a valid target
-    if (parent.isRoot) return false;
+    if (!parent || parent.isRoot) return false;
     // Only folders can receive children
     if (parent.data.nodeType !== "folder") return true;
     // Prevent dropping a folder into itself or its descendants
