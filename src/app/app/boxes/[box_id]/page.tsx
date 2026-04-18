@@ -48,6 +48,7 @@ import { BoxExportMenu } from "@/components/product/export_menu";
 import {
   ImportTriggerButton,
 } from "@/components/product/import_dialog";
+import { listTemplates } from "@/server/services/note_template_service";
 import { FolderPolicyToggle } from "@/components/product/folder_policy_toggle";
 import { BoxEditDialog } from "@/components/product/box_edit_dialog";
 import { BoxOverviewPanel } from "@/components/product/box_overview_panel";
@@ -312,6 +313,7 @@ export default async function BoxPage({
     trashedNotes,
     archivedFolders,
     trashedFolders,
+    savedTemplates,
   ] = await Promise.all([
     listFoldersByBox(supabase, box.id, { branchId: ctx.activeBranchId }),
     listNotesByBox(supabase, box.id, { branchId: ctx.activeBranchId }),
@@ -319,6 +321,7 @@ export default async function BoxPage({
     listTrashedNotesByBox(supabase, box.id, { branchId: ctx.activeBranchId }),
     listArchivedFoldersByBox(supabase, box.id, { branchId: ctx.activeBranchId }),
     listTrashedFoldersByBox(supabase, box.id, { branchId: ctx.activeBranchId }),
+    listTemplates(supabase, box.id),
   ]);
 
   const guideNote = box.guide_note_id
@@ -440,8 +443,15 @@ export default async function BoxPage({
                 boxId={box.id}
                 boxStatus={box.status as "active" | "archived"}
               />
+              <Link
+                href={`/app/boxes/${box.id}/templates`}
+                className="inline-flex items-center gap-1.5 rounded-md border border-input bg-background px-3 py-1.5 text-xs font-medium text-foreground shadow-sm transition-fast hover:bg-accent hover:text-accent-foreground"
+              >
+                <FileText className="h-3.5 w-3.5" aria-hidden="true" />
+                Templates
+              </Link>
               <CreateFolderDialog boxId={box.id} />
-              <CreateNoteDialog boxId={box.id} folders={folders} />
+              <CreateNoteDialog boxId={box.id} folders={folders} savedTemplates={savedTemplates.map((t) => ({ id: t.id, name: t.name, description: t.description, markdown_content: t.markdown_content }))} />
             </div>
           </div>
         </div>
@@ -504,7 +514,7 @@ export default async function BoxPage({
                     icon={<FileText className="h-5 w-5" />}
                     title="No notes yet"
                     description="Create your first note, choose a starter template, or use the Import button above to bring in existing Markdown content."
-                    action={<CreateNoteDialog boxId={box.id} folders={folders} />}
+                    action={<CreateNoteDialog boxId={box.id} folders={folders} savedTemplates={savedTemplates.map((t) => ({ id: t.id, name: t.name, description: t.description, markdown_content: t.markdown_content }))} />}
                     className="h-full"
                   />
                 ) : (

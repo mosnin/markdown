@@ -17,9 +17,18 @@ import { type Folder } from "@/server/domain/types/folder";
 import { createNoteAction } from "@/app/app/boxes/actions";
 import { NOTE_TEMPLATES } from "@/lib/templates";
 
+interface SavedTemplate {
+  id: string;
+  name: string;
+  description: string | null;
+  markdown_content: string;
+}
+
 interface CreateNoteDialogProps {
   boxId: string;
   folders: Folder[];
+  /** Saved note templates from the database (per-box template library). */
+  savedTemplates?: SavedTemplate[];
 }
 
 /**
@@ -28,7 +37,7 @@ interface CreateNoteDialogProps {
  * Supports an optional note starter template that pre-populates content.
  * On success, navigates to the new note's page.
  */
-export function CreateNoteDialog({ boxId, folders }: CreateNoteDialogProps) {
+export function CreateNoteDialog({ boxId, folders, savedTemplates = [] }: CreateNoteDialogProps) {
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState("");
   const [folderId, setFolderId] = useState<string>("");
@@ -54,7 +63,12 @@ export function CreateNoteDialog({ boxId, folders }: CreateNoteDialogProps) {
     // Auto-fill title from template if title is still empty
     if (id && !title.trim()) {
       const t = NOTE_TEMPLATES.find((t) => t.id === id);
-      if (t) setTitle(t.label);
+      if (t) {
+        setTitle(t.label);
+      } else {
+        const saved = savedTemplates.find((s) => s.id === id);
+        if (saved) setTitle(saved.name);
+      }
     }
   }
 
@@ -63,6 +77,7 @@ export function CreateNoteDialog({ boxId, folders }: CreateNoteDialogProps) {
     if (!title.trim()) return;
 
     const template = NOTE_TEMPLATES.find((t) => t.id === templateId);
+    const savedTemplate = savedTemplates.find((s) => s.id === templateId);
 
     setError(null);
     startTransition(async () => {
@@ -71,7 +86,7 @@ export function CreateNoteDialog({ boxId, folders }: CreateNoteDialogProps) {
         title,
         folderId || null,
         template?.kind ?? "note",
-        template?.markdownContent
+        template?.markdownContent ?? savedTemplate?.markdown_content
       );
       if (result.ok) {
         setOpen(false);
@@ -123,10 +138,20 @@ export function CreateNoteDialog({ boxId, folders }: CreateNoteDialogProps) {
                   {t.label}
                 </option>
               ))}
+              {savedTemplates.length > 0 && (
+                <optgroup label="Saved templates">
+                  {savedTemplates.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.name}
+                    </option>
+                  ))}
+                </optgroup>
+              )}
             </select>
             {templateId && (
               <p className="text-[11px] text-muted-foreground">
-                {NOTE_TEMPLATES.find((t) => t.id === templateId)?.description}
+                {NOTE_TEMPLATES.find((t) => t.id === templateId)?.description ??
+                  savedTemplates.find((t) => t.id === templateId)?.description}
               </p>
             )}
           </div>
