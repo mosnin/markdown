@@ -28,6 +28,7 @@ import { auditBundleRead } from "@/server/services/audit_service";
 import { listVersionsForNote } from "@/server/services/version_history_service";
 import { NoteEditor } from "@/components/product/note_editor";
 import { SemanticLinksPanel } from "@/components/product/semantic_links_panel";
+import { LinkSuggestionsPanel } from "@/components/product/link_suggestions_panel";
 import { ContextBundleViewer } from "@/components/product/context_bundle_viewer";
 import { NoteHistoryPanel } from "@/components/product/note_history_panel";
 import { NoteExportMenu } from "@/components/product/export_menu";
@@ -426,6 +427,9 @@ function NoteContextPanel({
                 allBoxNotes={allBoxNotes}
               />
             </div>
+            <div className="border-t border-border px-4 py-3">
+              <LinkSuggestionsPanel noteId={note.id} />
+            </div>
           </ScrollArea>
         </TabsContent>
 
@@ -528,6 +532,15 @@ export default async function NotePage({
   });
 
   const isGuideNote = box.guide_note_id === note_id;
+
+  // Derive a short display name for presence avatars — same logic as
+  // the branch detail page: strip the domain from the email, or fall
+  // back to a truncated user ID.
+  const userEmail = ctx.user.email ?? null;
+  const currentUserDisplayName =
+    userEmail && userEmail.includes("@")
+      ? userEmail.split("@")[0]
+      : userEmail ?? ctx.user.id;
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
@@ -640,7 +653,14 @@ export default async function NotePage({
 
         {/* Note editor — fills remaining space */}
         <div className="flex-1 overflow-hidden">
-          <NoteEditor note={note} initialMode="document" />
+          <NoteEditor
+            note={note}
+            initialMode="document"
+            currentUser={{
+              userId: ctx.user.id,
+              displayName: currentUserDisplayName,
+            }}
+          />
         </div>
       </div>
 
