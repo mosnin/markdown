@@ -34,6 +34,11 @@ import { MembersSection } from "./members_section";
 import { canAdmin } from "@/server/auth/require_role";
 import { ConnectedAppsSection } from "./connected_apps_section";
 import { DeveloperAppsSection } from "./developer_apps_section";
+import { AgentPreferencesCard } from "./agent_preferences_card";
+import {
+  DEFAULT_USER_AGENT_PREFERENCES,
+  getUserAgentPreferences,
+} from "@/server/services/user_agent_preferences_service";
 
 // Settings section nav is rendered by SettingsSidebar (see
 // src/components/product/settings_sidebar.tsx). Keeping the sections
@@ -80,16 +85,39 @@ export default async function SettingsPage() {
   const ctx = await requireAuthenticatedUser();
   const supabase = await createClient();
 
-  const [boxes, connections, workspace, plan, subscriptionStatus, noteLimit, boxLimit] =
-    await Promise.all([
-      listBoxesByWorkspace(supabase, ctx.workspace.id),
-      listConnectionsWithScopes(supabase, ctx.workspace.id),
-      getWorkspaceById(supabase, ctx.workspace.id),
-      getWorkspacePlan(supabase, ctx.workspace.id),
-      getSubscriptionStatus(supabase, ctx.workspace.id),
-      checkNoteLimit(supabase, ctx.workspace.id),
-      checkBoxLimit(supabase, ctx.workspace.id),
-    ]);
+  const [
+    boxes,
+    connections,
+    workspace,
+    plan,
+    subscriptionStatus,
+    noteLimit,
+    boxLimit,
+    agentPrefsRow,
+  ] = await Promise.all([
+    listBoxesByWorkspace(supabase, ctx.workspace.id),
+    listConnectionsWithScopes(supabase, ctx.workspace.id),
+    getWorkspaceById(supabase, ctx.workspace.id),
+    getWorkspacePlan(supabase, ctx.workspace.id),
+    getSubscriptionStatus(supabase, ctx.workspace.id),
+    checkNoteLimit(supabase, ctx.workspace.id),
+    checkBoxLimit(supabase, ctx.workspace.id),
+    getUserAgentPreferences(supabase, ctx.user.id),
+  ]);
+
+  const initialAgentPrefs = {
+    tone: agentPrefsRow?.tone ?? DEFAULT_USER_AGENT_PREFERENCES.tone,
+    citation_style:
+      agentPrefsRow?.citation_style ?? DEFAULT_USER_AGENT_PREFERENCES.citation_style,
+    tool_allowlist:
+      agentPrefsRow?.tool_allowlist ?? DEFAULT_USER_AGENT_PREFERENCES.tool_allowlist,
+    must_cite_per_claim:
+      agentPrefsRow?.must_cite_per_claim ??
+      DEFAULT_USER_AGENT_PREFERENCES.must_cite_per_claim,
+    max_tool_calls:
+      agentPrefsRow?.max_tool_calls ??
+      DEFAULT_USER_AGENT_PREFERENCES.max_tool_calls,
+  };
 
   const savedNotifications = ctx.user.user_metadata?.notifications as
     | NotificationPreferences
@@ -166,6 +194,15 @@ export default async function SettingsPage() {
               initialSecurity={savedNotifications?.security ?? true}
               initialAnnouncements={savedNotifications?.announcements ?? false}
             />
+
+            {/*
+              AI agent preferences — governs how the Workspace Operator
+              behaves on this user's runs (tone, citation style, tool
+              allowlist, etc.). Server-rendered with the user's saved
+              row, falling back to DEFAULT_USER_AGENT_PREFERENCES when
+              they have never saved.
+            */}
+            <AgentPreferencesCard initialPrefs={initialAgentPrefs} />
 
             <div id="settings-connections">
               <ConnectionsPanel

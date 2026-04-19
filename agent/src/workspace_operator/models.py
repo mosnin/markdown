@@ -32,6 +32,10 @@ class OperatorInput(BaseModel):
     prompt: str = Field(min_length=1, max_length=4000)
     mode: str = Field(default="full")  # "plan" | "execute" | "full"
     approved_plan: list[PlanStep] | None = None
+    # Phase 3 opt-in: when True, attach the model-based per-claim cite
+    # guardrail in addition to the lexical one. The default (False)
+    # preserves Phase 1/2 behaviour for callers that haven't migrated.
+    must_cite_per_claim: bool = False
 
 
 class OperatorResult(BaseModel):

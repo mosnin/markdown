@@ -122,15 +122,51 @@ Full plan → approve → execute flow with live progress streaming.
 
 Not yet: Modal deployed to staging, end-to-end smoke test.
 
-### ⏳ Phase 3 — Tool completion + governance
+### ✅ Phase 3 — Tool completion + governance (shipped)
+
+Five new tools, governance guardrails, durable run history, per-user
+preferences, and SDK tracing wired into the activity feed.
 
 - Tools: `read_note`, `edit_note`, `link_notes`, `apply_template`,
-  `web_fetch`
-- Guardrails: must-cite per claim (model-based), max tool calls per run,
-  branch-scope enforcement tests
-- OpenAI Agents SDK tracing piped into activity feed
-- Per-user `user_agent_preferences` (tone, citation style, tool allowlist)
-- Per-workspace `workspace_operator_runs` table for history + replay
+  `web_fetch` — Python `function_tool` wrappers + Next.js
+  `/api/agent/tools/*` endpoints with envelope auth and branch-scope
+  enforcement. `web_fetch` includes an SSRF guard (blocks `file://`,
+  `localhost`, RFC1918, link-local, cloud metadata).
+- Plan-mode tool inventory restricted to read-only:
+  `hybrid_search`, `read_note`, `web_fetch`. Execute/full modes get all
+  seven tools.
+- Guardrails:
+  - `must_cite_per_claim` — opt-in model-based output guardrail (uses a
+    `gpt-4.1-mini` checker); soft-fails open on parse errors so it
+    never silently breaks good runs.
+  - `max_tool_calls` — `Settings.max_tool_calls` mapped onto the SDK's
+    `Runner.run(max_turns=...)` (closest available primitive), enforced
+    in all 3 modes.
+  - Branch-scope enforcement tests — 12 vitest cases proving
+    `draft_note`, `edit_note`, `link_notes` reject missing/empty
+    `branch_id` and cross-workspace IDs.
+- `workspace_operator_runs` table — durable run history with
+  status/plan/result/notes_created/tool_calls/duration. RLS:
+  workspace-member SELECT, actor-or-admin write. `runWorkspaceOperator`
+  actions now create the row early, transition status, and capture
+  outcome. New `/app/agents/runs` history page lists the user's recent
+  runs across workspaces.
+- `user_agent_preferences` table + settings card — tone, citation
+  style, tool allowlist, strict-citation toggle, max-tool-calls slider
+  (1–100 clamp). Self-only RLS. Defaults exported as
+  `DEFAULT_USER_AGENT_PREFERENCES`.
+- OpenAI Agents SDK tracing — `PoggleTracingProcessor` batches span
+  events and POSTs fire-and-forget to `/api/agent/tools/trace`. Each
+  event becomes an `audit_events` row (which is the activity feed's
+  source of truth); "interesting" events (root traces, guardrail trips)
+  also broadcast on `activity_feed:${workspaceId}` Realtime channel.
+  Processor swallows all errors so tracing never breaks a run.
+- 86 new vitest cases (985/985 passing), 47 new pytest cases (66/67
+  passing — 1 pre-existing Phase 1 cite-guardrail false-positive
+  unrelated to Phase 3)
+
+Not yet: Modal deployed to staging, end-to-end smoke test against a
+live workspace, history page filters/search.
 
 ### ⏳ Phase 4 — Billing + launch
 
@@ -166,15 +202,24 @@ Cost is dominated by LLM tokens, not Modal containers.
 
 ### Known gaps
 
-- [ ] Runs table — currently only audit events record Operator runs; no
-  first-class history UI
+- [x] Runs table — ~~currently only audit events record Operator runs;
+  no first-class history UI~~ Phase 3 added `workspace_operator_runs`
+  table + `/app/agents/runs` history page
 - [x] Streaming — ~~Modal endpoint is synchronous POST/response~~ Phase 2
   added progress callbacks via `/api/agent/tools/progress` + Supabase
   Realtime broadcast. Still synchronous dispatch (action blocks until
   completion) but UI receives live updates via broadcast channel.
 - [ ] Cost accounting — no per-run token cost capture yet. Needed for
-  Phase 4 billing
+  Phase 4 billing. (Phase 3 tracing captures span counts and durations
+  but not token usage; the Agents SDK exposes usage on
+  `RunResult.context_wrapper.usage` — wire that into
+  `workspace_operator_runs` next.)
 - [ ] No end-to-end smoke test against a deployed Modal endpoint.
   Staging deploy is next step.
 - [ ] Operator panel not yet wired into the app layout (needs
   `onOpenOperator` prop threaded from layout to GlobalSearch)
+- [ ] `must_cite_per_claim` guardrail uses an extra LLM call per run
+  when enabled — measure latency impact before exposing to all tiers.
+- [ ] Activity feed broadcast is best-effort only (fire-and-forget POST
+  + Realtime); no replay if the broadcast lands while no client is
+  subscribed. Audit row is durable, but UI must reload to see history.

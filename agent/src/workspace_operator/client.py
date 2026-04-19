@@ -98,6 +98,75 @@ class PoggleClient:
         )
         return DraftNoteResult.model_validate(payload)
 
+    async def read_note(self, *, note_id: str) -> dict[str, Any]:
+        """Fetch a note's branch-overlay view. Returns the raw envelope payload."""
+        return await self._post(
+            "/api/agent/tools/read_note",
+            {"note_id": note_id},
+        )
+
+    async def edit_note(
+        self,
+        *,
+        note_id: str,
+        new_content: str,
+        edit_summary: str | None = None,
+    ) -> dict[str, Any]:
+        """Write a new version of a note onto the run's branch."""
+        return await self._post(
+            "/api/agent/tools/edit_note",
+            {
+                "note_id": note_id,
+                "new_content": new_content,
+                "edit_summary": edit_summary,
+            },
+        )
+
+    async def link_notes(
+        self,
+        *,
+        source_note_id: str,
+        target_note_id: str,
+        relationship_type: str,
+        relationship_note: str | None = None,
+    ) -> dict[str, Any]:
+        """Create a typed object_link between two notes on the run's branch."""
+        return await self._post(
+            "/api/agent/tools/link_notes",
+            {
+                "source_note_id": source_note_id,
+                "target_note_id": target_note_id,
+                "relationship_type": relationship_type,
+                "relationship_note": relationship_note,
+            },
+        )
+
+    async def apply_template(
+        self,
+        *,
+        template_id: str,
+        title: str,
+        variables: dict[str, str] | None = None,
+        box_id: str,
+    ) -> dict[str, Any]:
+        """Instantiate a template into a new note on the run's branch."""
+        return await self._post(
+            "/api/agent/tools/apply_template",
+            {
+                "template_id": template_id,
+                "title": title,
+                "variables": variables or {},
+                "box_id": box_id,
+            },
+        )
+
+    async def web_fetch(self, *, url: str) -> dict[str, Any]:
+        """Fetch a public URL via the trusted Next.js proxy (SSRF-guarded)."""
+        return await self._post(
+            "/api/agent/tools/web_fetch",
+            {"url": url},
+        )
+
     async def report_progress(
         self,
         *,

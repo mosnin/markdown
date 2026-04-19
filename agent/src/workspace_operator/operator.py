@@ -14,10 +14,23 @@ from agents import (
 )
 
 from workspace_operator.client import PoggleAPIError, PoggleClient
-from workspace_operator.guardrails import build_cite_output_guardrail
+from workspace_operator.guardrails import (
+    build_cite_output_guardrail,
+    build_must_cite_per_claim_guardrail,
+    derive_max_turns,
+)
 from workspace_operator.models import OperatorInput, OperatorResult, PlanResult, PlanStep
 from workspace_operator.settings import Settings
-from workspace_operator.tools import build_draft_note_tool, build_hybrid_search_tool
+from workspace_operator.tools import (
+    build_apply_template_tool,
+    build_draft_note_tool,
+    build_edit_note_tool,
+    build_hybrid_search_tool,
+    build_link_notes_tool,
+    build_read_note_tool,
+    build_web_fetch_tool,
+)
+from workspace_operator.tracing import flush_tracing, setup_tracing  # tracing: Phase 3 Agent 4
 
 log = logging.getLogger(__name__)
 
@@ -83,24 +96,53 @@ Respond with a JSON object:
 # Agent builders
 # ---------------------------------------------------------------------------
 
-def _build_operator(client: PoggleClient, *, box_id: str) -> Agent:
+def _build_operator(
+    client: PoggleClient,
+    *,
+    box_id: str,
+    must_cite_per_claim: bool = False,
+) -> Agent:
+    """Construct the main Operator agent.
+
+    The lexical cite guardrail is always on. The model-based per-claim
+    guardrail is opt-in via `OperatorInput.must_cite_per_claim` so the
+    cheaper-to-run baseline configuration stays the default.
+    """
+    output_guardrails = [build_cite_output_guardrail()]
+    if must_cite_per_claim:
+        output_guardrails.append(build_must_cite_per_claim_guardrail())
     return Agent(
         name="Workspace Operator",
         instructions=SYSTEM_PROMPT,
         tools=[
             build_hybrid_search_tool(client),
+            build_read_note_tool(client),
+            build_web_fetch_tool(client),
             build_draft_note_tool(client, box_id=box_id),
+            build_edit_note_tool(client),
+            build_link_notes_tool(client),
+            build_apply_template_tool(client, box_id=box_id),
         ],
-        output_guardrails=[build_cite_output_guardrail()],
+        output_guardrails=output_guardrails,
     )
 
 
 def _build_plan_agent(client: PoggleClient) -> Agent:
-    """Agent used in plan mode — search only, no drafting, no cite guardrail."""
+    """Agent used in plan mode — search/read only, no writes, no cite guardrail.
+
+    Plan mode is allowed to inspect existing notes (`read_note`) and pull
+    in external context (`web_fetch`) so the proposed plan can reference
+    real titles and URLs, but it cannot draft, edit, link, or apply
+    templates — those are write tools reserved for execute/full.
+    """
     return Agent(
         name="Workspace Operator (Planning)",
         instructions=PLAN_SYSTEM_PROMPT,
-        tools=[build_hybrid_search_tool(client)],
+        tools=[
+            build_hybrid_search_tool(client),
+            build_read_note_tool(client),
+            build_web_fetch_tool(client),
+        ],
     )
 
 
@@ -146,10 +188,14 @@ async def _run_plan(payload: OperatorInput, settings: Settings) -> OperatorResul
             workflow_name="workspace_operator",
             group_id=payload.run_id,
         )
+        # Tool-call budget enforcement: the SDK lacks a "stop after N
+        # tool calls" knob, so we map Settings.max_tool_calls onto its
+        # `max_turns` (one turn ≈ one tool call for tool-heavy loops).
+        # See guardrails/max_tool_calls.py for the rationale.
         run_result = await Runner.run(
             agent,
             payload.prompt,
-            max_turns=settings.max_tool_calls,
+            max_turns=derive_max_turns(settings),
             run_config=run_config,
         )
         tool_calls = _count_tool_calls(run_result)
@@ -264,17 +310,24 @@ async def _run_execute(payload: OperatorInput, settings: Settings) -> OperatorRe
 
         enriched_prompt = _build_execute_prompt(payload.prompt, payload.approved_plan)
 
-        agent = _build_operator(client, box_id=payload.box_id)
+        agent = _build_operator(
+            client,
+            box_id=payload.box_id,
+            must_cite_per_claim=payload.must_cite_per_claim,
+        )
         run_config = RunConfig(
             model=settings.model,
             workflow_name="workspace_operator",
             group_id=payload.run_id,
         )
 
+        # See guardrails/max_tool_calls.py — Settings.max_tool_calls
+        # is enforced via the SDK's `max_turns`, the closest available
+        # primitive to a tool-call cap.
         run_result = await Runner.run(
             agent,
             enriched_prompt,
-            max_turns=settings.max_tool_calls,
+            max_turns=derive_max_turns(settings),
             run_config=run_config,
         )
         tool_calls = _count_tool_calls(run_result)
@@ -356,7 +409,11 @@ async def _run_full(payload: OperatorInput, settings: Settings) -> OperatorResul
 
     client.draft_note = draft_note_capturing  # type: ignore[assignment]
 
-    agent = _build_operator(client, box_id=payload.box_id)
+    agent = _build_operator(
+        client,
+        box_id=payload.box_id,
+        must_cite_per_claim=payload.must_cite_per_claim,
+    )
     run_config = RunConfig(
         model=settings.model,
         workflow_name="workspace_operator",
@@ -364,10 +421,11 @@ async def _run_full(payload: OperatorInput, settings: Settings) -> OperatorResul
     )
 
     try:
+        # See guardrails/max_tool_calls.py for the max_turns rationale.
         run_result = await Runner.run(
             agent,
             payload.prompt,
-            max_turns=settings.max_tool_calls,
+            max_turns=derive_max_turns(settings),
             run_config=run_config,
         )
         tool_calls = _count_tool_calls(run_result)
@@ -413,13 +471,23 @@ async def _run_full(payload: OperatorInput, settings: Settings) -> OperatorResul
 
 async def run_operator(payload: OperatorInput, settings: Settings) -> OperatorResult:
     """Run one Operator invocation end-to-end and return a serializable result."""
-    if payload.mode == "plan":
-        return await _run_plan(payload, settings)
-    elif payload.mode == "execute":
-        return await _run_execute(payload, settings)
-    else:
-        # "full" mode — Phase 1 backward compat
-        return await _run_full(payload, settings)
+    # tracing: Phase 3 Agent 4 — pipe Agents-SDK spans into Poggle's activity feed.
+    tracing_client = _make_client(payload, settings)
+    tracing_handle = setup_tracing(tracing_client, payload.run_id)
+    try:
+        if payload.mode == "plan":
+            return await _run_plan(payload, settings)
+        elif payload.mode == "execute":
+            return await _run_execute(payload, settings)
+        else:
+            # "full" mode — Phase 1 backward compat
+            return await _run_full(payload, settings)
+    finally:
+        # tracing: Phase 3 Agent 4 — flush + deregister processor before returning.
+        try:
+            await flush_tracing(tracing_handle)
+        finally:
+            await tracing_client.aclose()
 
 
 def _count_tool_calls(run_result: object) -> int:

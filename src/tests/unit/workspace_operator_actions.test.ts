@@ -33,6 +33,33 @@ vi.mock("@/lib/supabase/server", () => ({
   ),
 }));
 
+// Phase 3 introduces a workspace_operator_runs row per dispatch. The
+// production action wires through createOperatorRun + updateOperatorRun;
+// for these unit tests we stub them to a no-op since the contract under
+// test is the action's return value, not the run-row persistence.
+vi.mock("@/server/services/workspace_operator_runs_service", () => ({
+  createOperatorRun: vi.fn(() =>
+    Promise.resolve({
+      id: "run-row-1",
+      workspace_id: "ws-1",
+      user_id: "user-1",
+      branch_id: null,
+      prompt: "stub",
+      mode: "plan",
+      status: "queued",
+      plan: null,
+      result: null,
+      error: null,
+      notes_created: [],
+      tool_calls: 0,
+      duration_ms: null,
+      created_at: "2026-04-19T00:00:00Z",
+      updated_at: "2026-04-19T00:00:00Z",
+    })
+  ),
+  updateOperatorRun: vi.fn(() => Promise.resolve()),
+}));
+
 vi.mock("@/server/services/branch_service", () => ({
   createDraftBranch: vi.fn(() =>
     Promise.resolve({ id: "branch-1", name: "agent/test" })

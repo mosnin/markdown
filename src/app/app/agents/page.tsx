@@ -1,4 +1,4 @@
-import { Bot } from "lucide-react";
+import { Bot, History } from "lucide-react";
 import { requireAuthenticatedUser } from "@/server/auth/require_authenticated_user";
 import { createClient } from "@/lib/supabase/server";
 import { listReusableAgents } from "@/server/repositories/agent_repository";
@@ -127,8 +127,22 @@ export default async function AgentsPage() {
               </p>
             </div>
           </div>
-          <AgentImportTrigger />
-          <AgentCreateDialog forceReusable />
+          <div className="flex items-center gap-2">
+            {/*
+              Cross-workspace shortcut to the Workspace Operator run
+              history. Surfacing it here so users discover that recent
+              agent runs are inspectable rather than fire-and-forget.
+            */}
+            <Link
+              href="/app/agents/runs"
+              className="inline-flex items-center gap-1.5 rounded-md border border-border bg-background px-2.5 py-1.5 text-xs font-medium text-foreground hover:bg-accent/40 transition-colors"
+            >
+              <History className="h-3.5 w-3.5" aria-hidden="true" />
+              Recent operator runs
+            </Link>
+            <AgentImportTrigger />
+            <AgentCreateDialog forceReusable />
+          </div>
         </div>
       </div>
 

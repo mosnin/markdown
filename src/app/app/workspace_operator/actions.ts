@@ -1,6 +1,5 @@
 "use server";
 
-import { randomUUID } from "node:crypto";
 import { createClient } from "@/lib/supabase/server";
 import { getRequestContext } from "@/server/auth/get_request_context";
 import { createDraftBranch } from "@/server/services/branch_service";
@@ -11,6 +10,10 @@ import {
   type OperatorRunResult,
   type OperatorPlanResult,
 } from "@/server/services/workspace_operator_service";
+import {
+  createOperatorRun,
+  updateOperatorRun,
+} from "@/server/services/workspace_operator_runs_service";
 import type { OperatorPlanStep } from "./types";
 import { isWorkspaceOperatorEnabled } from "@/lib/env";
 import { createAuditEvent } from "@/server/repositories/audit_event_repository";
@@ -89,7 +92,17 @@ export async function runWorkspaceOperatorAction(
       return { ok: false, error: "Target box not found in this workspace." };
     }
 
-    const runId = randomUUID();
+    // Persist the run row first so we have a stable id to send to Modal as
+    // the canonical run_id. The DB is the source of truth for run state from
+    // here on out — the previous random-UUID flow generated an id that was
+    // forgotten the moment the request returned.
+    const runRow = await createOperatorRun(supabase, {
+      workspaceId: ctx.workspace.id,
+      userId: ctx.user.id,
+      prompt,
+      mode: "full",
+    });
+    const runId = runRow.id;
     const branchName = (input.branchName ?? `agent/${runId.slice(0, 8)}`).slice(0, 200);
 
     const branch = await createDraftBranch(supabase, {
@@ -99,6 +112,15 @@ export async function runWorkspaceOperatorAction(
       created_by: ctx.user.id,
     });
 
+    // Now that the branch exists, attach it to the run and flip status to
+    // executing — the dispatch is synchronous in v1 so this is a thin
+    // transition, but we record it for any out-of-band readers.
+    await safeUpdateRun(supabase, runId, {
+      branchId: branch.id,
+      status: "executing",
+    });
+
+    const startedAt = Date.now();
     let result: OperatorRunResult;
     try {
       result = await dispatchOperatorRun({
@@ -111,6 +133,7 @@ export async function runWorkspaceOperatorAction(
       });
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
+      const durationMs = Date.now() - startedAt;
       // Audit the dispatch failure so the branch doesn't look like a mystery.
       await safeAudit(supabase, {
         workspaceId: ctx.workspace.id,
@@ -120,8 +143,24 @@ export async function runWorkspaceOperatorAction(
         eventType: "workspace_operator.dispatch_failed",
         metadata: { error: message, prompt: prompt.slice(0, 200) },
       });
+      await safeUpdateRun(supabase, runId, {
+        status: "failed",
+        error: message,
+        durationMs,
+      });
       return { ok: false, error: `Operator dispatch failed: ${message}` };
     }
+
+    const durationMs = Date.now() - startedAt;
+
+    await safeUpdateRun(supabase, runId, {
+      status: result.status === "completed" ? "completed" : "failed",
+      result: result as unknown,
+      error: result.error ?? null,
+      notesCreated: result.notes_created,
+      toolCalls: result.tool_calls,
+      durationMs,
+    });
 
     await safeAudit(supabase, {
       workspaceId: ctx.workspace.id,
@@ -216,7 +255,15 @@ export async function requestOperatorPlanAction(
       return { ok: false, error: "Target box not found in this workspace." };
     }
 
-    const runId = randomUUID();
+    // Create the run row up-front so the run_id we send to Modal is the same
+    // id the UI / history page will display.
+    const runRow = await createOperatorRun(supabase, {
+      workspaceId: ctx.workspace.id,
+      userId: ctx.user.id,
+      prompt,
+      mode: "plan",
+    });
+    const runId = runRow.id;
     const branchName = (input.branchName ?? `agent/${runId.slice(0, 8)}`).slice(
       0,
       200
@@ -229,13 +276,33 @@ export async function requestOperatorPlanAction(
       created_by: ctx.user.id,
     });
 
-    const plan = await dispatchOperatorPlan({
-      runId,
-      userId: ctx.user.id,
-      workspaceId: ctx.workspace.id,
+    await safeUpdateRun(supabase, runId, {
       branchId: branch.id,
-      boxId: input.boxId,
-      prompt,
+      status: "planning",
+    });
+
+    let plan: OperatorPlanResult;
+    try {
+      plan = await dispatchOperatorPlan({
+        runId,
+        userId: ctx.user.id,
+        workspaceId: ctx.workspace.id,
+        branchId: branch.id,
+        boxId: input.boxId,
+        prompt,
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      await safeUpdateRun(supabase, runId, {
+        status: "failed",
+        error: message,
+      });
+      throw err;
+    }
+
+    await safeUpdateRun(supabase, runId, {
+      status: "awaiting_approval",
+      plan: plan as unknown,
     });
 
     await safeAudit(supabase, {
@@ -319,6 +386,15 @@ export async function approveAndExecuteAction(
 
     const supabase = await createClient();
 
+    // The run row already exists from requestOperatorPlanAction; flip it to
+    // executing and capture the approved plan.
+    await safeUpdateRun(supabase, input.runId, {
+      status: "executing",
+      plan: input.steps as unknown,
+      branchId: input.branchId,
+    });
+
+    const startedAt = Date.now();
     let result: OperatorRunResult;
     try {
       result = await dispatchOperatorExecute({
@@ -332,6 +408,7 @@ export async function approveAndExecuteAction(
       });
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
+      const durationMs = Date.now() - startedAt;
       await safeAudit(supabase, {
         workspaceId: ctx.workspace.id,
         actorId: ctx.user.id,
@@ -340,8 +417,24 @@ export async function approveAndExecuteAction(
         eventType: "workspace_operator.execute_failed",
         metadata: { error: message },
       });
+      await safeUpdateRun(supabase, input.runId, {
+        status: "failed",
+        error: message,
+        durationMs,
+      });
       return { ok: false, error: `Operator execution failed: ${message}` };
     }
+
+    const durationMs = Date.now() - startedAt;
+
+    await safeUpdateRun(supabase, input.runId, {
+      status: result.status === "completed" ? "completed" : "failed",
+      result: result as unknown,
+      error: result.error ?? null,
+      notesCreated: result.notes_created,
+      toolCalls: result.tool_calls,
+      durationMs,
+    });
 
     await safeAudit(supabase, {
       workspaceId: ctx.workspace.id,
@@ -405,6 +498,24 @@ async function safeAudit(
     });
   } catch (err) {
     console.error("[workspace_operator] audit write failed", err);
+  }
+}
+
+/**
+ * Update the workspace_operator_runs row, swallowing failures so a flake
+ * in run-state bookkeeping never breaks the user-visible action. The
+ * dispatch result is the source of truth returned to the caller; the run
+ * row is best-effort persistence for the history view.
+ */
+async function safeUpdateRun(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  runId: string,
+  patch: Parameters<typeof updateOperatorRun>[2]
+): Promise<void> {
+  try {
+    await updateOperatorRun(supabase, runId, patch);
+  } catch (err) {
+    console.error("[workspace_operator] run row update failed", err);
   }
 }
 
