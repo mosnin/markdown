@@ -114,3 +114,145 @@ export async function dispatchOperatorRun(
     clearTimeout(timer);
   }
 }
+
+// ---------------------------------------------------------------------------
+// Phase 2: plan + execute dispatchers
+// ---------------------------------------------------------------------------
+
+export interface OperatorPlanResult {
+  run_id: string;
+  steps: Array<{ index: number; description: string; tool: string }>;
+  summary: string;
+}
+
+/**
+ * POST to the Modal Operator endpoint in "plan" mode.
+ * Returns a structured plan (steps + summary) without executing anything.
+ */
+export async function dispatchOperatorPlan(
+  input: OperatorDispatchInput,
+  fetchImpl: typeof fetch = fetch
+): Promise<OperatorPlanResult> {
+  assertOperatorEnabled();
+
+  const endpoint = process.env.WORKSPACE_OPERATOR_URL!;
+  const secret = process.env.WORKSPACE_OPERATOR_SHARED_SECRET!;
+
+  const controller = new AbortController();
+  const timeoutMs = input.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const response = await fetchImpl(endpoint, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        [AGENT_HEADERS.SECRET]: secret,
+        [AGENT_HEADERS.USER_ID]: input.userId,
+        [AGENT_HEADERS.WORKSPACE_ID]: input.workspaceId,
+        [AGENT_HEADERS.BRANCH_ID]: input.branchId,
+        [AGENT_HEADERS.RUN_ID]: input.runId,
+      },
+      body: JSON.stringify({
+        run_id: input.runId,
+        user_id: input.userId,
+        workspace_id: input.workspaceId,
+        branch_id: input.branchId,
+        box_id: input.boxId,
+        prompt: input.prompt,
+        mode: "plan",
+      }),
+      signal: controller.signal,
+    });
+
+    if (!response.ok) {
+      const text = await response.text().catch(() => "");
+      throw new Error(
+        `Operator plan endpoint returned ${response.status}: ${text.slice(0, 500)}`
+      );
+    }
+
+    const payload = await response.json();
+    const plan = payload.plan;
+    if (!plan || !Array.isArray(plan.steps)) {
+      throw new Error("Malformed plan response from Workspace Operator");
+    }
+
+    return {
+      run_id: payload.run_id ?? input.runId,
+      steps: plan.steps,
+      summary: plan.summary ?? "",
+    };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/**
+ * POST to the Modal Operator endpoint in "execute" mode with an approved plan.
+ * The Modal function executes each step and calls back with progress events.
+ * Uses a longer default timeout (5 min) since execution involves multiple
+ * tool invocations.
+ */
+export async function dispatchOperatorExecute(
+  input: OperatorDispatchInput & {
+    approvedPlan: Array<{ index: number; description: string; tool: string }>;
+  },
+  fetchImpl: typeof fetch = fetch
+): Promise<OperatorRunResult> {
+  assertOperatorEnabled();
+
+  const endpoint = process.env.WORKSPACE_OPERATOR_URL!;
+  const secret = process.env.WORKSPACE_OPERATOR_SHARED_SECRET!;
+
+  const controller = new AbortController();
+  const timeoutMs = input.timeoutMs ?? 300_000; // 5 min for execution
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const response = await fetchImpl(endpoint, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        [AGENT_HEADERS.SECRET]: secret,
+        [AGENT_HEADERS.USER_ID]: input.userId,
+        [AGENT_HEADERS.WORKSPACE_ID]: input.workspaceId,
+        [AGENT_HEADERS.BRANCH_ID]: input.branchId,
+        [AGENT_HEADERS.RUN_ID]: input.runId,
+      },
+      body: JSON.stringify({
+        run_id: input.runId,
+        user_id: input.userId,
+        workspace_id: input.workspaceId,
+        branch_id: input.branchId,
+        box_id: input.boxId,
+        prompt: input.prompt,
+        mode: "execute",
+        approved_plan: input.approvedPlan,
+      }),
+      signal: controller.signal,
+    });
+
+    if (!response.ok) {
+      const text = await response.text().catch(() => "");
+      throw new Error(
+        `Operator execute endpoint returned ${response.status}: ${text.slice(0, 500)}`
+      );
+    }
+
+    const result = (await response.json()) as Partial<OperatorRunResult>;
+    if (typeof result.run_id !== "string" || typeof result.status !== "string") {
+      throw new Error("Malformed response from Workspace Operator");
+    }
+
+    return {
+      run_id: result.run_id,
+      status: result.status === "completed" ? "completed" : "failed",
+      notes_created: Array.isArray(result.notes_created) ? result.notes_created : [],
+      tool_calls: typeof result.tool_calls === "number" ? result.tool_calls : 0,
+      error: result.error ?? null,
+    };
+  } finally {
+    clearTimeout(timer);
+  }
+}

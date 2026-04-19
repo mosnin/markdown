@@ -13,6 +13,7 @@ import {
   Plus,
   Search,
   Settings,
+  Sparkles,
   Zap,
 } from "lucide-react";
 
@@ -36,6 +37,8 @@ interface BoxRef {
 interface GlobalSearchProps {
   /** Boxes in the active workspace — used for quick navigation. */
   boxes: BoxRef[];
+  /** Callback to open the Workspace Operator panel. */
+  onOpenOperator?: () => void;
 }
 
 /**
@@ -49,7 +52,7 @@ interface GlobalSearchProps {
  * The trigger button renders as a compact "Search" pill suitable for
  * the top bar. Clicking it (or pressing ⌘K) opens the palette.
  */
-export function GlobalSearch({ boxes }: GlobalSearchProps) {
+export function GlobalSearch({ boxes, onOpenOperator }: GlobalSearchProps) {
   const router = useRouter();
   const [open, setOpen] = React.useState(false);
 
@@ -219,6 +222,24 @@ export function GlobalSearch({ boxes }: GlobalSearchProps) {
               />
               <span>New agent</span>
               <CommandShortcut>Go to agents</CommandShortcut>
+            </CommandItem>
+          </CommandGroup>
+
+          <CommandSeparator />
+          <CommandGroup heading="Workspace Operator">
+            <CommandItem
+              onSelect={() => {
+                setOpen(false);
+                onOpenOperator?.();
+              }}
+            >
+              <Sparkles
+                className="h-4 w-4 opacity-60"
+                strokeWidth={2}
+                aria-hidden="true"
+              />
+              <span>Run Workspace Operator</span>
+              <CommandShortcut>AI</CommandShortcut>
             </CommandItem>
           </CommandGroup>
         </CommandList>

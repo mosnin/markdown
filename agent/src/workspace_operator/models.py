@@ -5,6 +5,22 @@ from __future__ import annotations
 from pydantic import BaseModel, Field
 
 
+class PlanStep(BaseModel):
+    """A single step in the operator's execution plan."""
+
+    index: int
+    description: str
+    tool: str  # "hybrid_search" | "draft_note" | "analysis"
+
+
+class PlanResult(BaseModel):
+    """Returned when mode='plan' — the agent's proposed plan."""
+
+    run_id: str
+    steps: list[PlanStep]
+    summary: str
+
+
 class OperatorInput(BaseModel):
     """Payload posted by `dispatchOperatorRun` in the Next.js service."""
 
@@ -14,6 +30,8 @@ class OperatorInput(BaseModel):
     branch_id: str = Field(min_length=1)
     box_id: str = Field(min_length=1)
     prompt: str = Field(min_length=1, max_length=4000)
+    mode: str = Field(default="full")  # "plan" | "execute" | "full"
+    approved_plan: list[PlanStep] | None = None
 
 
 class OperatorResult(BaseModel):
@@ -24,6 +42,7 @@ class OperatorResult(BaseModel):
     notes_created: list[str] = Field(default_factory=list)
     tool_calls: int = 0
     error: str | None = None
+    plan: PlanResult | None = None  # populated when mode="plan"
 
 
 class SearchResult(BaseModel):

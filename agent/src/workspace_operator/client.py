@@ -11,11 +11,15 @@ Auth model: shared-secret + trusted envelope. See
 
 from __future__ import annotations
 
+import datetime
+import logging
 from typing import Any
 
 import httpx
 
 from workspace_operator.models import DraftNoteResult, SearchResult
+
+log = logging.getLogger(__name__)
 
 
 class PoggleAPIError(RuntimeError):
@@ -93,6 +97,29 @@ class PoggleClient:
             },
         )
         return DraftNoteResult.model_validate(payload)
+
+    async def report_progress(
+        self,
+        *,
+        event_type: str,  # "step_start" | "step_complete" | "tool_call" | "note_drafted" | "completed" | "failed"
+        step_index: int | None = None,
+        detail: str | None = None,
+    ) -> None:
+        """Fire-and-forget progress callback to Next.js. Failures are logged but not raised."""
+        try:
+            await self._client.post(
+                f"{self._base_url}/api/agent/tools/progress",
+                headers=self._headers,
+                json={
+                    "run_id": self._run_id,
+                    "type": event_type,
+                    "step_index": step_index,
+                    "detail": detail,
+                    "timestamp": datetime.datetime.utcnow().isoformat() + "Z",
+                },
+            )
+        except Exception:  # noqa: BLE001
+            log.warning("progress callback failed for run %s", self._run_id, exc_info=True)
 
     async def _post(self, path: str, body: dict[str, Any]) -> dict[str, Any]:
         url = f"{self._base_url}{path}"
