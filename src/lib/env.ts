@@ -15,12 +15,15 @@
  *   NEXT_PUBLIC_SENTRY_DSN         — Sentry error tracking DSN
  *   WEBAUTHN_RP_ID                 — WebAuthn Relying Party ID (defaults to localhost)
  *   BRANCH_CLEANUP_CRON_TOKEN      — Shared secret for branch cleanup cron
+ *   WORKSPACE_OPERATOR_URL         — Modal endpoint for the Workspace Operator agent
+ *   WORKSPACE_OPERATOR_SHARED_SECRET — Shared secret for Poggle <-> Modal agent traffic
  *
  * Optional:
  *   NEXT_PUBLIC_API_BASE_URL       — Used in connection UI to build example curl
  *   NEXT_PUBLIC_DIFF_WORKER_URL    — Cloudflare diff worker URL
  *   NEXT_PUBLIC_BUNDLE_CACHE_URL   — Cloudflare bundle cache worker URL
  *   LOG_LEVEL                      — Application log level
+ *   WORKSPACE_OPERATOR_ENABLED     — "true" to enable the Workspace Operator feature (default off)
  */
 
 const REQUIRED_SERVER_ENV = [
@@ -38,9 +41,28 @@ const RECOMMENDED_SERVER_ENV = [
   "NEXT_PUBLIC_SENTRY_DSN",
   "WEBAUTHN_RP_ID",
   "BRANCH_CLEANUP_CRON_TOKEN",
+  "WORKSPACE_OPERATOR_URL",
+  "WORKSPACE_OPERATOR_SHARED_SECRET",
 ] as const;
 
 export type RequiredEnvKey = (typeof REQUIRED_SERVER_ENV)[number];
+
+/**
+ * Feature flag: is the Workspace Operator agent enabled?
+ * Controlled by `WORKSPACE_OPERATOR_ENABLED=true` env var. Off by default so
+ * prod deploys don't silently expose the feature before the Modal endpoint
+ * and shared secret are configured. Also requires `WORKSPACE_OPERATOR_URL`
+ * and `WORKSPACE_OPERATOR_SHARED_SECRET` to actually dispatch runs.
+ */
+export function isWorkspaceOperatorEnabled(): boolean {
+  if (process.env.WORKSPACE_OPERATOR_ENABLED?.toLowerCase() !== "true") {
+    return false;
+  }
+  return (
+    !!process.env.WORKSPACE_OPERATOR_URL?.trim() &&
+    !!process.env.WORKSPACE_OPERATOR_SHARED_SECRET?.trim()
+  );
+}
 
 /**
  * Validates that all required server environment variables are present.
