@@ -56,15 +56,18 @@ import {
  *     "mode":   "plan" | "execute" | "full",
  *     "branchId":  "<uuid>"  // optional — caller-provided branch
  *     "boxId":     "<uuid>"  // required for "full" / "execute"
- *     "model":           "<string>"  // optional model hint, currently unused
- *     "maxInputTokens":  <int>       // optional, currently unused
- *     "maxOutputTokens": <int>       // optional, currently unused
+ *     "model":           "<string>"  // optional model hint (allowlisted)
+ *     "maxInputTokens":  <int>       // optional per-run input-token cap
+ *     "maxOutputTokens": <int>       // optional per-run output-token cap
  *   }
  *
- * `model` / `maxInputTokens` / `maxOutputTokens` are accepted for
- * forward-compat with the Wave 2 dispatch surface. They are echoed
- * onto the run row via the run's `result` jsonb so callers can grep
- * for them but the underlying Modal dispatcher does not yet honour them.
+ * `model` / `maxInputTokens` / `maxOutputTokens` are forwarded to the
+ * Modal dispatcher (Wave 1 F wired these end-to-end). They are also
+ * persisted on the runs row via `createOperatorRun` so the audit /
+ * history view can display what budget the caller asked for, even for
+ * runs that aborted before the Python side reported usage back.
+ * Unknown models fall back to the tier-safe default at the REST
+ * boundary — a leaked key cannot escalate to a higher-tier model.
  *
  * ─── Quota ───────────────────────────────────────────────────────────────
  *
@@ -268,6 +271,11 @@ export async function POST(request: NextRequest) {
       branchId,
       prompt: input.prompt,
       mode: input.mode,
+      // Persist the caller-supplied hints on the row so the audit
+      // trail captures intent even when dispatch never reports back.
+      model: input.model,
+      maxInputTokens: input.maxInputTokens,
+      maxOutputTokens: input.maxOutputTokens,
     });
   } catch (err) {
     return E_INTERNAL(
@@ -294,6 +302,9 @@ export async function POST(request: NextRequest) {
         branchId,
         boxId: input.boxId ?? "",
         prompt: input.prompt,
+        model: input.model,
+        maxInputTokens: input.maxInputTokens,
+        maxOutputTokens: input.maxOutputTokens,
       });
       await updateOperatorRun(supabase, runRow.id, {
         status: "awaiting_approval",
@@ -330,6 +341,9 @@ export async function POST(request: NextRequest) {
         boxId: input.boxId ?? "",
         prompt: input.prompt,
         approvedPlan: [],
+        model: input.model,
+        maxInputTokens: input.maxInputTokens,
+        maxOutputTokens: input.maxOutputTokens,
       });
     } else {
       result = await dispatchOperatorRun({
@@ -339,6 +353,9 @@ export async function POST(request: NextRequest) {
         branchId,
         boxId: input.boxId ?? "",
         prompt: input.prompt,
+        model: input.model,
+        maxInputTokens: input.maxInputTokens,
+        maxOutputTokens: input.maxOutputTokens,
       });
     }
     const durationMs = Date.now() - startedAt;
