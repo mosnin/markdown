@@ -248,6 +248,22 @@ export function OperatorPanel({
     };
   }, [open]);
 
+  // Pick up a prompt stashed in sessionStorage by the "Try an example"
+  // chips on the history page. Consumed once per open so re-opening an
+  // idle panel doesn't overwrite the user's in-progress text.
+  useEffect(() => {
+    if (!open || typeof window === "undefined") return;
+    try {
+      const pending = window.sessionStorage.getItem("poggle:pending-prompt");
+      if (pending) {
+        setPrompt(pending.slice(0, MAX_PROMPT_LENGTH));
+        window.sessionStorage.removeItem("poggle:pending-prompt");
+      }
+    } catch {
+      // sessionStorage blocked — nothing to pick up.
+    }
+  }, [open]);
+
   // -- derived ---------------------------------------------------------------
   const boxId = defaultBoxId ?? "";
 

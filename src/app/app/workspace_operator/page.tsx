@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { listOperatorRuns } from "@/server/services/workspace_operator_runs_service";
 import { OperatorHistoryTable } from "@/components/product/operator_history_table";
 import { OperatorNewRunButton } from "@/components/product/operator_new_run_button";
+import { PogAgentIntro } from "@/components/product/pog_agent_intro";
 import {
   expandStatusFilter,
   type OperatorRunStatusFilter,
@@ -102,6 +103,7 @@ export default async function WorkspaceOperatorHistoryPage({
 
       <div className="flex-1 overflow-auto">
         <div className="mx-auto max-w-5xl px-6 py-6">
+          <PogAgentIntro />
           <OperatorHistoryTable
             initialRows={initial.rows}
             initialCursor={initial.nextCursor}

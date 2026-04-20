@@ -31,6 +31,7 @@ image = (
         "openai-agents>=0.0.10",
         "httpx>=0.27.0",
         "pydantic>=2.8.0",
+        "fastapi[standard]>=0.115.0",
     )
     .add_local_python_source("workspace_operator")
 )
