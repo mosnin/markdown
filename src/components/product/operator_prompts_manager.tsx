@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { ArrowDown, ArrowUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -23,6 +24,7 @@ import {
   createOperatorPromptAction,
   updateOperatorPromptAction,
   deleteOperatorPromptAction,
+  reorderOperatorPromptsAction,
 } from "@/app/app/workspace_operator/prompts_actions";
 import type { OperatorPromptRow } from "@/server/services/operator_prompts_service";
 
@@ -76,6 +78,38 @@ export function OperatorPromptsManager({
         );
         setEditing(null);
       }
+    });
+  }
+
+  function handleMove(index: number, direction: -1 | 1) {
+    const target = index + direction;
+    if (target < 0 || target >= prompts.length) return;
+    // Optimistically swap in local state so the UI responds instantly;
+    // the server action below authoritatively re-fetches the ordered
+    // list and we replace local state with that on success.
+    const next = prompts.slice();
+    const a = next[index];
+    const b = next[target];
+    if (!a || !b) return;
+    next[index] = b;
+    next[target] = a;
+    // Reassign sort_order top-down so consecutive moves stay stable
+    // even if the server had gaps / ties in the previous ordering.
+    const items = next.map((row, i) => ({ id: row.id, sort_order: i }));
+    setPrompts(
+      next.map((row, i) => ({ ...row, sort_order: i }))
+    );
+    setError("");
+    startTransition(async () => {
+      const res = await reorderOperatorPromptsAction({ items });
+      if (!res.ok) {
+        setError(res.error);
+        // Roll back to the pre-swap list so the UI stays consistent
+        // with the server.
+        setPrompts(prompts);
+        return;
+      }
+      setPrompts(res.data);
     });
   }
 
@@ -135,7 +169,7 @@ export function OperatorPromptsManager({
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-          {prompts.map((row) => (
+          {prompts.map((row, index) => (
             <Card key={row.id} size="sm">
               <CardHeader>
                 <CardTitle className="break-words">{row.name}</CardTitle>
@@ -147,6 +181,26 @@ export function OperatorPromptsManager({
                 <div className="flex items-center justify-between gap-2 text-[10px] text-muted-foreground">
                   <span>Updated {formatAbsoluteDate(row.updated_at)}</span>
                   <div className="flex gap-1">
+                    <Button
+                      variant="outline"
+                      size="icon-xs"
+                      aria-label="Move prompt up"
+                      title="Move up"
+                      onClick={() => handleMove(index, -1)}
+                      disabled={pending || index === 0}
+                    >
+                      <ArrowUp aria-hidden="true" />
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="icon-xs"
+                      aria-label="Move prompt down"
+                      title="Move down"
+                      onClick={() => handleMove(index, 1)}
+                      disabled={pending || index === prompts.length - 1}
+                    >
+                      <ArrowDown aria-hidden="true" />
+                    </Button>
                     <Button
                       variant="outline"
                       size="xs"

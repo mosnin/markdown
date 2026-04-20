@@ -9,7 +9,9 @@ import {
   updateOperatorPrompt,
   deleteOperatorPrompt,
   getOperatorPrompt,
+  reorderOperatorPrompts,
   type OperatorPromptRow,
+  type ReorderOperatorPromptsItem,
   type UpdateOperatorPromptPatch,
 } from "@/server/services/operator_prompts_service";
 
@@ -149,6 +151,50 @@ export async function deleteOperatorPromptAction(
     return {
       ok: false,
       error: err instanceof Error ? err.message : "Failed to delete prompt.",
+    };
+  }
+}
+
+// ─── Reorder ────────────────────────────────────────────────────────────────
+
+export interface ReorderOperatorPromptsInput {
+  items: ReorderOperatorPromptsItem[];
+}
+
+/**
+ * Apply a batch of sort_order updates and return the full re-sorted list
+ * so the UI can re-render in one round-trip. The action validates its
+ * own input before touching the service — every item must have a
+ * non-empty id and a numeric sort_order — to fail fast without a DB
+ * round-trip on obvious client bugs.
+ */
+export async function reorderOperatorPromptsAction(
+  input: ReorderOperatorPromptsInput
+): Promise<PromptsActionResult<OperatorPromptRow[]>> {
+  try {
+    if (!input || !Array.isArray(input.items) || input.items.length === 0) {
+      return { ok: false, error: "items is required." };
+    }
+    const ctx = await getRequestContext();
+    if (!ctx.isAuthenticated || !ctx.user) {
+      return { ok: false, error: "Unauthenticated." };
+    }
+    const supabase = await createClient();
+    const rows = await reorderOperatorPrompts(
+      supabase,
+      ctx.user.id,
+      input.items
+    );
+    try {
+      revalidatePath(PROMPTS_PATH);
+    } catch {
+      /* see createOperatorPromptAction */
+    }
+    return { ok: true, data: rows };
+  } catch (err) {
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : "Failed to reorder prompts.",
     };
   }
 }

@@ -149,6 +149,7 @@ describe("createOperatorPrompt", () => {
         user_id: "u-1",
         name: "Trimmed",
         prompt: "Body",
+        sort_order: 0,
         created_at: "2026-04-20T00:00:00Z",
         updated_at: "2026-04-20T00:00:00Z",
       },
@@ -161,9 +162,12 @@ describe("createOperatorPrompt", () => {
       prompt: " Body ",
     });
     expect(row.id).toBe("p2");
-    const q = fake.queries[0];
-    expect(q?.op).toBe("insert");
-    expect(q?.payload).toMatchObject({
+    // The service now issues a max-sort_order SELECT before the INSERT
+    // (to place the new row at the end of the list); the insert is the
+    // second recorded query.
+    const insertQuery = fake.queries.find((q) => q.op === "insert");
+    expect(insertQuery).toBeDefined();
+    expect(insertQuery?.payload).toMatchObject({
       workspace_id: "ws-1",
       user_id: "u-1",
       name: "Trimmed",
