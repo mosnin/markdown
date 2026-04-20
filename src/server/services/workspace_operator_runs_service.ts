@@ -126,6 +126,27 @@ export interface ListOperatorRunsParams {
    * continue the descending sort.
    */
   cursor?: string | null;
+  /**
+   * Optional status filter. Pass a single status or an array of statuses
+   * to restrict the list (e.g. `["executing", "planning", "awaiting_approval"]`
+   * for an "in-flight" filter). Filter composes with the other params via AND.
+   */
+  status?: OperatorRunStatus | OperatorRunStatus[];
+  /**
+   * Optional lower bound on `created_at`. ISO-8601 timestamp. Inclusive.
+   * Composes with `cursor` — when both are set we apply both.
+   */
+  fromDate?: string;
+  /**
+   * Optional upper bound on `created_at`. ISO-8601 timestamp. Inclusive.
+   */
+  toDate?: string;
+  /**
+   * Optional case-insensitive substring match on the `prompt` column.
+   * Wraps the caller's query in `%...%` so partial matches work. An
+   * empty/whitespace string is treated as "no filter".
+   */
+  search?: string;
 }
 
 export interface ListOperatorRunsResult {
@@ -248,6 +269,29 @@ export async function listOperatorRuns(
   if (params.workspaceId) query = query.eq("workspace_id", params.workspaceId);
   if (params.userId) query = query.eq("user_id", params.userId);
   if (params.cursor) query = query.lt("created_at", params.cursor);
+
+  // Optional filter composition — status, date range, prompt search all
+  // AND together with the caller-supplied workspace/user/cursor filters.
+  if (params.status !== undefined) {
+    if (Array.isArray(params.status)) {
+      if (params.status.length > 0) {
+        query = query.in("status", params.status);
+      }
+    } else {
+      query = query.eq("status", params.status);
+    }
+  }
+  if (params.fromDate) query = query.gte("created_at", params.fromDate);
+  if (params.toDate) query = query.lte("created_at", params.toDate);
+  if (params.search) {
+    const needle = params.search.trim();
+    if (needle.length > 0) {
+      // Escape the SQL LIKE wildcards so user input isn't interpreted as
+      // a pattern. `ilike` is case-insensitive.
+      const escaped = needle.replace(/[\\%_]/g, (m) => `\\${m}`);
+      query = query.ilike("prompt", `%${escaped}%`);
+    }
+  }
 
   const { data, error } = await query;
   if (error) throw new Error(`Failed to list operator runs: ${error.message}`);
