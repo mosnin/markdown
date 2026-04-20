@@ -231,6 +231,96 @@ tuning for OpenAI auto-caching, and Business tier.
 Not yet: Creem metered-event sync, design partner onboarding, public
 launch demo (these are product/biz rather than code tasks).
 
+### ✅ Phase 5 — Operator polish (shipped 2026-04-20)
+
+Wave-based parallel agent build that closed the 13-feature audit gap.
+Disjoint file ownership across four agents; orchestrator stitched the
+integration seams.
+
+**Run lifecycle**
+
+- **Real cancel that signals Modal** — `cancellation_requested_at`
+  column + `cancelOperatorRun` service. Modal-side `_run_with_cancel_poll`
+  wraps `Runner.run` in `asyncio.create_task` with a 2-second sibling
+  poller hitting `/api/agent/operator/check_cancel`; returns
+  `OperatorCancelled` cleanly so the run is billed only for tokens
+  actually consumed (not the 10 min timeout).
+- **Per-run token budget** — `max_input_tokens` / `max_output_tokens`
+  columns + `_BudgetHooks` (RunHooks subclass) that raises
+  `OperatorBudgetExceeded` at the next tool boundary.
+- **Retry failed run** — two surfaces: panel reseed via
+  `retryRunAction` (mints a new row through the F service so the user
+  can re-approve a plan), end-to-end re-run via `retryOperatorRunAction`
+  on the detail page (preserves the original model). Both gated by the
+  same monthly quota.
+
+**Plan + cost preview**
+
+- **Plan editing round-trip** — `EditedOperatorPlanStep[]` shape passed
+  back through `approveAndExecuteAction`; agent rewrites status as it
+  executes so the client's status copy is replaced server-side.
+- **Cost preview before approval** — `estimateOperatorRunCost`
+  (worst-case upper bound: prompt_chars/4 + 2000 overhead per step ×
+  steps × per-model rate) rendered alongside the plan. Per-model rates
+  duplicated client-side from `MODEL_PRICING` to avoid pulling a `use
+  server` file across the client boundary.
+
+**Model picker**
+
+- **gpt-4.1-mini** (default, all tiers) and **gpt-4.1** (Pro+ only) —
+  enforced server-side by `resolveModel` narrowing arbitrary input
+  strings against `OPERATOR_MODELS`, and by Python's
+  `ALLOWED_OPERATOR_MODELS` rejecting at the agent boundary.
+
+**History & rollback**
+
+- **Run history UI** — `/app/workspace_operator` lists the user's runs
+  newest-first with cursor pagination.
+- **Run detail + diff preview** — `/app/workspace_operator/[runId]`
+  shows the plan, artifact list, and a `OperatorRunDiff` async server
+  component rendering the notes the run created.
+- **Rollback created notes** — `rollbackRun` soft-deletes via
+  `lifecycle_service.trashNote`; idempotent (already-deleted notes are
+  reported as `alreadyDeleted` not failures).
+
+**Saved prompts & templates**
+
+- `operator_prompts` table (UNIQUE on workspace+user+name); panel has a
+  saved-prompts dropdown + "Save as template" dialog. Full CRUD UI at
+  `/app/workspace_operator/prompts`.
+
+**Notifications**
+
+- `operator_notification_preferences` (per-user, per-workspace
+  defaults: fail-only). Resend transport reusing the
+  `email_digest_service` pattern. `safeNotify` fires once per terminal
+  transition in `actions.ts` (full-mode + execute-mode paths, success
+  and failure both).
+
+**Programmatic access**
+
+- REST API at `/api/operator/runs` (POST creates, GET lists, GET
+  `/[id]` retrieves). `wopr_` prefix + 32-char hex secret, sha256-hashed
+  at rest. Bearer auth via `parseOperatorBearer`. Same monthly quota
+  gate as UI runs.
+
+**Mobile parity**
+
+- Operator entry added to `mobile_sidebar.tsx` primary nav and
+  `app_sidebar.tsx` desktop nav.
+- Settings sidebar gains a "Workspace Operator" section with the
+  preferences page (notifications + API keys).
+
+**Migration**
+
+- `20260420000001_operator_cancel_and_budget.sql` —
+  `cancellation_requested_at`, `max_input_tokens`, `max_output_tokens`,
+  `model` columns + partial cancel index.
+- `20260420000002_operator_artifacts_and_prompts.sql` —
+  `operator_prompts` table.
+- `20260420000003_operator_notification_preferences.sql` — per-user
+  prefs.
+
 ## Operational notes
 
 ### Concurrency sizing
@@ -267,10 +357,8 @@ Cost is dominated by LLM tokens, not Modal containers.
   hardcoded; Creem metered-event sync is the next billing step.
 - [x] Operator panel wired into the app layout —
   `OperatorPanelTrigger` (client wrapper, owns `open` state) replaces
-  the raw `<GlobalSearch>` mount in `src/app/app/layout.tsx`. Desktop
-  toolbar only — mobile parity is a follow-up (the desktop-only mount
-  predates Phase 4, since `GlobalSearch` was already gated behind
-  `md:flex`).
+  the raw `<GlobalSearch>` mount in `src/app/app/layout.tsx`. Phase 5
+  added mobile parity (Operator entry in `mobile_sidebar.tsx`).
 - [ ] No end-to-end smoke test against a deployed Modal endpoint.
   `agent/DEPLOY.md` documents the deploy + smoke procedure
   (`agent/scripts/deploy_staging.sh`, `agent/scripts/smoke_test.sh`);

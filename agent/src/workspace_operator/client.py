@@ -178,6 +178,36 @@ class PoggleClient:
         """
         return await self._post("/api/agent/tools/workspace_context", {})
 
+    async def check_cancellation(self, run_id: str) -> bool:
+        """Ask the Next.js side whether this run has been cancelled.
+
+        Polled by the operator between phases (and periodically inside long
+        execute runs). Returns True iff `workspace_operator_runs.cancellation_requested_at`
+        is non-NULL for this run id. Network failures are *not* swallowed —
+        the operator catches them and treats them as "keep going" so a
+        transient blip doesn't fake-cancel a healthy run, but unexpected
+        errors still propagate up for observability.
+
+        We use GET because the lookup is read-only / idempotent.
+        """
+        url = f"{self._base_url}/api/agent/operator/check_cancel"
+        response = await self._client.get(
+            url,
+            headers=self._headers,
+            params={"run_id": run_id},
+        )
+        if response.status_code >= 400:
+            await self._raise_error(response)
+        envelope = response.json()
+        data = envelope.get("data") if isinstance(envelope, dict) else None
+        if not isinstance(data, dict):
+            raise PoggleAPIError(
+                response.status_code,
+                None,
+                f"check_cancel returned unexpected envelope: {envelope}",
+            )
+        return bool(data.get("cancelled", False))
+
     async def report_progress(
         self,
         *,

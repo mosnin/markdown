@@ -17,8 +17,15 @@
  * `/api/agent/tools/*`. See `src/app/api/agent/_lib/auth.ts` for the
  * shared-secret verification used on that side.
  */
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { isWorkspaceOperatorEnabled } from "@/lib/env";
 import { AGENT_HEADERS } from "@/app/api/agent/_lib/auth";
+import {
+  createOperatorRun,
+  getOperatorRun,
+  updateOperatorRun,
+  type WorkspaceOperatorRunRow,
+} from "@/server/services/workspace_operator_runs_service";
 
 export interface OperatorDispatchInput {
   runId: string;
@@ -29,6 +36,16 @@ export interface OperatorDispatchInput {
   prompt: string;
   /** Deadline in milliseconds; aborts the outbound call if exceeded. */
   timeoutMs?: number;
+  /**
+   * Optional model id forwarded to the Modal agent. When omitted, the
+   * Python settings default (`WORKSPACE_OPERATOR_MODEL`) wins. The agent
+   * will reject any model not in `ALLOWED_OPERATOR_MODELS`. (Wave 1 F)
+   */
+  model?: string | null;
+  /** Optional per-run input-token cap. NULL means unlimited. (Wave 1 F) */
+  maxInputTokens?: number | null;
+  /** Optional per-run output-token cap. NULL means unlimited. (Wave 1 F) */
+  maxOutputTokens?: number | null;
 }
 
 export interface OperatorRunResult {
@@ -102,6 +119,15 @@ export async function dispatchOperatorRun(
         branch_id: input.branchId,
         box_id: input.boxId,
         prompt: input.prompt,
+        ...(input.model !== undefined && input.model !== null
+          ? { model: input.model }
+          : {}),
+        ...(input.maxInputTokens !== undefined && input.maxInputTokens !== null
+          ? { max_input_tokens: input.maxInputTokens }
+          : {}),
+        ...(input.maxOutputTokens !== undefined && input.maxOutputTokens !== null
+          ? { max_output_tokens: input.maxOutputTokens }
+          : {}),
       }),
       signal: controller.signal,
     });
@@ -253,6 +279,15 @@ export async function dispatchOperatorExecute(
         prompt: input.prompt,
         mode: "execute",
         approved_plan: input.approvedPlan,
+        ...(input.model !== undefined && input.model !== null
+          ? { model: input.model }
+          : {}),
+        ...(input.maxInputTokens !== undefined && input.maxInputTokens !== null
+          ? { max_input_tokens: input.maxInputTokens }
+          : {}),
+        ...(input.maxOutputTokens !== undefined && input.maxOutputTokens !== null
+          ? { max_output_tokens: input.maxOutputTokens }
+          : {}),
       }),
       signal: controller.signal,
     });
@@ -288,4 +323,92 @@ export async function dispatchOperatorExecute(
   } finally {
     clearTimeout(timer);
   }
+}
+
+// ---------------------------------------------------------------------------
+// Wave 1 F — cancellation + retry helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Terminal statuses where neither cancellation nor retry should mutate state.
+ * Mirrors the OperatorRunStatus union in `workspace_operator_runs_service.ts`.
+ */
+const TERMINAL_STATUSES = new Set(["completed", "failed", "cancelled"]);
+
+/**
+ * Mark a run as cancellation-requested.
+ *
+ * The Modal Python operator polls `/api/agent/operator/check_cancel` between
+ * phases (and periodically during long-running execute) and aborts when this
+ * column flips. The Cancel button in the UI should call a server action that
+ * delegates here — actually flipping the column is what makes the OpenAI
+ * agent loop stop burning tokens (the previous local-state-only Cancel was
+ * a UI lie).
+ *
+ * Behaviour:
+ *   - Asserts the requesting user owns the run (we never let user A cancel
+ *     user B's run, even if both are workspace members).
+ *   - No-op when the run is already terminal — returns the row as-is so the
+ *     caller can render without special-casing.
+ *   - Does not change `status`. The Python side is responsible for writing
+ *     `status="cancelled"` once it actually stops.
+ */
+export async function cancelOperatorRun(
+  supabase: SupabaseClient,
+  runId: string,
+  userId: string
+): Promise<WorkspaceOperatorRunRow> {
+  const existing = await getOperatorRun(supabase, runId);
+  if (!existing) throw new Error("Operator run not found");
+  if (existing.user_id !== userId) {
+    throw new Error("forbidden: only the run's owner can cancel it");
+  }
+  if (TERMINAL_STATUSES.has(existing.status)) {
+    return existing; // already terminal, no-op
+  }
+  if (existing.cancellation_requested_at) {
+    return existing; // already requested
+  }
+  return updateOperatorRun(supabase, runId, {
+    cancellationRequestedAt: new Date().toISOString(),
+  });
+}
+
+/**
+ * Create a fresh run row mirroring an existing one's prompt/branch/mode/model.
+ *
+ * Does NOT dispatch — the caller (Wave 2 server action) decides whether to
+ * also kick the Modal endpoint. We stay narrowly scoped because the dispatch
+ * call hits a different code path (and we want retry semantics to compose
+ * with throttling / quota gates that the action layer owns).
+ *
+ * Returns the new row including the freshly minted `id`. The caller passes
+ * that id to `dispatchOperatorRun` (or its plan/execute siblings) to actually
+ * run the agent again.
+ */
+export async function retryOperatorRun(
+  supabase: SupabaseClient,
+  runId: string,
+  userId: string
+): Promise<WorkspaceOperatorRunRow> {
+  const existing = await getOperatorRun(supabase, runId);
+  if (!existing) throw new Error("Operator run not found");
+  if (existing.user_id !== userId) {
+    throw new Error("forbidden: only the run's owner can retry it");
+  }
+  if (!TERMINAL_STATUSES.has(existing.status)) {
+    throw new Error(
+      `cannot retry a non-terminal run (status=${existing.status})`
+    );
+  }
+  return createOperatorRun(supabase, {
+    workspaceId: existing.workspace_id,
+    userId: existing.user_id,
+    branchId: existing.branch_id,
+    prompt: existing.prompt,
+    mode: existing.mode,
+    model: existing.model,
+    maxInputTokens: existing.max_input_tokens,
+    maxOutputTokens: existing.max_output_tokens,
+  });
 }

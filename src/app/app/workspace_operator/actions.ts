@@ -7,6 +7,8 @@ import {
   dispatchOperatorRun,
   dispatchOperatorPlan,
   dispatchOperatorExecute,
+  cancelOperatorRun,
+  retryOperatorRun,
   type OperatorRunResult,
   type OperatorPlanResult,
 } from "@/server/services/workspace_operator_service";
@@ -19,8 +21,22 @@ import {
   checkOperatorQuota,
   type OperatorQuota,
 } from "@/server/services/workspace_operator_quota_service";
+import {
+  listOperatorPrompts,
+  createOperatorPrompt,
+} from "@/server/services/operator_prompts_service";
+import {
+  notifyRunCompleted,
+  notifyRunFailed,
+} from "@/server/services/operator_notifications_service";
 import type { WorkspacePlan } from "@/server/services/subscription_service";
-import type { OperatorPlanStep } from "./types";
+import type {
+  OperatorPlanStep,
+  EditedOperatorPlanStep,
+  OperatorModel,
+  SavedOperatorPrompt,
+} from "./types";
+import { OPERATOR_MODELS, DEFAULT_OPERATOR_MODEL } from "./types";
 import { isWorkspaceOperatorEnabled } from "@/lib/env";
 import { createAuditEvent } from "@/server/repositories/audit_event_repository";
 import type { SupabaseClient, User } from "@supabase/supabase-js";
@@ -116,6 +132,33 @@ export interface RunWorkspaceOperatorInput {
   boxId: string;
   /** Optional human-friendly branch name. Defaults to an agent-slug. */
   branchName?: string;
+  /**
+   * Operator model to use. Defaults to the cheapest tier-allowed model.
+   * Accepts arbitrary strings so server callers (e.g. retry, REST API) can
+   * forward an unvalidated model id from a stored row; `resolveModel`
+   * narrows to the allowed set at the boundary.
+   */
+  model?: OperatorModel | string;
+  /** Optional per-run input-token cap forwarded to the agent. */
+  maxInputTokens?: number | null;
+  /** Optional per-run output-token cap forwarded to the agent. */
+  maxOutputTokens?: number | null;
+}
+
+/**
+ * Validate / normalise a model id passed across the action boundary.
+ * Returns the supplied id when allowed, otherwise the cheap default.
+ * Tier gating is enforced separately in the panel UI; this is the
+ * server-side last-mile guard that prevents an arbitrary string from
+ * reaching the Modal endpoint.
+ */
+function resolveModel(
+  candidate: string | null | undefined
+): OperatorModel {
+  if (!candidate) return DEFAULT_OPERATOR_MODEL;
+  return (OPERATOR_MODELS as readonly string[]).includes(candidate)
+    ? (candidate as OperatorModel)
+    : DEFAULT_OPERATOR_MODEL;
 }
 
 export interface RunWorkspaceOperatorOutput {
@@ -192,6 +235,8 @@ export async function runWorkspaceOperatorAction(
       return quotaGate;
     }
 
+    const model = resolveModel(input.model);
+
     // Persist the run row first so we have a stable id to send to Modal as
     // the canonical run_id. The DB is the source of truth for run state from
     // here on out — the previous random-UUID flow generated an id that was
@@ -201,6 +246,9 @@ export async function runWorkspaceOperatorAction(
       userId: ctx.user.id,
       prompt,
       mode: "full",
+      model,
+      maxInputTokens: input.maxInputTokens ?? null,
+      maxOutputTokens: input.maxOutputTokens ?? null,
     });
     const runId = runRow.id;
     const branchName = (input.branchName ?? `agent/${runId.slice(0, 8)}`).slice(0, 200);
@@ -230,6 +278,9 @@ export async function runWorkspaceOperatorAction(
         branchId: branch.id,
         boxId: input.boxId,
         prompt,
+        model,
+        maxInputTokens: input.maxInputTokens ?? null,
+        maxOutputTokens: input.maxOutputTokens ?? null,
       });
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
@@ -255,6 +306,7 @@ export async function runWorkspaceOperatorAction(
         userId: ctx.user.id,
         result: null,
       });
+      await safeNotify(supabase, runId, "failed");
       return { ok: false, error: `Operator dispatch failed: ${message}` };
     }
 
@@ -276,6 +328,12 @@ export async function runWorkspaceOperatorAction(
       cachedInputTokens: result.cached_input_tokens ?? 0,
       model: result.model ?? null,
     });
+
+    await safeNotify(
+      supabase,
+      runId,
+      result.status === "completed" ? "completed" : "failed"
+    );
 
     // Metered usage — record exactly once per dispatched run regardless of
     // final status. Token counts come from Agent C's capture work; they'll
@@ -329,6 +387,12 @@ export interface RequestPlanInput {
   prompt: string;
   boxId: string;
   branchName?: string;
+  /** Operator model to use. Default = cheapest. */
+  model?: OperatorModel;
+  /** Optional per-run input-token cap. */
+  maxInputTokens?: number | null;
+  /** Optional per-run output-token cap. */
+  maxOutputTokens?: number | null;
 }
 
 export interface RequestPlanOutput {
@@ -387,6 +451,8 @@ export async function requestOperatorPlanAction(
       return quotaGate;
     }
 
+    const model = resolveModel(input.model);
+
     // Create the run row up-front so the run_id we send to Modal is the same
     // id the UI / history page will display.
     const runRow = await createOperatorRun(supabase, {
@@ -394,6 +460,9 @@ export async function requestOperatorPlanAction(
       userId: ctx.user.id,
       prompt,
       mode: "plan",
+      model,
+      maxInputTokens: input.maxInputTokens ?? null,
+      maxOutputTokens: input.maxOutputTokens ?? null,
     });
     const runId = runRow.id;
     const branchName = (input.branchName ?? `agent/${runId.slice(0, 8)}`).slice(
@@ -422,6 +491,9 @@ export async function requestOperatorPlanAction(
         branchId: branch.id,
         boxId: input.boxId,
         prompt,
+        model,
+        maxInputTokens: input.maxInputTokens ?? null,
+        maxOutputTokens: input.maxOutputTokens ?? null,
       });
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
@@ -474,7 +546,27 @@ export interface ApproveAndExecuteInput {
   branchId: string;
   boxId: string;
   prompt: string;
+  /**
+   * Approved (and possibly user-edited) plan steps. Replaces whatever
+   * the planner originally returned — the agent re-renders system
+   * context against this exact list. Use `editedSteps` if you want to
+   * be explicit at the call site that the array is the post-edit
+   * version; both names point at the same field for backwards compat.
+   */
   steps: Array<{ index: number; description: string; tool: string }>;
+  /**
+   * Alias for `steps` — added when wiring the panel's plan-edit UI so
+   * client code reads as "edited steps round-trip back". Server prefers
+   * `editedSteps` when both are supplied (they should be identical, but
+   * the alias wins if they ever drift).
+   */
+  editedSteps?: EditedOperatorPlanStep[];
+  /** Operator model to execute with. Default = cheapest. */
+  model?: OperatorModel;
+  /** Optional per-run input-token cap. */
+  maxInputTokens?: number | null;
+  /** Optional per-run output-token cap. */
+  maxOutputTokens?: number | null;
 }
 
 export interface ApproveAndExecuteOutput {
@@ -507,7 +599,14 @@ export async function approveAndExecuteAction(
     if (!input.runId || !input.branchId || !input.boxId) {
       return { ok: false, error: "runId, branchId, and boxId are required." };
     }
-    if (!input.steps?.length) {
+    // Prefer the explicit `editedSteps` alias when supplied so the wire
+    // shape is unambiguous about which copy of the plan the agent should
+    // use. Fall back to the legacy `steps` field for compat.
+    const approvedSteps =
+      input.editedSteps && input.editedSteps.length > 0
+        ? input.editedSteps
+        : input.steps;
+    if (!approvedSteps?.length) {
       return { ok: false, error: "At least one plan step is required." };
     }
 
@@ -529,12 +628,18 @@ export async function approveAndExecuteAction(
       return quotaGate;
     }
 
+    const model = resolveModel(input.model);
+
     // The run row already exists from requestOperatorPlanAction; flip it to
-    // executing and capture the approved plan.
+    // executing and capture the approved (post-edit) plan so the history
+    // page renders what the agent actually ran, not the pre-edit copy.
     await safeUpdateRun(supabase, input.runId, {
       status: "executing",
-      plan: input.steps as unknown,
+      plan: approvedSteps as unknown,
       branchId: input.branchId,
+      model,
+      maxInputTokens: input.maxInputTokens ?? null,
+      maxOutputTokens: input.maxOutputTokens ?? null,
     });
 
     const startedAt = Date.now();
@@ -547,7 +652,10 @@ export async function approveAndExecuteAction(
         branchId: input.branchId,
         boxId: input.boxId,
         prompt: input.prompt,
-        approvedPlan: input.steps,
+        approvedPlan: approvedSteps,
+        model,
+        maxInputTokens: input.maxInputTokens ?? null,
+        maxOutputTokens: input.maxOutputTokens ?? null,
       });
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
@@ -572,6 +680,7 @@ export async function approveAndExecuteAction(
         userId: ctx.user.id,
         result: null,
       });
+      await safeNotify(supabase, input.runId, "failed");
       return { ok: false, error: `Operator execution failed: ${message}` };
     }
 
@@ -591,6 +700,12 @@ export async function approveAndExecuteAction(
       cachedInputTokens: result.cached_input_tokens ?? 0,
       model: result.model ?? null,
     });
+
+    await safeNotify(
+      supabase,
+      input.runId,
+      result.status === "completed" ? "completed" : "failed"
+    );
 
     // Metered usage — record exactly once per executed run regardless of
     // final status. Token counts come from Agent C's capture work; they'll
@@ -632,6 +747,186 @@ export async function approveAndExecuteAction(
     return {
       ok: false,
       error: err instanceof Error ? err.message : "Failed to execute plan.",
+    };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Wave 2 — cancel + retry + saved prompts
+// ---------------------------------------------------------------------------
+
+export interface CancelRunOutput {
+  runId: string;
+  status: string;
+  cancellationRequestedAt: string | null;
+}
+
+/**
+ * User-initiated cancellation of an in-flight Operator run.
+ *
+ * Flips `cancellation_requested_at` on the runs row. The Modal-side Python
+ * operator polls for this between phases (and during long-running execute)
+ * and aborts when it sees the flag — the previous local-state-only Cancel
+ * button was a UI lie that did nothing on the agent side.
+ *
+ * No-op when the run is already terminal; the action returns the row as-is
+ * so the panel doesn't have to special-case "race won by completion".
+ */
+export async function cancelRunAction(
+  runId: string
+): Promise<ActionResult<CancelRunOutput>> {
+  try {
+    if (!runId) return { ok: false, error: "runId is required." };
+
+    const ctx = await getRequestContext();
+    if (!ctx.isAuthenticated || !ctx.user) {
+      return { ok: false, error: "Unauthenticated." };
+    }
+
+    const supabase = await createClient();
+    const row = await cancelOperatorRun(supabase, runId, ctx.user.id);
+
+    return {
+      ok: true,
+      data: {
+        runId: row.id,
+        status: row.status,
+        cancellationRequestedAt: row.cancellation_requested_at,
+      },
+    };
+  } catch (err) {
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : "Failed to cancel run.",
+    };
+  }
+}
+
+export interface RetryRunOutput {
+  /** Freshly-minted run id for the new attempt. */
+  newRunId: string;
+  /** The original prompt — surfaced so the panel can re-seed the textarea. */
+  prompt: string;
+  branchId: string | null;
+  /** Model the new run will use (mirrors the original). */
+  model: string | null;
+  mode: "plan" | "execute" | "full";
+}
+
+/**
+ * Re-run a terminal Operator run with the same prompt / branch / model.
+ *
+ * Creates a fresh runs row mirroring the failed (or completed) source run
+ * and returns the new id. Does NOT itself dispatch — the caller (the panel)
+ * picks the new id up and either calls `requestOperatorPlanAction` or
+ * `runWorkspaceOperatorAction` depending on the mode, so retry composes
+ * with the existing quota gate / dispatch path.
+ */
+export async function retryRunAction(
+  runId: string
+): Promise<ActionResult<RetryRunOutput>> {
+  try {
+    if (!runId) return { ok: false, error: "runId is required." };
+
+    const ctx = await getRequestContext();
+    if (!ctx.isAuthenticated || !ctx.user) {
+      return { ok: false, error: "Unauthenticated." };
+    }
+
+    const supabase = await createClient();
+    const newRow = await retryOperatorRun(supabase, runId, ctx.user.id);
+
+    return {
+      ok: true,
+      data: {
+        newRunId: newRow.id,
+        prompt: newRow.prompt,
+        branchId: newRow.branch_id,
+        model: newRow.model,
+        mode: newRow.mode,
+      },
+    };
+  } catch (err) {
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : "Failed to retry run.",
+    };
+  }
+}
+
+/**
+ * List the current user's saved Operator prompts (per workspace).
+ *
+ * Backed by Agent G's `operator_prompts_service`. If that service drifts
+ * at integration time, this action is the one place that needs to be
+ * patched — the panel only ever sees the narrow `SavedOperatorPrompt`
+ * shape declared in `./types`.
+ */
+export async function listSavedPromptsAction(): Promise<
+  ActionResult<SavedOperatorPrompt[]>
+> {
+  try {
+    const ctx = await getRequestContext();
+    if (!ctx.isAuthenticated || !ctx.user || !ctx.workspace) {
+      return { ok: false, error: "Unauthenticated." };
+    }
+    const supabase = await createClient();
+    const rows = await listOperatorPrompts(supabase, {
+      workspaceId: ctx.workspace.id,
+      userId: ctx.user.id,
+    });
+    return {
+      ok: true,
+      data: rows.map((r) => ({
+        id: r.id,
+        name: r.name,
+        prompt: r.prompt,
+      })),
+    };
+  } catch (err) {
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : "Failed to load prompts.",
+    };
+  }
+}
+
+export interface SaveOperatorPromptInput {
+  name: string;
+  prompt: string;
+}
+
+/**
+ * Persist a new saved prompt under the current (workspace, user) pair.
+ * Surfaces the duplicate-name error verbatim so the panel can render it.
+ */
+export async function saveOperatorPromptAction(
+  input: SaveOperatorPromptInput
+): Promise<ActionResult<SavedOperatorPrompt>> {
+  try {
+    if (!input.name?.trim() || !input.prompt?.trim()) {
+      return { ok: false, error: "Name and prompt are required." };
+    }
+
+    const ctx = await getRequestContext();
+    if (!ctx.isAuthenticated || !ctx.user || !ctx.workspace) {
+      return { ok: false, error: "Unauthenticated." };
+    }
+    const supabase = await createClient();
+    const row = await createOperatorPrompt(supabase, {
+      workspaceId: ctx.workspace.id,
+      userId: ctx.user.id,
+      name: input.name.trim(),
+      prompt: input.prompt.trim(),
+    });
+    return {
+      ok: true,
+      data: { id: row.id, name: row.name, prompt: row.prompt },
+    };
+  } catch (err) {
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : "Failed to save prompt.",
     };
   }
 }
@@ -695,6 +990,27 @@ async function safeUpdateRun(
  * Until Agent C lands the Python-side token capture they'll be undefined
  * and the cost estimate resolves to zero.
  */
+/**
+ * Best-effort completion/failure email. Never throws — the caller's
+ * action result is the source of truth; notification flakes only show
+ * up in logs (the service itself logs structured fields per outcome).
+ */
+async function safeNotify(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  runId: string,
+  outcome: "completed" | "failed"
+): Promise<void> {
+  try {
+    if (outcome === "completed") {
+      await notifyRunCompleted(supabase, runId);
+    } else {
+      await notifyRunFailed(supabase, runId);
+    }
+  } catch (err) {
+    console.error("[workspace_operator] notification failed", err);
+  }
+}
+
 async function safeRecordUsage(
   supabase: Awaited<ReturnType<typeof createClient>>,
   params: {

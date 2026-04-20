@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { GitBranch, Plus, Undo2 } from "lucide-react";
+import { Bot, GitBranch, Plus, Undo2 } from "lucide-react";
 import {
   AccountSetting01Icon,
   Alert01Icon,
@@ -34,6 +34,7 @@ const primaryNav = [
   { label: "Search", href: "/app/search", icon: SearchAreaIcon },
   { label: "Workspaces", href: "/app/workspaces", icon: Satellite01Icon },
   { label: "Agents", href: "/app/agents", icon: LaborIcon },
+  { label: "Operator", href: "/app/workspace_operator", icon: Bot },
   { label: "Skills", href: "/app/skills", icon: ToolsIcon },
   { label: "Proposals", href: "/app/proposals", icon: Alert01Icon },
   { label: "Branches", href: "/app/branches", icon: GitBranch },

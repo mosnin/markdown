@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 
@@ -10,6 +11,7 @@ from agents import (
     MaxTurnsExceeded,
     OutputGuardrailTripwireTriggered,
     RunConfig,
+    RunHooks,
     Runner,
 )
 
@@ -20,7 +22,7 @@ from workspace_operator.guardrails import (
     derive_max_turns,
 )
 from workspace_operator.models import OperatorInput, OperatorResult, PlanResult, PlanStep
-from workspace_operator.settings import Settings
+from workspace_operator.settings import ALLOWED_OPERATOR_MODELS, Settings
 from workspace_operator.tools import (
     build_apply_template_tool,
     build_draft_note_tool,
@@ -33,6 +35,168 @@ from workspace_operator.tools import (
 from workspace_operator.tracing import flush_tracing, setup_tracing  # tracing: Phase 3 Agent 4
 
 log = logging.getLogger(__name__)
+
+
+# ---------------------------------------------------------------------------
+# Wave 1 F — cancellation + budget machinery
+# ---------------------------------------------------------------------------
+
+# How often the cancellation poller wakes up while Runner.run is in flight.
+# Short enough that a clicked Cancel button feels responsive (the UI shows
+# a spinner until the run row's status flips), long enough that we don't
+# hammer the Next.js endpoint. 2s is the same cadence other internal pollers
+# use; adjust here if it ever shows up in dashboards.
+_CANCEL_POLL_INTERVAL_S = 2.0
+
+
+class OperatorCancelled(Exception):
+    """Raised when the operator polled `check_cancellation` and it returned True.
+
+    Caught at the top level of each mode's runner; we convert it into an
+    OperatorResult with status="cancelled" and whatever notes_created the
+    run had drafted before the cancel landed.
+    """
+
+
+class OperatorBudgetExceeded(Exception):
+    """Raised by `_BudgetHooks` when a run blows past `max_input_tokens` or
+    `max_output_tokens`. Caught at the top level and converted to a
+    status="failed" result with `error="Per-run token budget exceeded"`,
+    surfacing any partial artifacts so the user knows what they got.
+    """
+
+    def __init__(self, used_input: int, used_output: int, max_input: int | None, max_output: int | None) -> None:
+        super().__init__(
+            f"budget exceeded: input={used_input}/{max_input}, output={used_output}/{max_output}"
+        )
+        self.used_input = used_input
+        self.used_output = used_output
+        self.max_input = max_input
+        self.max_output = max_output
+
+
+def _resolve_model(payload: OperatorInput, settings: Settings) -> str:
+    """Pick the model id for a run and validate it.
+
+    Per-run override > settings default. We reject anything outside
+    `ALLOWED_OPERATOR_MODELS` early — before any tokens are spent — so a
+    typo'd dispatcher doesn't quietly fall back to the wrong tier.
+    """
+    chosen = payload.model or settings.model
+    if chosen not in ALLOWED_OPERATOR_MODELS:
+        raise ValueError(
+            f"model {chosen!r} is not in ALLOWED_OPERATOR_MODELS={ALLOWED_OPERATOR_MODELS}"
+        )
+    return chosen
+
+
+class _BudgetHooks(RunHooks):
+    """RunHooks that aborts when usage breaches the per-run budget.
+
+    We hook `on_llm_end` (after every model call surfaces its usage) and
+    `on_tool_end` (cheap defence-in-depth — the LLM's own usage refresh is
+    what matters but tool ends are also natural checkpoints). The hook
+    raises `OperatorBudgetExceeded`, which `Runner.run` propagates back up
+    to the mode-level catch.
+
+    Cancellation polling lives in a separate `asyncio.create_task` so we
+    don't block the agent loop on a network round-trip every step.
+    """
+
+    def __init__(
+        self,
+        *,
+        max_input_tokens: int | None,
+        max_output_tokens: int | None,
+    ) -> None:
+        self._max_in = max_input_tokens
+        self._max_out = max_output_tokens
+
+    def _check(self, ctx_wrapper: object) -> None:
+        if self._max_in is None and self._max_out is None:
+            return
+        usage = getattr(ctx_wrapper, "usage", None)
+        if usage is None:
+            return
+        used_in = int(getattr(usage, "input_tokens", 0) or 0)
+        used_out = int(getattr(usage, "output_tokens", 0) or 0)
+        if self._max_in is not None and used_in > self._max_in:
+            raise OperatorBudgetExceeded(used_in, used_out, self._max_in, self._max_out)
+        if self._max_out is not None and used_out > self._max_out:
+            raise OperatorBudgetExceeded(used_in, used_out, self._max_in, self._max_out)
+
+    async def on_llm_end(self, context, agent, response) -> None:  # type: ignore[override,no-untyped-def]
+        self._check(context)
+
+    async def on_tool_end(self, context, agent, tool, result) -> None:  # type: ignore[override,no-untyped-def]
+        self._check(context)
+
+
+async def _run_with_cancel_poll(
+    coro_factory,  # type: ignore[no-untyped-def]
+    *,
+    client: PoggleClient,
+    run_id: str,
+):
+    """Run `coro_factory()` while a sidecar task polls for cancellation.
+
+    Approach (chosen over monkey-patching the SDK):
+      * Wrap the agent run in `asyncio.create_task` so we can await with
+        `asyncio.wait`.
+      * Spawn a sibling poller task that hits `check_cancellation` every
+        `_CANCEL_POLL_INTERVAL_S`. When the API says cancelled, the poller
+        cancels the agent task and raises OperatorCancelled.
+      * On normal completion, cancel the poller and return the agent's
+        result.
+
+    We chose this approach over the SDK's RunHooks because tool calls can
+    be slow (hybrid_search hitting Postgres FTS, web_fetch with a 10s
+    timeout) — a hook-only check would only fire after each tool finished,
+    leaving up to 10s of dead-token burn between cancel-click and abort.
+    The poller fires regardless of what the agent loop is doing.
+    """
+    main_task: asyncio.Task = asyncio.create_task(coro_factory())
+    cancelled_flag = {"v": False}
+
+    async def _poller() -> None:
+        try:
+            while not main_task.done():
+                await asyncio.sleep(_CANCEL_POLL_INTERVAL_S)
+                if main_task.done():
+                    return
+                try:
+                    is_cancelled = await client.check_cancellation(run_id)
+                except Exception:  # noqa: BLE001
+                    # Transient errors -> keep going. We never let a poller
+                    # blip silently abort a healthy run.
+                    log.warning("[operator] check_cancellation poll failed", exc_info=True)
+                    continue
+                # `is True` rather than truthy: the client returns a real bool
+                # on success; anything else is a half-broken envelope and we
+                # prefer to keep running than fake-cancel.
+                if is_cancelled is True:
+                    cancelled_flag["v"] = True
+                    main_task.cancel()
+                    return
+        except asyncio.CancelledError:
+            return
+
+    poller_task: asyncio.Task = asyncio.create_task(_poller())
+
+    try:
+        result = await main_task
+        return result
+    except asyncio.CancelledError:
+        if cancelled_flag["v"]:
+            raise OperatorCancelled() from None
+        raise
+    finally:
+        if not poller_task.done():
+            poller_task.cancel()
+            try:
+                await poller_task
+            except (asyncio.CancelledError, Exception):  # noqa: BLE001
+                pass
 
 
 # ---------------------------------------------------------------------------
@@ -270,26 +434,43 @@ def _make_client(payload: OperatorInput, settings: Settings) -> PoggleClient:
 async def _run_plan(payload: OperatorInput, settings: Settings) -> OperatorResult:
     """Run the planning agent and return a structured PlanResult."""
     client = _make_client(payload, settings)
+    model = _resolve_model(payload, settings)
     try:
+        # Wave 1 F — short-circuit if the user already cancelled before we
+        # even start. Saves a model call.
+        if await _was_cancelled(client, payload.run_id):
+            return OperatorResult(
+                run_id=payload.run_id, status="cancelled", model=model,
+            )
         workspace_context = _build_workspace_context_block(
             workspace_id=payload.workspace_id,
             box_id=payload.box_id,
         )
         agent = _build_plan_agent(client, workspace_context_block=workspace_context)
         run_config = RunConfig(
-            model=settings.model,
+            model=model,
             workflow_name="workspace_operator",
             group_id=payload.run_id,
+        )
+        budget_hooks = _BudgetHooks(
+            max_input_tokens=payload.max_input_tokens,
+            max_output_tokens=payload.max_output_tokens,
         )
         # Tool-call budget enforcement: the SDK lacks a "stop after N
         # tool calls" knob, so we map Settings.max_tool_calls onto its
         # `max_turns` (one turn ≈ one tool call for tool-heavy loops).
         # See guardrails/max_tool_calls.py for the rationale.
-        run_result = await Runner.run(
-            agent,
-            payload.prompt,
-            max_turns=derive_max_turns(settings),
-            run_config=run_config,
+        async def _do_run():  # type: ignore[no-untyped-def]
+            return await Runner.run(
+                agent,
+                payload.prompt,
+                max_turns=derive_max_turns(settings),
+                run_config=run_config,
+                hooks=budget_hooks,
+            )
+
+        run_result = await _run_with_cancel_poll(
+            _do_run, client=client, run_id=payload.run_id
         )
         tool_calls = _count_tool_calls(run_result)
         plan = _parse_plan(payload.run_id, run_result.final_output)
@@ -302,7 +483,21 @@ async def _run_plan(payload: OperatorInput, settings: Settings) -> OperatorResul
             input_tokens=usage.get("input_tokens", 0),
             output_tokens=usage.get("output_tokens", 0),
             cached_input_tokens=usage.get("cached_input_tokens", 0),
-            model=settings.model,
+            model=model,
+        )
+    except OperatorCancelled:
+        log.info("[operator] plan run %s cancelled by user", payload.run_id)
+        return OperatorResult(
+            run_id=payload.run_id, status="cancelled", model=model,
+        )
+    except OperatorBudgetExceeded as err:
+        return OperatorResult(
+            run_id=payload.run_id,
+            status="failed",
+            error="Per-run token budget exceeded",
+            input_tokens=err.used_input,
+            output_tokens=err.used_output,
+            model=model,
         )
     except MaxTurnsExceeded as err:
         return OperatorResult(
@@ -310,17 +505,38 @@ async def _run_plan(payload: OperatorInput, settings: Settings) -> OperatorResul
             status="failed",
             tool_calls=settings.max_tool_calls,
             error=f"max_turns_exceeded: {err}",
-            model=settings.model,
+            model=model,
         )
     except PoggleAPIError as err:
         return OperatorResult(
             run_id=payload.run_id,
             status="failed",
             error=f"poggle_api_error[{err.status}]: {err.message}",
-            model=settings.model,
+            model=model,
         )
     finally:
         await client.aclose()
+
+
+async def _was_cancelled(client: PoggleClient, run_id: str) -> bool:
+    """Single-shot check_cancellation, swallowing transient errors.
+
+    Used at phase boundaries (start of plan, between plan and execute) where
+    we want a snapshot answer, not a long-running poller. If the network is
+    flaky the run keeps going — false-cancellation is worse than the
+    occasional missed click.
+
+    We compare with `is True` rather than truthy-coerce: the client method's
+    contract is to return a real bool, and any other shape (a Mock from a
+    test stub, a stray dict from a half-renamed envelope) should be treated
+    as "not cancelled" so we don't fake-abort healthy runs.
+    """
+    try:
+        result = await client.check_cancellation(run_id)
+    except Exception:  # noqa: BLE001
+        log.warning("[operator] phase-boundary check_cancellation failed", exc_info=True)
+        return False
+    return result is True
 
 
 def _parse_plan(run_id: str, raw_output: str) -> PlanResult:
@@ -373,11 +589,13 @@ def _extract_json_object(text: str) -> dict | None:
 
 async def _run_execute(payload: OperatorInput, settings: Settings) -> OperatorResult:
     """Execute an approved plan with progress reporting."""
+    model = _resolve_model(payload, settings)
     if not payload.approved_plan:
         return OperatorResult(
             run_id=payload.run_id,
             status="failed",
             error="execute mode requires approved_plan",
+            model=model,
         )
 
     client = _make_client(payload, settings)
@@ -400,6 +618,14 @@ async def _run_execute(payload: OperatorInput, settings: Settings) -> OperatorRe
     client.draft_note = draft_note_capturing  # type: ignore[assignment]
 
     try:
+        # Wave 1 F — phase-boundary cancel check.
+        if await _was_cancelled(client, payload.run_id):
+            return OperatorResult(
+                run_id=payload.run_id,
+                status="cancelled",
+                notes_created=notes_created,
+                model=model,
+            )
         # Report progress for each step before execution begins
         for step in payload.approved_plan:
             await client.report_progress(
@@ -421,19 +647,29 @@ async def _run_execute(payload: OperatorInput, settings: Settings) -> OperatorRe
             workspace_context_block=workspace_context,
         )
         run_config = RunConfig(
-            model=settings.model,
+            model=model,
             workflow_name="workspace_operator",
             group_id=payload.run_id,
+        )
+        budget_hooks = _BudgetHooks(
+            max_input_tokens=payload.max_input_tokens,
+            max_output_tokens=payload.max_output_tokens,
         )
 
         # See guardrails/max_tool_calls.py — Settings.max_tool_calls
         # is enforced via the SDK's `max_turns`, the closest available
         # primitive to a tool-call cap.
-        run_result = await Runner.run(
-            agent,
-            enriched_prompt,
-            max_turns=derive_max_turns(settings),
-            run_config=run_config,
+        async def _do_run():  # type: ignore[no-untyped-def]
+            return await Runner.run(
+                agent,
+                enriched_prompt,
+                max_turns=derive_max_turns(settings),
+                run_config=run_config,
+                hooks=budget_hooks,
+            )
+
+        run_result = await _run_with_cancel_poll(
+            _do_run, client=client, run_id=payload.run_id
         )
         tool_calls = _count_tool_calls(run_result)
         usage = _extract_usage(run_result)
@@ -456,7 +692,30 @@ async def _run_execute(payload: OperatorInput, settings: Settings) -> OperatorRe
             input_tokens=usage.get("input_tokens", 0),
             output_tokens=usage.get("output_tokens", 0),
             cached_input_tokens=usage.get("cached_input_tokens", 0),
-            model=settings.model,
+            model=model,
+        )
+    except OperatorCancelled:
+        log.info("[operator] execute run %s cancelled by user", payload.run_id)
+        await client.report_progress(event_type="cancelled")
+        return OperatorResult(
+            run_id=payload.run_id,
+            status="cancelled",
+            notes_created=notes_created,
+            model=model,
+        )
+    except OperatorBudgetExceeded as err:
+        await client.report_progress(
+            event_type="failed",
+            detail="budget_exceeded",
+        )
+        return OperatorResult(
+            run_id=payload.run_id,
+            status="failed",
+            notes_created=notes_created,
+            error="Per-run token budget exceeded",
+            input_tokens=err.used_input,
+            output_tokens=err.used_output,
+            model=model,
         )
     except OutputGuardrailTripwireTriggered as err:
         log.warning("[operator] cite guardrail tripped for run %s", payload.run_id)
@@ -469,7 +728,7 @@ async def _run_execute(payload: OperatorInput, settings: Settings) -> OperatorRe
             status="failed",
             notes_created=notes_created,
             error=f"cite_guardrail: {err}",
-            model=settings.model,
+            model=model,
         )
     except MaxTurnsExceeded as err:
         await client.report_progress(
@@ -482,7 +741,7 @@ async def _run_execute(payload: OperatorInput, settings: Settings) -> OperatorRe
             notes_created=notes_created,
             tool_calls=settings.max_tool_calls,
             error=f"max_turns_exceeded: {err}",
-            model=settings.model,
+            model=model,
         )
     except PoggleAPIError as err:
         await client.report_progress(
@@ -494,7 +753,7 @@ async def _run_execute(payload: OperatorInput, settings: Settings) -> OperatorRe
             status="failed",
             notes_created=notes_created,
             error=f"poggle_api_error[{err.status}]: {err.message}",
-            model=settings.model,
+            model=model,
         )
     finally:
         await client.aclose()
@@ -507,6 +766,7 @@ async def _run_execute(payload: OperatorInput, settings: Settings) -> OperatorRe
 async def _run_full(payload: OperatorInput, settings: Settings) -> OperatorResult:
     """Phase 1 full flow — search + draft in a single pass."""
     client = _make_client(payload, settings)
+    model = _resolve_model(payload, settings)
 
     notes_created: list[str] = []
 
@@ -533,18 +793,36 @@ async def _run_full(payload: OperatorInput, settings: Settings) -> OperatorResul
         workspace_context_block=workspace_context,
     )
     run_config = RunConfig(
-        model=settings.model,
+        model=model,
         workflow_name="workspace_operator",
         group_id=payload.run_id,
     )
+    budget_hooks = _BudgetHooks(
+        max_input_tokens=payload.max_input_tokens,
+        max_output_tokens=payload.max_output_tokens,
+    )
 
     try:
+        # Wave 1 F — phase-boundary cancel check.
+        if await _was_cancelled(client, payload.run_id):
+            return OperatorResult(
+                run_id=payload.run_id,
+                status="cancelled",
+                notes_created=notes_created,
+                model=model,
+            )
         # See guardrails/max_tool_calls.py for the max_turns rationale.
-        run_result = await Runner.run(
-            agent,
-            payload.prompt,
-            max_turns=derive_max_turns(settings),
-            run_config=run_config,
+        async def _do_run():  # type: ignore[no-untyped-def]
+            return await Runner.run(
+                agent,
+                payload.prompt,
+                max_turns=derive_max_turns(settings),
+                run_config=run_config,
+                hooks=budget_hooks,
+            )
+
+        run_result = await _run_with_cancel_poll(
+            _do_run, client=client, run_id=payload.run_id
         )
         tool_calls = _count_tool_calls(run_result)
         usage = _extract_usage(run_result)
@@ -557,7 +835,25 @@ async def _run_full(payload: OperatorInput, settings: Settings) -> OperatorResul
             input_tokens=usage.get("input_tokens", 0),
             output_tokens=usage.get("output_tokens", 0),
             cached_input_tokens=usage.get("cached_input_tokens", 0),
-            model=settings.model,
+            model=model,
+        )
+    except OperatorCancelled:
+        log.info("[operator] full run %s cancelled by user", payload.run_id)
+        return OperatorResult(
+            run_id=payload.run_id,
+            status="cancelled",
+            notes_created=notes_created,
+            model=model,
+        )
+    except OperatorBudgetExceeded as err:
+        return OperatorResult(
+            run_id=payload.run_id,
+            status="failed",
+            notes_created=notes_created,
+            error="Per-run token budget exceeded",
+            input_tokens=err.used_input,
+            output_tokens=err.used_output,
+            model=model,
         )
     except OutputGuardrailTripwireTriggered as err:
         log.warning("[operator] cite guardrail tripped for run %s", payload.run_id)
@@ -567,7 +863,7 @@ async def _run_full(payload: OperatorInput, settings: Settings) -> OperatorResul
             notes_created=notes_created,
             tool_calls=0,
             error=f"cite_guardrail: {err}",
-            model=settings.model,
+            model=model,
         )
     except MaxTurnsExceeded as err:
         return OperatorResult(
@@ -576,7 +872,7 @@ async def _run_full(payload: OperatorInput, settings: Settings) -> OperatorResul
             notes_created=notes_created,
             tool_calls=settings.max_tool_calls,
             error=f"max_turns_exceeded: {err}",
-            model=settings.model,
+            model=model,
         )
     except PoggleAPIError as err:
         return OperatorResult(
@@ -585,7 +881,7 @@ async def _run_full(payload: OperatorInput, settings: Settings) -> OperatorResul
             notes_created=notes_created,
             tool_calls=0,
             error=f"poggle_api_error[{err.status}]: {err.message}",
-            model=settings.model,
+            model=model,
         )
     finally:
         await client.aclose()
@@ -597,6 +893,20 @@ async def _run_full(payload: OperatorInput, settings: Settings) -> OperatorResul
 
 async def run_operator(payload: OperatorInput, settings: Settings) -> OperatorResult:
     """Run one Operator invocation end-to-end and return a serializable result."""
+    # Wave 1 F — fail fast on unknown model ids before doing any setup work.
+    # `_resolve_model` is called again inside each mode but doing it here
+    # too means a typo'd dispatcher gets a clean error response, not a half-
+    # initialised tracing client.
+    try:
+        _resolve_model(payload, settings)
+    except ValueError as err:
+        return OperatorResult(
+            run_id=payload.run_id,
+            status="failed",
+            error=f"invalid_model: {err}",
+            model=payload.model or settings.model,
+        )
+
     # tracing: Phase 3 Agent 4 — pipe Agents-SDK spans into Poggle's activity feed.
     tracing_client = _make_client(payload, settings)
     tracing_handle = setup_tracing(tracing_client, payload.run_id)

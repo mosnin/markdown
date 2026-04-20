@@ -36,13 +36,26 @@ class OperatorInput(BaseModel):
     # guardrail in addition to the lexical one. The default (False)
     # preserves Phase 1/2 behaviour for callers that haven't migrated.
     must_cite_per_claim: bool = False
+    # Wave 1 F — optional model override. When None, the operator falls back
+    # to `Settings.model` (env-configured). The operator validates against
+    # `ALLOWED_OPERATOR_MODELS` and raises a clear error before doing any
+    # billable work if the value is unknown.
+    model: str | None = None
+    # Wave 1 F — per-run token budget. NULL/None means unlimited. Server-side
+    # enforcement of tier-based defaults is a Wave 2 concern; the agent only
+    # honours what the dispatcher passes in.
+    max_input_tokens: int | None = None
+    max_output_tokens: int | None = None
 
 
 class OperatorResult(BaseModel):
     """Final response returned to the Next.js service."""
 
     run_id: str
-    status: str  # "completed" | "failed"
+    # Wave 1 F adds "cancelled" — set when the run was aborted because the
+    # UI flipped `cancellation_requested_at`. The Next.js side maps it onto
+    # the workspace_operator_runs.status enum verbatim.
+    status: str  # "completed" | "failed" | "cancelled"
     notes_created: list[str] = Field(default_factory=list)
     tool_calls: int = 0
     error: str | None = None

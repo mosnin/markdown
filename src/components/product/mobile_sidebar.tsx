@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
+  Bot,
   ClipboardList,
   Home,
   Inbox,
@@ -38,6 +39,7 @@ const primaryNav = [
   { label: "Home", href: "/app", icon: Home },
   { label: "Search", href: "/app/search", icon: Search },
   { label: "Workspaces", href: "/app/workspaces", icon: LayoutGrid },
+  { label: "Operator", href: "/app/workspace_operator", icon: Bot },
   { label: "Proposals", href: "/app/proposals", icon: Inbox },
   { label: "Audit log", href: "/app/audit", icon: ClipboardList },
 ];

@@ -10,6 +10,14 @@ import os
 from dataclasses import dataclass
 
 
+# Models the server is willing to dispatch with. Keep this list intentionally
+# narrow — every entry has been priced + cost-estimated, and the cost
+# estimator in `workspace_operator_usage_service.ts` only knows how to map
+# these ids. Reject anything else with a clear ValueError early in the
+# operator (see `_resolve_model`).
+ALLOWED_OPERATOR_MODELS: tuple[str, ...] = ("gpt-4.1-mini", "gpt-4.1")
+
+
 @dataclass(frozen=True)
 class Settings:
     poggle_base_url: str

@@ -11,6 +11,7 @@ import {
   RotateCcw,
   Sparkles,
   BadgeAlert,
+  Save,
 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
@@ -24,14 +25,27 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { Spinner } from "@/components/ui/spinner";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 import { useOperatorProgress } from "@/lib/hooks/use_operator_run";
 import {
   requestOperatorPlanAction,
   approveAndExecuteAction,
+  cancelRunAction,
+  retryRunAction,
+  listSavedPromptsAction,
+  saveOperatorPromptAction,
   type ActionErrorQuotaExceeded,
 } from "@/app/app/workspace_operator/actions";
 import { loadOperatorQuotaAction } from "@/app/app/workspace_operator/quota_actions";
@@ -39,6 +53,14 @@ import type {
   OperatorPlanStep,
   OperatorRunPhase,
   OperatorProgressEvent,
+  SavedOperatorPrompt,
+  OperatorModel,
+} from "@/app/app/workspace_operator/types";
+import {
+  OPERATOR_MODELS,
+  DEFAULT_OPERATOR_MODEL,
+  estimateOperatorRunCost,
+  formatOperatorCostUsd,
 } from "@/app/app/workspace_operator/types";
 import type { WorkspacePlan } from "@/server/services/subscription_service";
 
@@ -144,6 +166,17 @@ export function OperatorPanel({
     useState<QuotaExceededState | null>(null);
   const [quotaPreview, setQuotaPreview] = useState<QuotaPreview | null>(null);
 
+  // Wave 2 — model picker, saved prompts, save dialog, cancel-in-flight.
+  const [selectedModel, setSelectedModel] = useState<OperatorModel>(
+    DEFAULT_OPERATOR_MODEL
+  );
+  const [savedPrompts, setSavedPrompts] = useState<SavedOperatorPrompt[]>([]);
+  const [saveDialogOpen, setSaveDialogOpen] = useState(false);
+  const [saveName, setSaveName] = useState("");
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [cancelling, setCancelling] = useState(false);
+  const [retrying, setRetrying] = useState(false);
+
   const [isPlanPending, startPlanTransition] = useTransition();
   const [isExecPending, startExecTransition] = useTransition();
 
@@ -178,8 +211,26 @@ export function OperatorPanel({
     };
   }, [open, phase]);
 
+  // Load saved prompts when the panel opens. Errors here are non-fatal —
+  // the dropdown just shows nothing and the user can still type free-form.
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    listSavedPromptsAction().then((res) => {
+      if (cancelled || !res.ok) return;
+      setSavedPrompts(res.data);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [open]);
+
   // -- derived ---------------------------------------------------------------
   const boxId = defaultBoxId ?? "";
+
+  // Pro/Business may opt into the bigger model. Free is locked to mini.
+  const canUseLargeModel =
+    quotaPreview?.tier === "pro" || quotaPreview?.tier === "business";
 
   // -- effects ---------------------------------------------------------------
 
@@ -232,6 +283,8 @@ export function OperatorPanel({
     setError(null);
     setResult(null);
     setQuotaExceeded(null);
+    setCancelling(false);
+    setRetrying(false);
   }
 
   function handleGeneratePlan() {
@@ -244,6 +297,7 @@ export function OperatorPanel({
       const res = await requestOperatorPlanAction({
         prompt: prompt.trim(),
         boxId,
+        model: selectedModel,
       });
 
       if (!res.ok) {
@@ -282,16 +336,19 @@ export function OperatorPanel({
     setPhase("executing");
 
     startExecTransition(async () => {
+      const editedSteps = steps.map((s) => ({
+        index: s.index,
+        description: s.description,
+        tool: s.tool,
+      }));
       const res = await approveAndExecuteAction({
         runId: runId!,
         branchId: branchId!,
         boxId,
         prompt: prompt.trim(),
-        steps: steps.map((s) => ({
-          index: s.index,
-          description: s.description,
-          tool: s.tool,
-        })),
+        steps: editedSteps,
+        editedSteps,
+        model: selectedModel,
       });
 
       if (!res.ok) {
@@ -330,10 +387,90 @@ export function OperatorPanel({
     });
   }
 
+  /**
+   * Real cancel — signals the Modal-side agent to stop via cancelRunAction.
+   *
+   * Optimistically transitions to "cancelled" after the action returns.
+   * The Python operator polls cancellation_requested_at and writes the
+   * final status; the panel's state is just a UI hint until then.
+   *
+   * If we have no runId yet (e.g. action hasn't returned the dispatch id),
+   * fall back to a local-only reset — there's nothing server-side to stop.
+   */
   function handleCancel() {
-    setPhase("cancelled");
-    // After a beat, reset so the user can start fresh.
-    setTimeout(reset, 0);
+    if (!runId) {
+      reset();
+      return;
+    }
+    setCancelling(true);
+    setError(null);
+    cancelRunAction(runId)
+      .then((res) => {
+        if (!res.ok) {
+          setError(actionErrorToString(res.error, "Failed to cancel."));
+          setCancelling(false);
+          return;
+        }
+        setPhase("cancelled");
+        setCancelling(false);
+        // Brief beat so the user sees the "cancelled" state, then reset.
+        setTimeout(reset, 1200);
+      })
+      .catch((err: unknown) => {
+        setError(err instanceof Error ? err.message : "Failed to cancel.");
+        setCancelling(false);
+      });
+  }
+
+  /**
+   * Retry a failed run — mints a new runs row server-side via retryRunAction
+   * and re-enters the planning/executing phase. The panel reseeds prompt +
+   * model + branch from the new row so the user can also edit before
+   * re-approving (when the original mode was "execute" or "plan").
+   */
+  function handleRetry() {
+    if (!runId) {
+      reset();
+      return;
+    }
+    setRetrying(true);
+    setError(null);
+    retryRunAction(runId)
+      .then((res) => {
+        if (!res.ok) {
+          setError(actionErrorToString(res.error, "Failed to retry."));
+          setRetrying(false);
+          return;
+        }
+        // Reseed from the new run row.
+        setRunId(res.data.newRunId);
+        setBranchId(res.data.branchId);
+        setPrompt(res.data.prompt);
+        if (res.data.model) {
+          setSelectedModel(
+            (OPERATOR_MODELS as readonly string[]).includes(res.data.model)
+              ? (res.data.model as OperatorModel)
+              : DEFAULT_OPERATOR_MODEL
+          );
+        }
+        setSteps([]);
+        setSummary("");
+        setResult(null);
+        setRetrying(false);
+        // For plan/execute modes: drop back to idle so the user can re-plan.
+        // For full mode: kick off a fresh plan automatically. Without
+        // auto-dispatch we'd silently strand the new run id; explicit
+        // re-plan keeps quota gating + audit consistent.
+        if (res.data.mode === "full" || res.data.mode === "plan") {
+          setPhase("idle");
+        } else {
+          setPhase("idle");
+        }
+      })
+      .catch((err: unknown) => {
+        setError(err instanceof Error ? err.message : "Failed to retry.");
+        setRetrying(false);
+      });
   }
 
   function handleStepDescriptionChange(index: number, value: string) {
@@ -342,11 +479,68 @@ export function OperatorPanel({
     );
   }
 
+  function handleSelectSavedPrompt(id: string) {
+    if (!id) return;
+    const found = savedPrompts.find((p) => p.id === id);
+    if (found) setPrompt(found.prompt.slice(0, MAX_PROMPT_LENGTH));
+  }
+
+  function handleOpenSaveDialog() {
+    if (!prompt.trim()) return;
+    setSaveError(null);
+    setSaveName("");
+    setSaveDialogOpen(true);
+  }
+
+  function handleSaveTemplate() {
+    if (!saveName.trim() || !prompt.trim()) {
+      setSaveError("Name and prompt are required.");
+      return;
+    }
+    setSaveError(null);
+    saveOperatorPromptAction({
+      name: saveName.trim(),
+      prompt: prompt.trim(),
+    }).then((res) => {
+      if (!res.ok) {
+        setSaveError(actionErrorToString(res.error, "Failed to save prompt."));
+        return;
+      }
+      setSavedPrompts((prev) => [res.data, ...prev]);
+      setSaveDialogOpen(false);
+    });
+  }
+
   // -- render helpers --------------------------------------------------------
 
   function renderIdle() {
     return (
       <div className="flex flex-1 flex-col gap-4 p-4">
+        {savedPrompts.length > 0 && (
+          <div className="flex flex-col gap-1.5">
+            <label
+              htmlFor="operator-saved-prompt"
+              className="text-xs font-medium text-muted-foreground"
+            >
+              Use saved prompt
+            </label>
+            <select
+              id="operator-saved-prompt"
+              value=""
+              onChange={(e) => handleSelectSavedPrompt(e.target.value)}
+              className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              aria-label="Use saved prompt"
+            >
+              <option value="">-- Pick a saved prompt --</option>
+              {savedPrompts.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+
         <div className="flex flex-col gap-1.5">
           <label
             htmlFor="operator-prompt"
@@ -365,17 +559,58 @@ export function OperatorPanel({
             className="min-h-28 resize-none"
             aria-describedby="prompt-char-count"
           />
-          <span
-            id="prompt-char-count"
-            className={cn(
-              "self-end text-xs tabular-nums",
-              prompt.length >= MAX_PROMPT_LENGTH
-                ? "text-destructive"
-                : "text-muted-foreground"
-            )}
+          <div className="flex items-center justify-between">
+            <button
+              type="button"
+              onClick={handleOpenSaveDialog}
+              disabled={!prompt.trim()}
+              className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <Save className="h-3 w-3" aria-hidden="true" />
+              Save as template
+            </button>
+            <span
+              id="prompt-char-count"
+              className={cn(
+                "text-xs tabular-nums",
+                prompt.length >= MAX_PROMPT_LENGTH
+                  ? "text-destructive"
+                  : "text-muted-foreground"
+              )}
+            >
+              {prompt.length}/{MAX_PROMPT_LENGTH}
+            </span>
+          </div>
+        </div>
+
+        <div className="flex flex-col gap-1.5">
+          <label
+            htmlFor="operator-model"
+            className="text-xs font-medium text-muted-foreground"
           >
-            {prompt.length}/{MAX_PROMPT_LENGTH}
-          </span>
+            Model
+          </label>
+          <select
+            id="operator-model"
+            value={selectedModel}
+            onChange={(e) => {
+              const v = e.target.value as OperatorModel;
+              if (v === "gpt-4.1" && !canUseLargeModel) return;
+              setSelectedModel(v);
+            }}
+            className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            aria-label="Operator model"
+          >
+            {OPERATOR_MODELS.map((m) => {
+              const locked = m === "gpt-4.1" && !canUseLargeModel;
+              return (
+                <option key={m} value={m} disabled={locked}>
+                  {m}
+                  {locked ? " — Pro+ only" : ""}
+                </option>
+              );
+            })}
+          </select>
         </div>
 
         {quotaPreview && (
@@ -508,17 +743,39 @@ export function OperatorPanel({
           </ol>
         </ScrollArea>
 
-        <div className="flex items-center gap-2">
-          <Button
-            onClick={handleApproveAndRun}
-            disabled={isExecPending || steps.length === 0}
+        <div className="flex flex-col gap-2">
+          <p
+            className="text-xs text-muted-foreground"
+            title="Worst-case estimate. Actual cost is usually lower because cached prompt tokens are billed at ~25% of the list rate and many steps complete in fewer than 500 output tokens."
           >
-            <Play className="h-4 w-4" aria-hidden="true" />
-            Approve &amp; Run
-          </Button>
-          <Button variant="outline" onClick={handleCancel}>
-            Cancel
-          </Button>
+            Estimated max cost:{" "}
+            <span className="font-medium tabular-nums text-foreground">
+              {formatOperatorCostUsd(
+                estimateOperatorRunCost(
+                  prompt.length,
+                  steps.length,
+                  selectedModel
+                )
+              )}
+            </span>{" "}
+            ({selectedModel})
+          </p>
+          <div className="flex items-center gap-2">
+            <Button
+              onClick={handleApproveAndRun}
+              disabled={isExecPending || steps.length === 0}
+            >
+              <Play className="h-4 w-4" aria-hidden="true" />
+              Approve &amp; Run
+            </Button>
+            <Button
+              variant="outline"
+              onClick={handleCancel}
+              disabled={cancelling}
+            >
+              {cancelling ? "Cancelling..." : "Cancel"}
+            </Button>
+          </div>
         </div>
       </div>
     );
@@ -563,6 +820,16 @@ export function OperatorPanel({
           </ul>
           <div ref={eventsEndRef} />
         </ScrollArea>
+
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={handleCancel}
+          disabled={cancelling}
+          className="self-start"
+        >
+          {cancelling ? "Cancelling..." : "Cancel run"}
+        </Button>
       </div>
     );
   }
@@ -615,9 +882,29 @@ export function OperatorPanel({
           )}
         </div>
 
+        <div className="flex items-center gap-2">
+          {runId && (
+            <Button onClick={handleRetry} disabled={retrying}>
+              <RotateCcw className="h-4 w-4" aria-hidden="true" />
+              {retrying ? "Retrying..." : "Retry"}
+            </Button>
+          )}
+          <Button variant="outline" onClick={reset}>
+            Start over
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  function renderCancelled() {
+    return (
+      <div className="flex flex-1 flex-col items-center justify-center gap-4 p-4 text-center">
+        <XCircle className="h-10 w-10 text-amber-500" />
+        <p className="text-sm font-medium text-foreground">Run cancelled</p>
         <Button variant="outline" onClick={reset}>
           <RotateCcw className="h-4 w-4" aria-hidden="true" />
-          Try Again
+          Start over
         </Button>
       </div>
     );
@@ -639,6 +926,8 @@ export function OperatorPanel({
         return renderCompleted();
       case "failed":
         return renderFailed();
+      case "cancelled":
+        return renderCancelled();
       case "quota_exceeded":
         return renderQuotaExceeded();
       default:
@@ -649,27 +938,72 @@ export function OperatorPanel({
   // -- main render -----------------------------------------------------------
 
   return (
-    <Sheet open={open} onOpenChange={(o) => onOpenChange(o)}>
-      <SheetContent
-        side="right"
-        className="flex w-full flex-col sm:max-w-[480px]"
-        aria-describedby="operator-panel-desc"
-      >
-        <SheetHeader>
-          <SheetTitle className="flex items-center gap-2">
-            <Bot className="h-5 w-5" aria-hidden="true" />
-            Workspace Operator
-          </SheetTitle>
-          <SheetDescription id="operator-panel-desc">
-            Plan, review, and execute AI-powered workspace operations.
-          </SheetDescription>
-        </SheetHeader>
+    <>
+      <Sheet open={open} onOpenChange={(o) => onOpenChange(o)}>
+        <SheetContent
+          side="right"
+          className="flex w-full flex-col sm:max-w-[480px]"
+          aria-describedby="operator-panel-desc"
+        >
+          <SheetHeader>
+            <SheetTitle className="flex items-center gap-2">
+              <Bot className="h-5 w-5" aria-hidden="true" />
+              Workspace Operator
+            </SheetTitle>
+            <SheetDescription id="operator-panel-desc">
+              Plan, review, and execute AI-powered workspace operations.
+            </SheetDescription>
+          </SheetHeader>
 
-        <Separator />
+          <Separator />
 
-        {renderBody()}
-      </SheetContent>
-    </Sheet>
+          {renderBody()}
+        </SheetContent>
+      </Sheet>
+
+      <Dialog open={saveDialogOpen} onOpenChange={setSaveDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Save as template</DialogTitle>
+            <DialogDescription>
+              Save this prompt for one-click reuse later.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col gap-2">
+            <label
+              htmlFor="operator-save-name"
+              className="text-xs font-medium text-muted-foreground"
+            >
+              Name
+            </label>
+            <Input
+              id="operator-save-name"
+              value={saveName}
+              onChange={(e) => setSaveName(e.target.value.slice(0, 80))}
+              placeholder="e.g. Weekly competitive brief"
+              maxLength={80}
+            />
+            {saveError && (
+              <p className="text-xs text-destructive">{saveError}</p>
+            )}
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setSaveDialogOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleSaveTemplate}
+              disabled={!saveName.trim() || !prompt.trim()}
+            >
+              Save
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
 
@@ -691,6 +1025,20 @@ function isQuotaError(
     err !== null &&
     (err as { code?: unknown }).code === "quota_exceeded"
   );
+}
+
+/**
+ * Coerce an `ActionResult` error (string | structured) into a flat string
+ * suitable for `setError`. Quota errors carry a `.message`; plain string
+ * errors pass through verbatim.
+ */
+function actionErrorToString(
+  err: string | ActionErrorQuotaExceeded | undefined | null,
+  fallback: string
+): string {
+  if (err == null) return fallback;
+  if (typeof err === "string") return err;
+  return err.message ?? fallback;
 }
 
 function formatResetDate(iso: string): string {

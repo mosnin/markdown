@@ -60,6 +60,16 @@ export interface WorkspaceOperatorRunRow {
   cached_input_tokens: number;
   /** Model id that actually served the run (e.g. "gpt-4.1-mini"). */
   model: string | null;
+  /**
+   * When non-null, the UI has requested cancellation. The Python operator
+   * polls `/api/agent/operator/check_cancel` between phases and aborts when
+   * this flips. (Wave 1 F)
+   */
+  cancellation_requested_at: string | null;
+  /** Optional per-run input-token cap. NULL = unlimited. (Wave 1 F) */
+  max_input_tokens: number | null;
+  /** Optional per-run output-token cap. NULL = unlimited. (Wave 1 F) */
+  max_output_tokens: number | null;
   created_at: string;
   updated_at: string;
 }
@@ -70,6 +80,12 @@ export interface CreateOperatorRunInput {
   branchId?: string | null;
   prompt: string;
   mode: OperatorRunMode;
+  /** Optional model id (e.g. "gpt-4.1-mini"). Recorded on the row at create time. */
+  model?: string | null;
+  /** Optional per-run input-token cap. */
+  maxInputTokens?: number | null;
+  /** Optional per-run output-token cap. */
+  maxOutputTokens?: number | null;
 }
 
 export interface UpdateOperatorRunPatch {
@@ -89,6 +105,12 @@ export interface UpdateOperatorRunPatch {
   cachedInputTokens?: number;
   /** Model id that served the run (Phase 4). */
   model?: string | null;
+  /** ISO timestamp when cancellation was requested (Wave 1 F). */
+  cancellationRequestedAt?: string | null;
+  /** Per-run input-token cap (Wave 1 F). */
+  maxInputTokens?: number | null;
+  /** Per-run output-token cap (Wave 1 F). */
+  maxOutputTokens?: number | null;
 }
 
 export interface ListOperatorRunsParams {
@@ -125,16 +147,23 @@ export async function createOperatorRun(
   const prompt = input.prompt.trim();
   if (!prompt) throw new Error("Prompt is required");
 
+  const insertPayload: Record<string, unknown> = {
+    workspace_id: input.workspaceId,
+    user_id: input.userId,
+    branch_id: input.branchId ?? null,
+    prompt,
+    mode: input.mode,
+    status: "queued",
+  };
+  if (input.model !== undefined) insertPayload.model = input.model;
+  if (input.maxInputTokens !== undefined)
+    insertPayload.max_input_tokens = input.maxInputTokens;
+  if (input.maxOutputTokens !== undefined)
+    insertPayload.max_output_tokens = input.maxOutputTokens;
+
   const { data, error } = await supabase
     .from("workspace_operator_runs")
-    .insert({
-      workspace_id: input.workspaceId,
-      user_id: input.userId,
-      branch_id: input.branchId ?? null,
-      prompt,
-      mode: input.mode,
-      status: "queued",
-    })
+    .insert(insertPayload)
     .select("*")
     .single();
 
@@ -169,6 +198,12 @@ export async function updateOperatorRun(
   if (patch.cachedInputTokens !== undefined)
     update.cached_input_tokens = patch.cachedInputTokens;
   if (patch.model !== undefined) update.model = patch.model;
+  if (patch.cancellationRequestedAt !== undefined)
+    update.cancellation_requested_at = patch.cancellationRequestedAt;
+  if (patch.maxInputTokens !== undefined)
+    update.max_input_tokens = patch.maxInputTokens;
+  if (patch.maxOutputTokens !== undefined)
+    update.max_output_tokens = patch.maxOutputTokens;
 
   if (Object.keys(update).length === 0) {
     const existing = await getOperatorRun(supabase, runId);
