@@ -21,7 +21,7 @@ async function fetchSubscriptionRows(): Promise<SubscriptionRow[]> {
   const { data: subs, error: subsError } = await adminClient
     .from("workspace_subscriptions")
     .select(
-      "workspace_id, plan, status, current_period_end, creem_subscription_id, manually_overridden"
+      "workspace_id, plan, status, current_period_end, creem_subscription_id, manually_overridden, override_operator_quota"
     )
     .order("workspace_id");
 
@@ -61,17 +61,19 @@ async function fetchSubscriptionRows(): Promise<SubscriptionRow[]> {
       current_period_end: string | null;
       creem_subscription_id: string | null;
       manually_overridden: boolean | null;
+      override_operator_quota: boolean | null;
     }) => {
       const ws = wsMap.get(sub.workspace_id);
       return {
         workspace_id: sub.workspace_id,
         workspace_name: ws?.name ?? sub.workspace_id,
         owner_email: ws ? (emailMap.get(ws.owner_id) ?? "—") : "—",
-        plan: (sub.plan as "free" | "pro") ?? "free",
+        plan: (sub.plan as SubscriptionRow["plan"]) ?? "free",
         status: (sub.status as SubscriptionRow["status"]) ?? null,
         current_period_end: sub.current_period_end,
         creem_subscription_id: sub.creem_subscription_id,
         manually_overridden: sub.manually_overridden ?? false,
+        override_operator_quota: sub.override_operator_quota ?? false,
       };
     }
   );
@@ -111,6 +113,7 @@ export default async function SubscriptionsPage() {
 
   // ── Summary stats ──────────────────────────────────────────────────────────
   const proCount = rows.filter((r) => r.plan === "pro").length;
+  const businessCount = rows.filter((r) => r.plan === "business").length;
   const mrr = proCount * PRO_MONTHLY_PRICE_USD;
   const activeCount = rows.filter((r) => r.status === "active").length;
   const cancelledCount = rows.filter((r) => r.status === "cancelled").length;
@@ -127,8 +130,9 @@ export default async function SubscriptionsPage() {
       </div>
 
       {/* Summary stats */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-6">
         <StatCard label="Pro subscribers" value={proCount} />
+        <StatCard label="Business subscribers" value={businessCount} />
         <StatCard
           label="MRR"
           value={`$${mrr.toLocaleString()}`}

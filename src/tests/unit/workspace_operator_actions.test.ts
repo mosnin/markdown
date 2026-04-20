@@ -70,6 +70,25 @@ vi.mock("@/server/repositories/audit_event_repository", () => ({
   createAuditEvent: vi.fn(() => Promise.resolve()),
 }));
 
+// Phase 4: every action now gates on checkOperatorQuota before doing
+// any work. The default mock returns `allowed: true` so the existing
+// happy-path tests keep passing; the quota_exceeded test below
+// re-mocks to `allowed: false`.
+vi.mock("@/server/services/workspace_operator_quota_service", () => ({
+  OPERATOR_TIER_LIMITS: { free: 5, pro: 50, business: 500 },
+  checkOperatorQuota: vi.fn(() =>
+    Promise.resolve({
+      tier: "free",
+      limit: 5,
+      used: 0,
+      remaining: 5,
+      allowed: true,
+      resetsAt: new Date(Date.UTC(2026, 4, 1, 0, 0, 0)),
+    })
+  ),
+  firstOfNextMonthUTC: vi.fn(() => new Date(Date.UTC(2026, 4, 1, 0, 0, 0))),
+}));
+
 vi.mock("@/server/services/workspace_operator_service", () => ({
   dispatchOperatorRun: vi.fn(),
   dispatchOperatorPlan: vi.fn(() =>
@@ -100,6 +119,7 @@ import {
 import { isWorkspaceOperatorEnabled } from "@/lib/env";
 import { getRequestContext } from "@/server/auth/get_request_context";
 import { dispatchOperatorExecute } from "@/server/services/workspace_operator_service";
+import { checkOperatorQuota } from "@/server/services/workspace_operator_quota_service";
 
 // ---------------------------------------------------------------------------
 // requestOperatorPlanAction
@@ -306,5 +326,104 @@ describe("approveAndExecuteAction", () => {
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.error).toMatch(/Unauthenticated/);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Phase 4: quota gating
+// ---------------------------------------------------------------------------
+
+describe("operator actions — quota gate", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(isWorkspaceOperatorEnabled).mockReturnValue(true);
+    vi.mocked(getRequestContext).mockResolvedValue({
+      isAuthenticated: true,
+      user: { id: "user-1", email: "user@example.com" },
+      workspace: { id: "ws-1" },
+    } as any);
+    // Unset ADMIN_EMAILS so the user isn't flagged as an admin bypass.
+    delete process.env.ADMIN_EMAILS;
+  });
+
+  it("requestOperatorPlanAction returns a structured quota_exceeded error when the user is over the cap", async () => {
+    vi.mocked(checkOperatorQuota).mockResolvedValueOnce({
+      tier: "free",
+      limit: 5,
+      used: 5,
+      remaining: 0,
+      allowed: false,
+      resetsAt: new Date(Date.UTC(2026, 4, 1, 0, 0, 0)),
+    });
+
+    const result = await requestOperatorPlanAction({
+      prompt: "Draft a brief",
+      boxId: "box-1",
+    });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    // Structured error (not a bare string) so the UI can swap phases.
+    expect(typeof result.error).toBe("object");
+    const err = result.error as { code: string; tier: string; limit: number | null; resetsAt: string };
+    expect(err.code).toBe("quota_exceeded");
+    expect(err.tier).toBe("free");
+    expect(err.limit).toBe(5);
+    expect(typeof err.resetsAt).toBe("string");
+  });
+
+  it("approveAndExecuteAction blocks with quota_exceeded before dispatching", async () => {
+    vi.mocked(checkOperatorQuota).mockResolvedValueOnce({
+      tier: "pro",
+      limit: 50,
+      used: 50,
+      remaining: 0,
+      allowed: false,
+      resetsAt: new Date(Date.UTC(2026, 4, 1, 0, 0, 0)),
+    });
+
+    const result = await approveAndExecuteAction({
+      runId: "run-1",
+      branchId: "branch-1",
+      boxId: "box-1",
+      prompt: "Go",
+      steps: [
+        { index: 0, description: "Search context", tool: "hybrid_search" },
+      ],
+    });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    const err = result.error as { code: string; tier: string };
+    expect(err.code).toBe("quota_exceeded");
+    expect(err.tier).toBe("pro");
+    // Dispatch must NOT happen when the quota gate denied the request.
+    expect(dispatchOperatorExecute).not.toHaveBeenCalled();
+  });
+
+  it("admin callers bypass the quota check (ADMIN_EMAILS allow-list)", async () => {
+    process.env.ADMIN_EMAILS = "admin@example.com";
+    vi.mocked(getRequestContext).mockResolvedValue({
+      isAuthenticated: true,
+      user: { id: "admin-1", email: "admin@example.com" },
+      workspace: { id: "ws-1" },
+    } as any);
+    // If the admin bypass didn't work this would flip the action to a
+    // quota error; we confirm it's *ignored* by watching the happy path.
+    vi.mocked(checkOperatorQuota).mockResolvedValueOnce({
+      tier: "free",
+      limit: 5,
+      used: 99,
+      remaining: 0,
+      allowed: false,
+      resetsAt: new Date(Date.UTC(2026, 4, 1, 0, 0, 0)),
+    });
+
+    const result = await requestOperatorPlanAction({
+      prompt: "Draft a brief",
+      boxId: "box-1",
+    });
+
+    expect(result.ok).toBe(true);
   });
 });

@@ -18,7 +18,8 @@ export type OperatorRunPhase =
   | "executing"
   | "completed"
   | "failed"
-  | "cancelled";
+  | "cancelled"
+  | "quota_exceeded";
 
 export interface OperatorProgressEvent {
   run_id: string;

@@ -48,6 +48,15 @@ class OperatorResult(BaseModel):
     error: str | None = None
     plan: PlanResult | None = None  # populated when mode="plan"
 
+    # Phase 4 — token usage capture. These power per-workspace cost/quota
+    # tracking (Agent A) and cache-hit-rate observability. `cached_input_tokens`
+    # is the portion of `input_tokens` OpenAI billed at the cached rate; it is
+    # a subset of input_tokens, not a separate category.
+    input_tokens: int = 0
+    output_tokens: int = 0
+    cached_input_tokens: int = 0
+    model: str | None = None
+
 
 class SearchResult(BaseModel):
     note_id: str

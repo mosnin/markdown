@@ -167,6 +167,17 @@ class PoggleClient:
             {"url": url},
         )
 
+    async def fetch_workspace_context(self) -> dict[str, Any]:
+        """Fetch deterministic workspace metadata for prompt-cache prefixes.
+
+        Returns `{ workspace_name, boxes: [{id, name, note_count}, ...] }` with
+        boxes sorted deterministically server-side so the same workspace
+        always renders to the same bytes. Used by
+        `operator._build_workspace_context_block` when it wants richer context
+        than the bare envelope.
+        """
+        return await self._post("/api/agent/tools/workspace_context", {})
+
     async def report_progress(
         self,
         *,

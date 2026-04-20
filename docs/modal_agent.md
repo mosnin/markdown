@@ -168,16 +168,68 @@ preferences, and SDK tracing wired into the activity feed.
 Not yet: Modal deployed to staging, end-to-end smoke test against a
 live workspace, history page filters/search.
 
-### ⏳ Phase 4 — Billing + launch
+### ✅ Phase 4 — Billing + launch (shipped)
 
-- Stripe metered billing keyed on run count
-- Rate limiter: quota per tier (Free 5/mo, Pro 50/user/mo, Business
-  500/user/mo)
-- Prompt-cache tuning (OpenAI auto-caching relies on byte-identical
-  prefixes — enforce invariant that workspace context appears after
-  stable system prompt)
-- 20 design partner teams onboarded
-- Public launch demo: "Write a competitive brief in 90 seconds"
+Per-tier quotas, metered usage with cost accounting, prompt-cache
+tuning for OpenAI auto-caching, and Business tier.
+
+- Billing substrate is **Creem** (not Stripe as the original sketch
+  suggested — repo has been on Creem since Phase 0). Phase 4 adapts
+  the plan accordingly: per-run metering is stored locally
+  (`workspace_operator_usage`) and can be wired to Creem usage events
+  later without schema churn.
+- Business tier added to `workspace_subscriptions.plan` CHECK
+  constraint. `isProWorkspace` now covers both `pro` and `business`;
+  new `isBusinessWorkspace` helper. `.env.example` documents
+  `CREEM_BUSINESS_PRODUCT_ID`.
+- Quotas per tier (`OPERATOR_TIER_LIMITS`):
+  - **Free**: 5 runs/month per workspace (shared across members)
+  - **Pro**: 50 runs/month per user
+  - **Business**: 500 runs/month per user
+  - Admins bypass via `ADMIN_EMAILS` (shared with `requireAdmin.ts`)
+  - Per-workspace override via new `override_operator_quota` column on
+    `workspace_subscriptions`, toggled from admin UI
+  - `resetsAt` = first of next month UTC
+- `workspace_operator_quota_service.checkOperatorQuota({ userId,
+  workspaceId })` — checked at the top of every operator action
+  before `createOperatorRun`, so denied runs leave no row and cannot
+  double-charge.
+- `workspace_operator_usage` table — monthly rollup per
+  `(workspace_id, user_id, month)` with `run_count`, `tool_call_count`,
+  `input_token_count`, `output_token_count`, `estimated_cost_cents`.
+  Service-role writes only; members can SELECT.
+- Cost model: hardcoded per-model rates (gpt-4.1-mini at $0.4/M input
+  / $1.6/M output, gpt-4.1 at $2/M / $8/M, fallback to mini). Rounded
+  up to cents.
+- Prompt-cache tuning:
+  - `CONTEXT_VERSION` string + `_build_workspace_context_block` helper
+    produces a byte-deterministic workspace context suffix appended
+    after `SYSTEM_PROMPT`, so the combined prefix is identical across
+    runs in the same workspace → qualifies for OpenAI auto-cache.
+  - New `/api/agent/tools/workspace_context` endpoint exposes a
+    deterministic workspace summary (alphabetically sorted boxes) to
+    the agent when we want richer context.
+  - Token usage capture — `Runner.run`'s `RunResult.context_wrapper.
+    usage` (confirmed in SDK source) surfaces
+    `input_tokens`/`output_tokens` and cached-token counts via
+    `input_tokens_details.cached_tokens`. These flow into
+    `OperatorResult` → `workspace_operator_runs` (new columns) →
+    `workspace_operator_usage` rollup → billing UI.
+- Billing UI: new "Workspace Operator usage" subsection under
+  BillingSection — runs this month, tool calls, total tokens,
+  estimated cost. Shows `X / Y` when a tier limit applies, `Unlimited`
+  otherwise.
+- Operator panel: new `quota_exceeded` phase — preloads quota on
+  mount, disables Run button at limit, renders a panel with reset
+  date + "Upgrade plan" CTA (hidden for business tier).
+- Admin: new `/admin/operator_usage` page sorted by estimated cost
+  desc; per-workspace quota override toggle on the subscriptions
+  admin table; Business plan row + stat card.
+- 56 new vitest cases (955/955 passing), 13 new pytest cases (79/80
+  passing — same Phase 1 cite-guardrail false-positive).
+
+Not yet: Creem metered-event sync, design partner onboarding, public
+launch demo (these are product/biz rather than code tasks).
 
 ## Operational notes
 
@@ -209,11 +261,10 @@ Cost is dominated by LLM tokens, not Modal containers.
   added progress callbacks via `/api/agent/tools/progress` + Supabase
   Realtime broadcast. Still synchronous dispatch (action blocks until
   completion) but UI receives live updates via broadcast channel.
-- [ ] Cost accounting — no per-run token cost capture yet. Needed for
-  Phase 4 billing. (Phase 3 tracing captures span counts and durations
-  but not token usage; the Agents SDK exposes usage on
-  `RunResult.context_wrapper.usage` — wire that into
-  `workspace_operator_runs` next.)
+- [x] Cost accounting — ~~no per-run token cost capture yet~~ Phase 4
+  wires `RunResult.context_wrapper.usage` into `workspace_operator_runs`
+  + `workspace_operator_usage` rollup + billing UI. Cost model is
+  hardcoded; Creem metered-event sync is the next billing step.
 - [ ] No end-to-end smoke test against a deployed Modal endpoint.
   Staging deploy is next step.
 - [ ] Operator panel not yet wired into the app layout (needs
@@ -223,3 +274,12 @@ Cost is dominated by LLM tokens, not Modal containers.
 - [ ] Activity feed broadcast is best-effort only (fire-and-forget POST
   + Realtime); no replay if the broadcast lands while no client is
   subscribed. Audit row is durable, but UI must reload to see history.
+- [ ] Creem metered-event sync — Phase 4 stores usage locally but does
+  not emit metered billing events to Creem. Add once Creem exposes an
+  API for per-workspace usage reporting.
+- [ ] Design partner onboarding + public launch demo ("Write a
+  competitive brief in 90 seconds") — product/biz work, not code.
+- [ ] `fetch_workspace_context` endpoint is wired on both sides but
+  currently unused — Phase 4 context block uses envelope fields only
+  (fast + deterministic). Enable once we've measured cache benefit vs.
+  added per-run latency.

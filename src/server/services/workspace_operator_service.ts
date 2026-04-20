@@ -37,6 +37,21 @@ export interface OperatorRunResult {
   notes_created: string[];
   tool_calls: number;
   error?: string | null;
+  /**
+   * Token usage reported by the Modal agent. Phase 4-Agent-C adds these
+   * fields to the Python side; until that ships they'll be undefined and
+   * the usage service treats them as zero. Consumers should never rely
+   * on these being present — coalesce with `?? 0` at the call site.
+   */
+  input_tokens?: number;
+  output_tokens?: number;
+  /**
+   * Portion of input_tokens OpenAI billed at the cached rate. Subset of
+   * input_tokens, not a separate category. Used for cache-hit-rate observability.
+   */
+  cached_input_tokens?: number;
+  /** Model id used for the run — feeds cost estimation. Optional. */
+  model?: string;
 }
 
 const DEFAULT_TIMEOUT_MS = 120_000;
@@ -109,6 +124,15 @@ export async function dispatchOperatorRun(
       notes_created: Array.isArray(payload.notes_created) ? payload.notes_created : [],
       tool_calls: typeof payload.tool_calls === "number" ? payload.tool_calls : 0,
       error: payload.error ?? null,
+      input_tokens:
+        typeof payload.input_tokens === "number" ? payload.input_tokens : undefined,
+      output_tokens:
+        typeof payload.output_tokens === "number" ? payload.output_tokens : undefined,
+      cached_input_tokens:
+        typeof payload.cached_input_tokens === "number"
+          ? payload.cached_input_tokens
+          : undefined,
+      model: typeof payload.model === "string" ? payload.model : undefined,
     };
   } finally {
     clearTimeout(timer);
@@ -251,6 +275,15 @@ export async function dispatchOperatorExecute(
       notes_created: Array.isArray(result.notes_created) ? result.notes_created : [],
       tool_calls: typeof result.tool_calls === "number" ? result.tool_calls : 0,
       error: result.error ?? null,
+      input_tokens:
+        typeof result.input_tokens === "number" ? result.input_tokens : undefined,
+      output_tokens:
+        typeof result.output_tokens === "number" ? result.output_tokens : undefined,
+      cached_input_tokens:
+        typeof result.cached_input_tokens === "number"
+          ? result.cached_input_tokens
+          : undefined,
+      model: typeof result.model === "string" ? result.model : undefined,
     };
   } finally {
     clearTimeout(timer);

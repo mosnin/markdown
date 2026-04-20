@@ -72,6 +72,27 @@ const NAV_ITEMS = [
     ),
   },
   {
+    label: "Operator Usage",
+    href: "/admin/operator_usage",
+    icon: (
+      <svg
+        xmlns="http://www.w3.org/2000/svg"
+        width="15"
+        height="15"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        aria-hidden="true"
+      >
+        <path d="M3 3v18h18" />
+        <path d="M7 14l4-4 4 4 6-6" />
+      </svg>
+    ),
+  },
+  {
     label: "Audit Log",
     href: "/admin/audit-log",
     icon: (

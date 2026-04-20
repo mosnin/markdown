@@ -464,6 +464,14 @@ function UsageBar({
   );
 }
 
+export interface OperatorUsageSummaryProps {
+  runCount: number;
+  toolCallCount: number;
+  inputTokenCount: number;
+  outputTokenCount: number;
+  estimatedCostCents: number;
+}
+
 export function BillingSection({
   plan,
   subscriptionStatus,
@@ -471,6 +479,8 @@ export function BillingSection({
   noteMax,
   boxCount,
   boxMax,
+  operatorUsage,
+  operatorRunLimit,
 }: {
   plan: WorkspacePlan;
   subscriptionStatus: string | null;
@@ -478,6 +488,14 @@ export function BillingSection({
   noteMax: number;
   boxCount: number;
   boxMax: number;
+  /** Current-month Workspace Operator usage rollup. Optional so older callers still compile. */
+  operatorUsage?: OperatorUsageSummaryProps;
+  /**
+   * Per-tier run limit for the Workspace Operator. Null means "unknown /
+   * unlimited" — surfaced as just the count with no denominator.
+   * Populated by Agent B's tier-enforcement work.
+   */
+  operatorRunLimit?: number | null;
 }) {
   const [checkoutPending, setCheckoutPending] = useState(false);
   const [portalPending, setPortalPending] = useState(false);
@@ -560,15 +578,19 @@ export function BillingSection({
         )}
 
         {/* Current plan */}
-        {plan === "pro" ? (
+        {plan === "pro" || plan === "business" ? (
           <div className="flex items-start justify-between gap-4 rounded-lg border border-border bg-muted/30 p-4">
             <div className="flex flex-col gap-1">
               <div className="flex items-center gap-2">
-                <p className="text-sm font-semibold text-foreground">Pro plan</p>
+                <p className="text-sm font-semibold text-foreground">
+                  {plan === "business" ? "Business plan" : "Pro plan"}
+                </p>
                 <Badge variant="secondary" className="text-xs">Active</Badge>
               </div>
               <p className="text-sm text-muted-foreground">
-                Unlimited notes and boxes. $12&nbsp;/&nbsp;month.
+                {plan === "business"
+                  ? "Unlimited notes and boxes. Team features and high operator quota."
+                  : "Unlimited notes and boxes. $12\u00a0/\u00a0month."}
               </p>
             </div>
             <Button
@@ -631,8 +653,119 @@ export function BillingSection({
             </div>
           </>
         )}
+
+        {/*
+          Workspace Operator metered usage — populated by the
+          workspace_operator_usage rollup table. The run-limit denominator
+          is optional; Agent B's tier work fills it in once Business /
+          tier-specific quotas ship. Rendering is unconditional so users
+          can see usage on free and paid plans alike.
+        */}
+        {operatorUsage && (
+          <OperatorUsageSubsection
+            usage={operatorUsage}
+            runLimit={operatorRunLimit ?? null}
+          />
+        )}
       </CardContent>
     </Card>
+  );
+}
+
+/**
+ * Workspace Operator usage subsection of the Billing card. Rendered under
+ * the plan-specific block (free usage bars / pro "Manage billing" control)
+ * so it's visible on every tier.
+ *
+ * Values are current-month aggregates summed across every user of the
+ * workspace. Cost is a best-effort estimate based on the pricing table in
+ * `workspace_operator_usage_service.MODEL_PRICING`.
+ */
+export function OperatorUsageSubsection({
+  usage,
+  runLimit,
+}: {
+  usage: OperatorUsageSummaryProps;
+  runLimit: number | null;
+}) {
+  const totalTokens = usage.inputTokenCount + usage.outputTokenCount;
+  const runsLabel =
+    runLimit != null
+      ? `${usage.runCount} / ${runLimit}`
+      : `${usage.runCount}`;
+
+  // Format cents as USD with two decimal places. Values under $0.01 are
+  // shown as "< $0.01" rather than "$0.00" so we don't imply free usage.
+  const dollars = usage.estimatedCostCents / 100;
+  const costLabel =
+    usage.estimatedCostCents === 0
+      ? "$0.00"
+      : dollars < 0.01
+        ? "< $0.01"
+        : `$${dollars.toFixed(2)}`;
+
+  return (
+    <div
+      data-testid="operator-usage-subsection"
+      className="flex flex-col gap-3 rounded-lg border border-border bg-muted/30 p-4"
+    >
+      <div className="flex flex-col gap-1">
+        <p className="text-sm font-semibold text-foreground">
+          Workspace Operator usage
+        </p>
+        <p className="text-xs text-muted-foreground">
+          Current month totals across all members of this workspace.
+        </p>
+      </div>
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <OperatorUsageStat
+          label="Runs"
+          value={runsLabel}
+          hint={runLimit == null ? "Unlimited" : undefined}
+        />
+        <OperatorUsageStat
+          label="Tool calls"
+          value={`${usage.toolCallCount}`}
+        />
+        <OperatorUsageStat
+          label="Tokens"
+          value={`${totalTokens}`}
+          hint={
+            totalTokens > 0
+              ? `${usage.inputTokenCount} in / ${usage.outputTokenCount} out`
+              : undefined
+          }
+        />
+        <OperatorUsageStat label="Estimated cost" value={costLabel} />
+      </div>
+    </div>
+  );
+}
+
+function OperatorUsageStat({
+  label,
+  value,
+  hint,
+}: {
+  label: string;
+  value: string;
+  hint?: string;
+}) {
+  return (
+    <div
+      className="flex flex-col gap-0.5"
+      title={hint}
+    >
+      <span className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+        {label}
+      </span>
+      <span className="text-sm font-semibold tabular-nums text-foreground">
+        {value}
+      </span>
+      {hint && (
+        <span className="text-[11px] text-muted-foreground">{hint}</span>
+      )}
+    </div>
   );
 }
 

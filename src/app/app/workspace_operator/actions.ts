@@ -14,13 +14,101 @@ import {
   createOperatorRun,
   updateOperatorRun,
 } from "@/server/services/workspace_operator_runs_service";
+import { recordOperatorUsage } from "@/server/services/workspace_operator_usage_service";
+import {
+  checkOperatorQuota,
+  type OperatorQuota,
+} from "@/server/services/workspace_operator_quota_service";
+import type { WorkspacePlan } from "@/server/services/subscription_service";
 import type { OperatorPlanStep } from "./types";
 import { isWorkspaceOperatorEnabled } from "@/lib/env";
 import { createAuditEvent } from "@/server/repositories/audit_event_repository";
+import type { SupabaseClient, User } from "@supabase/supabase-js";
+
+/**
+ * Structured error body returned when a run is denied by the per-tier
+ * Operator quota. The Operator panel uses the `code === "quota_exceeded"`
+ * discriminator to swap into its quota-exceeded phase and render the
+ * resetsAt / upgrade-plan CTA.
+ */
+export interface ActionErrorQuotaExceeded {
+  code: "quota_exceeded";
+  message: string;
+  tier: WorkspacePlan;
+  limit: number | null;
+  used: number;
+  /** ISO string — safe to JSON-serialize back to the client. */
+  resetsAt: string;
+}
 
 type ActionResult<T> =
   | { ok: true; data: T }
-  | { ok: false; error: string };
+  | { ok: false; error: string }
+  | { ok: false; error: ActionErrorQuotaExceeded };
+
+function quotaErrorResult(quota: OperatorQuota): {
+  ok: false;
+  error: ActionErrorQuotaExceeded;
+} {
+  const label =
+    quota.tier === "business"
+      ? "Business"
+      : quota.tier === "pro"
+        ? "Pro"
+        : "Free";
+  return {
+    ok: false,
+    error: {
+      code: "quota_exceeded",
+      message: `You've used all ${quota.limit ?? "\u221e"} Operator runs on the ${label} tier this month.`,
+      tier: quota.tier,
+      limit: quota.limit,
+      used: quota.used,
+      resetsAt: quota.resetsAt.toISOString(),
+    },
+  };
+}
+
+/**
+ * Admin users (set via ADMIN_EMAILS) bypass the quota check entirely —
+ * they already bypass every other product surface and are the people
+ * most likely to be diagnosing a quota regression. Matches the same
+ * source-of-truth list used by `requireAdmin` so the two never drift.
+ */
+function isAdminEmail(email: string | null | undefined): boolean {
+  if (!email) return false;
+  const list = (process.env.ADMIN_EMAILS ?? "")
+    .split(",")
+    .map((e) => e.trim().toLowerCase())
+    .filter(Boolean);
+  return list.includes(email.toLowerCase());
+}
+
+/**
+ * Run the quota check unless the caller is an admin. Returns the quota
+ * object (for optional logging) or a structured error result ready to
+ * bubble back to the client.
+ */
+async function gateOnQuota(
+  supabase: SupabaseClient,
+  user: Pick<User, "id" | "email">,
+  workspaceId: string
+): Promise<
+  | { ok: true; quota: OperatorQuota | null }
+  | { ok: false; error: ActionErrorQuotaExceeded }
+> {
+  if (isAdminEmail(user.email ?? null)) {
+    return { ok: true, quota: null };
+  }
+  const quota = await checkOperatorQuota(supabase, {
+    userId: user.id,
+    workspaceId,
+  });
+  if (!quota.allowed) {
+    return quotaErrorResult(quota);
+  }
+  return { ok: true, quota };
+}
 
 export interface RunWorkspaceOperatorInput {
   prompt: string;
@@ -92,6 +180,18 @@ export async function runWorkspaceOperatorAction(
       return { ok: false, error: "Target box not found in this workspace." };
     }
 
+    // Per-tier monthly quota gate. Admins bypass. The check runs *before*
+    // we create the operator_runs row so a denied request leaves no state
+    // behind — the usage counter is only incremented in safeRecordUsage()
+    // after a successful dispatch, so calling gateOnQuota() here is
+    // idempotent: a denied call does not charge the user, and repeat
+    // calls at the limit return the same error rather than silently
+    // stacking extra bookkeeping rows.
+    const quotaGate = await gateOnQuota(supabase, ctx.user, ctx.workspace.id);
+    if (!quotaGate.ok) {
+      return quotaGate;
+    }
+
     // Persist the run row first so we have a stable id to send to Modal as
     // the canonical run_id. The DB is the source of truth for run state from
     // here on out — the previous random-UUID flow generated an id that was
@@ -148,6 +248,13 @@ export async function runWorkspaceOperatorAction(
         error: message,
         durationMs,
       });
+      // Record the failed run in the monthly usage rollup — failures still
+      // count against the per-tier run quota.
+      await safeRecordUsage(supabase, {
+        workspaceId: ctx.workspace.id,
+        userId: ctx.user.id,
+        result: null,
+      });
       return { ok: false, error: `Operator dispatch failed: ${message}` };
     }
 
@@ -160,6 +267,23 @@ export async function runWorkspaceOperatorAction(
       notesCreated: result.notes_created,
       toolCalls: result.tool_calls,
       durationMs,
+      // Phase 4 — persist token usage + model on the run row so the history
+      // view can surface cost and cache-hit rate per run without re-parsing
+      // the `result` jsonb. Coalesce missing fields to 0 (backward compat
+      // with older Modal responses).
+      inputTokens: result.input_tokens ?? 0,
+      outputTokens: result.output_tokens ?? 0,
+      cachedInputTokens: result.cached_input_tokens ?? 0,
+      model: result.model ?? null,
+    });
+
+    // Metered usage — record exactly once per dispatched run regardless of
+    // final status. Token counts come from Agent C's capture work; they'll
+    // be undefined (→ 0) until that lands.
+    await safeRecordUsage(supabase, {
+      workspaceId: ctx.workspace.id,
+      userId: ctx.user.id,
+      result,
     });
 
     await safeAudit(supabase, {
@@ -253,6 +377,14 @@ export async function requestOperatorPlanAction(
       .maybeSingle();
     if (!box || box.workspace_id !== ctx.workspace.id) {
       return { ok: false, error: "Target box not found in this workspace." };
+    }
+
+    // Per-tier monthly quota gate (see note on the full-run action).
+    // We check before `createOperatorRun` so denied requests leave no
+    // trace and the quota accounting stays honest.
+    const quotaGate = await gateOnQuota(supabase, ctx.user, ctx.workspace.id);
+    if (!quotaGate.ok) {
+      return quotaGate;
     }
 
     // Create the run row up-front so the run_id we send to Modal is the same
@@ -386,6 +518,17 @@ export async function approveAndExecuteAction(
 
     const supabase = await createClient();
 
+    // Per-tier monthly quota gate. The plan step already consumed a run
+    // for quota purposes (usage was recorded when the plan landed), but
+    // we re-check here in case the user crossed the limit between the
+    // plan and the approve+execute step. This stays idempotent: usage
+    // is only incremented in safeRecordUsage() below, never inside the
+    // quota check itself.
+    const quotaGate = await gateOnQuota(supabase, ctx.user, ctx.workspace.id);
+    if (!quotaGate.ok) {
+      return quotaGate;
+    }
+
     // The run row already exists from requestOperatorPlanAction; flip it to
     // executing and capture the approved plan.
     await safeUpdateRun(supabase, input.runId, {
@@ -422,6 +565,13 @@ export async function approveAndExecuteAction(
         error: message,
         durationMs,
       });
+      // Record the failed run in the monthly usage rollup — failures still
+      // count against the per-tier run quota (Agent B enforces).
+      await safeRecordUsage(supabase, {
+        workspaceId: ctx.workspace.id,
+        userId: ctx.user.id,
+        result: null,
+      });
       return { ok: false, error: `Operator execution failed: ${message}` };
     }
 
@@ -434,6 +584,21 @@ export async function approveAndExecuteAction(
       notesCreated: result.notes_created,
       toolCalls: result.tool_calls,
       durationMs,
+      // Phase 4 — persist token usage + model on the run row (see full-mode
+      // completion for the rationale).
+      inputTokens: result.input_tokens ?? 0,
+      outputTokens: result.output_tokens ?? 0,
+      cachedInputTokens: result.cached_input_tokens ?? 0,
+      model: result.model ?? null,
+    });
+
+    // Metered usage — record exactly once per executed run regardless of
+    // final status. Token counts come from Agent C's capture work; they'll
+    // be undefined (→ 0) until that lands.
+    await safeRecordUsage(supabase, {
+      workspaceId: ctx.workspace.id,
+      userId: ctx.user.id,
+      result,
     });
 
     await safeAudit(supabase, {
@@ -516,6 +681,42 @@ async function safeUpdateRun(
     await updateOperatorRun(supabase, runId, patch);
   } catch (err) {
     console.error("[workspace_operator] run row update failed", err);
+  }
+}
+
+/**
+ * Upsert the current-month workspace_operator_usage rollup, swallowing
+ * failures so usage bookkeeping never breaks the user-visible action.
+ * Every Operator run — success *or* failure — should call this once.
+ * Failed runs contribute `runCount: 1` with zero tokens so they still
+ * count against the per-tier run quota that Agent B enforces.
+ *
+ * Token / model fields are coalesced from the OperatorResult when present.
+ * Until Agent C lands the Python-side token capture they'll be undefined
+ * and the cost estimate resolves to zero.
+ */
+async function safeRecordUsage(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  params: {
+    workspaceId: string;
+    userId: string;
+    result?: OperatorRunResult | null;
+    toolCalls?: number;
+  }
+): Promise<void> {
+  try {
+    const result = params.result ?? null;
+    await recordOperatorUsage(supabase, {
+      workspaceId: params.workspaceId,
+      userId: params.userId,
+      runCount: 1,
+      toolCallCount: params.toolCalls ?? result?.tool_calls ?? 0,
+      inputTokens: result?.input_tokens ?? 0,
+      outputTokens: result?.output_tokens ?? 0,
+      model: result?.model,
+    });
+  } catch (err) {
+    console.error("[workspace_operator] usage row record failed", err);
   }
 }
 

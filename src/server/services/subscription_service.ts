@@ -1,18 +1,38 @@
 import { type SupabaseClient } from "@supabase/supabase-js";
 import { listBoxesByWorkspace } from "@/server/repositories/box_repository";
+import { WORKSPACE_PLANS } from "@/server/domain/types/subscription";
 
 // ─── Plan constants ───────────────────────────────────────────────────────────
 
 export const FREE_NOTE_LIMIT = 50;
 export const FREE_BOX_LIMIT = 3;
 
-export type WorkspacePlan = "free" | "pro";
+/**
+ * The three billing tiers. Mirrors the CHECK constraint on
+ * workspace_subscriptions.plan. Historical callers imported `WorkspacePlan`
+ * from this file, so we re-export the tuple-derived type here too.
+ */
+export type WorkspacePlan = (typeof WORKSPACE_PLANS)[number];
+
+// Re-export the tuple for consumers that want to enumerate tiers.
+export { WORKSPACE_PLANS } from "@/server/domain/types/subscription";
 
 // ─── Plan helpers ─────────────────────────────────────────────────────────────
+
+function isKnownPlan(value: unknown): value is WorkspacePlan {
+  return (
+    typeof value === "string" &&
+    (WORKSPACE_PLANS as readonly string[]).includes(value)
+  );
+}
 
 /**
  * Returns the plan for a workspace by querying workspace_subscriptions.
  * Returns 'free' if no subscription row exists or the table is missing.
+ *
+ * Pro and Business tiers are only recognized when the subscription status
+ * is `active` — a cancelled Pro workspace falls back to `free` privileges
+ * until a new active subscription is started.
  */
 export async function getWorkspacePlan(
   supabase: SupabaseClient,
@@ -27,8 +47,13 @@ export async function getWorkspacePlan(
 
     if (error || !data) return "free";
 
-    // Only treat active pro subscriptions as pro
-    if (data.plan === "pro" && data.status === "active") return "pro";
+    if (
+      isKnownPlan(data.plan) &&
+      (data.plan === "pro" || data.plan === "business") &&
+      data.status === "active"
+    ) {
+      return data.plan;
+    }
     return "free";
   } catch (err: unknown) {
     const code = (err as { code?: string })?.code;
@@ -39,14 +64,31 @@ export async function getWorkspacePlan(
 }
 
 /**
- * Returns true if the workspace is on the Pro plan.
+ * Returns true if the workspace is on a paid plan (Pro OR Business).
+ *
+ * Semantics widened in Phase 4: Business is a superset of Pro for every
+ * feature gate that used to be Pro-only (higher note/box limits, Operator
+ * access, etc.). Call `isBusinessWorkspace` when you specifically need to
+ * gate on the highest tier only.
  */
 export async function isProWorkspace(
   supabase: SupabaseClient,
   workspaceId: string
 ): Promise<boolean> {
   const plan = await getWorkspacePlan(supabase, workspaceId);
-  return plan === "pro";
+  return plan === "pro" || plan === "business";
+}
+
+/**
+ * Returns true if the workspace is on the Business plan.
+ * Business-only features (e.g. the 500-run Operator quota) gate on this.
+ */
+export async function isBusinessWorkspace(
+  supabase: SupabaseClient,
+  workspaceId: string
+): Promise<boolean> {
+  const plan = await getWorkspacePlan(supabase, workspaceId);
+  return plan === "business";
 }
 
 /**

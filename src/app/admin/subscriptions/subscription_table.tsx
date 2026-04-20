@@ -10,9 +10,12 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog";
-import { overridePlanAction } from "./actions";
+import {
+  overridePlanAction,
+  setOperatorQuotaOverrideAction,
+} from "./actions";
+import type { WorkspacePlan } from "@/server/services/subscription_service";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -20,37 +23,34 @@ export interface SubscriptionRow {
   workspace_id: string;
   workspace_name: string;
   owner_email: string;
-  plan: "free" | "pro";
+  plan: WorkspacePlan;
   status: "active" | "cancelled" | "past_due" | null;
   current_period_end: string | null;
   creem_subscription_id: string | null;
   manually_overridden: boolean;
+  override_operator_quota: boolean;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
+
+const PLAN_LABEL: Record<WorkspacePlan, string> = {
+  free: "Free",
+  pro: "Pro",
+  business: "Business",
+};
 
 function PlanBadge({
   plan,
   manually_overridden,
 }: {
-  plan: "free" | "pro";
+  plan: WorkspacePlan;
   manually_overridden: boolean;
 }) {
-  if (plan === "pro") {
-    return (
-      <span className="inline-flex items-center gap-1.5">
-        <Badge variant="default">Pro</Badge>
-        {manually_overridden && (
-          <Badge variant="outline" className="text-[10px]">
-            Manually set
-          </Badge>
-        )}
-      </span>
-    );
-  }
+  const label = PLAN_LABEL[plan];
+  const variant = plan === "business" ? "default" : plan === "pro" ? "default" : "secondary";
   return (
     <span className="inline-flex items-center gap-1.5">
-      <Badge variant="secondary">Free</Badge>
+      <Badge variant={variant}>{label}</Badge>
       {manually_overridden && (
         <Badge variant="outline" className="text-[10px]">
           Manually set
@@ -90,13 +90,13 @@ function formatDate(isoString: string | null): string {
 
 function OverrideDialog({ row }: { row: SubscriptionRow }) {
   const [open, setOpen] = useState(false);
-  const [targetPlan, setTargetPlan] = useState<"free" | "pro">("pro");
+  const [targetPlan, setTargetPlan] = useState<WorkspacePlan>("pro");
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
-  const targetLabel = targetPlan === "pro" ? "Pro" : "Free";
+  const targetLabel = PLAN_LABEL[targetPlan];
 
-  function openFor(plan: "free" | "pro") {
+  function openFor(plan: WorkspacePlan) {
     setTargetPlan(plan);
     setError(null);
     setOpen(true);
@@ -117,7 +117,7 @@ function OverrideDialog({ row }: { row: SubscriptionRow }) {
   return (
     <>
       {/* Trigger buttons — one per target plan */}
-      <span className="inline-flex gap-1">
+      <span className="inline-flex gap-1 flex-wrap">
         {row.plan !== "pro" && (
           <Button
             variant="outline"
@@ -126,6 +126,16 @@ function OverrideDialog({ row }: { row: SubscriptionRow }) {
             aria-label={`Override ${row.workspace_name} to Pro plan`}
           >
             Set Pro
+          </Button>
+        )}
+        {row.plan !== "business" && (
+          <Button
+            variant="outline"
+            size="xs"
+            onClick={() => openFor("business")}
+            aria-label={`Override ${row.workspace_name} to Business plan`}
+          >
+            Set Business
           </Button>
         )}
         {row.plan !== "free" && (
@@ -175,6 +185,44 @@ function OverrideDialog({ row }: { row: SubscriptionRow }) {
   );
 }
 
+// ─── Operator-quota override toggle ──────────────────────────────────────────
+
+function OperatorQuotaOverrideToggle({ row }: { row: SubscriptionRow }) {
+  const [isPending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+
+  function handleToggle() {
+    setError(null);
+    startTransition(async () => {
+      const result = await setOperatorQuotaOverrideAction(
+        row.workspace_id,
+        !row.override_operator_quota
+      );
+      if (!result.ok) setError(result.error ?? "Unknown error");
+    });
+  }
+
+  return (
+    <div className="flex flex-col gap-1">
+      <Button
+        variant={row.override_operator_quota ? "default" : "outline"}
+        size="xs"
+        disabled={isPending}
+        onClick={handleToggle}
+        aria-pressed={row.override_operator_quota}
+        aria-label={`Toggle operator quota override for ${row.workspace_name}`}
+      >
+        {isPending
+          ? "Saving…"
+          : row.override_operator_quota
+            ? "Quota bypass ON"
+            : "Bypass quota"}
+      </Button>
+      {error && <p className="text-[10px] text-destructive">{error}</p>}
+    </div>
+  );
+}
+
 // ─── Table ────────────────────────────────────────────────────────────────────
 
 export function SubscriptionTable({ rows }: { rows: SubscriptionRow[] }) {
@@ -201,6 +249,7 @@ export function SubscriptionTable({ rows }: { rows: SubscriptionRow[] }) {
               "Status",
               "Period ends",
               "Creem subscription ID",
+              "Operator quota",
               "Actions",
             ].map((h) => (
               <th
@@ -240,6 +289,9 @@ export function SubscriptionTable({ rows }: { rows: SubscriptionRow[] }) {
                 {row.creem_subscription_id ?? (
                   <span className="text-muted-foreground/50">—</span>
                 )}
+              </td>
+              <td className="px-4 py-3">
+                <OperatorQuotaOverrideToggle row={row} />
               </td>
               <td className="px-4 py-3">
                 <OverrideDialog row={row} />

@@ -39,6 +39,10 @@ import {
   DEFAULT_USER_AGENT_PREFERENCES,
   getUserAgentPreferences,
 } from "@/server/services/user_agent_preferences_service";
+import {
+  getWorkspaceUsageForMonth,
+  sumOperatorUsage,
+} from "@/server/services/workspace_operator_usage_service";
 
 // Settings section nav is rendered by SettingsSidebar (see
 // src/components/product/settings_sidebar.tsx). Keeping the sections
@@ -94,6 +98,7 @@ export default async function SettingsPage() {
     noteLimit,
     boxLimit,
     agentPrefsRow,
+    operatorUsageRows,
   ] = await Promise.all([
     listBoxesByWorkspace(supabase, ctx.workspace.id),
     listConnectionsWithScopes(supabase, ctx.workspace.id),
@@ -103,7 +108,14 @@ export default async function SettingsPage() {
     checkNoteLimit(supabase, ctx.workspace.id),
     checkBoxLimit(supabase, ctx.workspace.id),
     getUserAgentPreferences(supabase, ctx.user.id),
+    // Current-month operator usage — sum across all users of the
+    // workspace. Agent B's work attaches a run limit; we leave that
+    // denominator null here for now so the UI shows "X runs this month"
+    // with no "/ Y limit" suffix until the tier plumbing lands.
+    getWorkspaceUsageForMonth(supabase, ctx.workspace.id).catch(() => []),
   ]);
+
+  const operatorUsageTotals = sumOperatorUsage(operatorUsageRows);
 
   const initialAgentPrefs = {
     tone: agentPrefsRow?.tone ?? DEFAULT_USER_AGENT_PREFERENCES.tone,
@@ -181,6 +193,16 @@ export default async function SettingsPage() {
               noteMax={noteLimit.max}
               boxCount={boxLimit.current}
               boxMax={boxLimit.max}
+              operatorUsage={{
+                runCount: operatorUsageTotals.runCount,
+                toolCallCount: operatorUsageTotals.toolCallCount,
+                inputTokenCount: operatorUsageTotals.inputTokenCount,
+                outputTokenCount: operatorUsageTotals.outputTokenCount,
+                estimatedCostCents: operatorUsageTotals.estimatedCostCents,
+              }}
+              /* Run limit denominator is owned by Agent B's tier work —
+                 leaving null until that lands surfaces the count alone. */
+              operatorRunLimit={null}
             />
 
             <AppearanceSection

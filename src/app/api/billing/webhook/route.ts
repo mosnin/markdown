@@ -149,7 +149,7 @@ interface UpsertSubscriptionOptions {
   subscriptionId: string;
   customerId?: string;
   periodEnd?: string;
-  plan?: "free" | "pro";
+  plan?: "free" | "pro" | "business";
   status?: "active" | "cancelled" | "past_due";
   metadata?: Record<string, string | number | null>;
 }

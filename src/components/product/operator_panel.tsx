@@ -10,6 +10,7 @@ import {
   ArrowRight,
   RotateCcw,
   Sparkles,
+  BadgeAlert,
 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
@@ -31,12 +32,15 @@ import { useOperatorProgress } from "@/lib/hooks/use_operator_run";
 import {
   requestOperatorPlanAction,
   approveAndExecuteAction,
+  type ActionErrorQuotaExceeded,
 } from "@/app/app/workspace_operator/actions";
+import { loadOperatorQuotaAction } from "@/app/app/workspace_operator/quota_actions";
 import type {
   OperatorPlanStep,
   OperatorRunPhase,
   OperatorProgressEvent,
 } from "@/app/app/workspace_operator/types";
+import type { WorkspacePlan } from "@/server/services/subscription_service";
 
 // ---------------------------------------------------------------------------
 // Props
@@ -97,6 +101,27 @@ function stepStatusIcon(status: OperatorPlanStep["status"]) {
 
 const MAX_PROMPT_LENGTH = 4000;
 
+/** UI-facing slice of a structured quota-exceeded error — the panel
+ *  persists this so its `quota_exceeded` phase can show tier / reset
+ *  messaging without re-fetching. */
+interface QuotaExceededState {
+  tier: WorkspacePlan;
+  limit: number | null;
+  used: number;
+  resetsAt: string;
+  message: string;
+}
+
+/** Proactive pre-check snapshot used to disable the submit button. */
+interface QuotaPreview {
+  tier: WorkspacePlan;
+  limit: number | null;
+  used: number;
+  remaining: number;
+  allowed: boolean;
+  resetsAt: string;
+}
+
 export function OperatorPanel({
   open,
   onOpenChange,
@@ -115,6 +140,9 @@ export function OperatorPanel({
     tool_calls: number;
     error?: string | null;
   } | null>(null);
+  const [quotaExceeded, setQuotaExceeded] =
+    useState<QuotaExceededState | null>(null);
+  const [quotaPreview, setQuotaPreview] = useState<QuotaPreview | null>(null);
 
   const [isPlanPending, startPlanTransition] = useTransition();
   const [isExecPending, startExecTransition] = useTransition();
@@ -123,6 +151,32 @@ export function OperatorPanel({
     phase === "executing" ? runId : null
   );
   const eventsEndRef = useRef<HTMLDivElement>(null);
+
+  // -- quota preload ---------------------------------------------------------
+  // Load the current quota when the panel opens so the submit button can
+  // be preemptively disabled at limit with a tooltip. Re-fetch after a
+  // completed run so a user who was at 4/5 sees the reflected 5/5.
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    loadOperatorQuotaAction().then((res) => {
+      if (cancelled || !res.ok || !res.quota) return;
+      setQuotaPreview({
+        tier: res.quota.tier,
+        limit: res.quota.limit,
+        used: res.quota.used,
+        remaining: res.quota.remaining,
+        allowed: res.quota.allowed,
+        resetsAt:
+          res.quota.resetsAt instanceof Date
+            ? res.quota.resetsAt.toISOString()
+            : String(res.quota.resetsAt),
+      });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [open, phase]);
 
   // -- derived ---------------------------------------------------------------
   const boxId = defaultBoxId ?? "";
@@ -177,6 +231,7 @@ export function OperatorPanel({
     setSummary("");
     setError(null);
     setResult(null);
+    setQuotaExceeded(null);
   }
 
   function handleGeneratePlan() {
@@ -192,7 +247,22 @@ export function OperatorPanel({
       });
 
       if (!res.ok) {
-        setError(res.error);
+        if (isQuotaError(res.error)) {
+          setQuotaExceeded({
+            tier: res.error.tier,
+            limit: res.error.limit,
+            used: res.error.used,
+            resetsAt: res.error.resetsAt,
+            message: res.error.message,
+          });
+          setPhase("quota_exceeded");
+          return;
+        }
+        setError(
+          typeof res.error === "string"
+            ? res.error
+            : (res.error as { message: string }).message
+        );
         setPhase("failed");
         return;
       }
@@ -225,7 +295,22 @@ export function OperatorPanel({
       });
 
       if (!res.ok) {
-        setError(res.error);
+        if (isQuotaError(res.error)) {
+          setQuotaExceeded({
+            tier: res.error.tier,
+            limit: res.error.limit,
+            used: res.error.used,
+            resetsAt: res.error.resetsAt,
+            message: res.error.message,
+          });
+          setPhase("quota_exceeded");
+          return;
+        }
+        setError(
+          typeof res.error === "string"
+            ? res.error
+            : (res.error as { message: string }).message
+        );
         setPhase("failed");
         return;
       }
@@ -293,14 +378,82 @@ export function OperatorPanel({
           </span>
         </div>
 
+        {quotaPreview && (
+          <p
+            className={cn(
+              "text-xs",
+              quotaPreview.allowed
+                ? "text-muted-foreground"
+                : "text-destructive"
+            )}
+          >
+            {quotaPreview.limit == null
+              ? `Unlimited runs this month (${quotaPreview.tier} tier).`
+              : `${quotaPreview.used} of ${quotaPreview.limit} runs used this month (${quotaPreview.tier} tier).`}
+          </p>
+        )}
+
         <Button
-          disabled={!prompt.trim() || !boxId || isPlanPending}
+          disabled={
+            !prompt.trim() ||
+            !boxId ||
+            isPlanPending ||
+            (quotaPreview !== null && !quotaPreview.allowed)
+          }
           onClick={handleGeneratePlan}
           className="self-start"
+          title={
+            quotaPreview !== null && !quotaPreview.allowed
+              ? `You've used all ${quotaPreview.limit ?? "\u221e"} Operator runs on the ${quotaPreview.tier} tier this month. Resets on ${formatResetDate(quotaPreview.resetsAt)}.`
+              : undefined
+          }
         >
           <Sparkles className="h-4 w-4" aria-hidden="true" />
           Generate Plan
         </Button>
+      </div>
+    );
+  }
+
+  function renderQuotaExceeded() {
+    const q = quotaExceeded;
+    if (!q) return null;
+    const tierLabel =
+      q.tier === "business"
+        ? "Business"
+        : q.tier === "pro"
+          ? "Pro"
+          : "Free";
+    const canUpgrade = q.tier !== "business";
+    return (
+      <div className="flex flex-1 flex-col items-center justify-center gap-4 p-4 text-center">
+        <BadgeAlert
+          className="h-10 w-10 text-amber-600 dark:text-amber-400"
+          aria-hidden="true"
+        />
+        <div className="flex flex-col gap-1">
+          <p className="text-sm font-medium text-foreground">
+            {q.limit == null
+              ? `You've reached your Operator limit on the ${tierLabel} tier this month.`
+              : `You've used all ${q.limit} Operator runs on the ${tierLabel} tier this month.`}
+          </p>
+          <p className="text-xs text-muted-foreground">
+            Resets on {formatResetDate(q.resetsAt)}.
+          </p>
+        </div>
+
+        <div className="flex items-center gap-2">
+          {canUpgrade && (
+            <Button render={<Link href="/app/settings#settings-billing" />}>
+              <ArrowRight className="h-4 w-4" aria-hidden="true" />
+              Upgrade plan
+            </Button>
+          )}
+          <Button variant="outline" onClick={reset}>
+            <RotateCcw className="h-4 w-4" aria-hidden="true" />
+            Close
+          </Button>
+        </div>
       </div>
     );
   }
@@ -486,6 +639,8 @@ export function OperatorPanel({
         return renderCompleted();
       case "failed":
         return renderFailed();
+      case "quota_exceeded":
+        return renderQuotaExceeded();
       default:
         return renderIdle();
     }
@@ -521,6 +676,35 @@ export function OperatorPanel({
 // ---------------------------------------------------------------------------
 // Utilities
 // ---------------------------------------------------------------------------
+
+/**
+ * Narrow a raw action error to the structured quota-exceeded shape.
+ * Actions can surface either a plain string or a structured object
+ * (see `ActionErrorQuotaExceeded`); anything shaped like the latter
+ * routes the UI into the quota_exceeded phase.
+ */
+function isQuotaError(
+  err: unknown
+): err is ActionErrorQuotaExceeded {
+  return (
+    typeof err === "object" &&
+    err !== null &&
+    (err as { code?: unknown }).code === "quota_exceeded"
+  );
+}
+
+function formatResetDate(iso: string): string {
+  try {
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return iso;
+    return d.toLocaleDateString(undefined, {
+      month: "short",
+      day: "numeric",
+    });
+  } catch {
+    return iso;
+  }
+}
 
 function formatEventDetail(evt: OperatorProgressEvent): string {
   switch (evt.type) {
