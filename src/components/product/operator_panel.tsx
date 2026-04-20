@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, useTransition } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import {
   Bot,
@@ -180,10 +180,33 @@ export function OperatorPanel({
   const [isPlanPending, startPlanTransition] = useTransition();
   const [isExecPending, startExecTransition] = useTransition();
 
-  const progressEvents = useOperatorProgress(
-    phase === "executing" ? runId : null
-  );
+  // Prompt-history recall state. `historyIndex === -1` means "not recalling"
+  // (the textarea contents are user-typed, not a recalled entry). Any other
+  // value is a 0-based index into `promptHistory` (most-recent first).
+  const [promptHistory, setPromptHistory] = useState<string[]>([]);
+  const [historyIndex, setHistoryIndex] = useState<number>(-1);
+
+  // Subscribe to live progress broadcast channel for any non-terminal phase
+  // where the agent may still be pushing events. We still only *have* a runId
+  // once planning returns — the hook no-ops when runId is null, so the list
+  // stays empty in phases like "idle" / "quota_exceeded" / "failed".
+  //
+  // The hook also auto-tears down when `runId` changes to null (e.g. on
+  // panel close via reset()) — see `use_operator_run.ts`.
+  const isActivePhase =
+    phase === "planning" ||
+    phase === "awaiting_approval" ||
+    phase === "executing";
+  const progressEvents = useOperatorProgress(isActivePhase ? runId : null);
   const eventsEndRef = useRef<HTMLDivElement>(null);
+  const promptTextareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Last N live events to render in the little log beneath the plan / steps.
+  const LIVE_LOG_TAIL = 8;
+  const liveTail = useMemo(
+    () => progressEvents.slice(-LIVE_LOG_TAIL),
+    [progressEvents]
+  );
 
   // -- quota preload ---------------------------------------------------------
   // Load the current quota when the panel opens so the submit button can
@@ -227,6 +250,34 @@ export function OperatorPanel({
 
   // -- derived ---------------------------------------------------------------
   const boxId = defaultBoxId ?? "";
+
+  // Prompt-history key is scoped by boxId (the panel's closest workspace
+  // discriminator available here); the trigger forwards the active
+  // workspace's box so prompts don't bleed across workspaces on a shared
+  // device.
+  const promptHistoryKey = boxId
+    ? `${PROMPT_HISTORY_KEY_PREFIX}${boxId}`
+    : null;
+
+  // Load prompt history from localStorage once per workspace scope.
+  useEffect(() => {
+    if (!open || !promptHistoryKey || typeof window === "undefined") return;
+    const loaded = loadPromptHistory(window.localStorage, promptHistoryKey);
+    setPromptHistory(loaded);
+  }, [open, promptHistoryKey]);
+
+  // Tear down the progress subscription when the panel closes. We do this
+  // by clearing runId — the `useOperatorProgress` hook keys off runId and
+  // removes its Supabase channel when runId transitions to null. We keep
+  // the run otherwise viable (no reset of prompt/steps) so reopening the
+  // panel mid-run later would still benefit from a manual refresh.
+  useEffect(() => {
+    if (open) return;
+    if (phase === "completed" || phase === "failed" || phase === "cancelled") {
+      // Terminal state — it's fine to drop runId entirely on close.
+      setRunId(null);
+    }
+  }, [open, phase]);
 
   // Pro/Business may opt into the bigger model. Free is locked to mini.
   const canUseLargeModel =
@@ -289,6 +340,16 @@ export function OperatorPanel({
 
   function handleGeneratePlan() {
     if (!prompt.trim() || !boxId) return;
+
+    // Persist the submitted prompt into the per-workspace ring buffer so
+    // the user can recall it with Up/Down on future runs. Dedupes adjacent
+    // duplicates and caps at PROMPT_HISTORY_MAX entries.
+    if (promptHistoryKey && typeof window !== "undefined") {
+      const next = pushPromptHistory(promptHistory, prompt.trim());
+      setPromptHistory(next);
+      savePromptHistory(window.localStorage, promptHistoryKey, next);
+    }
+    setHistoryIndex(-1);
 
     setError(null);
     setPhase("planning");
@@ -479,6 +540,119 @@ export function OperatorPanel({
     );
   }
 
+  // -- keyboard shortcuts ----------------------------------------------------
+
+  // Cancel is only meaningful while the run is still in-flight server-side
+  // (planning or executing). `awaiting_approval` hasn't dispatched anything
+  // yet — Esc there would nuke local state, which reset() already handles.
+  const isCancellable =
+    phase === "planning" || phase === "executing";
+
+  const handleCancelRef = useRef(handleCancel);
+  const handleGeneratePlanRef = useRef(handleGeneratePlan);
+  handleCancelRef.current = handleCancel;
+  handleGeneratePlanRef.current = handleGeneratePlan;
+
+  // Global Cmd/Ctrl+K: focus the prompt textarea, opening the panel if it
+  // isn't already. This mirrors common "focus search" shortcuts and keeps
+  // the panel reachable from anywhere in the app when the trigger is
+  // mounted at the layout root.
+  useEffect(() => {
+    function onGlobalKeyDown(e: KeyboardEvent) {
+      const modifier = e.metaKey || e.ctrlKey;
+      if (modifier && (e.key === "k" || e.key === "K")) {
+        e.preventDefault();
+        if (!open) onOpenChange(true);
+        // Defer focus until the sheet mounts the textarea.
+        setTimeout(() => {
+          promptTextareaRef.current?.focus();
+        }, 0);
+      }
+    }
+    window.addEventListener("keydown", onGlobalKeyDown);
+    return () => window.removeEventListener("keydown", onGlobalKeyDown);
+  }, [open, onOpenChange]);
+
+  // Esc while a cancellable run is running: send cancel. Only active when
+  // the panel is open so it doesn't stomp on other "Esc" handlers elsewhere
+  // in the app.
+  useEffect(() => {
+    if (!open) return;
+    function onEsc(e: KeyboardEvent) {
+      if (e.key !== "Escape") return;
+      if (!isCancellable) return;
+      if (cancelling) return;
+      // Only intercept when the Sheet is the focused surface — a nested
+      // Dialog (e.g. save-template) should get its own Esc.
+      if (saveDialogOpen) return;
+      e.preventDefault();
+      handleCancelRef.current();
+    }
+    window.addEventListener("keydown", onEsc);
+    return () => window.removeEventListener("keydown", onEsc);
+  }, [open, isCancellable, cancelling, saveDialogOpen]);
+
+  /**
+   * Textarea keydown — supports three shortcuts:
+   *
+   *   - Cmd/Ctrl+Enter   → submit (same as clicking Generate Plan)
+   *   - Up (at start)    → recall previous prompt in history
+   *   - Down (at start)  → recall next prompt (or clear back to empty)
+   *   - Esc              → clear recall and return to an empty textarea
+   *
+   * Up/Down only intercept when the cursor is at position 0 AND either the
+   * textarea is empty OR the user is currently viewing a recalled entry.
+   * Without those guards, Up/Down would break vertical line navigation
+   * inside a multi-line user-typed prompt.
+   */
+  const handlePromptKeyDown = useCallback(
+    (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+      const modifier = e.metaKey || e.ctrlKey;
+      if (modifier && e.key === "Enter") {
+        e.preventDefault();
+        handleGeneratePlanRef.current();
+        return;
+      }
+
+      const target = e.currentTarget;
+      const atStart =
+        target.selectionStart === 0 && target.selectionEnd === 0;
+      const isRecalling = historyIndex !== -1;
+      const emptyOrRecalling = target.value.length === 0 || isRecalling;
+
+      if (e.key === "ArrowUp" && atStart && emptyOrRecalling) {
+        if (promptHistory.length === 0) return;
+        const nextIdx = Math.min(historyIndex + 1, promptHistory.length - 1);
+        if (nextIdx === historyIndex) return;
+        e.preventDefault();
+        setHistoryIndex(nextIdx);
+        setPrompt(promptHistory[nextIdx].slice(0, MAX_PROMPT_LENGTH));
+        return;
+      }
+
+      if (e.key === "ArrowDown" && atStart && emptyOrRecalling) {
+        if (!isRecalling) return;
+        const nextIdx = historyIndex - 1;
+        e.preventDefault();
+        if (nextIdx < 0) {
+          setHistoryIndex(-1);
+          setPrompt("");
+        } else {
+          setHistoryIndex(nextIdx);
+          setPrompt(promptHistory[nextIdx].slice(0, MAX_PROMPT_LENGTH));
+        }
+        return;
+      }
+
+      if (e.key === "Escape" && isRecalling) {
+        e.preventDefault();
+        setHistoryIndex(-1);
+        setPrompt("");
+      }
+    },
+    [historyIndex, promptHistory]
+  );
+
   function handleSelectSavedPrompt(id: string) {
     if (!id) return;
     const found = savedPrompts.find((p) => p.id === id);
@@ -550,15 +724,31 @@ export function OperatorPanel({
           </label>
           <Textarea
             id="operator-prompt"
+            ref={promptTextareaRef}
             placeholder="e.g. Research recent advances in transformer architectures and draft summary notes..."
             value={prompt}
-            onChange={(e) =>
-              setPrompt(e.target.value.slice(0, MAX_PROMPT_LENGTH))
-            }
+            onChange={(e) => {
+              // A real edit exits history-recall mode — the textarea is
+              // no longer mirroring a recalled entry verbatim.
+              if (historyIndex !== -1) setHistoryIndex(-1);
+              setPrompt(e.target.value.slice(0, MAX_PROMPT_LENGTH));
+            }}
+            onKeyDown={handlePromptKeyDown}
             maxLength={MAX_PROMPT_LENGTH}
             className="min-h-28 resize-none"
-            aria-describedby="prompt-char-count"
+            aria-describedby="prompt-char-count operator-prompt-shortcuts"
           />
+          <p
+            id="operator-prompt-shortcuts"
+            className="text-[10px] text-muted-foreground"
+          >
+            <kbd className="font-mono">Ctrl</kbd>/
+            <kbd className="font-mono">Cmd</kbd>+
+            <kbd className="font-mono">Enter</kbd> to submit &middot;{" "}
+            <kbd className="font-mono">Up</kbd>/
+            <kbd className="font-mono">Down</kbd> to recall history &middot;{" "}
+            <kbd className="font-mono">Esc</kbd> while running to cancel
+          </p>
           <div className="flex items-center justify-between">
             <button
               type="button"
@@ -707,6 +897,25 @@ export function OperatorPanel({
       <div className="flex flex-1 flex-col gap-4 overflow-hidden p-4">
         {summary && (
           <p className="text-sm text-muted-foreground">{summary}</p>
+        )}
+
+        {liveTail.length > 0 && (
+          <ul
+            className="flex flex-col gap-0.5 rounded-md border border-border bg-muted/30 p-2"
+            aria-label="Live operator events"
+          >
+            {liveTail.map((evt, i) => (
+              <li
+                key={`tail-${i}`}
+                className="flex items-start gap-2 text-[10px] text-muted-foreground"
+              >
+                <span className="shrink-0 tabular-nums">
+                  {new Date(evt.timestamp).toLocaleTimeString()}
+                </span>
+                <span className="truncate">{formatEventDetail(evt)}</span>
+              </li>
+            ))}
+          </ul>
         )}
 
         <Separator />
@@ -1005,6 +1214,74 @@ export function OperatorPanel({
       </Dialog>
     </>
   );
+}
+
+// ---------------------------------------------------------------------------
+// Prompt history (ring buffer, per-workspace, localStorage-backed)
+// ---------------------------------------------------------------------------
+
+/** Max prompts retained in the per-workspace history ring buffer. */
+export const PROMPT_HISTORY_MAX = 10;
+
+/** localStorage key prefix; full key is `${prefix}${workspaceOrBoxId}`. */
+export const PROMPT_HISTORY_KEY_PREFIX = "operator-prompt-history:";
+
+/**
+ * Push a newly-submitted prompt onto the most-recent-first history array.
+ *
+ *   - Trims whitespace; rejects empty strings (returns the prev array).
+ *   - Dedupes adjacent duplicates (submitting the same prompt twice in a
+ *     row leaves the history unchanged, so Up-arrow cycling stays clean).
+ *   - Caps the result at PROMPT_HISTORY_MAX (oldest entries drop off).
+ *
+ * Pure — safe to import in tests and call without a DOM.
+ */
+export function pushPromptHistory(
+  prev: string[],
+  raw: string,
+  max: number = PROMPT_HISTORY_MAX
+): string[] {
+  const trimmed = raw.trim();
+  if (!trimmed) return prev;
+  if (prev.length > 0 && prev[0] === trimmed) return prev;
+  const next = [trimmed, ...prev.filter((p) => p !== trimmed)];
+  if (next.length > max) next.length = max;
+  return next;
+}
+
+/**
+ * Load prompt history from localStorage. Returns `[]` on any parse or
+ * shape error — history is advisory, not load-bearing.
+ */
+export function loadPromptHistory(
+  storage: Pick<Storage, "getItem">,
+  key: string
+): string[] {
+  try {
+    const raw = storage.getItem(key);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter((v): v is string => typeof v === "string");
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Write the history array to localStorage. Swallows quota errors —
+ * a full localStorage should not break the panel.
+ */
+export function savePromptHistory(
+  storage: Pick<Storage, "setItem">,
+  key: string,
+  history: string[]
+): void {
+  try {
+    storage.setItem(key, JSON.stringify(history));
+  } catch {
+    // Best-effort; swallow quota / permission errors.
+  }
 }
 
 // ---------------------------------------------------------------------------
