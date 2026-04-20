@@ -12,7 +12,8 @@ LANGUAGE SQL STABLE AS $$
     1 - (ne.embedding <=> query_embedding) AS similarity
   FROM note_embeddings ne
   JOIN notes n ON n.id = ne.note_id
-  WHERE n.workspace_id = match_workspace_id
+  JOIN boxes b ON b.id = n.box_id
+  WHERE b.workspace_id = match_workspace_id
     AND n.status != 'trashed'
     AND (n.branch_id IS NULL OR n.branch_id = match_branch_id)
   ORDER BY similarity DESC
