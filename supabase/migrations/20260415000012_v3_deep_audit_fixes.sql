@@ -21,14 +21,18 @@ LANGUAGE SQL STABLE AS $$
 $$;
 
 -- 2. CRITICAL: note_comments has RLS enabled but zero policies (permadeny)
-CREATE POLICY IF NOT EXISTS note_comments_select ON note_comments FOR SELECT
+DROP POLICY IF EXISTS note_comments_select ON note_comments;
+CREATE POLICY note_comments_select ON note_comments FOR SELECT
   USING (public.owns_workspace(workspace_id));
 
-CREATE POLICY IF NOT EXISTS note_comments_insert ON note_comments FOR INSERT
+DROP POLICY IF EXISTS note_comments_insert ON note_comments;
+CREATE POLICY note_comments_insert ON note_comments FOR INSERT
   WITH CHECK (public.can_write_workspace(workspace_id));
 
-CREATE POLICY IF NOT EXISTS note_comments_update ON note_comments FOR UPDATE
+DROP POLICY IF EXISTS note_comments_update ON note_comments;
+CREATE POLICY note_comments_update ON note_comments FOR UPDATE
   USING (public.can_write_workspace(workspace_id));
 
-CREATE POLICY IF NOT EXISTS note_comments_delete ON note_comments FOR DELETE
+DROP POLICY IF EXISTS note_comments_delete ON note_comments;
+CREATE POLICY note_comments_delete ON note_comments FOR DELETE
   USING (public.can_write_workspace(workspace_id));
