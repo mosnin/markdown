@@ -13,6 +13,30 @@
 BEGIN;
 
 -- ---------------------------------------------------------------------------
+-- Rename legacy partitions from the y2026mMM scheme used by
+-- 20260414000009 to the YYYY_MM scheme used by the auto-maintenance
+-- function below, so the function's NOT EXISTS check finds them and
+-- doesn't try to create overlapping partitions.
+-- ---------------------------------------------------------------------------
+
+DO $$
+DECLARE
+  r record;
+  new_name text;
+BEGIN
+  FOR r IN
+    SELECT c.relname
+    FROM pg_class c
+    JOIN pg_namespace n ON n.oid = c.relnamespace
+    WHERE n.nspname = 'public'
+      AND c.relname ~ '^audit_events_y[0-9]{4}m[0-9]{2}$'
+  LOOP
+    new_name := 'audit_events_' || substring(r.relname from 'y([0-9]{4})m') || '_' || substring(r.relname from 'm([0-9]{2})$');
+    EXECUTE format('ALTER TABLE public.%I RENAME TO %I', r.relname, new_name);
+  END LOOP;
+END $$;
+
+-- ---------------------------------------------------------------------------
 -- create_future_audit_partitions(months_ahead integer DEFAULT 3)
 --
 -- For each month from the current month through current month + months_ahead,
