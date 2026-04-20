@@ -48,6 +48,7 @@ import { BoxExportMenu } from "@/components/product/export_menu";
 import {
   ImportTriggerButton,
 } from "@/components/product/import_dialog";
+import { AskPogInlineButton } from "@/components/product/ask_pog_inline_button";
 import { listTemplates } from "@/server/services/note_template_service";
 import { FolderPolicyToggle } from "@/components/product/folder_policy_toggle";
 import { BoxEditDialog } from "@/components/product/box_edit_dialog";
@@ -429,6 +430,10 @@ export default async function BoxPage({
               )}
             </div>
             <div className="flex shrink-0 flex-wrap items-center gap-2">
+              <AskPogInlineButton
+                label="Ask Pog about this box"
+                prompt={`Working in the box "${box.name}". Start by summarizing what's already in this box and what's missing, then draft any follow-up notes I should have.`}
+              />
               <ImportTriggerButton
                 boxId={box.id}
                 boxName={box.name}

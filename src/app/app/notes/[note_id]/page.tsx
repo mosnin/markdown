@@ -32,6 +32,7 @@ import { LinkSuggestionsPanel } from "@/components/product/link_suggestions_pane
 import { ContextBundleViewer } from "@/components/product/context_bundle_viewer";
 import { NoteHistoryPanel } from "@/components/product/note_history_panel";
 import { NoteExportMenu } from "@/components/product/export_menu";
+import { AskPogInlineButton } from "@/components/product/ask_pog_inline_button";
 import { NoteImportButton } from "@/components/product/note_import_dialog";
 import { NoteLifecycleMenu } from "@/components/product/note_lifecycle_menu";
 import { SaveAsTemplateButton } from "@/components/product/save_as_template_button";
@@ -604,6 +605,10 @@ export default async function NotePage({
               noteStatus={
                 note.status as "draft" | "active" | "archived" | "trashed"
               }
+            />
+            <AskPogInlineButton
+              label="Ask Pog about this note"
+              prompt={`Looking at the note titled "${note.title}". Summarize the key ideas and suggest follow-up notes, missing links, or open questions worth exploring.`}
             />
             <SaveAsTemplateButton noteId={note_id} noteTitle={note.title} />
             <NoteImportButton noteId={note_id} noteTitle={note.title} />

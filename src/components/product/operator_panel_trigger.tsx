@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { Sparkles } from "lucide-react";
 
+import { cn } from "@/lib/utils";
 import { GlobalSearch } from "@/components/product/global_search";
 import { OperatorPanel } from "@/components/product/operator_panel";
 
@@ -58,6 +60,19 @@ export function OperatorPanelTrigger({
   return (
     <>
       <GlobalSearch boxes={boxes} onOpenOperator={() => setOpen(true)} />
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        aria-label="Ask Pog Agent"
+        className={cn(
+          "inline-flex h-9 items-center gap-1.5 rounded-full border border-input bg-foreground px-3 py-2 text-sm font-medium text-background shadow-sm transition-colors",
+          "hover:bg-foreground/90",
+          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+        )}
+      >
+        <Sparkles className="h-3.5 w-3.5" aria-hidden="true" />
+        <span>Ask Pog</span>
+      </button>
       <OperatorPanel
         open={open}
         onOpenChange={setOpen}
