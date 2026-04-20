@@ -3,6 +3,7 @@ import { requireAuthenticatedUser } from "@/server/auth/require_authenticated_us
 import { createClient } from "@/lib/supabase/server";
 import { listOperatorRuns } from "@/server/services/workspace_operator_runs_service";
 import { OperatorHistoryTable } from "@/components/product/operator_history_table";
+import { OperatorNewRunButton } from "@/components/product/operator_new_run_button";
 import {
   expandStatusFilter,
   type OperatorRunStatusFilter,
@@ -80,18 +81,21 @@ export default async function WorkspaceOperatorHistoryPage({
         <div className="flex items-start justify-between gap-2 px-6 pt-6 pb-4">
           <div>
             <h1 className="text-2xl font-semibold tracking-tight text-foreground">
-              Workspace Operator
+              Pog Agent
             </h1>
             <p className="mt-1 text-sm text-muted-foreground">
-              History of your Operator runs in this workspace.
+              History of your Pog runs in this workspace.
             </p>
           </div>
-          <Link
-            href="/app/workspace_operator/prompts"
-            className="rounded-full border border-border bg-background px-3 py-1 text-xs text-foreground hover:bg-muted"
-          >
-            Saved prompts
-          </Link>
+          <div className="flex items-center gap-2">
+            <Link
+              href="/app/workspace_operator/prompts"
+              className="rounded-full border border-border bg-background px-3 py-1 text-xs text-foreground hover:bg-muted"
+            >
+              Saved prompts
+            </Link>
+            <OperatorNewRunButton />
+          </div>
         </div>
         <Separator />
       </div>

@@ -1157,7 +1157,7 @@ export function OperatorPanel({
           <SheetHeader>
             <SheetTitle className="flex items-center gap-2">
               <Bot className="h-5 w-5" aria-hidden="true" />
-              Workspace Operator
+              Pog Agent
             </SheetTitle>
             <SheetDescription id="operator-panel-desc">
               Plan, review, and execute AI-powered workspace operations.

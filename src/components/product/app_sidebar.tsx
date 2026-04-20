@@ -34,7 +34,7 @@ const primaryNav = [
   { label: "Search", href: "/app/search", icon: SearchAreaIcon },
   { label: "Workspaces", href: "/app/workspaces", icon: Satellite01Icon },
   { label: "Agents", href: "/app/agents", icon: LaborIcon },
-  { label: "Operator", href: "/app/workspace_operator", icon: Bot },
+  { label: "Pog Agent", href: "/app/workspace_operator", icon: Bot },
   { label: "Skills", href: "/app/skills", icon: ToolsIcon },
   { label: "Proposals", href: "/app/proposals", icon: Alert01Icon },
   { label: "Branches", href: "/app/branches", icon: GitBranch },

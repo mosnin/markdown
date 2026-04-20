@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { GlobalSearch } from "@/components/product/global_search";
 import { OperatorPanel } from "@/components/product/operator_panel";
@@ -25,6 +25,14 @@ interface OperatorPanelTriggerProps {
 }
 
 /**
+ * Window event server components can dispatch to open the operator
+ * panel. `OperatorPanelTrigger` listens for it and flips `open` to true
+ * so any page can expose a "New run" button without needing to live
+ * inside this React tree.
+ */
+export const OPEN_OPERATOR_EVENT = "poggle:open-operator";
+
+/**
  * Client wrapper that owns the open/close state for the Workspace
  * Operator panel and bridges the `GlobalSearch` command palette into
  * it. Mounted by the (server) authenticated app layout in place of a
@@ -40,6 +48,12 @@ export function OperatorPanelTrigger({
 }: OperatorPanelTriggerProps) {
   const [open, setOpen] = useState(false);
   const resolvedDefaultBoxId = defaultBoxId ?? boxes[0]?.id;
+
+  useEffect(() => {
+    const handler = () => setOpen(true);
+    window.addEventListener(OPEN_OPERATOR_EVENT, handler);
+    return () => window.removeEventListener(OPEN_OPERATOR_EVENT, handler);
+  }, []);
 
   return (
     <>

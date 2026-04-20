@@ -269,12 +269,12 @@ function EmptyState({ hasActiveFilters }: { hasActiveFilters: boolean }) {
   return (
     <div className="rounded-xl border border-dashed border-border bg-muted/20 p-8 text-center">
       <p className="text-sm font-medium text-foreground">
-        {hasActiveFilters ? "No runs match your filters" : "No Operator runs yet"}
+        {hasActiveFilters ? "No runs match your filters" : "No Pog runs yet"}
       </p>
       <p className="mt-1 text-xs text-muted-foreground">
         {hasActiveFilters
           ? "Try clearing the filter or broadening the date range."
-          : "Open the Operator panel from the sidebar to draft your first run. Your history will appear here as runs complete."}
+          : 'Click "New run" above (or press Cmd/Ctrl+K → "Run Pog Agent") to draft your first run. Your history will appear here as runs complete.'}
       </p>
     </div>
   );
