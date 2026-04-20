@@ -63,3 +63,36 @@ async def test_guardrail_passes_with_loose_citation_uuid() -> None:
         "I wrote a new note citing source [here](00000000-0000-0000-0000-000000000001)."
     )
     assert tripped is False
+
+
+@pytest.mark.asyncio
+async def test_guardrail_passes_when_no_candidates_to_draft() -> None:
+    """Infinitive `to draft` with no positive subject must not trip."""
+    tripped, _info = await _invoke_guardrail(
+        "After scanning the workspace I found no candidates to draft."
+    )
+    assert tripped is False
+
+
+@pytest.mark.asyncio
+async def test_guardrail_passes_when_drafted_nothing() -> None:
+    """`drafted nothing` is a negation, not a claim of having drafted a note."""
+    tripped, _info = await _invoke_guardrail(
+        "I drafted nothing because the search returned no usable sources."
+    )
+    assert tripped is False
+
+
+@pytest.mark.asyncio
+async def test_guardrail_trips_on_inline_drafted_claim_without_link() -> None:
+    """Affirmative drafting claim with an unlinked id must still trip."""
+    tripped, info = await _invoke_guardrail("I drafted abc-123 for you.")
+    assert tripped is True
+    assert info["reason"] == "no_citation"
+
+
+@pytest.mark.asyncio
+async def test_guardrail_passes_on_inline_drafted_claim_with_link() -> None:
+    """`I drafted [[abc-123]] for you` includes a wikilink and must pass."""
+    tripped, _info = await _invoke_guardrail("I drafted [[abc-123]] for you.")
+    assert tripped is False

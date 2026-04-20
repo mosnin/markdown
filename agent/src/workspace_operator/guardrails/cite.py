@@ -24,10 +24,82 @@ from agents import (
 
 _WIKILINK_PATTERN = re.compile(r"\[\[[^\[\]\n]{1,200}\]\]")
 
+# Verbs/phrases that, when used affirmatively, indicate the agent claims it
+# created or wrote a note. We require a subject ("I", "we", or a leading
+# capitalized verb at sentence start) so generic prose like "nothing to draft"
+# does not match.
+#
+# Examples that SHOULD match:
+#   "I drafted a brief"            (subject + past-tense verb)
+#   "We created note about X"
+#   "Drafted [[abc-123]] for you"  (sentence-initial past-tense verb)
+#   "I wrote a new note"
+#
+# Examples that should NOT match here (handled either by lacking a subject or
+# by the negation filter below):
+#   "nothing to draft"             (infinitive, no subject)
+#   "no candidates to draft"
+#   "did not draft"                (negation)
+#   "drafted nothing"              (negated object)
+_DRAFTING_CLAIM_PATTERN = re.compile(
+    r"""
+    (?:
+        \b(?:I|we|the\s+agent)\s+(?:just\s+|have\s+|already\s+)?
+            (?:drafted|created|wrote|authored|saved|added)\b
+        |
+        \b(?:I|we)\s+created\s+(?:a\s+|the\s+|new\s+)?note\b
+        |
+        (?:^|[.!?]\s+)(?:Drafted|Created|Wrote|Authored)\b
+    )
+    """,
+    re.IGNORECASE | re.VERBOSE,
+)
+
+# If a drafting claim sentence also contains any of these negation markers we
+# treat the claim as cancelled — the agent is describing an absence, not an
+# action it performed.
+_NEGATION_PATTERN = re.compile(
+    r"""
+    \b(?:
+        no(?:thing|ne)?            # no, none, nothing
+        | not
+        | n['’]t                   # didn't, couldn't, wasn't (straight + curly apostrophe)
+        | never
+        | without
+        | unable
+        | failed\s+to
+    )\b
+    """,
+    re.IGNORECASE | re.VERBOSE,
+)
+
 
 def contains_citation(markdown: str) -> bool:
     """Return True if the markdown contains at least one `[[...]]` wikilink."""
     return bool(_WIKILINK_PATTERN.search(markdown))
+
+
+def _mentions_drafting(text: str) -> bool:
+    """Return True iff the text contains an affirmative claim of drafting.
+
+    Splits on sentence boundaries and only counts a sentence as a drafting
+    claim when it matches a positive verb pattern AND contains no negation
+    markers. This prevents phrases like "nothing to draft", "no notes to
+    draft", or "did not draft" from tripping the citation requirement —
+    those describe an absence of action, not a claim of one.
+    """
+    # Split on sentence-ish boundaries (., !, ?, ;, newline). Keep it loose;
+    # a missing terminator on the final fragment is fine.
+    for sentence in re.split(r"[.!?;\n]+", text):
+        sentence = sentence.strip()
+        if not sentence:
+            continue
+        if not _DRAFTING_CLAIM_PATTERN.search(sentence):
+            continue
+        if _NEGATION_PATTERN.search(sentence):
+            continue
+        return True
+    return False
 
 
 class CiteGuardrailViolation(RuntimeError):
@@ -58,9 +130,7 @@ def build_cite_output_guardrail() -> Any:
                 tripwire_triggered=False,
             )
 
-        mentions_drafting = bool(
-            re.search(r"\bdraft(ed|ing)?\b|\bcreated note\b|\bwrote\b", text, re.IGNORECASE)
-        )
+        mentions_drafting = _mentions_drafting(text)
         has_citation = contains_citation(text) or _has_loose_citation(text)
 
         if mentions_drafting and not has_citation:
