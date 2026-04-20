@@ -995,7 +995,7 @@ async function safeUpdateRun(
  * action result is the source of truth; notification flakes only show
  * up in logs (the service itself logs structured fields per outcome).
  */
-async function safeNotify(
+export async function safeNotify(
   supabase: Awaited<ReturnType<typeof createClient>>,
   runId: string,
   outcome: "completed" | "failed"

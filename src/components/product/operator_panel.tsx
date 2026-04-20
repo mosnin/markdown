@@ -1032,7 +1032,7 @@ function isQuotaError(
  * suitable for `setError`. Quota errors carry a `.message`; plain string
  * errors pass through verbatim.
  */
-function actionErrorToString(
+export function actionErrorToString(
   err: string | ActionErrorQuotaExceeded | undefined | null,
   fallback: string
 ): string {

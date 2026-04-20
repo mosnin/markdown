@@ -13,6 +13,7 @@ import {
   verifyApiKey,
 } from "@/server/services/operator_api_keys_service";
 import { checkOperatorQuota } from "@/server/services/workspace_operator_quota_service";
+import { checkApiRateLimit } from "@/server/services/operator_rate_limit_service";
 import {
   createOperatorRun,
   updateOperatorRun,
@@ -169,6 +170,28 @@ export async function POST(request: NextRequest) {
   // the verified user_id / workspace_id explicitly to every write so
   // we can never accidentally write rows scoped to the wrong identity.
   const supabase = createAdminClient();
+
+  // Per-API-key sliding-window rate limit. Runs BEFORE the monthly
+  // quota check so a leaked key bursting on this endpoint can't drain
+  // the workspace's monthly quota in seconds. A 429 here is distinct
+  // from the quota's response: error code is `rate_limit_exceeded`
+  // and a `Retry-After` header points at the burst-window recovery.
+  const rateLimit = await checkApiRateLimit(supabase, verified.id);
+  if (!rateLimit.allowed) {
+    const retryAfter = rateLimit.retryAfterSeconds ?? 60;
+    return Response.json(
+      {
+        error: "rate_limit_exceeded",
+        retry_after_seconds: retryAfter,
+        remaining_minute: rateLimit.remainingMinute,
+        remaining_hour: rateLimit.remainingHour,
+      },
+      {
+        status: 429,
+        headers: { "Retry-After": String(retryAfter) },
+      },
+    );
+  }
 
   // Quota gate. The REST endpoint MUST NOT bypass it; admin email
   // bypass logic is intentionally NOT applied here because we have no
