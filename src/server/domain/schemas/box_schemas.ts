@@ -22,6 +22,7 @@ export const updateBoxSchema = z.object({
     BOX_STATUS.TRASHED,
   ]).optional(),
   guide_note_id: z.string().uuid().nullable().optional(),
+  agent_instructions: z.string().max(4000).nullable().optional(),
 });
 
 export type UpdateBoxInput = z.infer<typeof updateBoxSchema>;

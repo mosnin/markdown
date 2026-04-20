@@ -174,6 +174,12 @@ export function OperatorPanel({
   const [saveDialogOpen, setSaveDialogOpen] = useState(false);
   const [saveName, setSaveName] = useState("");
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [varsDialog, setVarsDialog] = useState<{
+    template: string;
+    variables: string[];
+    values: Record<string, string>;
+  } | null>(null);
+  const [requireCitations, setRequireCitations] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const [retrying, setRetrying] = useState(false);
 
@@ -370,9 +376,11 @@ export function OperatorPanel({
     setError(null);
     setPhase("planning");
 
+    const submittedPrompt = decoratePrompt(prompt.trim(), { requireCitations });
+
     startPlanTransition(async () => {
       const res = await requestOperatorPlanAction({
-        prompt: prompt.trim(),
+        prompt: submittedPrompt,
         boxId,
         model: selectedModel,
       });
@@ -422,7 +430,7 @@ export function OperatorPanel({
         runId: runId!,
         branchId: branchId!,
         boxId,
-        prompt: prompt.trim(),
+        prompt: decoratePrompt(prompt.trim(), { requireCitations }),
         steps: editedSteps,
         editedSteps,
         model: selectedModel,
@@ -672,7 +680,26 @@ export function OperatorPanel({
   function handleSelectSavedPrompt(id: string) {
     if (!id) return;
     const found = savedPrompts.find((p) => p.id === id);
-    if (found) setPrompt(found.prompt.slice(0, MAX_PROMPT_LENGTH));
+    if (!found) return;
+    const variables = extractPromptVariables(found.prompt);
+    if (variables.length === 0) {
+      setPrompt(found.prompt.slice(0, MAX_PROMPT_LENGTH));
+      return;
+    }
+    const initialValues: Record<string, string> = {};
+    for (const name of variables) initialValues[name] = "";
+    setVarsDialog({
+      template: found.prompt,
+      variables,
+      values: initialValues,
+    });
+  }
+
+  function handleApplyVariables() {
+    if (!varsDialog) return;
+    const filled = applyPromptVariables(varsDialog.template, varsDialog.values);
+    setPrompt(filled.slice(0, MAX_PROMPT_LENGTH));
+    setVarsDialog(null);
   }
 
   function handleOpenSaveDialog() {
@@ -818,6 +845,22 @@ export function OperatorPanel({
             })}
           </select>
         </div>
+
+        <label className="flex items-start gap-2 text-xs text-foreground/90">
+          <input
+            type="checkbox"
+            className="mt-0.5 h-3.5 w-3.5 rounded border-input accent-primary"
+            checked={requireCitations}
+            onChange={(e) => setRequireCitations(e.target.checked)}
+          />
+          <span className="flex flex-col gap-0.5">
+            <span className="font-medium">Require citations</span>
+            <span className="text-[11px] text-muted-foreground">
+              Force Pog to attach a <code>[[note-id]]</code> or URL to every
+              factual claim. Slower but safer for research output.
+            </span>
+          </span>
+        </label>
 
         {quotaPreview && (
           <p
@@ -1186,6 +1229,58 @@ export function OperatorPanel({
         </SheetContent>
       </Sheet>
 
+      <Dialog
+        open={varsDialog !== null}
+        onOpenChange={(next) => {
+          if (!next) setVarsDialog(null);
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Fill in prompt variables</DialogTitle>
+            <DialogDescription>
+              This saved prompt has {varsDialog?.variables.length ?? 0}{" "}
+              placeholder{(varsDialog?.variables.length ?? 0) === 1 ? "" : "s"}.
+              Fill them in to customise the prompt.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col gap-3">
+            {varsDialog?.variables.map((name) => (
+              <div key={name} className="flex flex-col gap-1.5">
+                <label
+                  htmlFor={`operator-var-${name}`}
+                  className="text-xs font-medium text-muted-foreground"
+                >
+                  {`{{${name}}}`}
+                </label>
+                <Input
+                  id={`operator-var-${name}`}
+                  value={varsDialog.values[name] ?? ""}
+                  onChange={(e) =>
+                    setVarsDialog((prev) =>
+                      prev
+                        ? {
+                            ...prev,
+                            values: { ...prev.values, [name]: e.target.value },
+                          }
+                        : prev
+                    )
+                  }
+                  placeholder={`Value for ${name}`}
+                  autoFocus={name === varsDialog.variables[0]}
+                />
+              </div>
+            ))}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setVarsDialog(null)}>
+              Cancel
+            </Button>
+            <Button onClick={handleApplyVariables}>Use prompt</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={saveDialogOpen} onOpenChange={setSaveDialogOpen}>
         <DialogContent>
           <DialogHeader>
@@ -1230,6 +1325,55 @@ export function OperatorPanel({
       </Dialog>
     </>
   );
+}
+
+// ---------------------------------------------------------------------------
+// Per-run prompt decorators (citations, future per-run flags)
+// ---------------------------------------------------------------------------
+
+const REQUIRE_CITATIONS_DIRECTIVE =
+  "CITATIONS REQUIRED: For every factual claim in your output, attach an inline citation in the form [[note-id]] for workspace notes, or a full URL for web sources. Do not introduce unsourced claims. If you cannot find a citation for a claim, either drop the claim or mark it explicitly as \"(no citation)\".";
+
+export function decoratePrompt(
+  prompt: string,
+  flags: { requireCitations?: boolean }
+): string {
+  if (!flags.requireCitations) return prompt;
+  return `${REQUIRE_CITATIONS_DIRECTIVE}\n\n${prompt}`;
+}
+
+// ---------------------------------------------------------------------------
+// Prompt variable substitution ({{name}} placeholders in saved prompts)
+// ---------------------------------------------------------------------------
+
+const PROMPT_VAR_PATTERN = /\{\{\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*\}\}/g;
+
+/** Return unique variable names (preserving first-appearance order). */
+export function extractPromptVariables(template: string): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const match of template.matchAll(PROMPT_VAR_PATTERN)) {
+    const name = match[1];
+    if (!seen.has(name)) {
+      seen.add(name);
+      out.push(name);
+    }
+  }
+  return out;
+}
+
+/**
+ * Replace every `{{name}}` occurrence with the matching value. Unknown
+ * placeholders are left untouched so the user can spot un-filled slots.
+ */
+export function applyPromptVariables(
+  template: string,
+  values: Record<string, string>
+): string {
+  return template.replace(PROMPT_VAR_PATTERN, (match, name) => {
+    const value = values[name];
+    return typeof value === "string" && value.length > 0 ? value : match;
+  });
 }
 
 // ---------------------------------------------------------------------------

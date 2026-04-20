@@ -180,10 +180,21 @@ export async function updateWorkspaceAction(
 
     const name = (formData.get("name") as string | null)?.trim();
     const description = (formData.get("description") as string | null)?.trim() || null;
+    const agentInstructionsRaw = formData.get("agent_instructions");
+    const agentInstructions =
+      typeof agentInstructionsRaw === "string"
+        ? agentInstructionsRaw.trim() || null
+        : undefined;
 
     if (!name) throw new Error("Workspace name is required");
 
-    const updated = await updateWorkspace(supabase, workspaceId, { name, description });
+    const updated = await updateWorkspace(supabase, workspaceId, {
+      name,
+      description,
+      ...(agentInstructions !== undefined
+        ? { agent_instructions: agentInstructions }
+        : {}),
+    });
     if (!updated) throw new Error("Failed to update workspace");
 
     revalidatePath('/app', 'layout');

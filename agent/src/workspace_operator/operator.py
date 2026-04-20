@@ -31,6 +31,7 @@ from workspace_operator.tools import (
     build_link_notes_tool,
     build_read_note_tool,
     build_web_fetch_tool,
+    build_web_search_tool,
 )
 from workspace_operator.tracing import flush_tracing, setup_tracing  # tracing: Phase 3 Agent 4
 
@@ -262,6 +263,8 @@ def _build_workspace_context_block(
     box_id: str,
     boxes: list[dict[str, object]] | None = None,
     workspace_name: str | None = None,
+    workspace_instructions: str | None = None,
+    box_instructions: str | None = None,
 ) -> str:
     """Return a byte-stable workspace context block for prompt caching.
 
@@ -300,7 +303,48 @@ def _build_workspace_context_block(
                 lines.append(f"- {name} ({bid}) — {count} notes")
             else:
                 lines.append(f"- {name} ({bid})")
+    ws_rules = (workspace_instructions or "").strip()
+    if ws_rules:
+        lines.append("")
+        lines.append("### Workspace instructions (user-set)")
+        lines.append(ws_rules)
+    box_rules = (box_instructions or "").strip()
+    if box_rules:
+        lines.append("")
+        lines.append("### Box instructions (user-set)")
+        lines.append(box_rules)
     return "\n".join(lines) + "\n"
+
+
+async def _build_context_with_instructions(
+    client: PoggleClient,
+    *,
+    workspace_id: str,
+    box_id: str,
+) -> str:
+    """Fetch user-set workspace + box instructions and build the context block.
+
+    Instructions are opt-in — if both are empty we fall back to the bare
+    context block so prompt-cache behaviour matches the pre-instructions
+    baseline. Errors are non-fatal: on failure we log and return the bare
+    block rather than blocking the run.
+    """
+    workspace_instructions: str | None = None
+    box_instructions: str | None = None
+    try:
+        data = await client.fetch_workspace_context(box_id=box_id)
+        workspace_instructions = data.get("workspace_instructions") or None
+        box_instructions = data.get("box_instructions") or None
+    except Exception:  # noqa: BLE001 — instructions are opt-in polish, not critical.
+        # Keep the run going without instructions rather than failing the
+        # whole operator over a missing optional context fetch.
+        pass
+    return _build_workspace_context_block(
+        workspace_id=workspace_id,
+        box_id=box_id,
+        workspace_instructions=workspace_instructions,
+        box_instructions=box_instructions,
+    )
 
 
 PLAN_SYSTEM_PROMPT = """\
@@ -361,6 +405,7 @@ def _build_operator(
         tools=[
             build_hybrid_search_tool(client),
             build_read_note_tool(client),
+            build_web_search_tool(client),
             build_web_fetch_tool(client),
             build_draft_note_tool(client, box_id=box_id),
             build_edit_note_tool(client),
@@ -394,6 +439,7 @@ def _build_plan_agent(
         tools=[
             build_hybrid_search_tool(client),
             build_read_note_tool(client),
+            build_web_search_tool(client),
             build_web_fetch_tool(client),
         ],
     )
@@ -442,7 +488,8 @@ async def _run_plan(payload: OperatorInput, settings: Settings) -> OperatorResul
             return OperatorResult(
                 run_id=payload.run_id, status="cancelled", model=model,
             )
-        workspace_context = _build_workspace_context_block(
+        workspace_context = await _build_context_with_instructions(
+            client,
             workspace_id=payload.workspace_id,
             box_id=payload.box_id,
         )
@@ -636,7 +683,8 @@ async def _run_execute(payload: OperatorInput, settings: Settings) -> OperatorRe
 
         enriched_prompt = _build_execute_prompt(payload.prompt, payload.approved_plan)
 
-        workspace_context = _build_workspace_context_block(
+        workspace_context = await _build_context_with_instructions(
+            client,
             workspace_id=payload.workspace_id,
             box_id=payload.box_id,
         )
@@ -782,7 +830,8 @@ async def _run_full(payload: OperatorInput, settings: Settings) -> OperatorResul
 
     client.draft_note = draft_note_capturing  # type: ignore[assignment]
 
-    workspace_context = _build_workspace_context_block(
+    workspace_context = await _build_context_with_instructions(
+        client,
         workspace_id=payload.workspace_id,
         box_id=payload.box_id,
     )

@@ -19,20 +19,21 @@ interface BoxEditDialogProps {
   boxId: string;
   initialName: string;
   initialDescription: string | null;
+  initialAgentInstructions?: string | null;
 }
 
-/**
- * Inline edit dialog for a box's name and description.
- * Renders a small pencil icon button as the trigger.
- */
 export function BoxEditDialog({
   boxId,
   initialName,
   initialDescription,
+  initialAgentInstructions,
 }: BoxEditDialogProps) {
   const [open, setOpen] = useState(false);
   const [name, setName] = useState(initialName);
   const [description, setDescription] = useState(initialDescription ?? "");
+  const [agentInstructions, setAgentInstructions] = useState(
+    initialAgentInstructions ?? ""
+  );
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
@@ -41,6 +42,7 @@ export function BoxEditDialog({
     if (next) {
       setName(initialName);
       setDescription(initialDescription ?? "");
+      setAgentInstructions(initialAgentInstructions ?? "");
       setError(null);
     }
   }
@@ -53,6 +55,7 @@ export function BoxEditDialog({
       const result = await updateBoxAction(boxId, {
         name: name.trim(),
         description: description.trim() || null,
+        agent_instructions: agentInstructions.trim() || null,
       });
       if (result.ok) {
         setOpen(false);
@@ -118,6 +121,31 @@ export function BoxEditDialog({
               rows={2}
               disabled={isPending}
             />
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <label
+              className="text-xs font-medium text-foreground/80"
+              htmlFor="box-edit-agent-instructions"
+            >
+              Pog instructions{" "}
+              <span className="font-normal text-muted-foreground">
+                (optional)
+              </span>
+            </label>
+            <Textarea
+              id="box-edit-agent-instructions"
+              value={agentInstructions}
+              onChange={(e) => setAgentInstructions(e.target.value)}
+              placeholder="Rules or tone guidance Pog should follow when working inside this box."
+              rows={4}
+              maxLength={4000}
+              disabled={isPending}
+            />
+            <p className="text-[11px] text-muted-foreground">
+              Auto-injected into every Pog run scoped to this box. Great for
+              style rules, required tags, or domain shorthand.
+            </p>
           </div>
 
           {error && (

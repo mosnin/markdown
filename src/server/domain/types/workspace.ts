@@ -15,6 +15,7 @@ export interface Workspace {
   slug: string;
   description: string | null;
   status: WorkspaceStatus;
+  agent_instructions: string | null;
   created_at: string;
   updated_at: string;
 }

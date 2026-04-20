@@ -170,6 +170,7 @@ export default async function SettingsPage() {
             <WorkspaceSection
               initialName={workspace?.name ?? ctx.workspace.name}
               initialDescription={workspace?.description ?? null}
+              initialAgentInstructions={workspace?.agent_instructions ?? null}
             />
 
             {/*

@@ -167,16 +167,42 @@ class PoggleClient:
             {"url": url},
         )
 
-    async def fetch_workspace_context(self) -> dict[str, Any]:
+    async def web_search(
+        self,
+        *,
+        query: str,
+        max_results: int = 5,
+        include_answer: bool = True,
+    ) -> dict[str, Any]:
+        """Search the public web via Tavily (keyed on the Next.js server)."""
+        return await self._post(
+            "/api/agent/tools/web_search",
+            {
+                "query": query,
+                "max_results": max_results,
+                "include_answer": include_answer,
+            },
+        )
+
+    async def fetch_workspace_context(
+        self, *, box_id: str | None = None
+    ) -> dict[str, Any]:
         """Fetch deterministic workspace metadata for prompt-cache prefixes.
 
-        Returns `{ workspace_name, boxes: [{id, name, note_count}, ...] }` with
-        boxes sorted deterministically server-side so the same workspace
-        always renders to the same bytes. Used by
-        `operator._build_workspace_context_block` when it wants richer context
-        than the bare envelope.
+        Returns `{
+            workspace_name,
+            workspace_instructions,   # user-set rules for every Pog run in this workspace
+            box_instructions,          # user-set rules scoped to `box_id` (if provided)
+            boxes: [{id, name, note_count}, ...]
+        }` with boxes sorted deterministically server-side so the same
+        workspace always renders to the same bytes. Used by
+        `operator._build_workspace_context_block` when it wants richer
+        context than the bare envelope.
         """
-        return await self._post("/api/agent/tools/workspace_context", {})
+        payload: dict[str, Any] = {}
+        if box_id:
+            payload["box_id"] = box_id
+        return await self._post("/api/agent/tools/workspace_context", payload)
 
     async def check_cancellation(self, run_id: str) -> bool:
         """Ask the Next.js side whether this run has been cancelled.

@@ -19,6 +19,7 @@ export type CreateWorkspaceInput = z.infer<typeof createWorkspaceSchema>;
 export const updateWorkspaceSchema = z.object({
   name: z.string().min(1).max(200).optional(),
   description: z.string().max(1000).nullish(),
+  agent_instructions: z.string().max(4000).nullable().optional(),
 });
 
 export type UpdateWorkspaceInput = z.infer<typeof updateWorkspaceSchema>;

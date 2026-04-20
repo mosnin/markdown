@@ -325,8 +325,12 @@ function PromptDialogForm({
           onChange={(e) => setPrompt(e.target.value)}
           maxLength={4000}
           rows={6}
-          placeholder="What should the Operator do?"
+          placeholder="What should the Operator do? Use {{variable}} placeholders for reusable slots."
         />
+        <span className="text-[11px] text-muted-foreground">
+          Tip: wrap reusable slots in <code>{`{{`}name{`}}`}</code> — Pog will
+          prompt for values each time you pick this template.
+        </span>
       </label>
       <DialogFooter>
         <Button

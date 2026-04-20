@@ -385,6 +385,7 @@ export default async function BoxPage({
                   boxId={box.id}
                   initialName={box.name}
                   initialDescription={box.description}
+                  initialAgentInstructions={box.agent_instructions}
                 />
               </div>
               {box.description && (

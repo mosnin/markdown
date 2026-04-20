@@ -16,6 +16,7 @@ import { formatAbsoluteDate } from "@/lib/format_date";
 import { useNotePresence } from "@/lib/hooks/use_note_presence";
 import { useConcurrentEditWarning } from "@/lib/hooks/use_concurrent_edit_warning";
 import { NotePresenceAvatars } from "@/components/product/note_presence_avatars";
+import { AskPogSelectionPopover } from "@/components/product/ask_pog_selection_popover";
 
 /**
  * Autosave debounce: 1500ms after the last content change.
@@ -60,6 +61,11 @@ export function NoteEditor({ note, initialMode = "document", currentUser }: Note
   const [savedAt, setSavedAt] = useState<Date | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+
+  // Textarea refs — shared by both modes so the selection popover can watch
+  // whichever editor is currently mounted.
+  const documentTextareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const markdownTextareaRef = useRef<HTMLTextAreaElement | null>(null);
 
   // Ref-based guard to prevent concurrent saves across stale closures (Bug 2)
   const isSavingRef = useRef(false);
@@ -405,6 +411,7 @@ export function NoteEditor({ note, initialMode = "document", currentUser }: Note
         {mode === "document" && (
           <div role="tabpanel" aria-label="Document view" className="flex h-full flex-col">
             <textarea
+              ref={documentTextareaRef}
               value={content}
               onChange={(e) => {
                 setContent(e.target.value);
@@ -419,6 +426,10 @@ export function NoteEditor({ note, initialMode = "document", currentUser }: Note
                 "text-base leading-8 text-foreground",
                 "placeholder:text-muted-foreground/40 focus:outline-none"
               )}
+            />
+            <AskPogSelectionPopover
+              textareaRef={documentTextareaRef}
+              contextLabel={`Looking at the note titled "${note.title}".`}
             />
           </div>
         )}
@@ -443,6 +454,7 @@ export function NoteEditor({ note, initialMode = "document", currentUser }: Note
 
             {/* Editable textarea */}
             <textarea
+              ref={markdownTextareaRef}
               value={content}
               onChange={(e) => {
                 setContent(e.target.value);
@@ -457,6 +469,10 @@ export function NoteEditor({ note, initialMode = "document", currentUser }: Note
                 "font-mono text-sm leading-7 text-foreground",
                 "placeholder:text-muted-foreground/40 focus:outline-none"
               )}
+            />
+            <AskPogSelectionPopover
+              textareaRef={markdownTextareaRef}
+              contextLabel={`Looking at the markdown source of the note titled "${note.title}".`}
             />
           </div>
         )}

@@ -111,7 +111,11 @@ export async function createBoxAction(
 
 export async function updateBoxAction(
   boxId: string,
-  changes: { name?: string; description?: string | null }
+  changes: {
+    name?: string;
+    description?: string | null;
+    agent_instructions?: string | null;
+  }
 ): Promise<ActionResult> {
   try {
     const { supabase, userId, workspaceId, activeBranchId } = await requireContext();
@@ -141,6 +145,14 @@ export async function updateBoxAction(
           name: changes.name !== undefined ? changes.name : undefined,
           description: changes.description !== undefined ? changes.description : undefined,
         });
+        // agent_instructions is workspace configuration (not branchable
+        // content), so write it straight to main even when a branch is
+        // active. This matches the behaviour of workspace-level rules.
+        if (changes.agent_instructions !== undefined) {
+          await updateBox(supabase, userId, boxId, workspaceId, {
+            agent_instructions: changes.agent_instructions,
+          });
+        }
         revalidatePath(`/app/boxes/${boxId}`);
         revalidatePath("/app");
         return { ok: true, data: undefined };

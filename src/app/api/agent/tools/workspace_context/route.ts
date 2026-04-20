@@ -49,17 +49,38 @@ export async function POST(request: NextRequest) {
   }
   const { ctx } = auth;
 
+  let body: { box_id?: unknown } = {};
+  try {
+    body = await request.json();
+  } catch {
+    body = {};
+  }
+  const boxId =
+    typeof body.box_id === "string" && body.box_id.trim() ? body.box_id : null;
+
   const admin = createAdminClient();
 
   try {
     const { data: ws, error: wsErr } = await admin
       .from("workspaces")
-      .select("id, name")
+      .select("id, name, agent_instructions")
       .eq("id", ctx.workspaceId)
       .maybeSingle();
     if (wsErr) throw wsErr;
     if (!ws) {
       return apiError("workspace_not_found", "Workspace not found", 404);
+    }
+
+    let boxInstructions: string | null = null;
+    if (boxId) {
+      const { data: boxRow, error: boxRowErr } = await admin
+        .from("boxes")
+        .select("id, agent_instructions")
+        .eq("id", boxId)
+        .eq("workspace_id", ctx.workspaceId)
+        .maybeSingle();
+      if (boxRowErr) throw boxRowErr;
+      boxInstructions = boxRow?.agent_instructions ?? null;
     }
 
     // Boxes on main (branch_id is null), excluding trashed. Note counts are
@@ -104,6 +125,9 @@ export async function POST(request: NextRequest) {
       run_id: ctx.runId,
       workspace_id: ws.id,
       workspace_name: ws.name,
+      workspace_instructions:
+        (ws as { agent_instructions: string | null }).agent_instructions ?? null,
+      box_instructions: boxInstructions,
       boxes: sorted.map((b) => ({
         id: b.id,
         name: b.name,

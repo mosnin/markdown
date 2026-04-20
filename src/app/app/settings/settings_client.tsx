@@ -346,9 +346,11 @@ export function NotificationsSection({
 export function WorkspaceSection({
   initialName,
   initialDescription,
+  initialAgentInstructions,
 }: {
   initialName: string;
   initialDescription: string | null;
+  initialAgentInstructions: string | null;
 }) {
   const [status, setStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [errorMsg, setErrorMsg] = useState<string>("");
@@ -414,6 +416,28 @@ export function WorkspaceSection({
               rows={3}
               className="resize-none"
             />
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <label
+              htmlFor="workspace-agent-instructions"
+              className="text-sm font-medium text-foreground"
+            >
+              Pog instructions
+            </label>
+            <Textarea
+              id="workspace-agent-instructions"
+              name="agent_instructions"
+              defaultValue={initialAgentInstructions ?? ""}
+              placeholder="Workspace-wide rules Pog should follow on every run — tone, required citations, forbidden topics, etc."
+              rows={5}
+              maxLength={4000}
+              className="resize-none"
+            />
+            <p className="text-xs text-muted-foreground">
+              Injected into every Pog run in this workspace. Box-level
+              instructions stack on top of these.
+            </p>
           </div>
 
           <div className="flex items-center justify-end gap-3 pt-1">

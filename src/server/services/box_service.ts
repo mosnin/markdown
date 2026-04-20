@@ -88,7 +88,11 @@ export async function updateBox(
   userId: string,
   boxId: string,
   workspaceId: string,
-  changes: { name?: string; description?: string | null }
+  changes: {
+    name?: string;
+    description?: string | null;
+    agent_instructions?: string | null;
+  }
 ): Promise<Box | null> {
   const box = await repoUpdate(supabase, boxId, changes);
   if (!box) return null;

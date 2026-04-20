@@ -28,6 +28,7 @@ export interface Box {
    * docs/branch_local_structural_creation_v1.md.
    */
   branch_id: string | null;
+  agent_instructions: string | null;
   created_at: string;
   updated_at: string;
 }
