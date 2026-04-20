@@ -265,12 +265,26 @@ Cost is dominated by LLM tokens, not Modal containers.
   wires `RunResult.context_wrapper.usage` into `workspace_operator_runs`
   + `workspace_operator_usage` rollup + billing UI. Cost model is
   hardcoded; Creem metered-event sync is the next billing step.
+- [x] Operator panel wired into the app layout —
+  `OperatorPanelTrigger` (client wrapper, owns `open` state) replaces
+  the raw `<GlobalSearch>` mount in `src/app/app/layout.tsx`. Desktop
+  toolbar only — mobile parity is a follow-up (the desktop-only mount
+  predates Phase 4, since `GlobalSearch` was already gated behind
+  `md:flex`).
 - [ ] No end-to-end smoke test against a deployed Modal endpoint.
-  Staging deploy is next step.
-- [ ] Operator panel not yet wired into the app layout (needs
-  `onOpenOperator` prop threaded from layout to GlobalSearch)
-- [ ] `must_cite_per_claim` guardrail uses an extra LLM call per run
-  when enabled — measure latency impact before exposing to all tiers.
+  `agent/DEPLOY.md` documents the deploy + smoke procedure
+  (`agent/scripts/deploy_staging.sh`, `agent/scripts/smoke_test.sh`);
+  needs to be executed once against a real Modal account.
+- [ ] `must_cite_per_claim` guardrail — pure-Python overhead measured
+  at <0.1ms (`agent/scripts/bench_guardrail_latency.py` mocked mode).
+  Real cost is the extra `gpt-4.1-mini` round-trip (~300–1500ms,
+  ~5–10% latency tax on a full run). Recommendation: keep opt-in via
+  `user_agent_preferences` for Pro/Business, do not enable for Free.
+- [ ] `fetch_workspace_context` — framework overhead <1ms
+  (`agent/scripts/bench_workspace_context.py` mocked mode, 40 boxes).
+  Real cost is HTTP RTT (30–150ms). Recommendation: enable behind a
+  settings flag once cache-hit-rate telemetry confirms the benefit
+  beats per-run RTT.
 - [ ] Activity feed broadcast is best-effort only (fire-and-forget POST
   + Realtime); no replay if the broadcast lands while no client is
   subscribed. Audit row is durable, but UI must reload to see history.
@@ -279,7 +293,3 @@ Cost is dominated by LLM tokens, not Modal containers.
   API for per-workspace usage reporting.
 - [ ] Design partner onboarding + public launch demo ("Write a
   competitive brief in 90 seconds") — product/biz work, not code.
-- [ ] `fetch_workspace_context` endpoint is wired on both sides but
-  currently unused — Phase 4 context block uses envelope fields only
-  (fast + deterministic). Enable once we've measured cache benefit vs.
-  added per-run latency.

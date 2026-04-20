@@ -7,7 +7,7 @@ import { AppShellSidebar } from "@/components/product/app_shell_sidebar";
 import { MobileShellSidebar } from "@/components/product/mobile_shell_sidebar";
 import { ThemeToggle } from "@/components/product/theme_toggle";
 import { AppBreadcrumbs } from "@/components/product/app_breadcrumbs";
-import { GlobalSearch } from "@/components/product/global_search";
+import { OperatorPanelTrigger } from "@/components/product/operator_panel_trigger";
 import { ActivityBell } from "@/components/product/activity_bell";
 import { LegalStickyFooter } from "@/components/legal/legal_modal";
 
@@ -98,7 +98,9 @@ export default async function AppLayout({
             role="toolbar"
             aria-label="User actions"
           >
-            <GlobalSearch boxes={boxes.map((b) => ({ id: b.id, name: b.name }))} />
+            <OperatorPanelTrigger
+              boxes={boxes.map((b) => ({ id: b.id, name: b.name }))}
+            />
             <ActivityBell />
             <a
               href="https://docs.contextstore.app"
