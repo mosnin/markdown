@@ -6,7 +6,7 @@ import { OperatorHistoryTable } from "@/components/product/operator_history_tabl
 import {
   expandStatusFilter,
   type OperatorRunStatusFilter,
-} from "@/app/app/workspace_operator/history_actions";
+} from "@/app/app/workspace_operator/history_filters";
 import Link from "next/link";
 
 /**

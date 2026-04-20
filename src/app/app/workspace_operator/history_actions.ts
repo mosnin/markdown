@@ -6,7 +6,6 @@ import {
   listOperatorRuns,
   getOperatorRun,
   type WorkspaceOperatorRunRow,
-  type OperatorRunStatus,
 } from "@/server/services/workspace_operator_runs_service";
 import {
   listRunArtifacts,
@@ -19,6 +18,12 @@ import {
   type RunWorkspaceOperatorOutput,
   type ActionErrorQuotaExceeded,
 } from "./actions";
+import {
+  expandStatusFilter,
+  type OperatorRunStatusFilter,
+} from "./history_filters";
+
+export type { OperatorRunStatusFilter } from "./history_filters";
 
 /**
  * History/detail/rollback/retry server actions for the Workspace Operator
@@ -39,19 +44,6 @@ export type HistoryActionResult<T> =
 
 // ─── List my runs ───────────────────────────────────────────────────────────
 
-/**
- * UI-facing status bucket. The "running" bucket is a convenience group
- * that collapses the executing / planning / awaiting_approval states into
- * a single "in flight" filter. Callers pass one of these values; the
- * action expands "running" into the underlying status array.
- */
-export type OperatorRunStatusFilter =
-  | "all"
-  | "completed"
-  | "failed"
-  | "cancelled"
-  | "running";
-
 export interface ListMyOperatorRunsInput {
   /** Page size — default 25, capped at 100 by the underlying service. */
   limit?: number;
@@ -71,21 +63,6 @@ export interface ListMyOperatorRunsInput {
   toDate?: string;
   /** Case-insensitive substring search on the prompt column. */
   search?: string;
-}
-
-/**
- * Expand the UI-facing status bucket into the underlying service param.
- * Exported for use in the server page so initial render uses the same
- * mapping as "Load more" / re-filter.
- */
-export function expandStatusFilter(
-  bucket: OperatorRunStatusFilter | undefined
-): OperatorRunStatus | OperatorRunStatus[] | undefined {
-  if (!bucket || bucket === "all") return undefined;
-  if (bucket === "running") {
-    return ["executing", "planning", "awaiting_approval"];
-  }
-  return bucket;
 }
 
 export interface ListMyOperatorRunsOutput {
