@@ -15,7 +15,15 @@ from dataclasses import dataclass
 # estimator in `workspace_operator_usage_service.ts` only knows how to map
 # these ids. Reject anything else with a clear ValueError early in the
 # operator (see `_resolve_model`).
-ALLOWED_OPERATOR_MODELS: tuple[str, ...] = ("gpt-4.1-mini", "gpt-4.1")
+ALLOWED_OPERATOR_MODELS: tuple[str, ...] = (
+    "gpt-4.1-mini",
+    "gpt-4.1",
+    # o3-mini is a reasoning model — worth the extra latency for planning-heavy
+    # runs where the agent has to weigh tradeoffs (e.g. curation: which notes
+    # to archive, which to merge). Priced separately from the 4.1 family; see
+    # `MODEL_PRICING` in workspace_operator_usage_service.ts.
+    "o3-mini",
+)
 
 
 @dataclass(frozen=True)
@@ -36,7 +44,7 @@ class Settings:
             openai_api_key=_require_env("OPENAI_API_KEY"),
             model=os.environ.get("WORKSPACE_OPERATOR_MODEL", "gpt-4.1-mini"),
             request_timeout_s=float(os.environ.get("WORKSPACE_OPERATOR_HTTP_TIMEOUT_S", "30")),
-            max_tool_calls=int(os.environ.get("WORKSPACE_OPERATOR_MAX_TOOL_CALLS", "20")),
+            max_tool_calls=int(os.environ.get("WORKSPACE_OPERATOR_MAX_TOOL_CALLS", "40")),
         )
 
 

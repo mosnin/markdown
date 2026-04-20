@@ -85,3 +85,4 @@ class DraftNoteResult(BaseModel):
     note_id: str
     title: str
     branch_id: str
+    markdown_content: str = ""

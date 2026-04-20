@@ -42,6 +42,7 @@ import { useOperatorProgress } from "@/lib/hooks/use_operator_run";
 import {
   requestOperatorPlanAction,
   approveAndExecuteAction,
+  runWorkspaceOperatorAction,
   cancelRunAction,
   retryRunAction,
   listSavedPromptsAction,
@@ -180,6 +181,7 @@ export function OperatorPanel({
     values: Record<string, string>;
   } | null>(null);
   const [requireCitations, setRequireCitations] = useState(false);
+  const [autoMode, setAutoMode] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const [retrying, setRetrying] = useState(false);
 
@@ -377,6 +379,55 @@ export function OperatorPanel({
     setPhase("planning");
 
     const submittedPrompt = decoratePrompt(prompt.trim(), { requireCitations });
+
+    // Auto mode — skip the plan/approve gate and go straight from prompt
+    // to execution. The plan phase is valuable for complex requests but is
+    // pure ceremony for simple one-shot prompts; power users opt into
+    // auto mode to cut the round-trip.
+    if (autoMode) {
+      setPhase("executing");
+      startExecTransition(async () => {
+        const res = await runWorkspaceOperatorAction({
+          prompt: submittedPrompt,
+          boxId,
+          model: selectedModel,
+        });
+        if (!res.ok) {
+          if (isQuotaError(res.error)) {
+            setQuotaExceeded({
+              tier: res.error.tier,
+              limit: res.error.limit,
+              used: res.error.used,
+              resetsAt: res.error.resetsAt,
+              message: res.error.message,
+            });
+            setPhase("quota_exceeded");
+            return;
+          }
+          setError(
+            typeof res.error === "string"
+              ? res.error
+              : (res.error as { message: string }).message
+          );
+          setPhase("failed");
+          return;
+        }
+        setRunId(res.data.run_id);
+        setBranchId(res.data.branch_id);
+        setResult({
+          notes_created: res.data.notes_created,
+          tool_calls: res.data.tool_calls,
+          error: res.data.error,
+        });
+        if (res.data.status === "completed") {
+          setPhase("completed");
+        } else {
+          setError(res.data.error ?? "Execution failed.");
+          setPhase("failed");
+        }
+      });
+      return;
+    }
 
     startPlanTransition(async () => {
       const res = await requestOperatorPlanAction({
@@ -862,6 +913,22 @@ export function OperatorPanel({
           </span>
         </label>
 
+        <label className="flex items-start gap-2 text-xs text-foreground/90">
+          <input
+            type="checkbox"
+            className="mt-0.5 h-3.5 w-3.5 rounded border-input accent-primary"
+            checked={autoMode}
+            onChange={(e) => setAutoMode(e.target.checked)}
+          />
+          <span className="flex flex-col gap-0.5">
+            <span className="font-medium">Auto run (skip plan)</span>
+            <span className="text-[11px] text-muted-foreground">
+              Dispatch the prompt straight to execution without the
+              plan-and-approve gate. Best for simple, trusted prompts.
+            </span>
+          </span>
+        </label>
+
         {quotaPreview && (
           <p
             className={cn(
@@ -882,6 +949,7 @@ export function OperatorPanel({
             !prompt.trim() ||
             !boxId ||
             isPlanPending ||
+            isExecPending ||
             (quotaPreview !== null && !quotaPreview.allowed)
           }
           onClick={handleGeneratePlan}
@@ -893,7 +961,7 @@ export function OperatorPanel({
           }
         >
           <Sparkles className="h-4 w-4" aria-hidden="true" />
-          Generate Plan
+          {autoMode ? "Run Now" : "Generate Plan"}
         </Button>
       </div>
     );

@@ -47,7 +47,7 @@ export interface OperatorProgressEvent {
  * and the Python operator's `ALLOWED_OPERATOR_MODELS`. New entries here
  * must be reflected in both.
  */
-export const OPERATOR_MODELS = ["gpt-4.1-mini", "gpt-4.1"] as const;
+export const OPERATOR_MODELS = ["gpt-4.1-mini", "gpt-4.1", "o3-mini"] as const;
 export type OperatorModel = (typeof OPERATOR_MODELS)[number];
 
 export const DEFAULT_OPERATOR_MODEL: OperatorModel = "gpt-4.1-mini";
@@ -91,6 +91,7 @@ export const OPERATOR_MODEL_RATES: Record<
 > = {
   "gpt-4.1-mini": { inputUsdPerMillion: 0.4, outputUsdPerMillion: 1.6 },
   "gpt-4.1": { inputUsdPerMillion: 2, outputUsdPerMillion: 8 },
+  "o3-mini": { inputUsdPerMillion: 1.1, outputUsdPerMillion: 4.4 },
 };
 
 /** Per-step output token estimate (rough — see {@link estimateOperatorRunCost}). */

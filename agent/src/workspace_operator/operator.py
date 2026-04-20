@@ -25,11 +25,15 @@ from workspace_operator.models import OperatorInput, OperatorResult, PlanResult,
 from workspace_operator.settings import ALLOWED_OPERATOR_MODELS, Settings
 from workspace_operator.tools import (
     build_apply_template_tool,
+    build_archive_note_tool,
     build_draft_note_tool,
     build_edit_note_tool,
     build_hybrid_search_tool,
     build_link_notes_tool,
+    build_list_notes_in_box_tool,
+    build_move_note_tool,
     build_read_note_tool,
+    build_rename_note_tool,
     build_web_fetch_tool,
     build_web_search_tool,
 )
@@ -347,6 +351,62 @@ async def _build_context_with_instructions(
     )
 
 
+async def _build_run_prologue(
+    client: PoggleClient,
+    *,
+    branch_id: str,
+    base_prompt: str,
+) -> str:
+    """Return the prompt with a small dynamic prologue prepended.
+
+    The prologue carries things that MUST NOT be in the cached system
+    prefix because they change per run:
+
+      * Today's date (UTC), so the agent can reason about recency
+        ("recent papers", "this week", "last quarter") without guessing.
+      * The active draft branch id, so the agent knows which branch its
+        writes land on and can reference it in its final summary.
+      * A short "recent runs" memory block — the last few completed runs
+        for this user in this workspace, with titles of notes they
+        produced. Without this the agent has amnesia between runs and
+        re-does the same discovery work.
+
+    All fetches are best-effort: a failure returns the bare prompt. The
+    prologue goes on the USER prompt (not the system prompt) so it
+    doesn't invalidate the prompt cache.
+    """
+    import datetime as _dt
+
+    today = _dt.date.today().isoformat()
+    lines: list[str] = [
+        "## Run prologue",
+        f"today: {today} (UTC)",
+        f"active_branch_id: {branch_id}",
+    ]
+    try:
+        memory = await client.fetch_run_memory(limit=5)
+        recent = memory.get("recent_runs") or []
+    except Exception:  # noqa: BLE001
+        recent = []
+    if recent:
+        lines.append("")
+        lines.append("### Recent runs (your memory — do not re-solve these)")
+        for r in recent:
+            when = str(r.get("created_at", ""))[:10]
+            preview = str(r.get("prompt_preview", "")).strip()
+            note_titles = r.get("note_titles") or []
+            title_suffix = (
+                " — created: " + ", ".join(f'"{t}"' for t in note_titles)
+                if note_titles
+                else ""
+            )
+            lines.append(f'- [{when}] "{preview}"{title_suffix}')
+    lines.append("")
+    lines.append("## User request")
+    lines.append(base_prompt)
+    return "\n".join(lines)
+
+
 PLAN_SYSTEM_PROMPT = """\
 You are the Workspace Operator in planning mode. Your job is to analyze the
 user's request and produce a structured execution plan.
@@ -404,11 +464,15 @@ def _build_operator(
         instructions=instructions,
         tools=[
             build_hybrid_search_tool(client),
+            build_list_notes_in_box_tool(client),
             build_read_note_tool(client),
             build_web_search_tool(client),
             build_web_fetch_tool(client),
             build_draft_note_tool(client, box_id=box_id),
             build_edit_note_tool(client),
+            build_rename_note_tool(client),
+            build_move_note_tool(client),
+            build_archive_note_tool(client),
             build_link_notes_tool(client),
             build_apply_template_tool(client, box_id=box_id),
         ],
@@ -438,6 +502,7 @@ def _build_plan_agent(
         instructions=instructions,
         tools=[
             build_hybrid_search_tool(client),
+            build_list_notes_in_box_tool(client),
             build_read_note_tool(client),
             build_web_search_tool(client),
             build_web_fetch_tool(client),
@@ -507,10 +572,14 @@ async def _run_plan(payload: OperatorInput, settings: Settings) -> OperatorResul
         # tool calls" knob, so we map Settings.max_tool_calls onto its
         # `max_turns` (one turn ≈ one tool call for tool-heavy loops).
         # See guardrails/max_tool_calls.py for the rationale.
+        prompt_with_prologue = await _build_run_prologue(
+            client, branch_id=payload.branch_id, base_prompt=payload.prompt
+        )
+
         async def _do_run():  # type: ignore[no-untyped-def]
             return await Runner.run(
                 agent,
-                payload.prompt,
+                prompt_with_prologue,
                 max_turns=derive_max_turns(settings),
                 run_config=run_config,
                 hooks=budget_hooks,
@@ -682,6 +751,9 @@ async def _run_execute(payload: OperatorInput, settings: Settings) -> OperatorRe
             )
 
         enriched_prompt = _build_execute_prompt(payload.prompt, payload.approved_plan)
+        enriched_prompt = await _build_run_prologue(
+            client, branch_id=payload.branch_id, base_prompt=enriched_prompt
+        )
 
         workspace_context = await _build_context_with_instructions(
             client,
@@ -860,11 +932,15 @@ async def _run_full(payload: OperatorInput, settings: Settings) -> OperatorResul
                 notes_created=notes_created,
                 model=model,
             )
+        prompt_with_prologue = await _build_run_prologue(
+            client, branch_id=payload.branch_id, base_prompt=payload.prompt
+        )
+
         # See guardrails/max_tool_calls.py for the max_turns rationale.
         async def _do_run():  # type: ignore[no-untyped-def]
             return await Runner.run(
                 agent,
-                payload.prompt,
+                prompt_with_prologue,
                 max_turns=derive_max_turns(settings),
                 run_config=run_config,
                 hooks=budget_hooks,

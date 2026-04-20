@@ -36,6 +36,7 @@ class EditNoteOutput(BaseModel):
     branch_id: str
     version_id: str
     version_number: int
+    markdown_content: str = ""
 
 
 def build_edit_note_tool(client: PoggleClient) -> Any:
@@ -45,7 +46,9 @@ def build_edit_note_tool(client: PoggleClient) -> Any:
             "Replace the body of an existing note. The change is written to "
             "the user's review branch (NOT main) — they will see it as a diff "
             "and choose to promote or discard. Always read the note first with "
-            "`read_note` so your edit reflects the current content."
+            "`read_note` so your edit reflects the current content. The "
+            "response echoes back the full `markdown_content` you wrote so you "
+            "can verify it landed as intended without an extra `read_note` round-trip."
         ),
     )
     async def edit_note(
@@ -61,6 +64,7 @@ def build_edit_note_tool(client: PoggleClient) -> Any:
             branch_id=result["branch_id"],
             version_id=result["version_id"],
             version_number=int(result["version_number"]),
+            markdown_content=str(result.get("markdown_content", "")),
         )
 
     return edit_note

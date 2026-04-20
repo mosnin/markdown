@@ -27,6 +27,7 @@ class DraftNoteOutput(BaseModel):
     note_id: str
     title: str
     branch_id: str
+    markdown_content: str = ""
 
 
 def build_draft_note_tool(client: PoggleClient, *, box_id: str) -> Any:
@@ -44,7 +45,10 @@ def build_draft_note_tool(client: PoggleClient, *, box_id: str) -> Any:
             "is NOT yet on main — it's a proposal the user will review as a "
             "diff. Every factual claim must be cited to a note_id using the "
             "`[[note_id]]` syntax; claims without citations will cause the run "
-            "to fail the output guardrail."
+            "to fail the output guardrail. The response echoes back the full "
+            "`markdown_content` that was written so you can verify it rendered "
+            "as intended and iterate with `edit_note` if needed — you do NOT "
+            "need to call `read_note` after drafting."
         ),
     )
     async def draft_note(
@@ -61,6 +65,7 @@ def build_draft_note_tool(client: PoggleClient, *, box_id: str) -> Any:
             note_id=result.note_id,
             title=result.title,
             branch_id=result.branch_id,
+            markdown_content=result.markdown_content,
         )
 
     return draft_note

@@ -141,6 +141,46 @@ class PoggleClient:
             },
         )
 
+    async def list_notes_in_box(
+        self,
+        *,
+        box_id: str,
+        include_archived: bool = False,
+        limit: int = 50,
+    ) -> dict[str, Any]:
+        """List notes in a box so the agent can orient before drafting/editing."""
+        return await self._post(
+            "/api/agent/tools/list_notes_in_box",
+            {
+                "box_id": box_id,
+                "include_archived": include_archived,
+                "limit": limit,
+            },
+        )
+
+    async def archive_note(self, *, note_id: str) -> dict[str, Any]:
+        """Archive a note (reversible). Guide notes cannot be archived."""
+        return await self._post(
+            "/api/agent/tools/archive_note",
+            {"note_id": note_id},
+        )
+
+    async def rename_note(self, *, note_id: str, new_title: str) -> dict[str, Any]:
+        """Rename a note on the run's branch — lands as a branch-scoped version."""
+        return await self._post(
+            "/api/agent/tools/rename_note",
+            {"note_id": note_id, "new_title": new_title},
+        )
+
+    async def move_note(
+        self, *, note_id: str, folder_id: str | None
+    ) -> dict[str, Any]:
+        """Move a note to a different folder within the same box."""
+        return await self._post(
+            "/api/agent/tools/move_note",
+            {"note_id": note_id, "folder_id": folder_id},
+        )
+
     async def apply_template(
         self,
         *,
@@ -203,6 +243,19 @@ class PoggleClient:
         if box_id:
             payload["box_id"] = box_id
         return await self._post("/api/agent/tools/workspace_context", payload)
+
+    async def fetch_run_memory(self, *, limit: int = 5) -> dict[str, Any]:
+        """Fetch compact summaries of this user's recent completed runs.
+
+        Used to build a "Run memory" prologue prepended to the user's
+        current prompt so the agent can stop re-solving the same
+        discovery problem every run. Kept tiny (≤10 runs × short
+        preview) so it doesn't bloat the per-run prompt.
+        """
+        return await self._post(
+            "/api/agent/tools/run_memory",
+            {"limit": limit},
+        )
 
     async def check_cancellation(self, run_id: str) -> bool:
         """Ask the Next.js side whether this run has been cancelled.

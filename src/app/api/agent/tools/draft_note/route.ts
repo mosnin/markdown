@@ -129,6 +129,7 @@ export async function POST(request: NextRequest) {
       note_id: note.id,
       title: note.title,
       branch_id: ctx.branchId,
+      markdown_content: note.markdown_content ?? "",
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);

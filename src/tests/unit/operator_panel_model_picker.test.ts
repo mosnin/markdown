@@ -17,12 +17,11 @@ import {
 } from "@/app/app/workspace_operator/types";
 
 describe("OPERATOR_MODELS", () => {
-  it('contains exactly ["gpt-4.1-mini", "gpt-4.1"] in that order', () => {
-    expect(OPERATOR_MODELS).toEqual(["gpt-4.1-mini", "gpt-4.1"]);
+  it("starts with the 4.1 family and includes the o3-mini reasoning option", () => {
+    expect(OPERATOR_MODELS).toEqual(["gpt-4.1-mini", "gpt-4.1", "o3-mini"]);
   });
 
-  it("has length 2 (no duplicates, no surprise additions)", () => {
-    expect(OPERATOR_MODELS).toHaveLength(2);
+  it("has no duplicates", () => {
     expect(new Set(OPERATOR_MODELS).size).toBe(OPERATOR_MODELS.length);
   });
 });
