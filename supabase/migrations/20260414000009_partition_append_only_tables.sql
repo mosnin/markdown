@@ -110,6 +110,8 @@ ALTER TABLE public.audit_events_partitioned RENAME TO audit_events;
 DROP INDEX IF EXISTS public.audit_events_workspace_id_created_at_idx;
 DROP INDEX IF EXISTS public.audit_events_object_idx;
 DROP INDEX IF EXISTS public.audit_events_actor_idx;
+DROP INDEX IF EXISTS public.audit_events_change_set_id_idx;
+DROP INDEX IF EXISTS public.audit_events_created_at_idx;
 
 -- ---------------------------------------------------------------------------
 -- 1f. Recreate indexes on the new partitioned table.
