@@ -17,12 +17,10 @@ from dataclasses import dataclass
 # operator (see `_resolve_model`).
 ALLOWED_OPERATOR_MODELS: tuple[str, ...] = (
     "gpt-4.1-mini",
+    "gpt-5.4-mini",
+    "o4-mini",
     "gpt-4.1",
-    # o3-mini is a reasoning model — worth the extra latency for planning-heavy
-    # runs where the agent has to weigh tradeoffs (e.g. curation: which notes
-    # to archive, which to merge). Priced separately from the 4.1 family; see
-    # `MODEL_PRICING` in workspace_operator_usage_service.ts.
-    "o3-mini",
+    "o3",
 )
 
 
@@ -42,7 +40,7 @@ class Settings:
             poggle_base_url=base,
             shared_secret=_require_env("WORKSPACE_OPERATOR_SHARED_SECRET"),
             openai_api_key=_require_env("OPENAI_API_KEY"),
-            model=os.environ.get("WORKSPACE_OPERATOR_MODEL", "gpt-4.1-mini"),
+            model=os.environ.get("WORKSPACE_OPERATOR_MODEL", "gpt-5.4-mini"),
             request_timeout_s=float(os.environ.get("WORKSPACE_OPERATOR_HTTP_TIMEOUT_S", "30")),
             max_tool_calls=int(os.environ.get("WORKSPACE_OPERATOR_MAX_TOOL_CALLS", "40")),
         )

@@ -17,8 +17,14 @@ import {
 } from "@/app/app/workspace_operator/types";
 
 describe("OPERATOR_MODELS", () => {
-  it("starts with the 4.1 family and includes the o3-mini reasoning option", () => {
-    expect(OPERATOR_MODELS).toEqual(["gpt-4.1-mini", "gpt-4.1", "o3-mini"]);
+  it("contains the current model lineup", () => {
+    expect(OPERATOR_MODELS).toEqual([
+      "gpt-4.1-mini",
+      "gpt-5.4-mini",
+      "o4-mini",
+      "gpt-4.1",
+      "o3",
+    ]);
   });
 
   it("has no duplicates", () => {
@@ -27,8 +33,8 @@ describe("OPERATOR_MODELS", () => {
 });
 
 describe("DEFAULT_OPERATOR_MODEL", () => {
-  it('is "gpt-4.1-mini" (cheapest tier)', () => {
-    expect(DEFAULT_OPERATOR_MODEL).toBe("gpt-4.1-mini");
+  it('is "gpt-5.4-mini" (best default for new runs)', () => {
+    expect(DEFAULT_OPERATOR_MODEL).toBe("gpt-5.4-mini");
   });
 
   it("is itself a member of OPERATOR_MODELS", () => {

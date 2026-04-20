@@ -84,8 +84,10 @@ export const MODEL_PRICING: Record<
   { inputCentsPerMillion: number; outputCentsPerMillion: number }
 > = {
   "gpt-4.1-mini": { inputCentsPerMillion: 40, outputCentsPerMillion: 160 },
+  "gpt-5.4-mini": { inputCentsPerMillion: 75, outputCentsPerMillion: 450 },
+  "o4-mini": { inputCentsPerMillion: 110, outputCentsPerMillion: 440 },
   "gpt-4.1": { inputCentsPerMillion: 200, outputCentsPerMillion: 800 },
-  "o3-mini": { inputCentsPerMillion: 110, outputCentsPerMillion: 440 },
+  "o3": { inputCentsPerMillion: 200, outputCentsPerMillion: 800 },
 };
 
 export const FALLBACK_MODEL = "gpt-4.1-mini";

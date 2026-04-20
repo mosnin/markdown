@@ -879,14 +879,16 @@ export function OperatorPanel({
             value={selectedModel}
             onChange={(e) => {
               const v = e.target.value as OperatorModel;
-              if (v === "gpt-4.1" && !canUseLargeModel) return;
+              const isPremium = v === "gpt-4.1" || v === "o3";
+              if (isPremium && !canUseLargeModel) return;
               setSelectedModel(v);
             }}
             className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             aria-label="Operator model"
           >
             {OPERATOR_MODELS.map((m) => {
-              const locked = m === "gpt-4.1" && !canUseLargeModel;
+              const isPremium = m === "gpt-4.1" || m === "o3";
+              const locked = isPremium && !canUseLargeModel;
               return (
                 <option key={m} value={m} disabled={locked}>
                   {m}
