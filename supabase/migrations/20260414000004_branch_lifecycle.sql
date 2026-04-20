@@ -25,7 +25,7 @@ ALTER TABLE public.draft_branches
   ADD COLUMN IF NOT EXISTS warning_count    integer NOT NULL DEFAULT 0;
 
 UPDATE public.draft_branches
-   SET last_activity_at = GREATEST(COALESCE(updated_at, created_at), created_at)
+   SET last_activity_at = created_at
  WHERE last_activity_at IS NULL;
 
 CREATE INDEX IF NOT EXISTS draft_branches_last_activity_idx
