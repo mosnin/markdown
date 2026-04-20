@@ -103,6 +103,14 @@ ALTER TABLE public.audit_events_partitioned RENAME TO audit_events;
 -- Also rename partitions to follow the parent name consistently.
 -- (Partition names remain as-is; they are referenced internally.)
 
+-- Indexes created on the original table (core_schema) kept their names
+-- after the rename — they're now attached to audit_events_legacy. Drop
+-- them so the fresh CREATE INDEX statements below can reuse the names
+-- on the new partitioned table.
+DROP INDEX IF EXISTS public.audit_events_workspace_id_created_at_idx;
+DROP INDEX IF EXISTS public.audit_events_object_idx;
+DROP INDEX IF EXISTS public.audit_events_actor_idx;
+
 -- ---------------------------------------------------------------------------
 -- 1f. Recreate indexes on the new partitioned table.
 --     Postgres propagates indexes on partitioned tables to each partition.
