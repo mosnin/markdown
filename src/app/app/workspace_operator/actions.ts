@@ -28,6 +28,8 @@ import {
 import {
   notifyRunCompleted,
   notifyRunFailed,
+  notifyRunAwaitingApproval,
+  notifyRunCancelled,
 } from "@/server/services/operator_notifications_service";
 import type { WorkspacePlan } from "@/server/services/subscription_service";
 import type {
@@ -509,6 +511,11 @@ export async function requestOperatorPlanAction(
       plan: plan as unknown,
     });
 
+    // Gap #5 — fire an email when the plan is ready for review. Gated on
+    // `email_on_approval_needed`; safeNotify swallows any send error so this
+    // never blocks the plan from being surfaced in the UI.
+    await safeNotify(supabase, runId, "awaiting_approval");
+
     await safeAudit(supabase, {
       workspaceId: ctx.workspace.id,
       actorId: ctx.user.id,
@@ -786,6 +793,13 @@ export async function cancelRunAction(
     const supabase = await createClient();
     const row = await cancelOperatorRun(supabase, runId, ctx.user.id);
 
+    // Gap #5 — fire an email on cancel. Gated on `email_on_cancel`. We send
+    // at user-initiated cancel time (i.e. when the `cancellation_requested_at`
+    // flag flips); the Python side eventually flips `status="cancelled"`
+    // but the user has already asked for the email here, which is the
+    // moment the intent is known.
+    await safeNotify(supabase, runId, "cancelled");
+
     return {
       ok: true,
       data: {
@@ -991,20 +1005,38 @@ async function safeUpdateRun(
  * and the cost estimate resolves to zero.
  */
 /**
- * Best-effort completion/failure email. Never throws — the caller's
- * action result is the source of truth; notification flakes only show
- * up in logs (the service itself logs structured fields per outcome).
+ * Best-effort notification dispatcher. Never throws — the caller's action
+ * result is the source of truth; notification flakes only show up in logs
+ * (the service itself logs structured fields per outcome).
+ *
+ * Outcome union extended in gap #5 beyond the original binary
+ * complete/failed to include:
+ *   - "awaiting_approval" — plan-mode run reached awaiting_approval
+ *   - "cancelled"         — user-initiated cancellation via cancelRunAction
+ *
+ * Each outcome is gated on its own per-user preference column in
+ * `operator_notification_preferences`; the service short-circuits when the
+ * user has not opted in for that specific event.
  */
 export async function safeNotify(
   supabase: Awaited<ReturnType<typeof createClient>>,
   runId: string,
-  outcome: "completed" | "failed"
+  outcome: "completed" | "failed" | "awaiting_approval" | "cancelled"
 ): Promise<void> {
   try {
-    if (outcome === "completed") {
-      await notifyRunCompleted(supabase, runId);
-    } else {
-      await notifyRunFailed(supabase, runId);
+    switch (outcome) {
+      case "completed":
+        await notifyRunCompleted(supabase, runId);
+        break;
+      case "failed":
+        await notifyRunFailed(supabase, runId);
+        break;
+      case "awaiting_approval":
+        await notifyRunAwaitingApproval(supabase, runId);
+        break;
+      case "cancelled":
+        await notifyRunCancelled(supabase, runId);
+        break;
     }
   } catch (err) {
     console.error("[workspace_operator] notification failed", err);

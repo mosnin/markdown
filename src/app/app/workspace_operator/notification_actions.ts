@@ -49,6 +49,12 @@ export async function getOperatorNotificationPrefsAction(): Promise<
 export interface SetOperatorNotificationPrefsInput {
   emailOnComplete?: boolean;
   emailOnFail?: boolean;
+  /** Gap #5 — fires when a plan-mode run reaches awaiting_approval. */
+  emailOnApprovalNeeded?: boolean;
+  /** Gap #5 — fires when a run is cancelled. */
+  emailOnCancel?: boolean;
+  /** Gap #5 — reserved for future daily digest; schema-only surface. */
+  digestEnabled?: boolean;
 }
 
 export async function setOperatorNotificationPrefsAction(

@@ -30,10 +30,15 @@ import { resolve } from "node:path";
 
 const notifyRunCompletedMock = vi.fn();
 const notifyRunFailedMock = vi.fn();
+const notifyRunAwaitingApprovalMock = vi.fn();
+const notifyRunCancelledMock = vi.fn();
 
 vi.mock("@/server/services/operator_notifications_service", () => ({
   notifyRunCompleted: (...args: unknown[]) => notifyRunCompletedMock(...args),
   notifyRunFailed: (...args: unknown[]) => notifyRunFailedMock(...args),
+  notifyRunAwaitingApproval: (...args: unknown[]) =>
+    notifyRunAwaitingApprovalMock(...args),
+  notifyRunCancelled: (...args: unknown[]) => notifyRunCancelledMock(...args),
 }));
 
 // The actions file pulls in a number of other server services at import
@@ -114,31 +119,39 @@ describe("workspace_operator/actions.ts — safeNotify wiring", () => {
     expect(source).toMatch(/(async\s+function|export\s+async\s+function)\s+safeNotify\s*\(/);
   });
 
-  it("invokes safeNotify exactly four times — success+failure for full-mode and execute-mode", () => {
+  it("invokes safeNotify six times — complete/fail in full+execute modes, plus awaiting_approval + cancelled (gap #5)", () => {
     // Count call sites only — the helper *declaration* uses
     // `function safeNotify(` (no leading `await`), so it won't match
     // `safeNotify(` when prefixed with `await `.
+    //
+    // Breakdown after gap #5:
+    //   2 × full-mode (success, failure)
+    //   2 × execute-mode (success, failure)
+    //   1 × plan-mode awaiting_approval
+    //   1 × cancelRunAction cancelled
     const callMatches = source.match(/await\s+safeNotify\s*\(/g) ?? [];
-    expect(callMatches.length).toBe(4);
+    expect(callMatches.length).toBe(6);
   });
 
-  it("each safeNotify call passes a runId arg and a 'completed' | 'failed' outcome", () => {
+  it("each safeNotify call passes a runId arg and a valid outcome literal", () => {
     // Pull every call site (across multiple lines) and check each one
     // against an allow-list of acceptable shapes:
     //   safeNotify(supabase, runId, "completed")
     //   safeNotify(supabase, runId, "failed")
     //   safeNotify(supabase, input.runId, "failed")
     //   safeNotify(supabase, runId, result.status === "completed" ? "completed" : "failed")
+    //   safeNotify(supabase, runId, "awaiting_approval")   (gap #5)
+    //   safeNotify(supabase, runId, "cancelled")           (gap #5)
     const callBlockRe = /await\s+safeNotify\s*\(([\s\S]*?)\)\s*;/g;
     const blocks = Array.from(source.matchAll(callBlockRe)).map((m) => m[1]);
-    expect(blocks.length).toBe(4);
+    expect(blocks.length).toBe(6);
     for (const args of blocks) {
       // runId or input.runId must appear
       const hasRunId = /\b(runId|input\.runId)\b/.test(args);
       expect(hasRunId, `runId arg missing in: ${args}`).toBe(true);
-      // outcome literal "completed" or "failed" appears (either as a
-      // bare literal arg or inside a ternary that resolves to one).
-      const hasOutcomeLiteral = /"completed"|"failed"/.test(args);
+      // outcome literal matches the extended union.
+      const hasOutcomeLiteral =
+        /"completed"|"failed"|"awaiting_approval"|"cancelled"/.test(args);
       expect(
         hasOutcomeLiteral,
         `outcome literal missing in: ${args}`
@@ -165,6 +178,8 @@ describe("safeNotify — best-effort contract", () => {
   beforeEach(() => {
     notifyRunCompletedMock.mockReset();
     notifyRunFailedMock.mockReset();
+    notifyRunAwaitingApprovalMock.mockReset();
+    notifyRunCancelledMock.mockReset();
   });
 
   it("dispatches to notifyRunCompleted for outcome='completed'", async () => {
@@ -206,6 +221,56 @@ describe("safeNotify — best-effort contract", () => {
     const { safeNotify } = await import("@/app/app/workspace_operator/actions");
     await expect(
       safeNotify({} as never, "run-4", "failed")
+    ).resolves.toBeUndefined();
+  });
+
+  it("dispatches to notifyRunAwaitingApproval for outcome='awaiting_approval'", async () => {
+    notifyRunAwaitingApprovalMock.mockResolvedValue({
+      sent: false,
+      reason: "disabled",
+    });
+    const { safeNotify } = await import("@/app/app/workspace_operator/actions");
+    await safeNotify({} as never, "run-5", "awaiting_approval");
+    expect(notifyRunAwaitingApprovalMock).toHaveBeenCalledTimes(1);
+    expect(notifyRunAwaitingApprovalMock).toHaveBeenCalledWith(
+      expect.anything(),
+      "run-5"
+    );
+    expect(notifyRunCompletedMock).not.toHaveBeenCalled();
+    expect(notifyRunFailedMock).not.toHaveBeenCalled();
+    expect(notifyRunCancelledMock).not.toHaveBeenCalled();
+  });
+
+  it("dispatches to notifyRunCancelled for outcome='cancelled'", async () => {
+    notifyRunCancelledMock.mockResolvedValue({
+      sent: false,
+      reason: "disabled",
+    });
+    const { safeNotify } = await import("@/app/app/workspace_operator/actions");
+    await safeNotify({} as never, "run-6", "cancelled");
+    expect(notifyRunCancelledMock).toHaveBeenCalledTimes(1);
+    expect(notifyRunCancelledMock).toHaveBeenCalledWith(
+      expect.anything(),
+      "run-6"
+    );
+    expect(notifyRunCompletedMock).not.toHaveBeenCalled();
+    expect(notifyRunFailedMock).not.toHaveBeenCalled();
+    expect(notifyRunAwaitingApprovalMock).not.toHaveBeenCalled();
+  });
+
+  it("swallows a thrown error from the awaiting_approval path too", async () => {
+    notifyRunAwaitingApprovalMock.mockRejectedValue(new Error("boom"));
+    const { safeNotify } = await import("@/app/app/workspace_operator/actions");
+    await expect(
+      safeNotify({} as never, "run-7", "awaiting_approval")
+    ).resolves.toBeUndefined();
+  });
+
+  it("swallows a thrown error from the cancelled path too", async () => {
+    notifyRunCancelledMock.mockRejectedValue(new Error("boom"));
+    const { safeNotify } = await import("@/app/app/workspace_operator/actions");
+    await expect(
+      safeNotify({} as never, "run-8", "cancelled")
     ).resolves.toBeUndefined();
   });
 });

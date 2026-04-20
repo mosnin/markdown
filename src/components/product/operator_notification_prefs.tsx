@@ -16,10 +16,18 @@ import type { OperatorNotificationPrefs } from "@/server/services/operator_notif
 /**
  * Notification preferences card for the operator settings page.
  *
- * Two checkboxes: email-on-complete (default off), email-on-fail
- * (default on). The card is initially seeded by the server page from
+ * Four toggle rows (gap #5):
+ *   - email-on-complete         (default off)
+ *   - email-on-fail             (default on)
+ *   - email-on-approval-needed  (default off) — plan-mode review prompt
+ *   - email-on-cancel           (default off) — user-initiated cancel
+ *
+ * The card is initially seeded by the server page from
  * `getNotificationPrefs`; saves use `setOperatorNotificationPrefsAction`
  * which upserts and returns the canonical row.
+ *
+ * `digestEnabled` is surfaced on the type but not yet wired in the UI —
+ * the column exists for the next PR to land without another migration.
  */
 
 export interface OperatorNotificationPrefsCardProps {
@@ -55,6 +63,8 @@ export function OperatorNotificationPrefsCard({
       const res = await setOperatorNotificationPrefsAction({
         emailOnComplete: prefs.emailOnComplete,
         emailOnFail: prefs.emailOnFail,
+        emailOnApprovalNeeded: prefs.emailOnApprovalNeeded,
+        emailOnCancel: prefs.emailOnCancel,
       });
       if (!res.ok) {
         setStatus("error");
@@ -89,6 +99,20 @@ export function OperatorNotificationPrefsCard({
           description="Sent when a run errors out or is cancelled mid-flight."
           checked={prefs.emailOnFail}
           onToggle={() => toggle("emailOnFail")}
+        />
+        <ToggleRow
+          id="email-on-approval-needed"
+          label="Email me when a plan needs approval"
+          description="Sent when a plan-mode run is ready for you to review the steps."
+          checked={prefs.emailOnApprovalNeeded}
+          onToggle={() => toggle("emailOnApprovalNeeded")}
+        />
+        <ToggleRow
+          id="email-on-cancel"
+          label="Email me when a run is cancelled"
+          description="Sent when you cancel a run (handy for long-running plan-mode runs)."
+          checked={prefs.emailOnCancel}
+          onToggle={() => toggle("emailOnCancel")}
         />
         <div className="flex items-center justify-end gap-3 pt-1">
           {status === "saved" && (

@@ -34,16 +34,49 @@ import { getOperatorRun } from "@/server/services/workspace_operator_runs_servic
 export interface OperatorNotificationPrefs {
   emailOnComplete: boolean;
   emailOnFail: boolean;
+  /**
+   * Fires when a plan-mode run transitions to `awaiting_approval`. Added in
+   * 20260420000006 to close Operator gap #5 (binary-only notifications).
+   */
+  emailOnApprovalNeeded: boolean;
+  /** Fires when a run is cancelled (see cancelRunAction). */
+  emailOnCancel: boolean;
+  /**
+   * Reserved for future daily/weekly digest wiring. Surfaced on the type so
+   * the settings UI can round-trip it; not consumed by any notify* path yet.
+   */
+  digestEnabled: boolean;
 }
 
 export interface SetOperatorNotificationPatch {
   emailOnComplete?: boolean;
   emailOnFail?: boolean;
+  emailOnApprovalNeeded?: boolean;
+  emailOnCancel?: boolean;
+  digestEnabled?: boolean;
 }
 
+/**
+ * Reason discriminator for non-send results. Extended in gap #5 with
+ * "disabled" so granular-opt-in call sites (approval / cancel) can return a
+ * consistent shape even though the read layer historically used
+ * "no_prefs_opt_in". New call sites should prefer "disabled"; the legacy
+ * "no_prefs_opt_in" is kept for back-compat with the complete/fail paths
+ * and their snapshot tests.
+ */
 export type NotifyResult =
   | { sent: true; channel: "email" }
-  | { sent: false; reason: "no_prefs_opt_in" | "no_run" | "no_email" | "no_api_key" | "send_failed"; error?: string };
+  | {
+      sent: false;
+      reason:
+        | "no_prefs_opt_in"
+        | "disabled"
+        | "no_run"
+        | "no_email"
+        | "no_api_key"
+        | "send_failed";
+      error?: string;
+    };
 
 // ─── Defaults ───────────────────────────────────────────────────────────────
 
@@ -56,12 +89,23 @@ export type NotifyResult =
 const DEFAULT_PREFS: OperatorNotificationPrefs = {
   emailOnComplete: false,
   emailOnFail: true,
+  // New granular opt-ins default OFF — symmetric with email_on_complete and
+  // consistent with the "don't surprise the user with more mail" stance.
+  emailOnApprovalNeeded: false,
+  emailOnCancel: false,
+  digestEnabled: false,
 };
 
 interface PrefsRow {
   user_id: string;
   email_on_complete: boolean;
   email_on_fail: boolean;
+  // Nullable on the row-read path so older DBs that predate 20260420000006
+  // (or a row seeded before the migration landed) don't crash the select —
+  // we coerce to the default when the field is missing/undefined.
+  email_on_approval_needed?: boolean | null;
+  email_on_cancel?: boolean | null;
+  digest_enabled?: boolean | null;
   updated_at: string;
 }
 
@@ -78,7 +122,9 @@ export async function getNotificationPrefs(
 ): Promise<OperatorNotificationPrefs> {
   const { data, error } = await supabase
     .from("operator_notification_preferences")
-    .select("user_id, email_on_complete, email_on_fail, updated_at")
+    .select(
+      "user_id, email_on_complete, email_on_fail, email_on_approval_needed, email_on_cancel, digest_enabled, updated_at"
+    )
     .eq("user_id", userId)
     .maybeSingle();
 
@@ -100,6 +146,9 @@ export async function getNotificationPrefs(
   return {
     emailOnComplete: row.email_on_complete,
     emailOnFail: row.email_on_fail,
+    emailOnApprovalNeeded: row.email_on_approval_needed ?? false,
+    emailOnCancel: row.email_on_cancel ?? false,
+    digestEnabled: row.digest_enabled ?? false,
   };
 }
 
@@ -122,6 +171,10 @@ export async function setNotificationPrefs(
   const next: OperatorNotificationPrefs = {
     emailOnComplete: patch.emailOnComplete ?? current.emailOnComplete,
     emailOnFail: patch.emailOnFail ?? current.emailOnFail,
+    emailOnApprovalNeeded:
+      patch.emailOnApprovalNeeded ?? current.emailOnApprovalNeeded,
+    emailOnCancel: patch.emailOnCancel ?? current.emailOnCancel,
+    digestEnabled: patch.digestEnabled ?? current.digestEnabled,
   };
 
   const { error } = await supabase
@@ -131,6 +184,9 @@ export async function setNotificationPrefs(
         user_id: userId,
         email_on_complete: next.emailOnComplete,
         email_on_fail: next.emailOnFail,
+        email_on_approval_needed: next.emailOnApprovalNeeded,
+        email_on_cancel: next.emailOnCancel,
+        digest_enabled: next.digestEnabled,
       },
       { onConflict: "user_id" }
     );
@@ -167,19 +223,83 @@ export async function notifyRunFailed(
   return notifyForRun(supabase, runId, "failed");
 }
 
+/**
+ * Notify the run's actor that a plan-mode run is waiting for approval.
+ * No-op if the user has `email_on_approval_needed = false`. Same best-effort
+ * posture as {@link notifyRunCompleted} — never throws, logs and returns a
+ * structured result.
+ */
+export async function notifyRunAwaitingApproval(
+  supabase: SupabaseClient,
+  runId: string
+): Promise<NotifyResult> {
+  return notifyForRun(supabase, runId, "awaiting_approval");
+}
+
+/**
+ * Notify the run's actor that their run has been cancelled. No-op if the
+ * user has `email_on_cancel = false`.
+ */
+export async function notifyRunCancelled(
+  supabase: SupabaseClient,
+  runId: string
+): Promise<NotifyResult> {
+  return notifyForRun(supabase, runId, "cancelled");
+}
+
 // ─── Internals ──────────────────────────────────────────────────────────────
+
+/**
+ * Internal notification dispatcher.
+ *
+ * Outcomes map 1:1 to preference columns:
+ *   completed           → email_on_complete
+ *   failed              → email_on_fail
+ *   awaiting_approval   → email_on_approval_needed   (gap #5)
+ *   cancelled           → email_on_cancel            (gap #5)
+ *
+ * We keep the "opted out" branch returning `no_prefs_opt_in` for the legacy
+ * complete/failed path (existing tests and callers depend on that exact
+ * reason string) and return `disabled` for the new outcomes so the wire
+ * shape for the granular prefs is unambiguous at the call site.
+ */
+type NotifyOutcome = "completed" | "failed" | "awaiting_approval" | "cancelled";
+
+function isOutcomeEnabled(
+  outcome: NotifyOutcome,
+  prefs: OperatorNotificationPrefs
+): boolean {
+  switch (outcome) {
+    case "completed":
+      return prefs.emailOnComplete;
+    case "failed":
+      return prefs.emailOnFail;
+    case "awaiting_approval":
+      return prefs.emailOnApprovalNeeded;
+    case "cancelled":
+      return prefs.emailOnCancel;
+  }
+}
 
 async function notifyForRun(
   supabase: SupabaseClient,
   runId: string,
-  outcome: "completed" | "failed"
+  outcome: NotifyOutcome
 ): Promise<NotifyResult> {
   const run = await getOperatorRun(supabase, runId);
   if (!run) return { sent: false, reason: "no_run" };
 
   const prefs = await getNotificationPrefs(supabase, run.user_id);
-  const optedIn = outcome === "completed" ? prefs.emailOnComplete : prefs.emailOnFail;
-  if (!optedIn) return { sent: false, reason: "no_prefs_opt_in" };
+  const optedIn = isOutcomeEnabled(outcome, prefs);
+  if (!optedIn) {
+    // Preserve back-compat on the legacy paths while giving the new outcomes
+    // a dedicated reason that the gap-#5 test suite asserts against.
+    const reason =
+      outcome === "completed" || outcome === "failed"
+        ? "no_prefs_opt_in"
+        : "disabled";
+    return { sent: false, reason };
+  }
 
   const email = await resolveUserEmail(supabase, run.user_id);
   if (!email) {
@@ -265,7 +385,7 @@ export async function sendOperatorRunCompletedEmail(
 }
 
 interface RunEmailPayload {
-  outcome: "completed" | "failed";
+  outcome: NotifyOutcome;
   runId: string;
   workspaceId: string;
   notesCreated: number;
@@ -274,16 +394,30 @@ interface RunEmailPayload {
   promptPreview: string;
 }
 
+/**
+ * Subject line per outcome — kept in one place so the UI story (what the
+ * user sees in their inbox) matches what the prefs card promises.
+ */
+function subjectForOutcome(outcome: NotifyOutcome): string {
+  switch (outcome) {
+    case "completed":
+      return "Your Workspace Operator run completed";
+    case "failed":
+      return "Your Workspace Operator run failed";
+    case "awaiting_approval":
+      return "Your Workspace Operator plan is awaiting approval";
+    case "cancelled":
+      return "Your Workspace Operator run was cancelled";
+  }
+}
+
 async function sendOperatorRunEmail(
   apiKey: string,
   to: string,
   payload: RunEmailPayload
 ): Promise<void> {
   const fromDomain = process.env.RESEND_FROM_DOMAIN ?? "mail.contextstore.dev";
-  const subject =
-    payload.outcome === "completed"
-      ? `Your Workspace Operator run completed`
-      : `Your Workspace Operator run failed`;
+  const subject = subjectForOutcome(payload.outcome);
 
   const promptHtml = escapeHtml(payload.promptPreview);
   const errorHtml = payload.error ? escapeHtml(payload.error) : "";

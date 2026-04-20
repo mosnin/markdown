@@ -94,7 +94,10 @@ describe("getNotificationPrefs", () => {
     const s = makeSupabase({ prefsRow: null });
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const prefs = await getNotificationPrefs(s as any, "u-1");
-    expect(prefs).toEqual({ emailOnComplete: false, emailOnFail: true });
+    // toMatchObject rather than toEqual so gap #5's added default fields
+    // (emailOnApprovalNeeded, emailOnCancel, digestEnabled) don't break
+    // this assertion — they're covered in operator_notification_granularity.
+    expect(prefs).toMatchObject({ emailOnComplete: false, emailOnFail: true });
   });
 
   it("returns the stored row when present", async () => {
@@ -108,7 +111,7 @@ describe("getNotificationPrefs", () => {
     });
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const prefs = await getNotificationPrefs(s as any, "u-1");
-    expect(prefs).toEqual({ emailOnComplete: true, emailOnFail: false });
+    expect(prefs).toMatchObject({ emailOnComplete: true, emailOnFail: false });
   });
 });
 
@@ -127,7 +130,8 @@ describe("setNotificationPrefs", () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const next = await setNotificationPrefs(s as any, "u-1", { emailOnComplete: true });
     // The unpatched field should be preserved at its current DB value.
-    expect(next).toEqual({ emailOnComplete: true, emailOnFail: true });
+    // toMatchObject for gap #5 — see getNotificationPrefs comment.
+    expect(next).toMatchObject({ emailOnComplete: true, emailOnFail: true });
   });
 });
 
