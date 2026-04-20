@@ -39,7 +39,7 @@ vi.mock("@/app/api/agent/_lib/auth", () => ({
 import { GET } from "@/app/api/agent/operator/check_cancel/route";
 import { verifyAgentRequest } from "@/app/api/agent/_lib/auth";
 
-const RUN_ID = "abcdef1234567890";
+const RUN_ID = "abcdef12-3456-7890-abcd-ef1234567890";
 const WORKSPACE_ID = "11111111-1111-1111-1111-111111111111";
 const USER_ID = "00000000-0000-0000-0000-000000000001";
 

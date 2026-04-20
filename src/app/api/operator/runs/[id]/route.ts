@@ -54,6 +54,11 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 
   const { id } = await params;
   if (!id) return E_NOT_FOUND("run id required");
+  // Reject malformed ids before the DB call so a caller who fuzzes the
+  // route gets a clean 404 instead of a Postgres type-cast 500.
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
+    return E_NOT_FOUND("run not found");
+  }
 
   const supabase = createAdminClient();
   const run = await getOperatorRun(supabase, id);

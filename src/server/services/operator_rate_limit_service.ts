@@ -91,6 +91,20 @@ const PRUNE_RPC = "prune_operator_api_rate_limit_events";
  * A failed INSERT is logged but does not roll the decision back; the
  * worst case is one extra request slips through, which the next check
  * will see and account for.
+ *
+ * ─── ACCEPTED RISK: check-then-insert TOCTOU (security review #2) ────────
+ *
+ * The COUNT and INSERT are not transactional. Under extreme concurrent
+ * load on a single key, N requests can all observe count < limit and all
+ * insert, briefly exceeding the limit by up to N-1. The next request sees
+ * every one of those rows and is correctly blocked, so the overshoot is
+ * bounded (not compounding) and the window self-heals within one
+ * evaluation. Product accepted this vs. the complexity of an RPC/advisory
+ * lock: the threat model is credential abuse (sustained flooding), not
+ * perfectly-coordinated bursts, and the bound overshoot (~fleet size) is
+ * small relative to the sustained-hour limit. Revisit if we ever see a
+ * leaked-key abuse case where the burst window is being gamed with
+ * perfectly-timed parallel requests.
  */
 export async function checkApiRateLimit(
   supabase: SupabaseClient,

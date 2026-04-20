@@ -51,6 +51,14 @@ export async function GET(request: NextRequest) {
   if (!runId) {
     return apiError("bad_request", "run_id query parameter is required", 400);
   }
+  // Validate UUID format before hitting the DB — Postgres would reject the
+  // type cast anyway, but validating early avoids a needless 500 and keeps
+  // the error message clean.
+  const UUID_RE =
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  if (!UUID_RE.test(runId)) {
+    return apiError("bad_request", "run_id must be a valid UUID", 400);
+  }
 
   const admin = createAdminClient();
 

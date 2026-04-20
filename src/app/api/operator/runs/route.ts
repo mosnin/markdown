@@ -27,6 +27,11 @@ import {
 import { createDraftBranch } from "@/server/services/branch_service";
 import { isWorkspaceOperatorEnabled } from "@/lib/env";
 import { recordOperatorUsage } from "@/server/services/workspace_operator_usage_service";
+import {
+  OPERATOR_MODELS,
+  DEFAULT_OPERATOR_MODEL,
+  type OperatorModel,
+} from "@/app/app/workspace_operator/types";
 
 /**
  * POST /api/operator/runs
@@ -98,6 +103,20 @@ function asTrimmedString(value: unknown, max: number): string | null {
   return trimmed;
 }
 
+/**
+ * Narrow an arbitrary model hint from the REST body to the allowlist.
+ * Mirrors `resolveModel` in `actions.ts` — duplicated at the boundary
+ * so a Free-tier caller can't escalate to `gpt-4.1` by passing the
+ * string through the REST surface. Unknown or missing → default.
+ */
+function resolveRestModel(value: unknown): OperatorModel {
+  if (typeof value !== "string") return DEFAULT_OPERATOR_MODEL;
+  const trimmed = value.trim();
+  return (OPERATOR_MODELS as readonly string[]).includes(trimmed)
+    ? (trimmed as OperatorModel)
+    : DEFAULT_OPERATOR_MODEL;
+}
+
 function asPositiveInt(value: unknown): number | null {
   if (typeof value !== "number" || !Number.isFinite(value) || value <= 0) return null;
   return Math.floor(value);
@@ -128,7 +147,10 @@ function parseBody(raw: DispatchBody): { ok: true; input: DispatchInput } | { ok
       mode,
       branchId,
       boxId,
-      model: asTrimmedString(raw.model, 200),
+      // Narrow the model hint to the allowlist at the REST boundary so a
+      // leaked API key can't request a higher-tier model even if the UI's
+      // Pro+ gate is bypassed. Unknown strings resolve to the default.
+      model: resolveRestModel(raw.model),
       maxInputTokens: asPositiveInt(raw.maxInputTokens),
       maxOutputTokens: asPositiveInt(raw.maxOutputTokens),
     },
@@ -353,7 +375,16 @@ export async function POST(request: NextRequest) {
       error: message,
     }).catch(() => undefined);
     await safeRecordUsage(supabase, verified, null);
-    return E_INTERNAL(`Operator dispatch failed: ${message}`);
+    // Log detailed error server-side (may contain Modal response body
+    // fragments, auth headers echoed in error messages, internal paths).
+    // Return a generic message to the API client so upstream errors do
+    // not leak implementation details to third-party integrators.
+    console.error("[operator REST] dispatch failed", {
+      run_id: runRow.id,
+      workspace_id: verified.workspaceId,
+      err: message,
+    });
+    return E_INTERNAL("Operator dispatch failed.");
   }
 }
 

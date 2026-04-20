@@ -30,6 +30,18 @@
 -- operator_api_keys.{workspace_id,user_id},
 -- operator_notification_preferences.user_id) already match the policy and
 -- are NOT touched here.
+--
+-- ---------------------------------------------------------------------------
+-- ACCEPTED RISK — orphaned-run visibility (security review #3)
+-- ---------------------------------------------------------------------------
+-- After this change, a run whose originating user has been deleted will
+-- retain `user_id = NULL` and remain visible to workspace admins through
+-- the run-history UI. This is the intended audit-trail behaviour: admins
+-- must still be able to account for historical compute spend and notes
+-- created by ex-members. The personal identifier (user_id) is gone,
+-- satisfying GDPR erasure requirements; the operational row survives.
+-- Product is aware and has signed off; the RLS policy on this table
+-- already scopes visibility to workspace members only.
 -- =============================================================================
 
 -- ---------------------------------------------------------------------------
