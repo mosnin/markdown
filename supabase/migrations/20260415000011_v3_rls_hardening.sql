@@ -7,29 +7,33 @@ ALTER TABLE IF EXISTS note_embeddings ENABLE ROW LEVEL SECURITY;
 CREATE POLICY note_embeddings_select ON note_embeddings FOR SELECT
   USING (EXISTS (
     SELECT 1 FROM notes
+    JOIN boxes ON boxes.id = notes.box_id
     WHERE notes.id = note_embeddings.note_id
-      AND public.owns_workspace(notes.workspace_id)
+      AND public.owns_workspace(boxes.workspace_id)
   ));
 
 CREATE POLICY note_embeddings_insert ON note_embeddings FOR INSERT
   WITH CHECK (EXISTS (
     SELECT 1 FROM notes
+    JOIN boxes ON boxes.id = notes.box_id
     WHERE notes.id = note_embeddings.note_id
-      AND public.can_write_workspace(notes.workspace_id)
+      AND public.can_write_workspace(boxes.workspace_id)
   ));
 
 CREATE POLICY note_embeddings_update ON note_embeddings FOR UPDATE
   USING (EXISTS (
     SELECT 1 FROM notes
+    JOIN boxes ON boxes.id = notes.box_id
     WHERE notes.id = note_embeddings.note_id
-      AND public.can_write_workspace(notes.workspace_id)
+      AND public.can_write_workspace(boxes.workspace_id)
   ));
 
 CREATE POLICY note_embeddings_delete ON note_embeddings FOR DELETE
   USING (EXISTS (
     SELECT 1 FROM notes
+    JOIN boxes ON boxes.id = notes.box_id
     WHERE notes.id = note_embeddings.note_id
-      AND public.can_write_workspace(notes.workspace_id)
+      AND public.can_write_workspace(boxes.workspace_id)
   ));
 
 -- 2. link_suggestions — no RLS at all
