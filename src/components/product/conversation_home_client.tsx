@@ -9,6 +9,7 @@ import { WorkspaceConversation } from "@/components/product/workspace_conversati
 import { ConversationComposer } from "@/components/product/conversation_composer";
 import { OnboardingCallout } from "@/components/product/onboarding_callout";
 import { BulkImportPanel } from "@/components/product/bulk_import_panel";
+import { startConversationTurnAction } from "@/app/app/conversation/actions";
 
 export interface ConversationHomeClientProps {
   workspaceId: string;
@@ -31,7 +32,24 @@ export function ConversationHomeClient({
 }: ConversationHomeClientProps) {
   const [activeRunId, setActiveRunId] = useState<string | null>(null);
   const [importToast, setImportToast] = useState<string | null>(null);
+  const [suggestionPending, setSuggestionPending] = useState(false);
   const router = useRouter();
+
+  async function startSuggestedPrompt(prompt: string) {
+    if (suggestionPending) return;
+    setSuggestionPending(true);
+    try {
+      const result = await startConversationTurnAction({
+        prompt,
+        boxId: defaultBoxId,
+      });
+      if (result.ok) {
+        setActiveRunId(result.data.runId);
+      }
+    } finally {
+      setSuggestionPending(false);
+    }
+  }
 
   // Fresh-workspace path: no boxes AND no past runs. The user has nothing
   // to chat about yet, so the centerpiece becomes the bulk importer —
@@ -118,6 +136,25 @@ export function ConversationHomeClient({
               userDisplayName={userDisplayName}
             />
           </div>
+
+          {!activeRunId && (
+            <div className="flex flex-wrap gap-2 px-1 pb-2 pt-1">
+              {[
+                "What should I work on today?",
+                "Summarize my workspace",
+                "What's changed recently?",
+              ].map((suggestion) => (
+                <button
+                  key={suggestion}
+                  onClick={() => startSuggestedPrompt(suggestion)}
+                  disabled={suggestionPending}
+                  className="rounded-full border border-border bg-muted/40 px-3 py-1 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50"
+                >
+                  {suggestion}
+                </button>
+              ))}
+            </div>
+          )}
 
           <div className="shrink-0 border-t border-border py-3">
             <ConversationComposer
