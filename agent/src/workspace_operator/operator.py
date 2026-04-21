@@ -42,6 +42,8 @@ from workspace_operator.tools import (
     build_web_search_tool,
     build_write_memory_tool,
 )
+from workspace_operator.tools.read_pending_steers import build_read_pending_steers_tool
+from workspace_operator.tools.sub_agents import build_sub_agent_tools
 from workspace_operator.persona import (  # noqa: E402
     PersonaConfig,
     apply_persona_to_instructions,
@@ -57,6 +59,7 @@ from workspace_operator.approval_gate import (  # noqa: E402
     await_approval,
     should_gate_tool,
 )
+from workspace_operator.approval_overrides import ApprovalOverrideQueue  # noqa: E402
 from workspace_operator.steering import SteerMessage, run_steer_poller  # noqa: E402
 
 log = logging.getLogger(__name__)
@@ -314,6 +317,15 @@ calling `draft_note` is a failed run, even if you found useful information.
 - Use short paragraphs, bulleted lists for enumerations, and `##` headers
   to structure longer notes.
 - Do not apologize or preface — produce work.
+
+## Mid-run steering
+
+The user may send guidance mid-run. Call `read_pending_steers` every 3–4
+tool invocations — especially before any write tool, long-running code
+execution, or web fetch — to give the user a chance to redirect you. If
+messages come back, weigh them against your current plan: if the user
+asks you to stop, acknowledge and finish the current turn without further
+writes; if they refine the ask, adjust your next step accordingly.
 """
 
 # ---------------------------------------------------------------------------
@@ -568,7 +580,30 @@ def _build_operator(
         build_propose_box_structure_tool(client),
         build_read_memories_tool(client),
         build_write_memory_tool(client),
+        build_read_pending_steers_tool(client),
     ]
+    # V3 harness — sub-agent delegation (gated by persona allowlist).
+    # The sub-agent tools (delegate_to_research / _drafting / _code) are
+    # only registered when the persona explicitly allows them, so the
+    # default agent surface stays lean.
+    if persona is not None and persona.tool_allowlist:
+        requested = {
+            name for name in persona.tool_allowlist
+            if name.startswith("delegate_to_")
+        }
+        wanted_keys = {name.removeprefix("delegate_to_") for name in requested}
+        # Known sub-agent keys; unknown delegate_* names are silently ignored.
+        VALID_SUB_AGENT_KEYS = {"research", "drafting", "code"}
+        keys = tuple(sorted(wanted_keys & VALID_SUB_AGENT_KEYS))
+        if keys:
+            full_tools.extend(
+                build_sub_agent_tools(
+                    client,
+                    box_id=box_id,
+                    workspace_context_block=workspace_context_block,
+                    include=keys,
+                )
+            )
     # Persona allowlist is a fallback: an explicit per-run override wins.
     effective_allowlist: list[str] = []
     if tool_allowlist:
@@ -805,6 +840,7 @@ def _make_tool_gate(
     requires_approval: bool,
     persona_requires_approval: bool = False,
     timeout_s: float = 300.0,
+    approval_overrides: ApprovalOverrideQueue | None = None,
 ):
     """Return a tool-gate callable that pauses tool calls for human approval.
 
@@ -816,11 +852,13 @@ def _make_tool_gate(
     args; rejection raises :class:`ToolCallRejected` which the SDK
     propagates out of the hook.
 
-    Note: the SDK uses these resolved args to actually invoke the tool
-    only when the hook mutates them; in practice we log the edit via
-    the ``tool_call_start`` event and trust the LLM's own args for
-    tool invocation. Edits to args surface to the user as a visible
-    diff in the approval UI but are not enforced at the tool-call layer.
+    Enforcement of edits: when ``approval_overrides`` is provided and the
+    reviewer returned edited args, we push ``(tool_name, resolved_args)``
+    onto the queue. The matching ``PoggleClient`` method then pops and
+    substitutes the override before calling the backend, so reviewer
+    edits actually take effect (the SDK otherwise invokes the tool with
+    the LLM's original args). The returned dict is still the resolved
+    args so the hook's ``tool_call_start`` event reflects the edit.
     """
 
     async def _gate(tool_name: str, tool_call_id: str, args: dict) -> dict:
@@ -839,6 +877,11 @@ def _make_tool_gate(
                 preview=None,
                 timeout_s=timeout_s,
             )
+            if (
+                approval_overrides is not None
+                and approved.resolved_args != args
+            ):
+                approval_overrides.push(tool_name, approved.resolved_args)
             return approved.resolved_args
         except ToolCallTimedOut:
             log.warning(
@@ -1077,6 +1120,7 @@ async def _run_execute(payload: OperatorInput, settings: Settings) -> OperatorRe
                 client,
                 run_id=payload.run_id,
                 requires_approval=requires_approval_effective,
+                approval_overrides=client.approval_overrides,
             )
             if requires_approval_effective
             else None
@@ -1267,6 +1311,7 @@ async def _run_full(payload: OperatorInput, settings: Settings) -> OperatorResul
             client,
             run_id=payload.run_id,
             requires_approval=requires_approval_effective,
+            approval_overrides=client.approval_overrides,
         )
         if requires_approval_effective
         else None

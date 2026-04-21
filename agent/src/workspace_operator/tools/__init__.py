@@ -24,6 +24,9 @@ from workspace_operator.tools.propose_box_structure import (
     build_propose_box_structure_tool,
 )
 from workspace_operator.tools.read_note import build_read_note_tool
+from workspace_operator.tools.read_pending_steers import (
+    build_read_pending_steers_tool,
+)
 from workspace_operator.tools.search import build_hybrid_search_tool
 from workspace_operator.tools.web_fetch import build_web_fetch_tool
 from workspace_operator.tools.web_search import build_web_search_tool
@@ -41,6 +44,7 @@ __all__ = [
     "build_propose_box_structure_tool",
     "build_read_memories_tool",
     "build_read_note_tool",
+    "build_read_pending_steers_tool",
     "build_rename_note_tool",
     "build_web_fetch_tool",
     "build_web_search_tool",

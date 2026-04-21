@@ -17,6 +17,7 @@ from typing import Any
 
 import httpx
 
+from workspace_operator.approval_overrides import ApprovalOverrideQueue
 from workspace_operator.models import DraftNoteResult, SearchResult
 
 log = logging.getLogger(__name__)
@@ -59,6 +60,7 @@ class PoggleClient:
         }
         self._owns_client = http_client is None
         self._client = http_client or httpx.AsyncClient(timeout=timeout_s)
+        self.approval_overrides: ApprovalOverrideQueue = ApprovalOverrideQueue()
 
     async def __aenter__(self) -> "PoggleClient":
         return self
@@ -85,6 +87,14 @@ class PoggleClient:
         tags: list[str] | None = None,
         folder_id: str | None = None,
     ) -> DraftNoteResult:
+        override = self.approval_overrides.consume("draft_note")
+        if override is not None:
+            box_id = override.get("box_id", box_id)
+            title = override.get("title", title)
+            markdown_content = override.get("markdown_content", markdown_content)
+            summary = override.get("summary", summary)
+            tags = override.get("tags", tags)
+            folder_id = override.get("folder_id", folder_id)
         payload = await self._post(
             "/api/agent/tools/draft_note",
             {
@@ -113,6 +123,11 @@ class PoggleClient:
         edit_summary: str | None = None,
     ) -> dict[str, Any]:
         """Write a new version of a note onto the run's branch."""
+        override = self.approval_overrides.consume("edit_note")
+        if override is not None:
+            note_id = override.get("note_id", note_id)
+            new_content = override.get("new_content", new_content)
+            edit_summary = override.get("edit_summary", edit_summary)
         return await self._post(
             "/api/agent/tools/edit_note",
             {
@@ -131,6 +146,12 @@ class PoggleClient:
         relationship_note: str | None = None,
     ) -> dict[str, Any]:
         """Create a typed object_link between two notes on the run's branch."""
+        override = self.approval_overrides.consume("link_notes")
+        if override is not None:
+            source_note_id = override.get("source_note_id", source_note_id)
+            target_note_id = override.get("target_note_id", target_note_id)
+            relationship_type = override.get("relationship_type", relationship_type)
+            relationship_note = override.get("relationship_note", relationship_note)
         return await self._post(
             "/api/agent/tools/link_notes",
             {
@@ -160,6 +181,9 @@ class PoggleClient:
 
     async def archive_note(self, *, note_id: str) -> dict[str, Any]:
         """Archive a note (reversible). Guide notes cannot be archived."""
+        override = self.approval_overrides.consume("archive_note")
+        if override is not None:
+            note_id = override.get("note_id", note_id)
         return await self._post(
             "/api/agent/tools/archive_note",
             {"note_id": note_id},
@@ -190,6 +214,12 @@ class PoggleClient:
         box_id: str,
     ) -> dict[str, Any]:
         """Instantiate a template into a new note on the run's branch."""
+        override = self.approval_overrides.consume("apply_template")
+        if override is not None:
+            template_id = override.get("template_id", template_id)
+            title = override.get("title", title)
+            variables = override.get("variables", variables)
+            box_id = override.get("box_id", box_id)
         return await self._post(
             "/api/agent/tools/apply_template",
             {
