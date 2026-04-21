@@ -12,6 +12,7 @@ import {
   Sparkles,
   BadgeAlert,
   Save,
+  Maximize2,
 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
@@ -1102,6 +1103,16 @@ export function OperatorPanel({
             ({selectedModel})
           </p>
           <div className="flex items-center gap-2">
+            {runId && (
+              <Button
+                variant="outline"
+                size="sm"
+                render={<Link href={`/app/workspace_operator/live/${runId}`} />}
+              >
+                <Maximize2 className="h-4 w-4" aria-hidden="true" />
+                Open full view
+              </Button>
+            )}
             <Button
               onClick={handleApproveAndRun}
               disabled={isExecPending || steps.length === 0}
@@ -1157,15 +1168,26 @@ export function OperatorPanel({
         </div>
         <div ref={eventsEndRef} />
 
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={handleCancel}
-          disabled={cancelling}
-          className="self-start"
-        >
-          {cancelling ? "Cancelling..." : "Cancel run"}
-        </Button>
+        <div className="flex items-center gap-2 self-start">
+          {runId && (
+            <Button
+              variant="outline"
+              size="sm"
+              render={<Link href={`/app/workspace_operator/live/${runId}`} />}
+            >
+              <Maximize2 className="h-4 w-4" aria-hidden="true" />
+              Open full view
+            </Button>
+          )}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleCancel}
+            disabled={cancelling}
+          >
+            {cancelling ? "Cancelling..." : "Cancel run"}
+          </Button>
+        </div>
       </div>
     );
   }
