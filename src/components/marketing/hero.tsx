@@ -8,6 +8,7 @@ import { ArrowRightIcon, SparklesIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { AnimatedBackground } from "@/components/ui/animated-blur-blob-background";
+import { TrustBar } from "@/components/marketing/trust_bar";
 
 // ─── Glitch title ─────────────────────────────────────────────────────────────
 
@@ -162,6 +163,14 @@ export function HeroSection() {
 						Get started free
 						<ArrowRightIcon className="size-4 ml-2" data-icon="inline-end" />
 					</Button>
+				</motion.div>
+
+				<motion.div
+					initial={{ opacity: 0 }}
+					animate={{ opacity: 1 }}
+					transition={{ delay: 0.5, duration: 0.5 }}
+				>
+					<TrustBar />
 				</motion.div>
 
 				<motion.p
