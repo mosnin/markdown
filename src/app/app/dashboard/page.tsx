@@ -8,17 +8,21 @@ import { listBoxesByWorkspace } from "@/server/repositories/box_repository";
 import { listNotesByBox } from "@/server/repositories/note_repository";
 import { listConnectionsByWorkspace } from "@/server/repositories/connection_repository";
 import { listPendingProposals } from "@/server/repositories/write_proposal_repository";
+import { listOperatorRuns } from "@/server/services/workspace_operator_runs_service";
+import { listAuditEventsByWorkspace } from "@/server/repositories/audit_event_repository";
 import { NoteStub } from "@/components/product/note_stub";
 import { DashboardSection } from "@/components/product/dashboard_section";
 import { DashboardCard } from "@/components/product/dashboard_card";
 import { CreateBoxDialog } from "@/components/product/create_box_dialog";
 import { OnboardingCallout } from "@/components/product/onboarding_callout";
 import { QuickStartPanel } from "@/components/product/quick_start_panel";
+import { OnboardingMilestoneBar } from "@/components/product/onboarding_milestone_bar";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { CONNECTION_STATUS } from "@/server/domain/constants/connection_constants";
 import { formatRelativeDateShort } from "@/lib/format_date";
+import { computeMilestones } from "@/lib/onboarding_milestones";
 
 export default async function AppHomePage() {
   // Freeze "now" at server render so relative-date strings computed
@@ -31,15 +35,24 @@ export default async function AppHomePage() {
 
   const boxes = await listBoxesByWorkspace(supabase, ctx.workspace.id);
 
-  const [notesByBox, connections, pendingProposals] = await Promise.all([
-    Promise.all(
-      boxes.slice(0, 6).map((box) =>
-        listNotesByBox(supabase, box.id, { limit: 6, branchId: ctx.activeBranchId })
-      )
-    ),
-    listConnectionsByWorkspace(adminClient, ctx.workspace.id),
-    listPendingProposals(adminClient, ctx.workspace.id, { limit: 20 }),
-  ]);
+  const [notesByBox, connections, pendingProposals, conversationRuns, bundleExportEvents] =
+    await Promise.all([
+      Promise.all(
+        boxes.slice(0, 6).map((box) =>
+          listNotesByBox(supabase, box.id, { limit: 6, branchId: ctx.activeBranchId })
+        )
+      ),
+      listConnectionsByWorkspace(adminClient, ctx.workspace.id),
+      listPendingProposals(adminClient, ctx.workspace.id, { limit: 20 }),
+      listOperatorRuns(adminClient, {
+        workspaceId: ctx.workspace.id,
+        limit: 1,
+      }),
+      listAuditEventsByWorkspace(adminClient, ctx.workspace.id, {
+        event_type: "bundle.exported",
+        limit: 1,
+      }),
+    ]);
 
   const allNotes = notesByBox
     .flat()
@@ -51,6 +64,34 @@ export default async function AppHomePage() {
   );
   const pendingCount = pendingProposals.length;
   const hasBoxes = boxes.length > 0;
+
+  // Note links: count across all boxes fetched in notesByBox (first 6).
+  // We use the notes we already have to determine if any links exist by
+  // querying the note_links table for the workspace via a dedicated count query.
+  const { data: noteLinkCountData } = await adminClient
+    .from("note_links")
+    .select("id", { count: "exact", head: true })
+    .in(
+      "source_note_id",
+      notesByBox.flat().map((n) => n.id)
+    );
+  const noteLinkCount = noteLinkCountData === null
+    ? 0
+    : (noteLinkCountData as unknown as number | null) ?? 0;
+
+  // Derive a workspace-level note count: if allNotes has content, there's
+  // at least one note. Use the flattened pre-slice array for accuracy within
+  // the fetched set (first 6 boxes × 6 notes).
+  const totalFetchedNoteCount = notesByBox.flat().length;
+
+  const milestones = computeMilestones({
+    noteCount: totalFetchedNoteCount,
+    boxCount: boxes.length,
+    conversationCount: conversationRuns.rows.length,
+    linkCount: typeof noteLinkCount === "number" ? noteLinkCount : 0,
+    bundleExportCount: bundleExportEvents.length,
+  });
+  const allMilestonesDone = milestones.every((m) => m.done);
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
@@ -77,6 +118,11 @@ export default async function AppHomePage() {
 
       <ScrollArea className="flex-1">
         <div className="mx-auto max-w-3xl space-y-8 px-6 py-6">
+
+          {/* Onboarding milestone bar — hidden once all done */}
+          {!allMilestonesDone && (
+            <OnboardingMilestoneBar milestones={milestones} />
+          )}
 
           {/* First-run: no boxes */}
           {!hasBoxes && <OnboardingCallout />}
