@@ -33,7 +33,7 @@ export async function POST(request: NextRequest) {
   }
 
   // Rate limit import/export operations per connection/token.
-  const rl = importExportLimit(ctx.connectionId);
+  const rl = await importExportLimit(ctx.connectionId);
   if (!rl.allowed) return E_RATE_LIMITED(rl.retryAfter);
 
   let body: {

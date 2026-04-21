@@ -87,7 +87,7 @@ export async function POST(request: NextRequest) {
   }
 
   // Rate limit per connection/token (20 writes/min)
-  const rl = apiWriteLimit(ctx.connectionId);
+  const rl = await apiWriteLimit(ctx.connectionId);
   if (!rl.allowed) return E_RATE_LIMITED(rl.retryAfter);
 
   // permission_mode check — still honoured for legacy csk_v1_ contexts.

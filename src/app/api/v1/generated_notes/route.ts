@@ -49,7 +49,7 @@ export async function POST(request: NextRequest) {
   }
 
   // Rate limit per connection/token (20 writes/min)
-  const rl = apiWriteLimit(ctx.connectionId);
+  const rl = await apiWriteLimit(ctx.connectionId);
   if (!rl.allowed) return E_RATE_LIMITED(rl.retryAfter);
 
   if (ctx.permissionMode !== PERMISSION_MODE.GENERATE_IN_ALLOWED_FOLDERS) {

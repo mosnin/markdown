@@ -32,7 +32,7 @@ export async function GET(_request: NextRequest) {
   }
 
   // Rate limit import/export operations per user.
-  const rl = importExportLimit(ctx.user.id);
+  const rl = await importExportLimit(ctx.user.id);
   if (!rl.allowed) return E_RATE_LIMITED(rl.retryAfter);
 
   const supabase = await createClient();

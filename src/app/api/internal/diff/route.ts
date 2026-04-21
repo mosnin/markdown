@@ -43,7 +43,7 @@ export async function POST(req: NextRequest) {
   }
 
   // ── Rate limit per user (60 req/min) ─────────────────────────────────
-  const rl = apiReadLimit(`diff_proxy:${ctx.user.id}`);
+  const rl = await apiReadLimit(`diff_proxy:${ctx.user.id}`);
   if (!rl.allowed) {
     return NextResponse.json(
       { error: "rate_limited", retry_after: rl.retryAfter },

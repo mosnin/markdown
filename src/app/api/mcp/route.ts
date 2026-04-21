@@ -412,7 +412,7 @@ async function dispatchTool(
     "create_write_proposal",
   ]);
   if (RATE_LIMITED_WRITE_TOOLS.has(name)) {
-    const rl = apiWriteLimit(ctx.clientId);
+    const rl = await apiWriteLimit(ctx.clientId);
     if (!rl.allowed) {
       throw toolError(
         -32029,
