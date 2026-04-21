@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Bot, GitBranch, Plus, Undo2 } from "lucide-react";
+import { Bot, GitBranch, LayoutDashboard, Plus, Undo2 } from "lucide-react";
 import {
   AccountSetting01Icon,
   Alert01Icon,
@@ -31,6 +31,7 @@ import { WorkspaceSwitcher } from "@/components/product/workspace_switcher";
 
 const primaryNav = [
   { label: "Home", href: "/app", icon: Home01Icon },
+  { label: "Dashboard", href: "/app/dashboard", icon: LayoutDashboard },
   { label: "Search", href: "/app/search", icon: SearchAreaIcon },
   { label: "Workspaces", href: "/app/workspaces", icon: Satellite01Icon },
   { label: "Agents", href: "/app/agents", icon: LaborIcon },
