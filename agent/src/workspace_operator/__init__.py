@@ -7,6 +7,33 @@ agentic loop with a fixed toolbelt, and produces one or more draft notes
 on the caller-supplied branch — which the user then reviews as a diff.
 """
 
+from workspace_operator.approval_gate import (
+    REQUIRES_APPROVAL_TOOLS,
+    ToolCallApproved,
+    ToolCallRejected,
+    ToolCallTimedOut,
+    await_approval,
+    should_gate_tool,
+)
 from workspace_operator.models import OperatorInput, OperatorResult
+from workspace_operator.steering import (
+    SteerMessage,
+    fetch_steer_messages,
+    format_steer_injection,
+    run_steer_poller,
+)
 
-__all__ = ["OperatorInput", "OperatorResult"]
+__all__ = [
+    "OperatorInput",
+    "OperatorResult",
+    "ToolCallApproved",
+    "ToolCallRejected",
+    "ToolCallTimedOut",
+    "await_approval",
+    "should_gate_tool",
+    "REQUIRES_APPROVAL_TOOLS",
+    "SteerMessage",
+    "fetch_steer_messages",
+    "format_steer_injection",
+    "run_steer_poller",
+]

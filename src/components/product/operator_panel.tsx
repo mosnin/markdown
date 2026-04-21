@@ -39,6 +39,7 @@ import {
 } from "@/components/ui/dialog";
 
 import { useOperatorProgress } from "@/lib/hooks/use_operator_run";
+import { OperatorActivityPanel } from "@/components/product/operator_activity_panel";
 import {
   requestOperatorPlanAction,
   approveAndExecuteAction,
@@ -1143,25 +1144,18 @@ export function OperatorPanel({
 
         <Separator />
 
-        {/* Realtime event log */}
-        <ScrollArea className="flex-1 -mx-4 px-4">
-          <ul className="flex flex-col gap-1" aria-label="Operator events">
-            {progressEvents.map((evt, i) => (
-              <li
-                // Event stream is append-only; timestamp + type + step_index
-                // uniquely identify each event, with `i` as a tiebreaker.
-                key={`evt-${evt.timestamp}-${evt.type}-${evt.step_index ?? "x"}-${i}`}
-                className="flex items-start gap-2 text-xs text-muted-foreground"
-              >
-                <span className="shrink-0 tabular-nums text-[10px]">
-                  {new Date(evt.timestamp).toLocaleTimeString()}
-                </span>
-                <span>{formatEventDetail(evt)}</span>
-              </li>
-            ))}
-          </ul>
-          <div ref={eventsEndRef} />
-        </ScrollArea>
+        {/* V3 activity panel — rich tool-call cards + live token counter +
+            inline approval queue + mid-run steer input. Subscribes to the
+            rich `event` broadcast emitted by the Python StreamingOperatorHooks.
+            The legacy `progressEvents` stream still drives the status-chip
+            animations above but its raw log is superseded by this panel. */}
+        <div className="flex-1 -mx-4 min-h-0">
+          <OperatorActivityPanel
+            runId={runId}
+            runIsActive={isActivePhase}
+          />
+        </div>
+        <div ref={eventsEndRef} />
 
         <Button
           variant="outline"

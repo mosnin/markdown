@@ -14,7 +14,15 @@ from workspace_operator.tools.curator import (
 )
 from workspace_operator.tools.draft import build_draft_note_tool
 from workspace_operator.tools.edit_note import build_edit_note_tool
+from workspace_operator.tools.execute_code import build_execute_code_tool
 from workspace_operator.tools.link_notes import build_link_notes_tool
+from workspace_operator.tools.memory import (
+    build_read_memories_tool,
+    build_write_memory_tool,
+)
+from workspace_operator.tools.propose_box_structure import (
+    build_propose_box_structure_tool,
+)
 from workspace_operator.tools.read_note import build_read_note_tool
 from workspace_operator.tools.search import build_hybrid_search_tool
 from workspace_operator.tools.web_fetch import build_web_fetch_tool
@@ -25,12 +33,16 @@ __all__ = [
     "build_archive_note_tool",
     "build_draft_note_tool",
     "build_edit_note_tool",
+    "build_execute_code_tool",
     "build_hybrid_search_tool",
     "build_link_notes_tool",
     "build_list_notes_in_box_tool",
     "build_move_note_tool",
+    "build_propose_box_structure_tool",
+    "build_read_memories_tool",
     "build_read_note_tool",
     "build_rename_note_tool",
     "build_web_fetch_tool",
     "build_web_search_tool",
+    "build_write_memory_tool",
 ]

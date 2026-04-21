@@ -47,6 +47,23 @@ class OperatorInput(BaseModel):
     max_input_tokens: int | None = None
     max_output_tokens: int | None = None
 
+    # V3 harness additions.
+    # ----------------------
+    # When set, every write-capable tool call pauses for human approval
+    # before executing. The agent POSTs to /api/agent/operator/approval/request
+    # and polls for the verdict. See approval_gate.REQUIRES_APPROVAL_TOOLS.
+    requires_approval: bool = False
+    # When True, this run produces a plan document and waits for human
+    # approval before executing. Short-circuits the "full" fast path.
+    plan_first: bool = False
+    # Optional persona slug (see public.agent_personas). When set, the
+    # operator filters its tool list and overrides instructions per the
+    # persona config fetched at run start.
+    persona_slug: str | None = None
+    # Optional per-run tool allowlist. When non-empty, only tools whose
+    # name appears here are registered. Overrides persona allowlist.
+    tool_allowlist: list[str] = Field(default_factory=list)
+
 
 class OperatorResult(BaseModel):
     """Final response returned to the Next.js service."""

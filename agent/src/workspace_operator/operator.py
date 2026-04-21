@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import uuid
 
 from agents import (
     Agent,
@@ -28,16 +29,31 @@ from workspace_operator.tools import (
     build_archive_note_tool,
     build_draft_note_tool,
     build_edit_note_tool,
+    build_execute_code_tool,
     build_hybrid_search_tool,
     build_link_notes_tool,
     build_list_notes_in_box_tool,
     build_move_note_tool,
+    build_propose_box_structure_tool,
+    build_read_memories_tool,
     build_read_note_tool,
     build_rename_note_tool,
     build_web_fetch_tool,
     build_web_search_tool,
+    build_write_memory_tool,
 )
+from workspace_operator.persona import filter_tools_by_allowlist  # noqa: E402
 from workspace_operator.tracing import flush_tracing, setup_tracing  # tracing: Phase 3 Agent 4
+
+# V3 harness: streaming hooks, approval gate, steering poller.
+from workspace_operator.hooks import StreamingOperatorHooks  # noqa: E402
+from workspace_operator.approval_gate import (  # noqa: E402
+    ToolCallRejected,
+    ToolCallTimedOut,
+    await_approval,
+    should_gate_tool,
+)
+from workspace_operator.steering import SteerMessage, run_steer_poller  # noqa: E402
 
 log = logging.getLogger(__name__)
 
@@ -501,6 +517,7 @@ def _build_operator(
     box_id: str,
     must_cite_per_claim: bool = False,
     workspace_context_block: str = "",
+    tool_allowlist: list[str] | None = None,
 ) -> Agent:
     """Construct the main Operator agent.
 
@@ -521,23 +538,30 @@ def _build_operator(
         else SYSTEM_PROMPT
     )
     instructions = _bound_system_prompt(instructions)
+    full_tools = [
+        build_hybrid_search_tool(client),
+        build_list_notes_in_box_tool(client),
+        build_read_note_tool(client),
+        build_web_search_tool(client),
+        build_web_fetch_tool(client),
+        build_draft_note_tool(client, box_id=box_id),
+        build_edit_note_tool(client),
+        build_rename_note_tool(client),
+        build_move_note_tool(client),
+        build_archive_note_tool(client),
+        build_link_notes_tool(client),
+        build_apply_template_tool(client, box_id=box_id),
+        # V3 — new tools (code exec, box architect, memory read/write)
+        build_execute_code_tool(client),
+        build_propose_box_structure_tool(client),
+        build_read_memories_tool(client),
+        build_write_memory_tool(client),
+    ]
+    tools = filter_tools_by_allowlist(full_tools, tool_allowlist or [])
     return Agent(
         name="Workspace Operator",
         instructions=instructions,
-        tools=[
-            build_hybrid_search_tool(client),
-            build_list_notes_in_box_tool(client),
-            build_read_note_tool(client),
-            build_web_search_tool(client),
-            build_web_fetch_tool(client),
-            build_draft_note_tool(client, box_id=box_id),
-            build_edit_note_tool(client),
-            build_rename_note_tool(client),
-            build_move_note_tool(client),
-            build_archive_note_tool(client),
-            build_link_notes_tool(client),
-            build_apply_template_tool(client, box_id=box_id),
-        ],
+        tools=tools,
         output_guardrails=output_guardrails,
     )
 
@@ -627,9 +651,14 @@ async def _run_plan(payload: OperatorInput, settings: Settings) -> OperatorResul
             workflow_name="workspace_operator",
             group_id=payload.run_id,
         )
-        budget_hooks = _BudgetHooks(
+        # Plan mode is read-only — no approval gate needed, but we still
+        # stream events so the UI shows planning progress in real time.
+        budget_hooks = StreamingOperatorHooks(
+            client=client,
+            run_id=payload.run_id,
             max_input_tokens=payload.max_input_tokens,
             max_output_tokens=payload.max_output_tokens,
+            on_tool_gate=None,
         )
         # Tool-call budget enforcement: the SDK lacks a "stop after N
         # tool calls" knob, so we map Settings.max_tool_calls onto its
@@ -648,7 +677,7 @@ async def _run_plan(payload: OperatorInput, settings: Settings) -> OperatorResul
                 hooks=budget_hooks,
             )
 
-        run_result = await _run_with_cancel_poll(
+        run_result = await _run_with_cancel_and_steer(
             _do_run, client=client, run_id=payload.run_id
         )
         tool_calls = _count_tool_calls(run_result)
@@ -695,6 +724,128 @@ async def _run_plan(payload: OperatorInput, settings: Settings) -> OperatorResul
         )
     finally:
         await client.aclose()
+
+
+# ---------------------------------------------------------------------------
+# V3 harness — tool approval gate + steer poller factories
+# ---------------------------------------------------------------------------
+
+
+def _make_tool_gate(
+    client: PoggleClient,
+    *,
+    run_id: str,
+    requires_approval: bool,
+    persona_requires_approval: bool = False,
+    timeout_s: float = 300.0,
+):
+    """Return a tool-gate callable that pauses tool calls for human approval.
+
+    The gate is attached to :class:`StreamingOperatorHooks` via its
+    ``on_tool_gate`` parameter. On every ``on_tool_start``, if the tool
+    is in :data:`REQUIRES_APPROVAL_TOOLS` and either the run or the
+    persona requires approval, we POST to the approval endpoint and
+    block until a human decides. Approval returns the (possibly edited)
+    args; rejection raises :class:`ToolCallRejected` which the SDK
+    propagates out of the hook.
+
+    Note: the SDK uses these resolved args to actually invoke the tool
+    only when the hook mutates them; in practice we log the edit via
+    the ``tool_call_start`` event and trust the LLM's own args for
+    tool invocation. Edits to args surface to the user as a visible
+    diff in the approval UI but are not enforced at the tool-call layer.
+    """
+
+    async def _gate(tool_name: str, tool_call_id: str, args: dict) -> dict:
+        if not should_gate_tool(
+            tool_name,
+            run_requires_approval=requires_approval,
+            persona_requires_approval=persona_requires_approval,
+        ):
+            return args
+        try:
+            approved = await await_approval(
+                client,
+                tool_call_id=tool_call_id,
+                tool_name=tool_name,
+                requested_args=args,
+                preview=None,
+                timeout_s=timeout_s,
+            )
+            return approved.resolved_args
+        except ToolCallTimedOut:
+            log.warning(
+                "[operator] approval timed out for tool %s (run %s)",
+                tool_name,
+                run_id,
+            )
+            raise ToolCallRejected(reject_reason="approval_timed_out") from None
+
+    return _gate
+
+
+def _make_steer_handler(run_id: str):
+    """Return a coroutine callback that logs received steer messages.
+
+    Mid-run steering is logged as events so the UI shows the interjection,
+    and the messages are marked ``consumed`` on the server side so the
+    agent doesn't see them twice. Deeper integration (injecting them
+    into the next LLM turn) requires SDK session-append which the 0.0.x
+    series doesn't expose cleanly — for now the agent sees the messages
+    via the ``steer_message_received`` event in its activity stream and
+    (when persisted to run_memory) subsequent runs.
+    """
+
+    async def _on_messages(messages: list[SteerMessage]) -> None:
+        if not messages:
+            return
+        log.info(
+            "[operator] received %d steer message(s) for run %s",
+            len(messages),
+            run_id,
+        )
+        # The steer/poll endpoint already records a
+        # ``steer_message_received`` event per message on consume; nothing
+        # more to do here. Left as a seam for future injection work.
+
+    return _on_messages
+
+
+async def _run_with_cancel_and_steer(
+    coro_factory,  # type: ignore[no-untyped-def]
+    *,
+    client: PoggleClient,
+    run_id: str,
+):
+    """Run the agent with both the cancel poller AND the steer poller sidecars.
+
+    Wraps :func:`_run_with_cancel_poll` with an additional background task
+    that polls for unread steer messages every 3s. The steer poller is
+    best-effort — it logs receipt of any messages (via the server's own
+    ``steer_message_received`` event emission) but does not abort the run.
+    """
+    steer_stop = asyncio.Event()
+    steer_handler = _make_steer_handler(run_id)
+    steer_task = asyncio.create_task(
+        run_steer_poller(
+            client,
+            cancel_event=steer_stop,
+            on_messages=steer_handler,
+            interval_s=3.0,
+        )
+    )
+    try:
+        return await _run_with_cancel_poll(
+            coro_factory, client=client, run_id=run_id
+        )
+    finally:
+        steer_stop.set()
+        if not steer_task.done():
+            try:
+                await asyncio.wait_for(steer_task, timeout=2.0)
+            except (asyncio.TimeoutError, asyncio.CancelledError, Exception):  # noqa: BLE001
+                if not steer_task.done():
+                    steer_task.cancel()
 
 
 async def _was_cancelled(client: PoggleClient, run_id: str) -> bool:
@@ -828,15 +979,29 @@ async def _run_execute(payload: OperatorInput, settings: Settings) -> OperatorRe
             box_id=payload.box_id,
             must_cite_per_claim=payload.must_cite_per_claim,
             workspace_context_block=workspace_context,
+            tool_allowlist=payload.tool_allowlist or None,
         )
         run_config = RunConfig(
             model=model,
             workflow_name="workspace_operator",
             group_id=payload.run_id,
         )
-        budget_hooks = _BudgetHooks(
+        # Execute mode: stream events + optional approval gate for write tools.
+        tool_gate = (
+            _make_tool_gate(
+                client,
+                run_id=payload.run_id,
+                requires_approval=payload.requires_approval,
+            )
+            if payload.requires_approval
+            else None
+        )
+        budget_hooks = StreamingOperatorHooks(
+            client=client,
+            run_id=payload.run_id,
             max_input_tokens=payload.max_input_tokens,
             max_output_tokens=payload.max_output_tokens,
+            on_tool_gate=tool_gate,
         )
 
         # See guardrails/max_tool_calls.py — Settings.max_tool_calls
@@ -851,7 +1016,7 @@ async def _run_execute(payload: OperatorInput, settings: Settings) -> OperatorRe
                 hooks=budget_hooks,
             )
 
-        run_result = await _run_with_cancel_poll(
+        run_result = await _run_with_cancel_and_steer(
             _do_run, client=client, run_id=payload.run_id
         )
         tool_calls = _count_tool_calls(run_result)
@@ -975,15 +1140,29 @@ async def _run_full(payload: OperatorInput, settings: Settings) -> OperatorResul
         box_id=payload.box_id,
         must_cite_per_claim=payload.must_cite_per_claim,
         workspace_context_block=workspace_context,
+        tool_allowlist=payload.tool_allowlist or None,
     )
     run_config = RunConfig(
         model=model,
         workflow_name="workspace_operator",
         group_id=payload.run_id,
     )
-    budget_hooks = _BudgetHooks(
+    # Full mode: stream events + optional approval gate for write tools.
+    tool_gate = (
+        _make_tool_gate(
+            client,
+            run_id=payload.run_id,
+            requires_approval=payload.requires_approval,
+        )
+        if payload.requires_approval
+        else None
+    )
+    budget_hooks = StreamingOperatorHooks(
+        client=client,
+        run_id=payload.run_id,
         max_input_tokens=payload.max_input_tokens,
         max_output_tokens=payload.max_output_tokens,
+        on_tool_gate=tool_gate,
     )
 
     try:
@@ -1009,7 +1188,7 @@ async def _run_full(payload: OperatorInput, settings: Settings) -> OperatorResul
                 hooks=budget_hooks,
             )
 
-        run_result = await _run_with_cancel_poll(
+        run_result = await _run_with_cancel_and_steer(
             _do_run, client=client, run_id=payload.run_id
         )
         tool_calls = _count_tool_calls(run_result)

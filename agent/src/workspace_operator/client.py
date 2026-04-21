@@ -287,6 +287,105 @@ class PoggleClient:
             )
         return bool(data.get("cancelled", False))
 
+    async def request_approval(
+        self,
+        *,
+        tool_call_id: str,
+        tool_name: str,
+        requested_args: dict[str, Any],
+        preview: dict[str, Any] | None = None,
+        timeout_seconds: int | None = None,
+    ) -> dict[str, Any]:
+        """Request human approval for a tool call. Returns { approval_id }."""
+        return await self._post(
+            "/api/agent/operator/approval/request",
+            {
+                "tool_call_id": tool_call_id,
+                "tool_name": tool_name,
+                "requested_args": requested_args,
+                "preview": preview,
+                "timeout_seconds": timeout_seconds,
+            },
+        )
+
+    async def poll_approval(self, tool_call_id: str) -> dict[str, Any]:
+        """Poll approval status. Returns { status, resolved_args?, reject_reason? }."""
+        return await self._post(
+            "/api/agent/operator/approval/poll",
+            {"tool_call_id": tool_call_id},
+        )
+
+    async def poll_steer_messages(self) -> dict[str, Any]:
+        """Fetch + consume unread steering messages for this run."""
+        return await self._post(
+            "/api/agent/operator/steer/poll",
+            {},
+        )
+
+    async def read_memories(
+        self,
+        *,
+        memory_type: str | None = None,
+        limit: int = 10,
+    ) -> dict[str, Any]:
+        """Read agent memories for the workspace."""
+        return await self._post(
+            "/api/agent/tools/memories",
+            {"operation": "read", "memory_type": memory_type, "limit": limit},
+        )
+
+    async def write_memory(
+        self,
+        *,
+        memory_type: str,
+        title: str,
+        content: str,
+        relevance: float = 1.0,
+    ) -> dict[str, Any]:
+        """Persist a memory for future runs to consume."""
+        return await self._post(
+            "/api/agent/tools/memories",
+            {
+                "operation": "write",
+                "memory_type": memory_type,
+                "title": title,
+                "content": content,
+                "relevance": relevance,
+            },
+        )
+
+    async def boost_memory(self, *, memory_id: str) -> dict[str, Any]:
+        """Mark a memory as recently used (touch last_used_at)."""
+        return await self._post(
+            "/api/agent/tools/memories",
+            {"operation": "boost", "memory_id": memory_id},
+        )
+
+    async def execute_code(
+        self,
+        *,
+        language: str,
+        code: str,
+        timeout_seconds: int = 15,
+    ) -> dict[str, Any]:
+        """Execute code in a sandboxed environment."""
+        return await self._post(
+            "/api/agent/tools/execute_code",
+            {"language": language, "code": code, "timeout_seconds": timeout_seconds},
+        )
+
+    async def propose_box_structure(
+        self,
+        *,
+        workspace_scope: str = "all",
+        box_id: str | None = None,
+    ) -> dict[str, Any]:
+        """Request an AI-generated proposed reorganization of boxes."""
+        return await self._post(
+            "/api/agent/tools/propose_box_structure",
+            {"workspace_scope": workspace_scope, "box_id": box_id},
+        )
+
     async def report_progress(
         self,
         *,
