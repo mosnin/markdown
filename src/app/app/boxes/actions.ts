@@ -115,6 +115,7 @@ export async function updateBoxAction(
     name?: string;
     description?: string | null;
     agent_instructions?: string | null;
+    is_public?: boolean;
   }
 ): Promise<ActionResult> {
   try {
@@ -145,13 +146,18 @@ export async function updateBoxAction(
           name: changes.name !== undefined ? changes.name : undefined,
           description: changes.description !== undefined ? changes.description : undefined,
         });
-        // agent_instructions is workspace configuration (not branchable
-        // content), so write it straight to main even when a branch is
-        // active. This matches the behaviour of workspace-level rules.
+        // agent_instructions and is_public are workspace configuration (not
+        // branchable content), so write them straight to main even when a
+        // branch is active. This matches the behaviour of workspace-level rules.
+        const directChanges: { agent_instructions?: string | null; is_public?: boolean } = {};
         if (changes.agent_instructions !== undefined) {
-          await updateBox(supabase, userId, boxId, workspaceId, {
-            agent_instructions: changes.agent_instructions,
-          });
+          directChanges.agent_instructions = changes.agent_instructions;
+        }
+        if (changes.is_public !== undefined) {
+          directChanges.is_public = changes.is_public;
+        }
+        if (Object.keys(directChanges).length > 0) {
+          await updateBox(supabase, userId, boxId, workspaceId, directChanges);
         }
         revalidatePath(`/app/boxes/${boxId}`);
         revalidatePath("/app");

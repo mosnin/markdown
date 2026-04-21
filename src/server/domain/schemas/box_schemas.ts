@@ -23,6 +23,7 @@ export const updateBoxSchema = z.object({
   ]).optional(),
   guide_note_id: z.string().uuid().nullable().optional(),
   agent_instructions: z.string().max(4000).nullable().optional(),
+  is_public: z.boolean().optional(),
 });
 
 export type UpdateBoxInput = z.infer<typeof updateBoxSchema>;

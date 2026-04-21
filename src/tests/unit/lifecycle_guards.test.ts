@@ -61,6 +61,7 @@ function makeBox(overrides: Partial<{ guide_note_id: string | null; workspace_id
     status: "active" as const,
     branch_id: null,
     agent_instructions: null,
+    is_public: false,
     created_at: "2026-01-01T00:00:00Z",
     updated_at: "2026-01-01T00:00:00Z",
     ...overrides,

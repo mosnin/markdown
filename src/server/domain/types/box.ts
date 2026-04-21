@@ -29,6 +29,7 @@ export interface Box {
    */
   branch_id: string | null;
   agent_instructions: string | null;
+  is_public: boolean;
   created_at: string;
   updated_at: string;
 }

@@ -95,3 +95,32 @@ export async function updateBox(
   if (error || !data) return null;
   return data as Box;
 }
+
+export async function listPublicBoxesByWorkspace(
+  supabase: SupabaseClient,
+  workspaceId: string
+): Promise<Box[]> {
+  const { data, error } = await supabase
+    .from("boxes")
+    .select("*")
+    .eq("workspace_id", workspaceId)
+    .eq("is_public", true)
+    .eq("status", "active")
+    .order("name");
+  if (error) throw error;
+  return (data ?? []) as Box[];
+}
+
+export async function getWorkspaceBySlug(
+  supabase: SupabaseClient,
+  slug: string
+): Promise<{ id: string; name: string; slug: string } | null> {
+  const { data, error } = await supabase
+    .from("workspaces")
+    .select("id, name, slug")
+    .eq("slug", slug)
+    .single();
+
+  if (error || !data) return null;
+  return data as { id: string; name: string; slug: string };
+}
