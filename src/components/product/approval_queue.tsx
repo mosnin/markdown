@@ -6,6 +6,7 @@ import {
   Check,
   ChevronDown,
   ChevronRight,
+  Clock,
   Loader2,
   ShieldAlert,
   X,
@@ -97,6 +98,61 @@ function prettyJson(value: unknown): string {
   } catch {
     return "{}";
   }
+}
+
+function formatRemaining(ms: number): string {
+  if (ms <= 0) return "expired";
+  const total = Math.floor(ms / 1000);
+  const m = Math.floor(total / 60);
+  const s = total % 60;
+  return `${m}:${s.toString().padStart(2, "0")}`;
+}
+
+function classifyRemaining(ms: number): "ok" | "warn" | "expired" {
+  if (ms <= 0) return "expired";
+  if (ms <= 30_000) return "warn"; // last 30 seconds
+  return "ok";
+}
+
+// ---------------------------------------------------------------------------
+// TimeoutChip — small live countdown until the agent auto-rejects
+// ---------------------------------------------------------------------------
+
+function TimeoutChip({ timeoutAt }: { timeoutAt: string | null }) {
+  const [now, setNow] = useState<number>(() => Date.now());
+
+  useEffect(() => {
+    if (!timeoutAt) return;
+    // Tick every 1s. Stops once the deadline is past so we don't churn forever.
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, [timeoutAt]);
+
+  if (!timeoutAt) return null;
+  const deadline = Date.parse(timeoutAt);
+  if (!Number.isFinite(deadline)) return null;
+  const remainingMs = deadline - now;
+  const tone = classifyRemaining(remainingMs);
+
+  const toneClass =
+    tone === "expired"
+      ? "bg-destructive/10 text-destructive"
+      : tone === "warn"
+        ? "bg-amber-500/10 text-amber-600 dark:text-amber-400"
+        : "bg-muted text-muted-foreground";
+
+  return (
+    <span
+      className={cn(
+        "inline-flex items-center gap-1 rounded-full px-2 py-0.5 font-mono text-[10px] tabular-nums",
+        toneClass
+      )}
+      title={`Expires ${new Date(deadline).toLocaleString()}`}
+    >
+      <Clock className="h-2.5 w-2.5" aria-hidden="true" />
+      {formatRemaining(remainingMs)}
+    </span>
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -231,6 +287,7 @@ function ApprovalCard({ approval, onResolved }: ApprovalCardProps) {
           <span className="truncate font-mono text-sm font-medium text-foreground">
             {approval.tool_name}
           </span>
+          <TimeoutChip timeoutAt={approval.timeout_at} />
           <Badge variant="warning" className="shrink-0">
             awaiting approval
           </Badge>

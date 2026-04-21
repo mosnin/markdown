@@ -1,4 +1,4 @@
-import type { Event, Breadcrumb } from "@sentry/nextjs";
+import type { ErrorEvent, Breadcrumb } from "@sentry/nextjs";
 
 const SENSITIVE_HEADER_NAMES = new Set([
   "authorization", "cookie", "set-cookie", "x-api-key",
@@ -40,7 +40,7 @@ function redactUrl(url: string | undefined): string | undefined {
   } catch { return url; }
 }
 
-export function scrubEvent(event: Event): Event | null {
+export function scrubEvent(event: ErrorEvent): ErrorEvent | null {
   if (event.request) {
     event.request.headers = redactHeaders(event.request.headers as Record<string, unknown>) as Record<string, string>;
     if (event.request.url) event.request.url = redactUrl(event.request.url);

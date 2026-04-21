@@ -349,7 +349,7 @@ export async function autoDiscardExpiredBranches(
       // context to diagnose half-cleanups on retry.
       const deleteSteps: Array<{
         table: string;
-        run: () => Promise<{ error: { message: string } | null }>;
+        run: () => PromiseLike<{ error: { message: string } | null }>;
       }> = [
         { table: "files", run: () => supabase.from("files").delete().eq("branch_id", branch.id) },
         { table: "object_links", run: () => supabase.from("object_links").delete().eq("branch_id", branch.id) },
