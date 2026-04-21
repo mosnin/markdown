@@ -2,11 +2,13 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { LayoutDashboard } from "lucide-react";
 import type { WorkspaceOperatorRunRow } from "@/server/services/workspace_operator_runs_service";
 import { WorkspaceConversation } from "@/components/product/workspace_conversation";
 import { ConversationComposer } from "@/components/product/conversation_composer";
 import { OnboardingCallout } from "@/components/product/onboarding_callout";
+import { BulkImportPanel } from "@/components/product/bulk_import_panel";
 
 export interface ConversationHomeClientProps {
   workspaceId: string;
@@ -28,10 +30,16 @@ export function ConversationHomeClient({
   userDisplayName,
 }: ConversationHomeClientProps) {
   const [activeRunId, setActiveRunId] = useState<string | null>(null);
+  const [importToast, setImportToast] = useState<string | null>(null);
+  const router = useRouter();
+
+  // Fresh-workspace path: no boxes AND no past runs. The user has nothing
+  // to chat about yet, so the centerpiece becomes the bulk importer —
+  // paste notes, get an organized workspace, then start chatting.
+  const isFreshWorkspace = hasNoBoxes && initialRuns.length === 0;
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
-      {/* Header — workspace name + Dashboard link */}
       <header className="flex items-center justify-between border-b border-border px-6 py-3">
         <div>
           <p className="text-[11px] uppercase tracking-wider text-muted-foreground">
@@ -50,35 +58,71 @@ export function ConversationHomeClient({
         </Link>
       </header>
 
-      {/* Onboarding banner when no boxes — Pog can't draft without a box */}
-      {hasNoBoxes && (
-        <div className="border-b border-border bg-muted/20 px-6 py-4">
-          <OnboardingCallout />
+      {isFreshWorkspace ? (
+        <div className="flex-1 overflow-y-auto">
+          <div className="mx-auto flex w-full max-w-2xl flex-col gap-6 px-4 py-8">
+            <div className="text-center">
+              <h2 className="text-2xl font-semibold tracking-tight text-foreground">
+                Bring your notes — Pog will organize them
+              </h2>
+              <p className="mt-2 text-sm text-muted-foreground">
+                Paste a markdown blob or drop a folder of <code className="rounded bg-muted px-1 py-0.5 text-xs">.md</code> files.
+                We embed each note, group them by meaning, and create boxes
+                automatically. You&apos;ll have a navigable workspace in seconds.
+              </p>
+            </div>
+
+            {importToast && (
+              <div className="rounded-md border border-green-500/30 bg-green-500/10 px-3 py-2 text-sm text-green-700 dark:text-green-400">
+                {importToast}
+              </div>
+            )}
+
+            <BulkImportPanel
+              workspaceId={workspaceId}
+              onOrganized={(result) => {
+                setImportToast(result.summary);
+                router.refresh();
+              }}
+            />
+
+            <details className="rounded-md border border-border bg-muted/30 px-4 py-3">
+              <summary className="cursor-pointer text-xs font-medium uppercase tracking-wider text-muted-foreground hover:text-foreground">
+                Or learn the mental model first
+              </summary>
+              <div className="mt-3">
+                <OnboardingCallout />
+              </div>
+            </details>
+          </div>
+        </div>
+      ) : (
+        <div className="mx-auto flex w-full max-w-3xl min-h-0 flex-1 flex-col px-4">
+          {hasNoBoxes && (
+            <div className="border-b border-border bg-muted/20 px-2 py-2 text-xs text-muted-foreground">
+              No boxes yet — <Link href="/app/workspaces" className="underline hover:text-foreground">create one</Link> so Pog can draft notes for you.
+            </div>
+          )}
+          <div className="min-h-0 flex-1">
+            <WorkspaceConversation
+              workspaceId={workspaceId}
+              initialRuns={initialRuns}
+              nowIso={nowIso}
+              activeRunId={activeRunId}
+              userDisplayName={userDisplayName}
+            />
+          </div>
+
+          <div className="shrink-0 border-t border-border py-3">
+            <ConversationComposer
+              workspaceId={workspaceId}
+              defaultBoxId={defaultBoxId}
+              hasHistory={initialRuns.length > 0}
+              onRunStarted={setActiveRunId}
+            />
+          </div>
         </div>
       )}
-
-      {/* Transcript fills available space */}
-      <div className="mx-auto flex w-full max-w-3xl min-h-0 flex-1 flex-col px-4">
-        <div className="min-h-0 flex-1">
-          <WorkspaceConversation
-            workspaceId={workspaceId}
-            initialRuns={initialRuns}
-            nowIso={nowIso}
-            activeRunId={activeRunId}
-            userDisplayName={userDisplayName}
-          />
-        </div>
-
-        {/* Composer pinned to bottom */}
-        <div className="shrink-0 border-t border-border py-3">
-          <ConversationComposer
-            workspaceId={workspaceId}
-            defaultBoxId={defaultBoxId}
-            hasHistory={initialRuns.length > 0}
-            onRunStarted={setActiveRunId}
-          />
-        </div>
-      </div>
     </div>
   );
 }
