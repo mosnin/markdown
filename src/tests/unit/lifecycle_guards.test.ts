@@ -136,9 +136,6 @@ describe("archiveNote", () => {
 
   it("throws if note belongs to a different workspace", async () => {
     vi.mocked(noteRepo.getNoteById).mockResolvedValue(makeNote() as never);
-    vi.mocked(boxRepo.getBoxById).mockResolvedValue(
-      makeBox() as unknown as ReturnType<typeof makeBox> & { workspace_id: "other-ws" }
-    );
     // getBoxById returns box with wrong workspace_id
     vi.mocked(boxRepo.getBoxById).mockResolvedValue({
       ...makeBox(),
