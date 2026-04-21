@@ -255,7 +255,7 @@ function ParentPathDisplay({ bundle }: { bundle: ContextBundle }) {
     <div className="flex items-center gap-1 flex-wrap text-xs text-muted-foreground">
       <span className="text-foreground/60">{box.name}</span>
       {parent_path.folder_names.map((name, i) => (
-        <span key={i} className="flex items-center gap-1">
+        <span key={`${name}-${i}`} className="flex items-center gap-1">
           <ChevronRight className="h-3 w-3 text-muted-foreground/40" />
           <span className="text-foreground/70">{name}</span>
         </span>

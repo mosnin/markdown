@@ -1035,7 +1035,9 @@ export function OperatorPanel({
           >
             {liveTail.map((evt, i) => (
               <li
-                key={`tail-${i}`}
+                // Event stream is append-only; timestamp + type + step_index
+                // uniquely identify each event, with `i` as a tiebreaker.
+                key={`tail-${evt.timestamp}-${evt.type}-${evt.step_index ?? "x"}-${i}`}
                 className="flex items-start gap-2 text-[10px] text-muted-foreground"
               >
                 <span className="shrink-0 tabular-nums">
@@ -1146,7 +1148,9 @@ export function OperatorPanel({
           <ul className="flex flex-col gap-1" aria-label="Operator events">
             {progressEvents.map((evt, i) => (
               <li
-                key={i}
+                // Event stream is append-only; timestamp + type + step_index
+                // uniquely identify each event, with `i` as a tiebreaker.
+                key={`evt-${evt.timestamp}-${evt.type}-${evt.step_index ?? "x"}-${i}`}
                 className="flex items-start gap-2 text-xs text-muted-foreground"
               >
                 <span className="shrink-0 tabular-nums text-[10px]">
