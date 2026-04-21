@@ -403,6 +403,16 @@ export interface PromoteBranchOptions {
   onProgress?: (event: PromoteProgressEvent) => void;
 }
 
+// NOTE: While this function is running, `draft_branches.status` is
+// set to `'promoting'`. The rollback path in `branch_rollback_service`
+// MUST reject any rollback attempt while a branch is in the
+// `'promoting'` state — otherwise a concurrent rollback could race
+// against the in-flight mutations here and leave the canonical
+// objects in a torn state (some advanced, some reverted). The
+// existing rollback service only checks for `status = 'promoted'`;
+// extending it to also block on `'promoting'` is tracked separately
+// (another agent's scope). Do not remove this note without confirming
+// that guard has landed.
 export async function promoteBranch(
   supabase: SupabaseClient,
   workspaceId: string,
@@ -644,15 +654,23 @@ export async function promoteBranch(
           .select("id, current_version_id, title, markdown_content, content_bytes, summary")
           .eq("id", head.object_id)
           .maybeSingle();
-        if (!note) continue;
+        if (!note) {
+          throw new Error(
+            "Note " + head.object_id + " missing during promotion, aborting"
+          );
+        }
         const { data: branchVer } = await supabase
           .from("note_versions")
           .select("id, title, markdown_content, content_bytes")
           .eq("id", head.version_id)
           .maybeSingle();
-        if (!branchVer) continue;
+        if (!branchVer) {
+          throw new Error(
+            "note_version " + head.version_id + " missing during promotion, aborting"
+          );
+        }
 
-        await supabase
+        const { error: noteUpdateErr } = await supabase
           .from("notes")
           .update({
             current_version_id: branchVer.id,
@@ -661,15 +679,34 @@ export async function promoteBranch(
             content_bytes: branchVer.content_bytes,
           })
           .eq("id", head.object_id);
+        if (noteUpdateErr) {
+          throw new Error(
+            "Failed to advance note head for note " + head.object_id + ": " +
+              noteUpdateErr.message
+          );
+        }
 
         // Tag the promoted version with the change_set_id so history
         // can walk from "branch_promotion change set" → versions.
-        await supabase
+        const { error: noteVerTagErr } = await supabase
           .from("note_versions")
           .update({ change_set_id: cs.id })
           .eq("id", branchVer.id);
+        if (noteVerTagErr) {
+          throw new Error(
+            "Failed to tag note_version " + branchVer.id +
+              " with change_set for note " + head.object_id + ": " +
+              noteVerTagErr.message
+          );
+        }
 
-        batchItems.push({
+        // Record the change_set_item for this object immediately
+        // after its mutations succeed. Mutate-one-record-one keeps
+        // rollback's audit trail in sync with the canonical state —
+        // if this insert fails, the outer catch rolls the branch
+        // back to 'open' and the rollback engine can still revert
+        // every successfully-recorded item.
+        const noteItem: RecordItemInput = {
           change_set_id: cs.id,
           workspace_id: workspaceId,
           operation: "update",
@@ -678,7 +715,9 @@ export async function promoteBranch(
           version_id: branchVer.id,
           before_snapshot: { version_id: note.current_version_id ?? null },
           after_snapshot: { version_id: branchVer.id, branch_id: branchId },
-        });
+        };
+        batchItems.push(noteItem);
+        await recordChangeSetItemsBatch(supabase, [noteItem]);
 
         promoted.push({
           object_type: "note",
@@ -706,15 +745,26 @@ export async function promoteBranch(
           .select("id, current_version_id, source_content, content_bytes")
           .eq("id", head.object_id)
           .maybeSingle();
-        if (!row) continue;
+        if (!row) {
+          throw new Error(
+            head.object_type + " " + head.object_id +
+              " missing during promotion, aborting"
+          );
+        }
         const { data: branchVer } = await supabase
           .from("object_versions")
           .select("id, source_content, content_bytes")
           .eq("id", head.version_id)
           .maybeSingle();
-        if (!branchVer) continue;
+        if (!branchVer) {
+          throw new Error(
+            "object_version " + head.version_id +
+              " missing during promotion for " + head.object_type +
+              " " + head.object_id + ", aborting"
+          );
+        }
 
-        await supabase
+        const { error: rowUpdateErr } = await supabase
           .from(table)
           .update({
             current_version_id: branchVer.id,
@@ -722,15 +772,30 @@ export async function promoteBranch(
             content_bytes: branchVer.content_bytes,
           })
           .eq("id", head.object_id);
+        if (rowUpdateErr) {
+          throw new Error(
+            "Failed to advance " + head.object_type + " head for " +
+              head.object_id + ": " + rowUpdateErr.message
+          );
+        }
 
         // Tag the promoted version with the change_set_id so the
         // rollback engine can walk branch_promotion → versions.
-        await supabase
+        const { error: objVerTagErr } = await supabase
           .from("object_versions")
           .update({ change_set_id: cs.id })
           .eq("id", branchVer.id);
+        if (objVerTagErr) {
+          throw new Error(
+            "Failed to tag object_version " + branchVer.id +
+              " with change_set for " + head.object_type + " " +
+              head.object_id + ": " + objVerTagErr.message
+          );
+        }
 
-        batchItems.push({
+        // Mutate-one-record-one: flush this object's item to
+        // change_set_items right after its mutations succeed.
+        const headItem: RecordItemInput = {
           change_set_id: cs.id,
           workspace_id: workspaceId,
           operation: "update",
@@ -739,7 +804,9 @@ export async function promoteBranch(
           version_id: branchVer.id,
           before_snapshot: { version_id: row.current_version_id ?? null },
           after_snapshot: { version_id: branchVer.id, branch_id: branchId },
-        });
+        };
+        batchItems.push(headItem);
+        await recordChangeSetItemsBatch(supabase, [headItem]);
 
         promoted.push({
           object_type: head.object_type,
@@ -783,10 +850,16 @@ export async function promoteBranch(
         .eq("id", ov.package_id)
         .maybeSingle();
 
-      await supabase
+      const { error: ovUpdateErr } = await supabase
         .from(table)
         .update(patch)
         .eq("id", ov.package_id);
+      if (ovUpdateErr) {
+        throw new Error(
+          "Failed to apply package metadata overlay to " + ov.package_type +
+            " " + ov.package_id + ": " + ovUpdateErr.message
+        );
+      }
 
       // Keep the denormalized `workspace_objects.display_name` in sync
       // when the overlay renamed the package. Without this sync the
@@ -798,14 +871,20 @@ export async function promoteBranch(
         patch.name !== undefined &&
         typeof patch.name === "string"
       ) {
-        await supabase
+        const { error: woErr } = await supabase
           .from("workspace_objects")
           .update({ display_name: patch.name })
           .eq("object_type", ov.package_type)
           .eq("object_id", ov.package_id);
+        if (woErr) {
+          throw new Error(
+            "Failed to sync workspace_objects.display_name for " +
+              ov.package_type + " " + ov.package_id + ": " + woErr.message
+          );
+        }
       }
 
-      batchItems.push({
+      const ovItem: RecordItemInput = {
         change_set_id: cs.id,
         workspace_id: workspaceId,
         operation: "update",
@@ -813,7 +892,9 @@ export async function promoteBranch(
         object_id: ov.package_id,
         before_snapshot: { metadata: before ?? {} },
         after_snapshot: { metadata: patch, from_branch: branchId },
-      });
+      };
+      batchItems.push(ovItem);
+      await recordChangeSetItemsBatch(supabase, [ovItem]);
 
       promoted.push({
         object_type: ov.package_type as "skill" | "agent",
@@ -834,10 +915,21 @@ export async function promoteBranch(
       .select("id, name, box_id, parent_skill_id, parent_agent_id")
       .eq("branch_id", branchId);
     const selFileIds = (branchFiles ?? []).filter(f => isSelected("file", f.id)).map(f => f.id);
-    if (selFileIds.length) await supabase.from("files").update({ branch_id: null }).in("id", selFileIds);
+    if (selFileIds.length) {
+      const { error: filesClearErr } = await supabase
+        .from("files")
+        .update({ branch_id: null })
+        .in("id", selFileIds);
+      if (filesClearErr) {
+        throw new Error(
+          "Failed to land branch-scoped files onto main for branch " +
+            branchId + ": " + filesClearErr.message
+        );
+      }
+    }
     for (const f of branchFiles ?? []) {
       if (!isSelected("file", f.id)) continue;
-      batchItems.push({
+      const item: RecordItemInput = {
         change_set_id: cs.id,
         workspace_id: workspaceId,
         operation: "create",
@@ -851,7 +943,9 @@ export async function promoteBranch(
           parent_agent_id: f.parent_agent_id ?? null,
           promoted_from_branch: branchId,
         },
-      });
+      };
+      batchItems.push(item);
+      await recordChangeSetItemsBatch(supabase, [item]);
       promoted.push({
         object_type: "file" as const,
         object_id: f.id,
@@ -864,10 +958,21 @@ export async function promoteBranch(
       .select("id, source_object_type, source_object_id, target_object_type, target_object_id, relationship_type")
       .eq("branch_id", branchId);
     const selLinkIds = (branchLinks ?? []).filter(l => isSelected("object_link", l.id)).map(l => l.id);
-    if (selLinkIds.length) await supabase.from("object_links").update({ branch_id: null }).in("id", selLinkIds);
+    if (selLinkIds.length) {
+      const { error: linksClearErr } = await supabase
+        .from("object_links")
+        .update({ branch_id: null })
+        .in("id", selLinkIds);
+      if (linksClearErr) {
+        throw new Error(
+          "Failed to land branch-scoped object_links onto main for branch " +
+            branchId + ": " + linksClearErr.message
+        );
+      }
+    }
     for (const link of branchLinks ?? []) {
       if (!isSelected("object_link", link.id)) continue;
-      batchItems.push({
+      const item: RecordItemInput = {
         change_set_id: cs.id,
         workspace_id: workspaceId,
         operation: "link_create",
@@ -882,7 +987,9 @@ export async function promoteBranch(
           relationship_type: link.relationship_type,
           promoted_from_branch: branchId,
         },
-      });
+      };
+      batchItems.push(item);
+      await recordChangeSetItemsBatch(supabase, [item]);
     }
 
     // Promote branch-scoped note_links — same shape as object_links.
@@ -894,10 +1001,21 @@ export async function promoteBranch(
       .select("id, source_note_id, target_note_id, relationship_type")
       .eq("branch_id", branchId);
     const selNlIds = (branchNoteLinks ?? []).filter(nl => isSelected("note_link", nl.id)).map(nl => nl.id);
-    if (selNlIds.length) await supabase.from("note_links").update({ branch_id: null }).in("id", selNlIds);
+    if (selNlIds.length) {
+      const { error: nlClearErr } = await supabase
+        .from("note_links")
+        .update({ branch_id: null })
+        .in("id", selNlIds);
+      if (nlClearErr) {
+        throw new Error(
+          "Failed to land branch-scoped note_links onto main for branch " +
+            branchId + ": " + nlClearErr.message
+        );
+      }
+    }
     for (const nl of branchNoteLinks ?? []) {
       if (!isSelected("note_link", nl.id)) continue;
-      batchItems.push({
+      const item: RecordItemInput = {
         change_set_id: cs.id,
         workspace_id: workspaceId,
         operation: "link_create",
@@ -910,7 +1028,9 @@ export async function promoteBranch(
           relationship_type: nl.relationship_type,
           promoted_from_branch: branchId,
         },
-      });
+      };
+      batchItems.push(item);
+      await recordChangeSetItemsBatch(supabase, [item]);
     }
 
     // Promote branch-scoped box_object_attachments. Attachment rows
@@ -923,10 +1043,21 @@ export async function promoteBranch(
       .select("id, box_id, folder_id, object_type, object_id, sort_order")
       .eq("branch_id", branchId);
     const selAttIds = (branchAttachments ?? []).filter(a => isSelected("box_object_attachment", a.id)).map(a => a.id);
-    if (selAttIds.length) await supabase.from("box_object_attachments").update({ branch_id: null }).in("id", selAttIds);
+    if (selAttIds.length) {
+      const { error: attClearErr } = await supabase
+        .from("box_object_attachments")
+        .update({ branch_id: null })
+        .in("id", selAttIds);
+      if (attClearErr) {
+        throw new Error(
+          "Failed to land branch-scoped box_object_attachments onto main for branch " +
+            branchId + ": " + attClearErr.message
+        );
+      }
+    }
     for (const att of branchAttachments ?? []) {
       if (!isSelected("box_object_attachment", att.id)) continue;
-      batchItems.push({
+      const item: RecordItemInput = {
         change_set_id: cs.id,
         workspace_id: workspaceId,
         operation: "attach",
@@ -941,7 +1072,9 @@ export async function promoteBranch(
           sort_order: att.sort_order,
           promoted_from_branch: branchId,
         },
-      });
+      };
+      batchItems.push(item);
+      await recordChangeSetItemsBatch(supabase, [item]);
     }
 
     // Promote branch-scoped notes, folders, and boxes. Same pattern
@@ -957,10 +1090,21 @@ export async function promoteBranch(
       const itemObjectType =
         table === "notes" ? "note" as const : table === "folders" ? "folder" as const : "box" as const;
       const selIds = (rows ?? []).filter(r => isSelected(itemObjectType, r.id)).map(r => r.id);
-      if (selIds.length) await supabase.from(table).update({ branch_id: null }).in("id", selIds);
+      if (selIds.length) {
+        const { error: tableClearErr } = await supabase
+          .from(table)
+          .update({ branch_id: null })
+          .in("id", selIds);
+        if (tableClearErr) {
+          throw new Error(
+            "Failed to land branch-scoped " + table + " onto main for branch " +
+              branchId + ": " + tableClearErr.message
+          );
+        }
+      }
       for (const row of rows ?? []) {
         if (!isSelected(itemObjectType, row.id)) continue;
-        batchItems.push({
+        const item: RecordItemInput = {
           change_set_id: cs.id,
           workspace_id: workspaceId,
           operation: "create",
@@ -968,7 +1112,9 @@ export async function promoteBranch(
           object_id: row.id,
           before_snapshot: { branch_id: branchId },
           after_snapshot: { branch_id: null, promoted_from_branch: branchId },
-        });
+        };
+        batchItems.push(item);
+        await recordChangeSetItemsBatch(supabase, [item]);
       }
     }
 
@@ -985,7 +1131,7 @@ export async function promoteBranch(
       selectedKeys ? (boxId) => isSelected("box", boxId) : undefined
     );
     for (const ch of boxOverlayChanges) {
-      batchItems.push({
+      const item: RecordItemInput = {
         change_set_id: cs.id,
         workspace_id: workspaceId,
         operation: "update",
@@ -993,7 +1139,9 @@ export async function promoteBranch(
         object_id: ch.boxId,
         before_snapshot: { metadata: ch.before, branch_id: branchId },
         after_snapshot: { metadata: ch.after },
-      });
+      };
+      batchItems.push(item);
+      await recordChangeSetItemsBatch(supabase, [item]);
     }
 
     // Apply folder-branch overrides — rename / reparent / reorder
@@ -1015,7 +1163,7 @@ export async function promoteBranch(
       ) {
         continue; // empty overlay — nothing to record
       }
-      batchItems.push({
+      const item: RecordItemInput = {
         change_set_id: cs.id,
         workspace_id: workspaceId,
         operation: "update",
@@ -1023,7 +1171,9 @@ export async function promoteBranch(
         object_id: ch.folderId,
         before_snapshot: { ...ch.before, branch_id: branchId },
         after_snapshot: { ...ch.after, promoted_from_branch: branchId },
-      });
+      };
+      batchItems.push(item);
+      await recordChangeSetItemsBatch(supabase, [item]);
       promoted.push({
         object_type: "folder" as unknown as BranchHeadObjectType,
         object_id: ch.folderId,
@@ -1084,7 +1234,7 @@ export async function promoteBranch(
           ? "box_object_attachment"
           : (ch.objectType ?? "box_object_attachment");
       const itemObjectId = ch.objectId ?? ch.targetId;
-      batchItems.push({
+      const item: RecordItemInput = {
         change_set_id: cs.id,
         workspace_id: workspaceId,
         operation: op,
@@ -1101,7 +1251,9 @@ export async function promoteBranch(
         object_id: itemObjectId,
         before_snapshot: { ...ch.before, branch_id: branchId },
         after_snapshot: { ...ch.after, promoted_from_branch: branchId },
-      });
+      };
+      batchItems.push(item);
+      await recordChangeSetItemsBatch(supabase, [item]);
     }
 
     // Apply pending structural ops (trash / archive / unarchive /
@@ -1124,7 +1276,7 @@ export async function promoteBranch(
         op.op_type === "unarchive" ? "unarchive" as const :
         op.op_type === "detach" ? "detach" as const :
         "move" as const;
-      batchItems.push({
+      const item: RecordItemInput = {
         change_set_id: cs.id,
         workspace_id: workspaceId,
         operation: opToItemOp,
@@ -1134,10 +1286,17 @@ export async function promoteBranch(
         object_id: op.object_id,
         before_snapshot: { ...result.before, branch_id: branchId, pending_op: op.op_type },
         after_snapshot: { ...result.after, promoted_from_branch: branchId },
-      });
+      };
+      batchItems.push(item);
+      await recordChangeSetItemsBatch(supabase, [item]);
     }
 
-    await recordChangeSetItemsBatch(supabase, batchItems);
+    // Every per-object mutation above flushed its own change_set_item
+    // via `recordChangeSetItemsBatch(..., [item])` immediately after
+    // the mutation succeeded — this keeps the rollback audit trail in
+    // lock-step with the canonical writes. `batchItems` is still
+    // accumulated as an in-memory tally for logging / future use, but
+    // no end-of-flow bulk insert is needed.
     await commitChangeSet(supabase, cs.id);
 
     // Status flip. Full-promote (no selection) always lands on
@@ -1146,6 +1305,21 @@ export async function promoteBranch(
     // branch-local row — i.e., nothing is left to promote. If any
     // unpromoted work remains, the branch stays 'open' so the
     // author can continue editing or promote the rest later.
+    //
+    // KNOWN RACE (partial-promote status): the `countUnpromotedForBranch`
+    // read and the subsequent `draft_branches.status` update below are
+    // two separate round-trips. A concurrent writer adding a new branch
+    // head / overlay / pending-op between the count and the status
+    // update can slip work onto the branch that this transaction then
+    // marks `promoted`, stranding that work on a closed branch.
+    // Properly closing the race requires an RPC that takes a row-level
+    // lock on `draft_branches` and performs count+update atomically —
+    // the Supabase JS client does not expose `SELECT ... FOR UPDATE`
+    // from client-side query builders. Until that RPC lands, we rely
+    // on the `.eq("status", "promoting")` guard on the status update
+    // (which only narrows the window — it does NOT eliminate it) plus
+    // application-level discipline that branch writes go through
+    // services that check status first. Tracked as a known issue.
     let finalStatus: "promoted" | "open" = "promoted";
     if (isPartial) {
       const remaining = await countUnpromotedForBranch(supabase, branchId);

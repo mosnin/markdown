@@ -42,6 +42,72 @@ import { auditGuideNoteAssigned } from "@/server/services/audit_service";
 const CANONICAL_RELATIONSHIP_TYPES = new Set(Object.values(RELATIONSHIP_TYPE));
 const CANONICAL_READ_HINTS = new Set(Object.values(NOTE_READ_HINT));
 
+// ─── Path validation ──────────────────────────────────────────────────────────
+
+/**
+ * Validate that a manifest `file_path` value is a safe relative path.
+ *
+ * Although these paths are only used as Map keys (never touched against the
+ * filesystem), rejecting hostile values defends in depth against future
+ * callers that may join them onto disk paths, and surfaces malformed imports
+ * early with a clear error.
+ *
+ * Rejects:
+ *   - Empty string
+ *   - Leading `/` (absolute Unix path)
+ *   - Any `..` segment (traversal)
+ *   - Any `//` run (empty segment / normalization attack)
+ *   - Null bytes or ASCII control characters
+ *   - Windows-style absolute paths (`C:\`, `\\server\share`, leading `\`)
+ */
+function isSafeRelativePath(path: string): boolean {
+  if (typeof path !== "string" || path.length === 0) return false;
+
+  // Null bytes or any C0/C1 control character
+  // eslint-disable-next-line no-control-regex
+  if (/[\x00-\x1f\x7f]/.test(path)) return false;
+
+  // Unix-absolute or Windows-UNC / backslash-rooted
+  if (path.startsWith("/") || path.startsWith("\\")) return false;
+
+  // Windows drive letter (e.g. `C:\`, `c:/foo`)
+  if (/^[a-zA-Z]:[\\/]/.test(path)) return false;
+
+  // Parent-traversal segments in either slash style
+  const segments = path.split(/[\\/]/);
+  if (segments.some((s) => s === "..")) return false;
+
+  // Empty segments (e.g. `foo//bar`) — also catches leading `\\` UNC
+  if (path.includes("//") || path.includes("\\\\")) return false;
+
+  return true;
+}
+
+/**
+ * Scan every `file_path` field across manifest collections and throw if any
+ * value is unsafe. Called once up-front so a single bad path aborts the
+ * entire import before any write occurs.
+ */
+function validateManifestFilePaths(manifest: ExportManifest): void {
+  const check = (collection: ReadonlyArray<{ file_path?: string | null }> | undefined, kind: string): void => {
+    if (!collection) return;
+    for (const item of collection) {
+      const p = item.file_path;
+      if (p == null) continue; // optional field — nothing to validate
+      if (!isSafeRelativePath(p)) {
+        throw new Error(
+          `Unsafe file_path in manifest ${kind}: ${JSON.stringify(p)}`
+        );
+      }
+    }
+  };
+
+  check(manifest.notes, "notes");
+  check(manifest.object_files, "object_files");
+  check(manifest.skills, "skills");
+  check(manifest.agents, "agents");
+}
+
 /**
  * Validate a relationship_type value from an incoming manifest.
  * Returns the value if canonical, null otherwise.
@@ -365,11 +431,20 @@ async function applyManifest(
   actions: ImportAction[],
   warnings: ImportWarning[]
 ): Promise<void> {
-  // Validate object count bound
-  const totalObjects = manifest.folders.length + manifest.notes.length;
+  // Reject hostile file_path values before any write.
+  validateManifestFilePaths(manifest);
+
+  // Validate object count bound — covers every collection that contributes
+  // rows to the import, not just folders + notes.
+  const totalObjects =
+    (manifest.folders?.length ?? 0) +
+    (manifest.notes?.length ?? 0) +
+    (manifest.object_files?.length ?? 0) +
+    (manifest.skills?.length ?? 0) +
+    (manifest.agents?.length ?? 0);
   if (totalObjects > MAX_OBJECT_COUNT) {
     throw new Error(
-      `Package contains ${totalObjects} objects (folders + notes), which exceeds the limit of ${MAX_OBJECT_COUNT}.`
+      `Package contains ${totalObjects} objects, which exceeds the limit of ${MAX_OBJECT_COUNT}.`
     );
   }
 

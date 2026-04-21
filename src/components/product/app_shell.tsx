@@ -2,6 +2,7 @@ import { type ReactNode } from "react";
 import { type Box } from "@/server/domain/types/box";
 import { AppSidebar } from "@/components/product/app_sidebar";
 import { MobileSidebar } from "@/components/product/mobile_sidebar";
+import { ErrorBoundary } from "@/components/ui/error_boundary";
 
 interface AppShellProps {
   /** Main content area — may include an inline right panel */
@@ -74,7 +75,7 @@ export function AppShell({
           className="flex flex-1 flex-col overflow-hidden"
           tabIndex={-1}
         >
-          {children}
+          <ErrorBoundary>{children}</ErrorBoundary>
         </main>
       </div>
     </div>

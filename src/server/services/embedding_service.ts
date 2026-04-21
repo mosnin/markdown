@@ -79,31 +79,43 @@ export async function generateEmbedding(
   const baseUrl =
     process.env.EMBEDDING_API_BASE_URL ?? "https://api.openai.com/v1";
 
-  const response = await fetch(`${baseUrl}/embeddings`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model: EMBEDDING_MODEL,
-      input: text.slice(0, 8192), // respect token limit
-    }),
-  });
+  // API failures must NOT throw — callers (including the embed cron)
+  // treat a null return as "skip this note and continue the batch".
+  // Network errors, JSON parse failures, and non-2xx responses all log
+  // and return null so a single bad request can't kill an entire run.
+  try {
+    const response = await fetch(`${baseUrl}/embeddings`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: EMBEDDING_MODEL,
+        input: text.slice(0, 8192), // respect token limit
+      }),
+    });
 
-  if (!response.ok) {
+    if (!response.ok) {
+      console.error(
+        "[embedding_service] embedding API error:",
+        response.status,
+        await response.text().catch(() => "")
+      );
+      return null;
+    }
+
+    const json = (await response.json()) as {
+      data?: Array<{ embedding: number[] }>;
+    };
+    return json.data?.[0]?.embedding ?? null;
+  } catch (err) {
     console.error(
-      "[embedding_service] embedding API error:",
-      response.status,
-      await response.text().catch(() => "")
+      "[embedding_service] embedding API call failed:",
+      err instanceof Error ? err.message : err
     );
     return null;
   }
-
-  const json = (await response.json()) as {
-    data?: Array<{ embedding: number[] }>;
-  };
-  return json.data?.[0]?.embedding ?? null;
 }
 
 // ─── Upsert ─────────────────────────────────────────────────────────────────
@@ -144,13 +156,19 @@ export async function upsertNoteEmbedding(
 
   if (existing) {
     // Update existing row.
-    await supabase
+    const { error } = await supabase
       .from("note_embeddings")
       .update(row)
       .eq("id", existing.id);
+    if (error) {
+      throw new Error(`Failed to upsert embedding: ${error.message}`);
+    }
   } else {
     // Insert new row.
-    await supabase.from("note_embeddings").insert(row);
+    const { error } = await supabase.from("note_embeddings").insert(row);
+    if (error) {
+      throw new Error(`Failed to upsert embedding: ${error.message}`);
+    }
   }
 
   return true;
@@ -337,10 +355,21 @@ async function fetchKeywordResults(
 
   const like = `%${q.replace(/[%_]/g, "\\$&")}%`;
 
+  // `notes` has no `workspace_id` column; workspace membership is
+  // inherited via `notes.box_id → boxes.workspace_id`. Fetch the box
+  // ids for the workspace first, then filter notes by `box_id IN (...)`.
+  const { data: boxes } = await supabase
+    .from("boxes")
+    .select("id")
+    .eq("workspace_id", workspaceId);
+
+  const boxIds = (boxes ?? []).map((b: { id: string }) => b.id);
+  if (boxIds.length === 0) return [];
+
   const { data } = await supabase
     .from("notes")
     .select("id, title, summary, markdown_content, status, updated_at")
-    .eq("workspace_id", workspaceId)
+    .in("box_id", boxIds)
     .neq("status", "trashed")
     .is("branch_id", null)
     .or(`title.ilike.${like},markdown_content.ilike.${like}`)

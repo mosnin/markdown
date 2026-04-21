@@ -1,4 +1,5 @@
 import * as Sentry from "@sentry/nextjs";
+import { scrubEvent, scrubBreadcrumb } from "@/lib/sentry_redaction";
 
 // Sentry client-side initialization.
 // DSN is read from the NEXT_PUBLIC_SENTRY_DSN environment variable.
@@ -18,4 +19,10 @@ Sentry.init({
 
   // Only send events when a DSN is configured.
   enabled: !!process.env.NEXT_PUBLIC_SENTRY_DSN,
+
+  // PII redaction: strip auth headers, tokens, emails, and sensitive
+  // query params from events and breadcrumbs before sending.
+  beforeSend: scrubEvent,
+  beforeBreadcrumb: scrubBreadcrumb,
+  sendDefaultPii: false,
 });

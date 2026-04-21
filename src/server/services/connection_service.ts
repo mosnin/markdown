@@ -29,6 +29,7 @@ import {
   auditConnectionUpdated,
   auditTokenRotated,
 } from "@/server/services/audit_service";
+import { cancelPendingProposalsByConnection } from "@/server/services/write_proposal_service";
 
 // ─── Token expiry defaults ────────────────────────────────────────────────────
 
@@ -223,6 +224,35 @@ export async function revokeConnection(
   void auditConnectionRevoked(supabase, workspaceId, actorId, connectionId, {
     name: connection.name,
   });
+
+  // Clean up any still-pending proposals from this connection so a
+  // reviewer can't later approve writes from an actor that's been
+  // revoked. Failures here must not fail the revoke — the connection
+  // is already marked revoked at the DB level and tokens are dead, so
+  // stranded proposals are a queue-hygiene issue, not a security one.
+  try {
+    const { cancelled } = await cancelPendingProposalsByConnection(
+      supabase,
+      connectionId,
+      "Connection revoked"
+    );
+    console.log(
+      `[connection_service] Cancelled ${cancelled} pending proposals on revoke`,
+      { connection_id: connectionId }
+    );
+    // TODO: emit a `proposals.cancelled_on_revoke` audit event with
+    // metadata { connection_id, count: cancelled }. The audit helpers
+    // in audit_service are all typed per-event — there is no generic
+    // passthrough exported — and audit_service.ts is out of scope for
+    // this change. Add a dedicated auditProposalsCancelledOnRevoke
+    // helper in a follow-up and call it here.
+  } catch (err) {
+    // Don't fail the revoke if cleanup fails — just log.
+    console.error(
+      "[connection_service] Failed to cancel proposals on revoke",
+      { connection_id: connectionId, err }
+    );
+  }
 }
 
 /**

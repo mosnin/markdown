@@ -40,7 +40,24 @@ interface DiffResponse {
 /** Threshold (bytes) above which we auto-fallback to line-level diff. */
 const LARGE_CONTENT_THRESHOLD = 50_000;
 
+/** Hard upper limit on combined input size (bytes) for a single request. */
+const MAX_TOTAL_SIZE = 1_000_000; // 1 MB
+
 // ─── Helpers ────────────────────────────────────────────────────────────────
+
+/**
+ * Constant-time string comparison. Returns true iff strings are equal.
+ * Always inspects every character of `a` when lengths match, so timing
+ * leaks the length but not the content.
+ */
+function timingSafeEqual(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) {
+    diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  }
+  return diff === 0;
+}
 
 function corsHeaders(origin: string): Record<string, string> {
   return {
@@ -85,10 +102,15 @@ export default {
       return jsonResponse({ error: "Not found" }, 404, allowedOrigin);
     }
 
-    // Auth check
+    // Auth check. Fail fast on missing header (no token => unauth),
+    // then use a constant-time comparison to avoid leaking the secret
+    // byte-by-byte via response timing.
     const authHeader = request.headers.get("Authorization");
+    if (!authHeader) {
+      return jsonResponse({ error: "Unauthorized" }, 401, allowedOrigin);
+    }
     const expectedToken = `Bearer ${env.DIFF_WORKER_SECRET}`;
-    if (!authHeader || authHeader !== expectedToken) {
+    if (!timingSafeEqual(authHeader, expectedToken)) {
       return jsonResponse({ error: "Unauthorized" }, 401, allowedOrigin);
     }
 
@@ -123,6 +145,15 @@ export default {
         400,
         allowedOrigin,
       );
+    }
+
+    // Enforce hard upper bound on combined input size BEFORE diffing.
+    // Diff algorithms are super-linear in input size, so we cap total
+    // bytes to prevent CPU exhaustion / DoS via oversized payloads.
+    const beforeLen = (before ?? "").length;
+    const afterLen = (after ?? "").length;
+    if (beforeLen + afterLen > MAX_TOTAL_SIZE) {
+      return jsonResponse({ error: "Input too large" }, 413, allowedOrigin);
     }
 
     // Compute diff

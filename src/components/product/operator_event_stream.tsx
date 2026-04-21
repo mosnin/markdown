@@ -120,7 +120,10 @@ export function OperatorEventStream({
           <ul className="flex flex-col gap-1">
             {events.map((evt, i) => (
               <li
-                key={`${evt.type}-${i}`}
+                // Event stream is strictly append-only; timestamp + type +
+                // step_index is stable and unique in practice, with `i` as
+                // a last-resort tiebreaker for duplicate sub-ms events.
+                key={`${evt.timestamp}-${evt.type}-${evt.step_index ?? "x"}-${i}`}
                 className={cn(
                   "flex items-start gap-2 rounded px-1.5 py-1",
                   evt.type === "failed" &&

@@ -170,6 +170,15 @@ export async function restoreFromChangeSet(
   changeSetId: string,
   filter?: RestoreScopeFilter
 ): Promise<RestoreResult> {
+  // Defense-in-depth: assert the change set belongs to the caller's
+  // workspace before doing anything else. RLS guards this at the row
+  // level, but a service-layer check makes the contract explicit and
+  // fails fast on misuse (e.g. a buggy caller passing the wrong id pair).
+  const cs = await getChangeSet(supabase, changeSetId);
+  if (!cs || cs.workspace_id !== workspaceId) {
+    throw new Error("Change set does not belong to this workspace");
+  }
+
   const plan = await planRestoreFromChangeSet(supabase, changeSetId);
   if (plan.blockers.length > 0) {
     const rr = await recordRestore(supabase, {
@@ -206,6 +215,23 @@ export async function restoreFromChangeSet(
       : {},
   });
 
+  // Compensation log: every inversion we successfully apply is pushed
+  // here so that if a later step fails we can walk the log in reverse
+  // and re-apply the ORIGINAL (non-inverse) operation to roll the
+  // workspace back to its pre-restore state. This is still best-effort
+  // (the restore is not a DB transaction and the RPCs we call can
+  // themselves fail mid-way), but it is strictly better than the prior
+  // behaviour where partial inversions would silently persist on abort.
+  //
+  // Known weakness: compensation re-runs RPCs that allocate new version
+  // rows, so a successful compensation is observable in history as a
+  // second round-trip rather than a clean no-op. A proper fix requires
+  // moving the whole sequence into a compound RPC executed inside a
+  // single database transaction. Tracked for follow-up.
+  type AppliedStructural = { kind: "structural"; event: StructuralEvent };
+  type AppliedItem = { kind: "item"; item: ChangeSetItem };
+  const applied: Array<AppliedStructural | AppliedItem> = [];
+
   try {
     // 1. Undo structural events in reverse sequence first so content
     //    restores land into the topology they originally came from.
@@ -215,6 +241,7 @@ export async function restoreFromChangeSet(
       : allStructural;
     for (const se of [...structural].reverse()) {
       await applyStructuralInverse(supabase, workspaceId, restoreCs.id, se);
+      applied.push({ kind: "structural", event: se });
     }
 
     // 2. Undo content items. Version-bearing items use the version graph;
@@ -225,6 +252,7 @@ export async function restoreFromChangeSet(
       : allItems;
     for (const it of [...items].reverse()) {
       await applyItemInverse(supabase, workspaceId, restoreCs.id, actorId, it);
+      applied.push({ kind: "item", item: it });
     }
 
     await commitChangeSet(supabase, restoreCs.id);
@@ -244,6 +272,87 @@ export async function restoreFromChangeSet(
     };
   } catch (err) {
     const message = err instanceof Error ? err.message : "Restore failed";
+
+    // Compensation pass: walk the applied log in reverse and re-apply
+    // the original (non-inverse) operation. We swallow per-step errors
+    // so one bad compensation doesn't prevent the rest from running,
+    // but we log each failure with enough context for ops triage.
+    let compensationPartialFailure = false;
+    for (const entry of [...applied].reverse()) {
+      try {
+        if (entry.kind === "structural") {
+          // Re-applying the original event: write the original after_state
+          // back onto the canonical tables. We construct a synthetic
+          // "inverse-of-inverse" event by swapping before/after so the
+          // helper replays the original direction.
+          const se = entry.event;
+          const reapply: StructuralEvent = {
+            ...se,
+            before_state: se.after_state,
+            after_state: se.before_state,
+          };
+          await applyStructuralInverse(supabase, workspaceId, restoreCs.id, reapply);
+          console.warn(
+            `[restore_service] compensation re-applied structural event`,
+            {
+              workspace_id: workspaceId,
+              change_set_id: changeSetId,
+              restore_change_set_id: restoreCs.id,
+              event_id: se.id,
+              object_type: se.object_type,
+              object_id: se.object_id,
+            }
+          );
+        } else {
+          // Re-apply the original content item. The simplest safe
+          // re-application is to swap before/after snapshots and call
+          // the same helper, which will treat it as the reverse of the
+          // reversal. Note: not every operation has a clean inverse
+          // helper (e.g. create-of-create), so we log and continue.
+          const it = entry.item;
+          const swapped: ChangeSetItem = {
+            ...it,
+            before_snapshot: it.after_snapshot,
+            after_snapshot: it.before_snapshot,
+          };
+          await applyItemInverse(supabase, workspaceId, restoreCs.id, actorId, swapped);
+          console.warn(
+            `[restore_service] compensation re-applied change set item`,
+            {
+              workspace_id: workspaceId,
+              change_set_id: changeSetId,
+              restore_change_set_id: restoreCs.id,
+              item_id: it.id,
+              object_type: it.object_type,
+              object_id: it.object_id,
+            }
+          );
+        }
+      } catch (compErr) {
+        compensationPartialFailure = true;
+        const compMessage =
+          compErr instanceof Error ? compErr.message : String(compErr);
+        const objectId =
+          entry.kind === "structural" ? entry.event.object_id : entry.item.object_id;
+        const objectType =
+          entry.kind === "structural" ? entry.event.object_type : entry.item.object_type;
+        // HIGH-SEVERITY: a compensation failure means the workspace is
+        // left in an inconsistent state that needs operator attention.
+        console.error(
+          `[restore_service] COMPENSATION FAILED — object left inconsistent`,
+          {
+            severity: "high",
+            workspace_id: workspaceId,
+            change_set_id: changeSetId,
+            restore_change_set_id: restoreCs.id,
+            object_type: objectType,
+            object_id: objectId,
+            error: compMessage,
+          }
+        );
+      }
+    }
+
     await abortChangeSet(supabase, restoreCs.id, message);
     const rr = await recordRestore(supabase, {
       workspace_id: workspaceId,
@@ -252,8 +361,23 @@ export async function restoreFromChangeSet(
       source_change_set_id: changeSetId,
       restored_change_set_id: restoreCs.id,
       status: "failed",
-      error: message,
+      error: compensationPartialFailure
+        ? `${message} (partial_failure: one or more compensation steps failed; see logs)`
+        : message,
     });
+    // Best-effort: stamp partial_failure on the restore record if the
+    // schema supports it. The update is swallowed on missing-column so
+    // older schemas don't explode; ops can still detect via logs.
+    if (compensationPartialFailure && rr) {
+      try {
+        await supabase
+          .from("restore_records")
+          .update({ partial_failure: true })
+          .eq("id", rr);
+      } catch {
+        // column may not exist yet; logs above are authoritative
+      }
+    }
     return {
       ok: false,
       plan,
@@ -293,16 +417,40 @@ export async function restoreNoteVersion(
       versionId
     );
 
-    await recordChangeSetItem(supabase, {
-      change_set_id: cs.id,
-      workspace_id: workspaceId,
-      operation: "rollback",
-      object_type: "note",
-      object_id: rollbackResult.note.id,
-      version_id: rollbackResult.new_version_id,
-      before_snapshot: { version_id: rollbackResult.restored_from_version_id },
-      after_snapshot: { version_id: rollbackResult.new_version_id },
-    });
+    // NOTE: the version write and the change_set_item write are
+    // separate non-transactional DB calls. A crash or RPC failure
+    // between them would leave the new version row created but not
+    // linked to its change set, which breaks future restore planners.
+    // Until a compound RPC (e.g. `rollback_note_to_version_in_change_set`)
+    // exists that performs both writes atomically, we at least surface
+    // a failure of the second write so the caller sees the inconsistency
+    // rather than silently continuing.
+    try {
+      await recordChangeSetItem(supabase, {
+        change_set_id: cs.id,
+        workspace_id: workspaceId,
+        operation: "rollback",
+        object_type: "note",
+        object_id: rollbackResult.note.id,
+        version_id: rollbackResult.new_version_id,
+        before_snapshot: { version_id: rollbackResult.restored_from_version_id },
+        after_snapshot: { version_id: rollbackResult.new_version_id },
+      });
+    } catch (recordErr) {
+      const msg =
+        recordErr instanceof Error ? recordErr.message : "recordChangeSetItem failed";
+      console.error(
+        `[restore_service] failed to record change_set_item after note rollback`,
+        {
+          workspace_id: workspaceId,
+          change_set_id: cs.id,
+          note_id: noteId,
+          new_version_id: rollbackResult.new_version_id,
+          error: msg,
+        }
+      );
+      throw new Error(`Failed to link rollback version to change set: ${msg}`);
+    }
 
     // Tag the new version with its change_set_id so future restore
     // planners can find it.
@@ -384,16 +532,36 @@ export async function restoreObjectVersion(
       versionId
     );
 
-    await recordChangeSetItem(supabase, {
-      change_set_id: cs.id,
-      workspace_id: workspaceId,
-      operation: "rollback",
-      object_type: objectType,
-      object_id: objectId,
-      version_id: rollbackResult.new_version_id,
-      before_snapshot: { version_id: rollbackResult.restored_from_version_id },
-      after_snapshot: { version_id: rollbackResult.new_version_id },
-    });
+    // Same non-atomic caveat as restoreNoteVersion — see comment there.
+    // A compound RPC would fix this properly; for now we fail loudly if
+    // the second write breaks instead of leaking an orphan version.
+    try {
+      await recordChangeSetItem(supabase, {
+        change_set_id: cs.id,
+        workspace_id: workspaceId,
+        operation: "rollback",
+        object_type: objectType,
+        object_id: objectId,
+        version_id: rollbackResult.new_version_id,
+        before_snapshot: { version_id: rollbackResult.restored_from_version_id },
+        after_snapshot: { version_id: rollbackResult.new_version_id },
+      });
+    } catch (recordErr) {
+      const msg =
+        recordErr instanceof Error ? recordErr.message : "recordChangeSetItem failed";
+      console.error(
+        `[restore_service] failed to record change_set_item after object rollback`,
+        {
+          workspace_id: workspaceId,
+          change_set_id: cs.id,
+          object_type: objectType,
+          object_id: objectId,
+          new_version_id: rollbackResult.new_version_id,
+          error: msg,
+        }
+      );
+      throw new Error(`Failed to link rollback version to change set: ${msg}`);
+    }
 
     // Tag the new version row with its change_set_id so planners can
     // trace a version back to the change set that produced it.

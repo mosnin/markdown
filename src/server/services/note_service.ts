@@ -255,8 +255,22 @@ export async function updateNote(
     changeOrigin?: "human_edit" | "import" | "rollback";
   }
 ): Promise<Note> {
-  // Load current note state to compute diff_summary before overwriting
+  // Defense-in-depth: verify the note belongs to the caller's workspace
+  // before invoking the RPC. RLS would also catch cross-workspace
+  // writes, but we want a predictable service-layer error. This mirrors
+  // the check performed by `updateNoteOnBranch` in this same file.
   const currentNote = await getNoteById(supabase, noteId);
+  if (!currentNote) throw new Error("Note not found");
+  const { data: ownerBox } = await supabase
+    .from("boxes")
+    .select("workspace_id")
+    .eq("id", currentNote.box_id)
+    .maybeSingle();
+  if (!ownerBox || ownerBox.workspace_id !== workspaceId) {
+    throw new Error("Note not found");
+  }
+
+  // Load current note state to compute diff_summary before overwriting
   const diffSummary = currentNote
     ? computeDiffSummary(
         {

@@ -195,11 +195,29 @@ export function buildZip(files: Record<string, string>): Buffer {
 
 import { inflateRawSync } from "node:zlib";
 
+// ─── Security limits ──────────────────────────────────────────────────────────
+// These guard against zip-bomb and malformed-ZIP denial-of-service attacks.
+
+/** Maximum decompressed size allowed for any single entry (100 MB). */
+const MAX_ENTRY_DECOMPRESSED_BYTES = 100 * 1024 * 1024;
+/** Maximum total decompressed size across all entries (500 MB). */
+const MAX_TOTAL_DECOMPRESSED_BYTES = 500 * 1024 * 1024;
+/** Reject any entry whose decompressed:compressed ratio exceeds this. */
+const MAX_COMPRESSION_RATIO = 1000;
+/** Maximum number of entries declared in the central directory. */
+const MAX_ENTRY_COUNT = 10000;
+
 /**
  * Parse a ZIP buffer and return a map of { path → utf-8 content }.
  *
  * Supports DEFLATE (method=8) and stored (method=0) entries.
  * Throws on malformed zip.
+ *
+ * Security: enforces per-entry and total decompressed-size limits, an entry
+ * count cap, bounds checks on every header read, and a compression ratio
+ * guard against zip bombs. Because Node's `inflateRawSync` does not support
+ * mid-stream aborts, size enforcement uses the declared `uncompressedSize`
+ * field as a pre-inflate gate plus a post-inflate length assertion.
  */
 export function parseZip(buffer: Buffer): Map<string, string> {
   const files = new Map<string, string>();
@@ -218,27 +236,77 @@ export function parseZip(buffer: Buffer): Map<string, string> {
   }
 
   const entryCount = buffer.readUInt16LE(eocdOffset + 8);
+  if (entryCount > MAX_ENTRY_COUNT) {
+    throw new Error(
+      `Malformed ZIP: too many entries (> ${MAX_ENTRY_COUNT})`
+    );
+  }
   const centralDirOffset = buffer.readUInt32LE(eocdOffset + 16);
+
+  let totalDecompressed = 0;
 
   let pos = centralDirOffset;
   for (let i = 0; i < entryCount; i++) {
+    // Bounds: central directory entry is at least 46 bytes
+    if (pos + 46 > buffer.length) {
+      throw new Error("Malformed ZIP: central directory entry out of bounds.");
+    }
     if (buffer.readUInt32LE(pos) !== 0x02014b50) {
       throw new Error("Malformed ZIP: invalid central directory entry.");
     }
 
     const compressionMethod = buffer.readUInt16LE(pos + 10);
     const compressedSize = buffer.readUInt32LE(pos + 20);
+    const uncompressedSize = buffer.readUInt32LE(pos + 24);
     const filenameLen = buffer.readUInt16LE(pos + 28);
     const extraLen = buffer.readUInt16LE(pos + 30);
     const commentLen = buffer.readUInt16LE(pos + 32);
     const localHeaderOffset = buffer.readUInt32LE(pos + 42);
 
+    // Bounds: the filename + extra + comment region must lie within the buffer
+    if (pos + 46 + filenameLen > buffer.length) {
+      throw new Error("Malformed ZIP: central directory filename out of bounds.");
+    }
     const filename = buffer.slice(pos + 46, pos + 46 + filenameLen).toString("utf-8");
     pos += 46 + filenameLen + extraLen + commentLen;
+
+    // Bounds: local file header is 30 bytes minimum
+    if (localHeaderOffset + 30 > buffer.length) {
+      throw new Error(
+        `Malformed ZIP: local header for entry "${filename}" out of bounds.`
+      );
+    }
 
     // Read local file header to find actual data offset
     const lfhExtraLen = buffer.readUInt16LE(localHeaderOffset + 28);
     const dataOffset = localHeaderOffset + 30 + filenameLen + lfhExtraLen;
+
+    // Bounds: the compressed data region must lie within the buffer
+    if (dataOffset + compressedSize > buffer.length) {
+      throw new Error(
+        `Malformed ZIP: compressed data for entry "${filename}" out of bounds.`
+      );
+    }
+
+    // Zip-bomb guards — validate declared uncompressed size against limits
+    // before paying the CPU cost of inflation. `inflateRawSync` cannot be
+    // aborted mid-stream, so we rely on the declared field plus a
+    // post-inflate length assertion below.
+    if (uncompressedSize > MAX_ENTRY_DECOMPRESSED_BYTES) {
+      throw new Error(
+        `Malformed ZIP: decompressed size exceeds limit (${MAX_ENTRY_DECOMPRESSED_BYTES} bytes)`
+      );
+    }
+    if (compressedSize > 0 && uncompressedSize / compressedSize > MAX_COMPRESSION_RATIO) {
+      throw new Error(
+        `Malformed ZIP: compression ratio exceeds limit (${MAX_COMPRESSION_RATIO}x) for entry "${filename}"`
+      );
+    }
+    if (totalDecompressed + uncompressedSize > MAX_TOTAL_DECOMPRESSED_BYTES) {
+      throw new Error(
+        `Malformed ZIP: decompressed size exceeds limit (${MAX_TOTAL_DECOMPRESSED_BYTES} bytes)`
+      );
+    }
 
     const compressedData = buffer.slice(dataOffset, dataOffset + compressedSize);
 
@@ -254,6 +322,21 @@ export function parseZip(buffer: Buffer): Map<string, string> {
     } else {
       // Unsupported method — skip
       continue;
+    }
+
+    // Post-inflate assertion: actual length must not exceed per-entry limit,
+    // and must not push running total over the total limit. This catches
+    // mismatched/forged central-directory declarations.
+    if (content.length > MAX_ENTRY_DECOMPRESSED_BYTES) {
+      throw new Error(
+        `Malformed ZIP: decompressed size exceeds limit (${MAX_ENTRY_DECOMPRESSED_BYTES} bytes)`
+      );
+    }
+    totalDecompressed += content.length;
+    if (totalDecompressed > MAX_TOTAL_DECOMPRESSED_BYTES) {
+      throw new Error(
+        `Malformed ZIP: decompressed size exceeds limit (${MAX_TOTAL_DECOMPRESSED_BYTES} bytes)`
+      );
     }
 
     // Skip directories

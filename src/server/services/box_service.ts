@@ -94,6 +94,13 @@ export async function updateBox(
     agent_instructions?: string | null;
   }
 ): Promise<Box | null> {
+  // Defense-in-depth: verify the box belongs to the caller's workspace
+  // before mutating. RLS would reject a cross-workspace update, but we
+  // want a deterministic service-layer error and avoid an unnecessary
+  // RPC.
+  const existing = await getBoxForWorkspace(supabase, boxId, workspaceId);
+  if (!existing) throw new Error("Box not found");
+
   const box = await repoUpdate(supabase, boxId, changes);
   if (!box) return null;
 

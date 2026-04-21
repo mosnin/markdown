@@ -106,10 +106,17 @@ function TokenRevealDialog({
 }) {
   const [copied, setCopied] = useState(false);
 
+  // Reset `copied` back to false 2s after a copy, with cleanup on unmount
+  // or re-copy so a fast close / re-trigger can't leak a pending timer.
+  useEffect(() => {
+    if (!copied) return;
+    const t = setTimeout(() => setCopied(false), 2000);
+    return () => clearTimeout(t);
+  }, [copied]);
+
   async function handleCopy() {
     await navigator.clipboard.writeText(rawToken);
     setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
   }
 
   return (

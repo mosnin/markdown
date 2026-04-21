@@ -33,12 +33,30 @@ export interface RollbackBranchResult {
 export async function rollbackBranchPromotion(
   supabase: SupabaseClient,
   branchId: string,
-  actorId: string
+  actorId: string,
+  workspaceId?: string
 ): Promise<RollbackBranchResult> {
   // 1. Load and validate the branch.
   const branch = await getDraftBranch(supabase, branchId);
   if (!branch) {
     throw new Error("Branch not found");
+  }
+  // Defensive workspace scoping. RLS already prevents cross-workspace
+  // access, but asserting here fails fast on caller misuse and keeps
+  // the service contract explicit. Optional to preserve backward
+  // compatibility with callers that haven't been updated yet.
+  if (workspaceId && branch.workspace_id !== workspaceId) {
+    throw new Error("Branch does not belong to this workspace");
+  }
+  // Reject mid-promotion branches: a `promoting` branch is in the
+  // middle of its forward write-path and rolling it back now would
+  // race the promote's own writes. Callers should wait for the promote
+  // to complete (succeed → status='promoted', rollback allowed; fail →
+  // status reverts, rollback not meaningful) before trying again.
+  if (branch.status === "promoting") {
+    throw new Error(
+      "Branch is currently being promoted; retry after completion"
+    );
   }
   if (branch.status !== "promoted") {
     throw new Error(

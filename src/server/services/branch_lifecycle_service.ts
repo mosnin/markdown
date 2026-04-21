@@ -344,21 +344,41 @@ export async function autoDiscardExpiredBranches(
     if (branch.review_status !== "draft") continue;
 
     try {
-      await supabase.from("files").delete().eq("branch_id", branch.id);
-      await supabase.from("object_links").delete().eq("branch_id", branch.id);
-      await supabase.from("note_links").delete().eq("branch_id", branch.id);
-      await supabase
-        .from("box_object_attachments")
-        .delete()
-        .eq("branch_id", branch.id);
-      await supabase.from("notes").delete().eq("branch_id", branch.id);
-      await supabase.from("folders").delete().eq("branch_id", branch.id);
-      await supabase.from("boxes").delete().eq("branch_id", branch.id);
-      await supabase.from("branch_heads").delete().eq("branch_id", branch.id);
+      // Run every delete and bail out on the first failure. Surfacing the
+      // table name in the thrown error lets the outer catch log enough
+      // context to diagnose half-cleanups on retry.
+      const deleteSteps: Array<{
+        table: string;
+        run: () => Promise<{ error: { message: string } | null }>;
+      }> = [
+        { table: "files", run: () => supabase.from("files").delete().eq("branch_id", branch.id) },
+        { table: "object_links", run: () => supabase.from("object_links").delete().eq("branch_id", branch.id) },
+        { table: "note_links", run: () => supabase.from("note_links").delete().eq("branch_id", branch.id) },
+        { table: "box_object_attachments", run: () => supabase.from("box_object_attachments").delete().eq("branch_id", branch.id) },
+        { table: "notes", run: () => supabase.from("notes").delete().eq("branch_id", branch.id) },
+        { table: "folders", run: () => supabase.from("folders").delete().eq("branch_id", branch.id) },
+        { table: "boxes", run: () => supabase.from("boxes").delete().eq("branch_id", branch.id) },
+        { table: "branch_heads", run: () => supabase.from("branch_heads").delete().eq("branch_id", branch.id) },
+      ];
+
+      for (const step of deleteSteps) {
+        const { error } = await step.run();
+        if (error) {
+          throw new Error(
+            `auto-discard delete failed on table "${step.table}": ${error.message}`
+          );
+        }
+      }
+
       await dropAllPendingOpsForBranch(supabase, branch.id);
       await dropAllBoxOverlaysForBranch(supabase, branch.id);
       await dropAllFolderOverridesForBranch(supabase, branch.id);
       await dropAllPlacementOverridesForBranch(supabase, branch.id);
+
+      // Only flip the branch to `discarded` AFTER every cleanup delete
+      // has succeeded. If one of the deletes above threw, the branch
+      // keeps its prior status (e.g. `warned`/`expiring`) so the next
+      // cron tick can retry the cleanup.
       await discardDraftBranch(supabase, branch.id);
 
       try {
@@ -380,8 +400,16 @@ export async function autoDiscardExpiredBranches(
         // audit failure shouldn't block the loop
       }
       discarded += 1;
-    } catch {
-      // per-branch failures are skipped so the loop continues
+    } catch (err) {
+      // Structured log so half-cleanup incidents are diagnosable. We
+      // deliberately keep iterating so one bad branch can't crash the
+      // cron — but the service no longer swallows the error silently.
+      console.error("[branch_lifecycle] auto-discard failed", {
+        branchId: branch.id,
+        workspaceId: branch.workspace_id,
+        err,
+      });
+      continue;
     }
   }
   return discarded;

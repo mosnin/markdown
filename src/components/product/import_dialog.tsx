@@ -114,7 +114,7 @@ function SummaryPanel({ report }: { report: ImportSummaryReport }) {
             </p>
           </div>
           {report.warnings.map((w, i) => (
-            <p key={i} className="text-xs text-amber-600/80 dark:text-amber-400/80">
+            <p key={`warn-${w.message.slice(0, 30)}-${w.subject ?? "none"}-${i}`} className="text-xs text-amber-600/80 dark:text-amber-400/80">
               {w.message}
               {w.subject ? <span className="font-mono ml-1 text-[10px]">({w.subject})</span> : null}
             </p>
@@ -137,7 +137,7 @@ function SummaryPanel({ report }: { report: ImportSummaryReport }) {
           {expanded && (
             <div className="mt-2 flex max-h-48 flex-col gap-1 overflow-y-auto">
               {report.actions.map((a, i) => (
-                <div key={i} className="flex items-start gap-2 text-xs">
+                <div key={`action-${a.action}-${a.object_type}-${a.final_id ?? a.incoming_id ?? a.final_path ?? a.incoming_path ?? i}`} className="flex items-start gap-2 text-xs">
                   <ActionBadge action={a.action} />
                   <span className="capitalize text-muted-foreground">{a.object_type}</span>
                   <span className="min-w-0 flex-1 truncate text-foreground/70 font-mono text-[10px]">

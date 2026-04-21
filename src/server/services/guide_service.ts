@@ -36,6 +36,13 @@ export async function assignGuideNote(
     throw new Error("Note not found in this box");
   }
 
+  // Refuse to point a box at a note that has been soft-removed. A
+  // trashed or archived note is semantically invisible to most readers
+  // and making it the guide note would surface a dead pointer.
+  if (note.status === "trashed" || note.status === "archived") {
+    throw new Error("Cannot assign a trashed or archived note as guide note");
+  }
+
   const updated = await updateBox(supabase, boxId, { guide_note_id: noteId });
   if (!updated) throw new Error("Failed to assign guide note");
 

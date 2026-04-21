@@ -352,6 +352,65 @@ export async function createAgent(
 }
 
 /**
+ * Create an agent whose existence is scoped to a draft branch.
+ *
+ * Mirrors `createFileOnBranch` in file_service.ts: we call the
+ * normal `createAgent` path first (atomic RPC + workspace_objects
+ * + audit), then stamp `branch_id` on the resulting row. Until
+ * promote, main-scoped readers filter out rows with
+ * `branch_id IS NOT NULL`; branch readers union main with rows
+ * where `branch_id = <active branch>`.
+ *
+ * TODO: there is currently no dedicated `create_agent_on_branch`
+ * RPC. This function uses the same RPC as `createAgent` plus a
+ * manual `branch_id` UPDATE, which means the branch stamp is not
+ * applied atomically with the initial version insert. A follow-up
+ * should add a branch-aware RPC so the branch_id is set inside the
+ * same transaction as the initial insert.
+ */
+export async function createAgentOnBranch(
+  supabase: SupabaseClient,
+  actorId: string,
+  workspaceId: string,
+  branchId: string,
+  input: Parameters<typeof createAgent>[3]
+): Promise<Agent> {
+  // Re-validate the branch is open and belongs to this workspace
+  // up-front so we never write an agent pointing at a stale branch.
+  const { data: branch } = await supabase
+    .from("draft_branches")
+    .select("id, workspace_id, status")
+    .eq("id", branchId)
+    .maybeSingle();
+  if (!branch || branch.workspace_id !== workspaceId || branch.status !== "open") {
+    throw new Error("Branch not found or not open");
+  }
+
+  const agent = await createAgent(supabase, actorId, workspaceId, input);
+
+  // Stamp branch_id on the agent row. We also mirror the column
+  // onto workspace_objects so tree / navigation filters that read
+  // the registry can scope branch-local rows just as cheaply as
+  // the agents table.
+  await supabase
+    .from("agents")
+    .update({ branch_id: branchId })
+    .eq("id", agent.id);
+
+  // Distinct audit event: "agent.branch_created" — separate from
+  // "agent.created" so the Audit Log makes branch-scoped structural
+  // creation easy to filter.
+  await writeAgentAudit(supabase, workspaceId, actorId, agent.id, "agent.branch_created", {
+    branch_id: branchId,
+    box_id: agent.box_id,
+    folder_id: agent.folder_id ?? null,
+    is_reusable: agent.is_reusable,
+  });
+
+  return { ...agent, branch_id: branchId } as Agent;
+}
+
+/**
  * Update an agent's content and metadata, creating a new version atomically via RPC.
  * Returns the updated Agent.
  */

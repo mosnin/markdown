@@ -39,7 +39,7 @@ function MiniSummary({ report }: { report: ImportSummaryReport }) {
           <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-600 dark:text-amber-400" />
           <div className="flex flex-col gap-0.5">
             {warnings.slice(0, 3).map((w, i) => (
-              <p key={i} className="text-xs text-amber-600/80 dark:text-amber-400/80">{w.message}</p>
+              <p key={`warn-${w.message.slice(0, 30)}-${i}`} className="text-xs text-amber-600/80 dark:text-amber-400/80">{w.message}</p>
             ))}
             {warnings.length > 3 && (
               <p className="text-xs text-amber-600/60 dark:text-amber-400/60">+{warnings.length - 3} more warnings</p>

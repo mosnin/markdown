@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { Check, ChevronDown, LayoutGrid, Plus } from "lucide-react";
@@ -67,12 +67,33 @@ export function WorkspaceSwitcher({
   const active = workspaces.find((w) => w.id === activeWorkspaceId);
   const activeName = active?.name ?? "My Workspace";
 
+  // Hold every post-menu-close defer timer in a ref so unmount (or a
+  // rapid second click) can clear the pending timeout. Without this the
+  // setTimeout callbacks would fire on a torn-down component.
+  const deferTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    return () => {
+      if (deferTimerRef.current) {
+        clearTimeout(deferTimerRef.current);
+        deferTimerRef.current = null;
+      }
+    };
+  }, []);
+
+  function deferAfterMenuClose(cb: () => void) {
+    if (deferTimerRef.current) clearTimeout(deferTimerRef.current);
+    deferTimerRef.current = setTimeout(() => {
+      deferTimerRef.current = null;
+      cb();
+    }, 0);
+  }
+
   function selectWorkspace(id: string) {
     if (id === activeWorkspaceId) return;
     // Defer the server action one tick so Base UI's Menu close animation
     // and focus return complete first. Without this, the menu close can
     // cancel the router navigation on some browsers.
-    setTimeout(() => {
+    deferAfterMenuClose(() => {
       startSwitching(async () => {
         const result = await setActiveWorkspaceAction(id);
         if (result.ok) {
@@ -82,7 +103,7 @@ export function WorkspaceSwitcher({
           console.error("Workspace switch failed:", result.error);
         }
       });
-    }, 0);
+    });
   }
 
   function openCreateDialog() {
@@ -92,7 +113,7 @@ export function WorkspaceSwitcher({
     // collide with the Menu's own focus management, which prevents the
     // dialog from appearing. The microtask defer lets the menu finish
     // closing before the dialog takes over.
-    setTimeout(() => setCreateOpen(true), 0);
+    deferAfterMenuClose(() => setCreateOpen(true));
   }
 
   function handleCreate(e: React.FormEvent) {
@@ -193,14 +214,14 @@ export function WorkspaceSwitcher({
             uses this same onClick pattern — see user_menu.tsx, tree_sidebar.
           */}
           <DropdownMenuItem
-            onClick={() => setTimeout(() => router.push("/app/workspaces"), 0)}
+            onClick={() => deferAfterMenuClose(() => router.push("/app/workspaces"))}
             className="flex items-center gap-2"
           >
             <LayoutGrid className="h-3.5 w-3.5" aria-hidden="true" />
             Manage workspaces
           </DropdownMenuItem>
           <DropdownMenuItem
-            onClick={() => setTimeout(() => router.push("/app/settings"), 0)}
+            onClick={() => deferAfterMenuClose(() => router.push("/app/settings"))}
             className="flex items-center gap-2"
           >
             <AccountSetting01Icon className="h-3.5 w-3.5" aria-hidden="true" />

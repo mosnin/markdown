@@ -304,7 +304,7 @@ class PoggleClient:
                     "type": event_type,
                     "step_index": step_index,
                     "detail": detail,
-                    "timestamp": datetime.datetime.utcnow().isoformat() + "Z",
+                    "timestamp": datetime.datetime.now(datetime.UTC).isoformat(),
                 },
             )
         except Exception:  # noqa: BLE001

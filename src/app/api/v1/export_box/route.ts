@@ -13,7 +13,9 @@ import {
   E_BAD_REQUEST,
   E_INTERNAL,
   E_INSUFFICIENT_SCOPE,
+  E_RATE_LIMITED,
 } from "@/lib/api/response";
+import { importExportLimit } from "@/lib/api/rate_limit";
 
 /**
  * POST /api/v1/export_box
@@ -28,6 +30,10 @@ export async function POST(request: NextRequest) {
   if (!requireScope(ctx, "context:read")) {
     return E_INSUFFICIENT_SCOPE("context:read");
   }
+
+  // Rate limit import/export operations per connection/token.
+  const rl = importExportLimit(ctx.connectionId);
+  if (!rl.allowed) return E_RATE_LIMITED(rl.retryAfter);
 
   let body: { box_id?: string };
   try {

@@ -41,17 +41,20 @@ function HighlightedExcerpt({
   const pattern = new RegExp(`(${terms.join("|")})`, "gi");
   const parts = text.split(pattern);
 
+  let offset = 0;
   return (
     <>
-      {parts.map((part, i) =>
-        i % 2 === 1 ? (
-          <strong key={i} className="font-semibold text-foreground">
+      {parts.map((part, i) => {
+        const key = `${query}-${part.slice(0, 10)}-${offset}`;
+        offset += part.length;
+        return i % 2 === 1 ? (
+          <strong key={key} className="font-semibold text-foreground">
             {part}
           </strong>
         ) : (
-          <span key={i}>{part}</span>
-        )
-      )}
+          <span key={key}>{part}</span>
+        );
+      })}
     </>
   );
 }
@@ -85,6 +88,7 @@ function SearchSkeletonRows({ count = 5 }: { count?: number }) {
       aria-label="Loading search results"
     >
       {Array.from({ length: count }).map((_, i) => (
+        // skeleton row, index key is safe
         <div
           key={i}
           className="flex flex-col gap-2 rounded-lg border border-border bg-card px-4 py-3"

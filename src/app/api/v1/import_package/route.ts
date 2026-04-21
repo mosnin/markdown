@@ -10,7 +10,9 @@ import {
   E_UNAUTHORIZED,
   E_BAD_REQUEST,
   E_INTERNAL,
+  E_RATE_LIMITED,
 } from "@/lib/api/response";
+import { importExportLimit } from "@/lib/api/rate_limit";
 
 const MAX_UPLOAD_BYTES = 25 * 1024 * 1024; // 25 MB
 
@@ -98,6 +100,10 @@ export async function POST(request: NextRequest) {
         "External connection auth is not supported for import in V1."
     );
   }
+
+  // Rate limit import/export operations per user.
+  const rl = importExportLimit(ctx.user.id);
+  if (!rl.allowed) return E_RATE_LIMITED(rl.retryAfter);
 
   const supabase = await createClient();
   const workspaceId = ctx.workspace.id;

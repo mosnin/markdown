@@ -134,6 +134,23 @@ export function ProseDiff({ before, after, mode = "unified" }: ProseDiffProps) {
   return <UnifiedDiff parts={parts} isLineFallback={isLineFallback} />;
 }
 
+// ─── Key helpers ───────────────────────────────────────────────────────────
+
+/**
+ * Build a stable content-hash-like key for a diff part: combines the change
+ * type, a short content slice, and the cumulative character offset so that
+ * identical-valued parts at different positions keep unique, stable keys.
+ */
+function partType(part: DiffPart): "add" | "del" | "eq" {
+  if (part.added) return "add";
+  if (part.removed) return "del";
+  return "eq";
+}
+
+function diffPartKey(part: DiffPart, offset: number): string {
+  return `${partType(part)}-${part.value.slice(0, 20)}-${offset}`;
+}
+
 // ─── Unified diff view ─────────────────────────────────────────────────────
 
 function UnifiedDiff({
@@ -143,6 +160,7 @@ function UnifiedDiff({
   parts: DiffPart[];
   isLineFallback: boolean;
 }) {
+  let offset = 0;
   return (
     <div>
       {isLineFallback && (
@@ -151,11 +169,13 @@ function UnifiedDiff({
         </p>
       )}
       <div className="max-h-80 overflow-auto rounded-md border border-border bg-muted/30 px-3 py-2 font-mono text-[11px] leading-relaxed whitespace-pre-wrap break-words">
-        {parts.map((part, i) => {
+        {parts.map((part) => {
+          const key = diffPartKey(part, offset);
+          offset += part.value.length;
           if (part.added) {
             return (
               <span
-                key={i}
+                key={key}
                 className="bg-green-100 dark:bg-green-900/30"
               >
                 {part.value}
@@ -165,14 +185,14 @@ function UnifiedDiff({
           if (part.removed) {
             return (
               <span
-                key={i}
+                key={key}
                 className="bg-red-100 dark:bg-red-900/30 line-through"
               >
                 {part.value}
               </span>
             );
           }
-          return <span key={i}>{part.value}</span>;
+          return <span key={key}>{part.value}</span>;
         })}
       </div>
     </div>
@@ -205,19 +225,24 @@ function SideBySideDiff({
             Main
           </p>
           <div className="max-h-80 overflow-auto rounded-md border border-border bg-muted/30 px-3 py-2 font-mono text-[11px] leading-relaxed whitespace-pre-wrap break-words">
-            {leftParts.map((part, i) => {
-              if (part.removed) {
-                return (
-                  <span
-                    key={i}
-                    className="bg-red-100 dark:bg-red-900/30 line-through"
-                  >
-                    {part.value}
-                  </span>
-                );
-              }
-              return <span key={i}>{part.value}</span>;
-            })}
+            {(() => {
+              let leftOffset = 0;
+              return leftParts.map((part) => {
+                const key = diffPartKey(part, leftOffset);
+                leftOffset += part.value.length;
+                if (part.removed) {
+                  return (
+                    <span
+                      key={key}
+                      className="bg-red-100 dark:bg-red-900/30 line-through"
+                    >
+                      {part.value}
+                    </span>
+                  );
+                }
+                return <span key={key}>{part.value}</span>;
+              });
+            })()}
           </div>
         </div>
         <div className="px-4 py-3 bg-accent/20">
@@ -225,19 +250,24 @@ function SideBySideDiff({
             Branch
           </p>
           <div className="max-h-80 overflow-auto rounded-md border border-border bg-muted/30 px-3 py-2 font-mono text-[11px] leading-relaxed whitespace-pre-wrap break-words">
-            {rightParts.map((part, i) => {
-              if (part.added) {
-                return (
-                  <span
-                    key={i}
-                    className="bg-green-100 dark:bg-green-900/30"
-                  >
-                    {part.value}
-                  </span>
-                );
-              }
-              return <span key={i}>{part.value}</span>;
-            })}
+            {(() => {
+              let rightOffset = 0;
+              return rightParts.map((part) => {
+                const key = diffPartKey(part, rightOffset);
+                rightOffset += part.value.length;
+                if (part.added) {
+                  return (
+                    <span
+                      key={key}
+                      className="bg-green-100 dark:bg-green-900/30"
+                    >
+                      {part.value}
+                    </span>
+                  );
+                }
+                return <span key={key}>{part.value}</span>;
+              });
+            })()}
           </div>
         </div>
       </div>

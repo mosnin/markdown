@@ -13,7 +13,31 @@
 import { type SupabaseClient } from "@supabase/supabase-js";
 import { type ObjectLink } from "@/server/domain/types/object_link";
 import { type RelationshipType } from "@/server/domain/constants/note_constants";
-import { type ObjectType } from "@/server/domain/constants/object_constants";
+import {
+  LINKABLE_OBJECT_TYPES,
+  type ObjectType,
+} from "@/server/domain/constants/object_constants";
+
+/**
+ * Strict UUID v1–v5 shape check. Used to guard any value that is
+ * interpolated into a PostgREST `.or()` filter string (which is not
+ * parameterised and therefore vulnerable to filter-injection if the
+ * input is attacker-controlled).
+ */
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function assertUuid(value: string, name: string): void {
+  if (typeof value !== "string" || !UUID_RE.test(value)) {
+    throw new Error(`Invalid ${name}: expected UUID`);
+  }
+}
+
+function assertLinkableObjectType(value: string): void {
+  if (!(LINKABLE_OBJECT_TYPES as readonly string[]).includes(value)) {
+    throw new Error("Invalid object type");
+  }
+}
 
 /** Input shape for creating a new object link. */
 export interface CreateObjectLinkInput {
@@ -87,6 +111,12 @@ export async function getAllObjectLinksForObject(
   object_type: ObjectType,
   object_id: string
 ): Promise<ObjectLink[]> {
+  // object_type and object_id are interpolated into a PostgREST `.or()`
+  // filter string below, which is NOT parameterised. Validate both
+  // against strict allowlists to prevent filter-injection.
+  assertLinkableObjectType(object_type);
+  assertUuid(object_id, "object_id");
+
   const { data, error } = await supabase
     .from("object_links")
     .select("*")
@@ -121,16 +151,21 @@ export async function createObjectLink(
 
 /**
  * Hard-delete a single object link by its primary key.
+ * When `workspace_id` is provided, the delete is additionally scoped
+ * to that workspace for defense-in-depth against IDOR — callers in the
+ * service layer should always pass it after verifying ownership.
  * Returns true if deleted, false if the row was not found or an error occurred.
  */
 export async function deleteObjectLink(
   supabase: SupabaseClient,
-  id: string
+  id: string,
+  workspace_id?: string
 ): Promise<boolean> {
-  const { error } = await supabase
-    .from("object_links")
-    .delete()
-    .eq("id", id);
+  let query = supabase.from("object_links").delete().eq("id", id);
+  if (workspace_id) {
+    query = query.eq("workspace_id", workspace_id);
+  }
+  const { error } = await query;
 
   return !error;
 }

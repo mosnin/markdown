@@ -54,10 +54,21 @@ async function countEligibleNotes(
   supabase: SupabaseClient,
   workspaceId: string
 ): Promise<number> {
+  // `notes` has no `workspace_id` column; resolve workspace membership
+  // through `notes.box_id → boxes.workspace_id`. Fetch box ids first,
+  // then count notes whose `box_id` is in that set.
+  const { data: boxes } = await supabase
+    .from("boxes")
+    .select("id")
+    .eq("workspace_id", workspaceId);
+
+  const boxIds = (boxes ?? []).map((b: { id: string }) => b.id);
+  if (boxIds.length === 0) return 0;
+
   const { count } = await supabase
     .from("notes")
     .select("id", { count: "exact", head: true })
-    .eq("workspace_id", workspaceId)
+    .in("box_id", boxIds)
     .neq("status", "trashed")
     .is("branch_id", null);
   return count ?? 0;
@@ -91,23 +102,52 @@ export async function reindexWorkspaceAction(): Promise<ReindexActionResult> {
     let skipped = 0;
 
     if (cap > 0) {
-      const { data: notes, error } = await supabase
-        .from("notes")
-        .select("id, title, markdown_content")
-        .eq("workspace_id", workspaceId)
-        .neq("status", "trashed")
-        .is("branch_id", null)
-        .order("updated_at", { ascending: false })
-        .limit(cap);
+      // Resolve workspace membership via `notes.box_id → boxes.workspace_id`.
+      // The `notes` table has no `workspace_id` column, so filter by the
+      // set of box ids that belong to this workspace.
+      const { data: workspaceBoxes, error: boxesError } = await supabase
+        .from("boxes")
+        .select("id")
+        .eq("workspace_id", workspaceId);
 
-      if (error) {
+      if (boxesError) {
         return {
           ok: false,
-          error: `Failed to read notes: ${error.message}`,
+          error: `Failed to read boxes: ${boxesError.message}`,
         };
       }
 
-      for (const note of notes ?? []) {
+      const boxIds = (workspaceBoxes ?? []).map(
+        (b: { id: string }) => b.id
+      );
+
+      let notes: Array<{
+        id: string;
+        title: string;
+        markdown_content: string | null;
+      }> = [];
+
+      if (boxIds.length > 0) {
+        const { data, error } = await supabase
+          .from("notes")
+          .select("id, title, markdown_content")
+          .in("box_id", boxIds)
+          .neq("status", "trashed")
+          .is("branch_id", null)
+          .order("updated_at", { ascending: false })
+          .limit(cap);
+
+        if (error) {
+          return {
+            ok: false,
+            error: `Failed to read notes: ${error.message}`,
+          };
+        }
+
+        notes = data ?? [];
+      }
+
+      for (const note of notes) {
         const content = `${note.title}\n\n${note.markdown_content ?? ""}`;
         try {
           const didUpsert = await upsertNoteEmbedding(

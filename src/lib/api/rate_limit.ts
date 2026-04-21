@@ -1,3 +1,4 @@
+// TODO: move to Vercel KV for multi-instance correctness
 /**
  * Lightweight in-process rate limiter.
  *

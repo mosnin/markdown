@@ -43,6 +43,51 @@ log = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
+# Prompt-injection defence
+# ---------------------------------------------------------------------------
+
+# Total system prompt length cap. If the concatenation of SYSTEM_PROMPT +
+# workspace context block exceeds this after sanitization, we truncate with a
+# clear notice so an attacker can't simply pad instructions past any downstream
+# limit.
+_MAX_SYSTEM_PROMPT_CHARS = 20000
+
+
+def sanitize_for_prompt(text: str, max_length: int = 2000) -> str:
+    """Sanitize untrusted text before prompt interpolation.
+
+    Truncates, strips prompt-injection patterns, escapes meta-characters.
+    """
+    if not text:
+        return ""
+    text = text[:max_length]
+    # Strip common injection markers
+    text = text.replace("</system>", "").replace("<|system|>", "")
+    text = text.replace("[[SYSTEM]]", "").replace("</instructions>", "")
+    # Strip null bytes and control chars except newlines/tabs
+    text = "".join(ch for ch in text if ch == "\n" or ch == "\t" or ch >= " ")
+    return text.strip()
+
+
+def _bound_system_prompt(prompt: str, max_chars: int = _MAX_SYSTEM_PROMPT_CHARS) -> str:
+    """Bound the total length of the assembled system prompt.
+
+    If the prompt exceeds `max_chars`, truncate and append a clear notice so
+    the model (and any human reading logs) knows content was dropped rather
+    than silently swallowed. This guards against untrusted fields being
+    padded out to push later, trusted instructions out of the model's
+    attention window.
+    """
+    if len(prompt) <= max_chars:
+        return prompt
+    notice = "\n\n[NOTICE: system prompt truncated to bound length]\n"
+    keep = max_chars - len(notice)
+    if keep < 0:
+        keep = 0
+    return prompt[:keep] + notice
+
+
+# ---------------------------------------------------------------------------
 # Wave 1 F — cancellation + budget machinery
 # ---------------------------------------------------------------------------
 
@@ -303,7 +348,7 @@ def _build_workspace_context_block(
         f"target_box_id: {box_id}",
     ]
     if workspace_name:
-        lines.append(f"workspace_name: {workspace_name}")
+        lines.append(f"workspace_name: {sanitize_for_prompt(workspace_name, max_length=200)}")
     if boxes:
         # Deterministic ordering: (name, id). Tuple handles duplicate names.
         sorted_boxes = sorted(
@@ -313,19 +358,19 @@ def _build_workspace_context_block(
         lines.append("")
         lines.append("### Boxes")
         for b in sorted_boxes:
-            name = str(b.get("name", ""))
-            bid = str(b.get("id", ""))
+            name = sanitize_for_prompt(str(b.get("name", "")), max_length=200)
+            bid = sanitize_for_prompt(str(b.get("id", "")), max_length=100)
             count = b.get("note_count")
             if isinstance(count, int):
                 lines.append(f"- {name} ({bid}) — {count} notes")
             else:
                 lines.append(f"- {name} ({bid})")
-    ws_rules = (workspace_instructions or "").strip()
+    ws_rules = sanitize_for_prompt(workspace_instructions or "")
     if ws_rules:
         lines.append("")
         lines.append("### Workspace instructions (user-set)")
         lines.append(ws_rules)
-    box_rules = (box_instructions or "").strip()
+    box_rules = sanitize_for_prompt(box_instructions or "")
     if box_rules:
         lines.append("")
         lines.append("### Box instructions (user-set)")
@@ -405,9 +450,12 @@ async def _build_run_prologue(
         lines.append("")
         lines.append("### Recent runs (your memory — do not re-solve these)")
         for r in recent:
-            when = str(r.get("created_at", ""))[:10]
-            preview = str(r.get("prompt_preview", "")).strip()
-            note_titles = r.get("note_titles") or []
+            when = sanitize_for_prompt(str(r.get("created_at", ""))[:10], max_length=20)
+            preview = sanitize_for_prompt(str(r.get("prompt_preview", "")), max_length=500)
+            raw_titles = r.get("note_titles") or []
+            note_titles = [
+                sanitize_for_prompt(str(t), max_length=200) for t in raw_titles
+            ]
             title_suffix = (
                 " — created: " + ", ".join(f'"{t}"' for t in note_titles)
                 if note_titles
@@ -472,6 +520,7 @@ def _build_operator(
         if workspace_context_block
         else SYSTEM_PROMPT
     )
+    instructions = _bound_system_prompt(instructions)
     return Agent(
         name="Workspace Operator",
         instructions=instructions,
@@ -510,6 +559,7 @@ def _build_plan_agent(
         if workspace_context_block
         else PLAN_SYSTEM_PROMPT
     )
+    instructions = _bound_system_prompt(instructions)
     return Agent(
         name="Workspace Operator (Planning)",
         instructions=instructions,

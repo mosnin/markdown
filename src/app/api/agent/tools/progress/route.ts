@@ -56,14 +56,27 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  // Defense in depth: the run_id must be taken from the authenticated envelope,
+  // not from the request body. If the body disagrees with the verified context
+  // we reject rather than silently picking one, to surface agent-side bugs.
+  if (body.run_id !== auth.ctx.runId) {
+    return NextResponse.json(
+      {
+        error_code: "run_id_mismatch",
+        message: "body.run_id does not match authenticated run_id",
+      },
+      { status: 400 }
+    );
+  }
+
   const supabase = createAdminClient();
-  const channelName = `operator_run:${body.run_id}`;
+  const channelName = `operator_run:${auth.ctx.runId}`;
 
   await supabase.channel(channelName).send({
     type: "broadcast",
     event: "progress",
     payload: {
-      run_id: body.run_id,
+      run_id: auth.ctx.runId,
       type: body.type,
       step_index: body.step_index ?? null,
       detail: body.detail ?? null,

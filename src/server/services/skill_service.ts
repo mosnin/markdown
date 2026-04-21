@@ -343,6 +343,65 @@ export async function createSkill(
 }
 
 /**
+ * Create a skill whose existence is scoped to a draft branch.
+ *
+ * Mirrors `createFileOnBranch` in file_service.ts: we call the
+ * normal `createSkill` path first (atomic RPC + workspace_objects +
+ * audit), then stamp `branch_id` on the resulting row. Until
+ * promote, main-scoped readers filter out rows with
+ * `branch_id IS NOT NULL`; branch readers union main with rows
+ * where `branch_id = <active branch>`.
+ *
+ * TODO: there is currently no dedicated `create_skill_on_branch`
+ * RPC. This function uses the same RPC as `createSkill` plus a
+ * manual `branch_id` UPDATE, which means the branch stamp is not
+ * applied atomically with the initial version insert. A follow-up
+ * should add a branch-aware RPC so the branch_id is set inside the
+ * same transaction as the initial insert.
+ */
+export async function createSkillOnBranch(
+  supabase: SupabaseClient,
+  actorId: string,
+  workspaceId: string,
+  branchId: string,
+  input: Parameters<typeof createSkill>[3]
+): Promise<Skill> {
+  // Re-validate the branch is open and belongs to this workspace
+  // up-front so we never write a skill pointing at a stale branch.
+  const { data: branch } = await supabase
+    .from("draft_branches")
+    .select("id, workspace_id, status")
+    .eq("id", branchId)
+    .maybeSingle();
+  if (!branch || branch.workspace_id !== workspaceId || branch.status !== "open") {
+    throw new Error("Branch not found or not open");
+  }
+
+  const skill = await createSkill(supabase, actorId, workspaceId, input);
+
+  // Stamp branch_id on the skill row. We also mirror the column onto
+  // workspace_objects so tree / navigation filters that read the
+  // registry can scope branch-local rows just as cheaply as the
+  // skills table.
+  await supabase
+    .from("skills")
+    .update({ branch_id: branchId })
+    .eq("id", skill.id);
+
+  // Distinct audit event: "skill.branch_created" — separate from
+  // "skill.created" so the Audit Log makes branch-scoped structural
+  // creation easy to filter.
+  await writeSkillAudit(supabase, workspaceId, actorId, skill.id, "skill.branch_created", {
+    branch_id: branchId,
+    box_id: skill.box_id,
+    folder_id: skill.folder_id ?? null,
+    is_reusable: skill.is_reusable,
+  });
+
+  return { ...skill, branch_id: branchId } as Skill;
+}
+
+/**
  * Update a skill's content and metadata, creating a new version atomically via RPC.
  * Returns the updated Skill.
  */

@@ -5,7 +5,7 @@ import { refreshSession } from "@/lib/supabase/proxy";
 //
 // Next.js 16 automatically extracts the nonce from the CSP header and applies
 // it to all framework scripts, page bundles, and inline scripts/styles it
-// generates. The proxy generates a fresh nonce per request and threads it
+// generates. The middleware generates a fresh nonce per request and threads it
 // through via the `x-nonce` request header and the `Content-Security-Policy`
 // response header.
 //
@@ -64,7 +64,7 @@ function buildCsp(nonce: string): string {
 }
 
 /**
- * Next.js 16 proxy — nonce-based CSP + Supabase session refresh.
+ * Next.js 16 middleware — nonce-based CSP + Supabase session refresh.
  *
  * Runs on every non-static request. For each request it:
  * 1. Generates a cryptographically random nonce for Content Security Policy.
@@ -75,7 +75,9 @@ function buildCsp(nonce: string): string {
  * Authorization is NOT enforced here — it lives in server components via
  * `requireAuthenticatedUser()`.
  */
-export async function proxy(request: NextRequest): Promise<NextResponse> {
+export default async function middleware(
+  request: NextRequest,
+): Promise<NextResponse> {
   const nonce = Buffer.from(crypto.randomUUID()).toString("base64");
   const csp = buildCsp(nonce);
 

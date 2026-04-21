@@ -18,6 +18,7 @@ import { semanticSearch } from "@/server/services/embedding_service";
 import { createAuditEvent } from "@/server/repositories/audit_event_repository";
 import { auditMcp } from "@/server/services/audit_service";
 import { getCanonicalBaseUrl } from "@/lib/canonical_url";
+import { apiWriteLimit } from "@/lib/api/rate_limit";
 
 /**
  * HTTP MCP endpoint.
@@ -401,6 +402,25 @@ async function dispatchTool(
     throw toolError(-32003, "Viewer role cannot perform write operations");
   }
 
+  // Rate limit write tools per client. Reuses the shared
+  // apiWriteLimit bucket (20 writes/min) so MCP writes share a budget
+  // with the canonical /api/v1/** write routes.
+  const RATE_LIMITED_WRITE_TOOLS = new Set([
+    "create_branch",
+    "write_to_branch",
+    "create_generated_note",
+    "create_write_proposal",
+  ]);
+  if (RATE_LIMITED_WRITE_TOOLS.has(name)) {
+    const rl = apiWriteLimit(ctx.clientId);
+    if (!rl.allowed) {
+      throw toolError(
+        -32029,
+        `Too many requests. Retry after ${rl.retryAfter} seconds.`
+      );
+    }
+  }
+
   const admin = createAdminClient();
 
   switch (name) {
@@ -769,19 +789,29 @@ async function dispatchTool(
           const boxId = typeof op.box_id === "string" ? op.box_id : null;
 
           // Resolve a box_id: either explicitly provided or the first box
-          // in the workspace.
+          // in the workspace the caller can access.
           let resolvedBoxId = boxId;
           if (!resolvedBoxId) {
             const { data: boxes } = await admin
               .from("boxes")
               .select("id")
               .eq("workspace_id", ctx.workspaceId)
-              .neq("status", "trashed")
-              .limit(1);
-            resolvedBoxId = boxes?.[0]?.id ?? null;
+              .neq("status", "trashed");
+            resolvedBoxId =
+              (boxes ?? [])
+                .map((b: { id: string }) => b.id)
+                .find((id) => canAccessBox(ctx.scope, id)) ?? null;
           }
           if (!resolvedBoxId) {
             throw toolError(-32003, "No box found in workspace for note creation");
+          }
+          // Box scope narrowing: the branch-ownership check above does
+          // not by itself prove the target box is in the token's scope.
+          // Enforce it explicitly so a compromised or over-broad branch
+          // can't be used as a smuggling path into a box the token was
+          // never granted.
+          if (!canAccessBox(ctx.scope, resolvedBoxId)) {
+            throw toolError(-32003, "Target box is not in authorized scope");
           }
 
           await createNoteOnBranch(admin, ctx.userId, ctx.workspaceId, branchId, {
@@ -801,6 +831,10 @@ async function dispatchTool(
           const { getNoteById } = await import("@/server/repositories/note_repository");
           const note = await getNoteById(admin, noteId);
           if (!note) throw toolError(-32003, "Note not found");
+          // Box scope narrowing for the note's containing box.
+          if (!canAccessBox(ctx.scope, note.box_id)) {
+            throw toolError(-32003, "Target box is not in authorized scope");
+          }
 
           await updateNoteOnBranch(admin, ctx.userId, ctx.workspaceId, branchId, noteId, {
             title: title ?? note.title,
@@ -816,6 +850,10 @@ async function dispatchTool(
           const { resolveBranchVersion } = await import("@/server/services/branch_service");
           const note = await getNoteById(admin, noteId);
           if (!note) throw toolError(-32003, "Note not found");
+          // Box scope narrowing for the note's containing box.
+          if (!canAccessBox(ctx.scope, note.box_id)) {
+            throw toolError(-32003, "Target box is not in authorized scope");
+          }
 
           // Check if there's already a branch version.
           const branchVersionId = await resolveBranchVersion(admin, branchId, "note", noteId);
@@ -869,6 +907,25 @@ async function dispatchTool(
       const branch = await getDraftBranch(admin, branchId);
       if (!branch || branch.workspace_id !== ctx.workspaceId) {
         throw toolError(-32003, "Branch not found");
+      }
+
+      // Information-disclosure guard: connection-authored branches are
+      // only viewable by the client that authored them. A branch is
+      // "authored by a connection" when either authored_by_client_id or
+      // authored_by_connection_id is set. Human-authored branches (both
+      // null) remain viewable by anyone with context:branch scope so
+      // operators can review AI-vs-human provenance side by side.
+      const branchAuthoredByConnection =
+        branch.authored_by_client_id !== null ||
+        branch.authored_by_connection_id !== null;
+      if (
+        branchAuthoredByConnection &&
+        branch.authored_by_client_id !== ctx.clientId
+      ) {
+        throw toolError(
+          -32003,
+          "Cannot view diff of a branch owned by another client"
+        );
       }
 
       const { getBranchDiff } = await import("@/server/services/branch_diff_service");
@@ -936,8 +993,88 @@ async function dispatchTool(
       // We synthesize the equivalent context from the OAuth identity:
       // the workspace, the acting user, and an OAuth-specific actor
       // handle embedded in a minimal ConnectionRequestContext shape.
-      const { openChangeSet, commitChangeSet, recordChangeSetItem } =
+      const { openChangeSet, commitChangeSet, recordChangeSetItem, abortChangeSet } =
         await import("@/server/services/change_set_service");
+
+      // Validate required input shape before we open a change set so
+      // bad requests don't pollute the audit stream with aborted rows.
+      const proposalInput = args as {
+        proposal_type?: string;
+        target_note_id?: string;
+        target_folder_id?: string;
+        proposed_title?: string;
+        proposed_content?: string;
+        proposed_summary?: string;
+        proposed_tags?: string[];
+        rationale?: string;
+      };
+      const allowedTypes = new Set([
+        "create_note",
+        "update_note",
+        "append_note",
+        "replace_note",
+      ]);
+      if (!proposalInput.proposal_type || !allowedTypes.has(proposalInput.proposal_type)) {
+        throw toolError(
+          -32602,
+          `proposal_type is required and must be one of: ${Array.from(allowedTypes).join(", ")}`
+        );
+      }
+      if (
+        (proposalInput.proposal_type === "update_note" ||
+          proposalInput.proposal_type === "append_note" ||
+          proposalInput.proposal_type === "replace_note") &&
+        !proposalInput.target_note_id
+      ) {
+        throw toolError(
+          -32602,
+          `target_note_id is required for ${proposalInput.proposal_type} proposals`
+        );
+      }
+      if (proposalInput.proposal_type === "create_note" && !proposalInput.target_folder_id) {
+        throw toolError(-32602, "target_folder_id is required for create_note proposals");
+      }
+      if (
+        typeof proposalInput.proposed_content !== "string" ||
+        proposalInput.proposed_content.length === 0
+      ) {
+        throw toolError(-32602, "proposed_content is required");
+      }
+
+      // Build the ConnectionRequestContext the service expects. Same
+      // pattern as create_generated_note above: allowedBoxIds is the
+      // intersection of live workspace boxes and the token's granted
+      // box set, and permission_mode is derived so the service's
+      // canPropose() check passes.
+      const { data: boxes } = await admin
+        .from("boxes")
+        .select("id")
+        .eq("workspace_id", ctx.workspaceId)
+        .neq("status", "trashed");
+      const workspaceBoxIds = (boxes ?? []).map((b: { id: string }) => b.id);
+      const allowedBoxIds = new Set(
+        workspaceBoxIds.filter((id: string) => canAccessBox(ctx.scope, id))
+      );
+      const syntheticConnection = {
+        connection: {
+          id: `oauth:${ctx.clientId}`,
+          workspace_id: ctx.workspaceId,
+          name: `oauth:${ctx.clientId}`,
+          description: null,
+          connection_type: "mcp" as const,
+          status: "active" as const,
+          permission_mode: "propose_writes" as const,
+          last_used_at: null,
+          usage_count: 0,
+          metadata: { oauth_client_id: ctx.clientId, oauth_user_id: ctx.userId },
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        },
+        workspaceId: ctx.workspaceId,
+        allowedBoxIds,
+        tokenId: `oauth:${ctx.clientId}`,
+      };
+
       const cs = await openChangeSet(admin, {
         workspace_id: ctx.workspaceId,
         origin: "proposal_approval",
@@ -948,47 +1085,50 @@ async function dispatchTool(
       });
 
       try {
-        // Create a WriteProposal row directly so the existing approval
-        // flow handles it. The "connection_id" we pass is synthesized
-        // from the OAuth client_id to preserve attribution — the audit
-        // layer sees a human-initiated proposal coming through a
-        // specific connector.
-        const proposalInput = args as {
-          proposal_type: string;
-          target_note_id?: string;
-          target_folder_id?: string;
-          proposed_title?: string;
-          proposed_content?: string;
-          proposed_summary?: string;
-          proposed_tags?: string[];
-          rationale?: string;
-        };
-
-        // Note: V1 of the OAuth/MCP path records the proposal in the
-        // change_set but does not automatically approve it. Humans
-        // approve via /app/proposals. This keeps the trust boundary
-        // intact: connector writes are always gated by human review
-        // unless the user has explicitly granted context:generate AND
-        // the target folder allows generated content — both of which
-        // go through the dedicated createGeneratedNote path (not
-        // wired in V1 of HTTP MCP; use the canonical API for that).
-        void proposalInput;
-        void createProposal;
+        // Actually create the proposal via the canonical service so the
+        // approval flow (review + conflict detection + audit) stays
+        // identical to the /api/v1/write_proposals path.
+        const proposal = await createProposal(admin, syntheticConnection, {
+          proposal_type: proposalInput.proposal_type as
+            | "create_note"
+            | "update_note"
+            | "append_note"
+            | "replace_note",
+          target_note_id: proposalInput.target_note_id ?? null,
+          target_folder_id: proposalInput.target_folder_id ?? null,
+          proposed_title: proposalInput.proposed_title ?? null,
+          proposed_content: proposalInput.proposed_content ?? null,
+          proposed_summary: proposalInput.proposed_summary ?? null,
+          proposed_tags: proposalInput.proposed_tags ?? null,
+          rationale: proposalInput.rationale ?? null,
+        });
 
         await recordChangeSetItem(admin, {
           change_set_id: cs.id,
           workspace_id: ctx.workspaceId,
           operation: "create",
           object_type: "note",
-          object_id: ctx.userId, // placeholder — real proposal_id after implementation
-          after_snapshot: { client_id: ctx.clientId },
+          object_id: proposal.id,
+          after_snapshot: { client_id: ctx.clientId, proposal_id: proposal.id },
         });
         await commitChangeSet(admin, cs.id);
         return {
           ok: true,
+          proposal_id: proposal.id,
+          status: proposal.status,
           note: "Proposal submitted for human review. Approve it at /app/proposals in the Context Store UI.",
         };
       } catch (err) {
+        try {
+          await abortChangeSet(
+            admin,
+            cs.id,
+            err instanceof Error ? err.message : "proposal failed"
+          );
+        } catch {
+          // Abort failures are best-effort; the original error is more
+          // important to surface.
+        }
         throw toolError(-32000, err instanceof Error ? err.message : "Failed to submit proposal");
       }
     }

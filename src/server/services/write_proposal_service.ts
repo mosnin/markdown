@@ -765,6 +765,44 @@ function slugify(text: string): string {
     .slice(0, 80) || "note";
 }
 
+// ─── Bulk cancel by connection ────────────────────────────────────────────────
+
+/**
+ * Cancel every pending proposal for a given connection.
+ *
+ * Called when a connection is revoked so the approval queue doesn't keep
+ * pending proposals whose originating connection no longer exists as a
+ * write-capable actor. The schema has no `cancelled_at` / `cancellation_reason`
+ * column — the `updated_at` trigger records the transition time, and we
+ * reuse `review_note` (the existing reviewer-comment column used by
+ * `rejectProposal`) to carry the human-readable reason for why the
+ * proposal was auto-cancelled. `reviewer_id` is intentionally left null
+ * because this is a system action, not a reviewer decision.
+ *
+ * Status value is `canceled` (single-l; see PROPOSAL_STATUS and the
+ * write_proposals.status CHECK constraint in the core schema migration).
+ *
+ * Returns the number of rows transitioned. Errors bubble up so the caller
+ * can decide whether to treat them as fatal; the revoke flow swallows them.
+ */
+export async function cancelPendingProposalsByConnection(
+  supabase: SupabaseClient,
+  connectionId: string,
+  reason: string = "Connection revoked"
+): Promise<{ cancelled: number }> {
+  const { data, error } = await supabase
+    .from("write_proposals")
+    .update({
+      status: PROPOSAL_STATUS.CANCELED,
+      review_note: reason,
+    })
+    .eq("connection_id", connectionId)
+    .eq("status", PROPOSAL_STATUS.PENDING)
+    .select("id");
+  if (error) throw new Error(`Failed to cancel proposals: ${error.message}`);
+  return { cancelled: data?.length ?? 0 };
+}
+
 // ─── Reject ───────────────────────────────────────────────────────────────────
 
 /**

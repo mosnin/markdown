@@ -134,6 +134,7 @@ export function MetadataPanelSkeleton() {
       <Separator className="my-1" />
       <div className="flex flex-col gap-2">
         {[1, 2, 3].map((i) => (
+          // skeleton row, index key is safe
           <div key={i} className="flex gap-2">
             <Skeleton className="h-3.5 w-3.5 rounded" />
             <div className="flex-1 space-y-1">

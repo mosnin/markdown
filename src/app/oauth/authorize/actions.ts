@@ -115,7 +115,7 @@ export async function approveAuthorizeAction(formData: FormData): Promise<never>
   // Persist a consent record so subsequent authorizations for the same
   // (client, workspace, scopes) skip the screen. Admin client to
   // bypass RLS, then explicitly bound to the calling user id.
-  await admin
+  const { error: consentUpsertError } = await admin
     .from("oauth_consents")
     .upsert(
       {
@@ -127,6 +127,9 @@ export async function approveAuthorizeAction(formData: FormData): Promise<never>
       },
       { onConflict: "user_id,client_id,workspace_id" }
     );
+  if (consentUpsertError) {
+    redirect(errorRedirect(redirectUri, state, "server_error", "Failed to record consent"));
+  }
 
   // Mint the authorization code, bound to (client, user, workspace,
   // scope, PKCE challenge). The raw code is returned exactly once —

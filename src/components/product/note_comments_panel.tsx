@@ -38,18 +38,21 @@ function formatDate(dateStr: string): string {
 /** Render body with @mention highlights (display only, no notification). */
 function renderBody(body: string) {
   const parts = body.split(/(@[\w.+\-]+@[\w.\-]+)/g);
-  return parts.map((part, i) =>
-    part.startsWith("@") ? (
+  let offset = 0;
+  return parts.map((part) => {
+    const key = `${part.startsWith("@") ? "m" : "t"}-${part.slice(0, 20)}-${offset}`;
+    offset += part.length;
+    return part.startsWith("@") ? (
       <span
-        key={i}
+        key={key}
         className="rounded bg-blue-100 px-0.5 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400"
       >
         {part}
       </span>
     ) : (
-      <span key={i}>{part}</span>
-    )
-  );
+      <span key={key}>{part}</span>
+    );
+  });
 }
 
 function shortAuthor(authorId: string): string {

@@ -3,7 +3,7 @@ import { withSentryConfig } from "@sentry/nextjs";
 
 // ─── Security headers ────────────────────────────────────────────────────────
 //
-// Content-Security-Policy is set dynamically per-request in proxy.ts using a
+// Content-Security-Policy is set dynamically per-request in middleware.ts using a
 // nonce-based policy. Only non-CSP security headers are defined here as static
 // headers (they don't need per-request nonces).
 
@@ -33,6 +33,12 @@ const securityHeaders = [
   {
     key: "Permissions-Policy",
     value: "camera=(), microphone=(), geolocation=()",
+  },
+  // Enforce HTTPS for this origin and all subdomains, and mark the domain
+  // as eligible for the HSTS preload list.
+  {
+    key: "Strict-Transport-Security",
+    value: "max-age=31536000; includeSubDomains; preload",
   },
 ];
 

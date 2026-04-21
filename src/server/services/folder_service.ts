@@ -191,6 +191,23 @@ export async function renameFolder(
   const folder = await getFolderById(supabase, folderId);
   if (!folder) throw new Error("Folder not found");
 
+  // Defense-in-depth: verify the folder belongs to the caller's
+  // workspace (either directly or via its owning box). RLS would also
+  // block this, but we want a predictable service-layer error. Mirrors
+  // the check in `setGeneratedFolderPolicy` below.
+  if (folder.box_id) {
+    const { data: ownerBox } = await supabase
+      .from("boxes")
+      .select("workspace_id")
+      .eq("id", folder.box_id)
+      .maybeSingle();
+    if (!ownerBox || ownerBox.workspace_id !== workspaceId) {
+      throw new Error("Folder not found");
+    }
+  } else if (folder.workspace_id !== workspaceId) {
+    throw new Error("Folder not found");
+  }
+
   const oldName = folder.name;
   const oldPathCache = folder.path_cache;
 

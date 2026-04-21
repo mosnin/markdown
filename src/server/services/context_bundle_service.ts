@@ -549,19 +549,31 @@ export async function assembleContextBundle(
     userId,
   } = options;
 
-  // ── Cache check ────────────────────────────────────────────────────────
-  // Cache key includes branchId (via userId) so branch-aware bundles
-  // never serve stale main data.
-  const cacheKey = bundleCacheKey(noteId, workspaceId, userId);
-  const cached = await getCachedBundle<ContextBundle>(cacheKey);
-  if (cached) return cached;
-
   // Opting in to branch overlays without passing a user id is a
   // programming error: returning the full workspace set would leak
   // other users' drafts. Degrade gracefully to "no overlay" so the
   // main bundle still renders.
+  //
+  // This flag MUST be resolved before the cache key is built — it's a
+  // key component, since overlay-enabled bundles embed per-user draft
+  // state and cannot be shared with the base (no-overlay) view.
   const branchOverlayEnabled =
     includeUserBranches === true && typeof userId === "string" && userId.length > 0;
+
+  // ── Cache check ────────────────────────────────────────────────────────
+  // Cache key includes workspaceId, noteId, userId, and the overlay
+  // flag so cached responses never leak between users (same workspace,
+  // different user → distinct key) or between overlay / no-overlay
+  // views. Skip the cache entirely when no userId was supplied — a
+  // shared key would be a cross-user leak vector.
+  const cacheKey =
+    typeof userId === "string" && userId.length > 0
+      ? bundleCacheKey(noteId, workspaceId, userId, branchOverlayEnabled)
+      : null;
+  if (cacheKey) {
+    const cached = await getCachedBundle<ContextBundle>(cacheKey);
+    if (cached) return cached;
+  }
 
   const effectiveLinkedLimit = Math.min(
     Math.max(1, linkedLimit),
@@ -842,7 +854,11 @@ export async function assembleContextBundle(
 
   // ── 11. Store in edge cache (best-effort, 5 min TTL) ───────────────────
   // Fire-and-forget so cache failures never block bundle delivery.
-  setCachedBundle(cacheKey, bundle, 300).catch(() => {});
+  // Only cache when we have a user-scoped key — anonymous / no-user
+  // requests are not cached to avoid cross-user leakage.
+  if (cacheKey) {
+    setCachedBundle(cacheKey, bundle, 300).catch(() => {});
+  }
 
   return bundle;
 }

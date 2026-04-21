@@ -1,8 +1,14 @@
 /**
  * Client for the Cloudflare bundle cache worker (context-store-bundle-cache).
  *
- * When NEXT_PUBLIC_BUNDLE_CACHE_URL is set, provides KV-backed caching
- * for context bundle assembly results. No-ops when unconfigured.
+ * Server-side only. Reads `BUNDLE_CACHE_SECRET` from the server env —
+ * the secret must NEVER be exposed to the browser. The worker URL is
+ * still read from `NEXT_PUBLIC_BUNDLE_CACHE_URL` (URLs are not
+ * sensitive) but this module should only ever run server-side, as
+ * context bundle assembly is a server operation.
+ *
+ * When `NEXT_PUBLIC_BUNDLE_CACHE_URL` is unset, all operations become
+ * silent no-ops so assembly still works without the edge cache.
  */
 
 // ─── Constants ──────────────────────────────────────────────────────────────
@@ -14,21 +20,28 @@ const CACHE_TIMEOUT_MS = 3_000;
 function getConfig(): { url: string; secret: string | undefined } | null {
   const url = process.env.NEXT_PUBLIC_BUNDLE_CACHE_URL;
   if (!url) return null;
-  return { url, secret: process.env.NEXT_PUBLIC_BUNDLE_CACHE_SECRET };
+  return { url, secret: process.env.BUNDLE_CACHE_SECRET };
 }
 
 /**
  * Build a deterministic cache key for a context bundle.
  *
- * Includes branchId so branch-aware bundles never serve stale main data.
+ * Always incorporates `userId` so cached responses never leak between
+ * users in the same workspace. When `includeUserBranches` is true, an
+ * `:overlay` suffix is appended so overlay-enabled bundles live in a
+ * distinct cache slot from the base (no-overlay) view.
+ *
+ *   bundle:${workspaceId}:${noteId}:${userId}          // no overlay
+ *   bundle:${workspaceId}:${noteId}:${userId}:overlay  // overlay enabled
  */
 export function bundleCacheKey(
   noteId: string,
   workspaceId: string,
-  branchId?: string | null,
+  userId: string,
+  includeUserBranches: boolean,
 ): string {
-  const base = `bundle:${workspaceId}:${noteId}`;
-  return branchId ? `${base}:${branchId}` : base;
+  const base = `bundle:${workspaceId}:${noteId}:${userId}`;
+  return includeUserBranches ? `${base}:overlay` : base;
 }
 
 // ─── Public API ─────────────────────────────────────────────────────────────

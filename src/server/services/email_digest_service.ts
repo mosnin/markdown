@@ -178,6 +178,15 @@ export async function sendDigestBatch(
         continue;
       }
 
+      // Aggregate-only log — never log the raw `summaries` array because
+      // it contains user-controlled metadata (note titles, etc.) that
+      // could include PII. See sanitizeMetadataTitle for the email-body
+      // scrubbing path.
+      console.log("[email_digest] sending digest", {
+        user_id: userId,
+        event_count: summaries.length,
+      });
+
       await sendDigestEmail(apiKey, email, cadence, summaries);
       sent++;
     } catch (err) {
@@ -282,13 +291,57 @@ function labelFor(eventType: string): string {
   return EVENT_LABELS[eventType] ?? eventType;
 }
 
+/**
+ * Defensively sanitize a user-controlled metadata value before it lands
+ * in an email body or a structured log.
+ *
+ * Audit `metadata` is free-form JSON populated by many call sites, so we
+ * treat it as untrusted: it may contain raw PII (email addresses, phone
+ * numbers), embedded newlines, or be absent entirely. This helper
+ * coerces to string, masks the common PII patterns, strips control
+ * characters, caps length, and falls back to a placeholder when nothing
+ * usable is left.
+ */
+function sanitizeMetadataTitle(value: unknown): string {
+  if (value === null || value === undefined) return "<unnamed>";
+  let s: string;
+  try {
+    s = typeof value === "string" ? value : String(value);
+  } catch {
+    return "<unnamed>";
+  }
+  // Mask email addresses first (before any control-char substitution).
+  s = s.replace(
+    /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g,
+    "<email>"
+  );
+  // Mask phone-like runs: 7+ digits, optionally grouped with
+  // spaces/dashes/dots/parens and an optional leading +.
+  s = s.replace(
+    /\+?\d[\d\s\-().]{6,}\d/g,
+    "<phone>"
+  );
+  // Strip newlines, carriage returns, tabs, and other C0/DEL control
+  // characters so nothing downstream sees a split line or terminal
+  // escape. Escape sequences keep the source file 7-bit-clean.
+  // Build the control-character regex via RegExp-from-string to
+  // keep the source file free of literal control bytes.
+  const CONTROL_CHARS_RE = new RegExp("[\x00-\x1F\x7F]", "g");
+  s = s.replace(CONTROL_CHARS_RE, " ");
+  s = s.replace(/\s+/g, " ").trim();
+  if (s.length === 0) return "<unnamed>";
+  if (s.length > 120) s = s.slice(0, 120);
+  return s;
+}
+
 function notableSummary(event: AuditEvent): string {
   const md = event.metadata ?? {};
-  const title =
-    (md.title as string | undefined) ??
-    (md.name as string | undefined) ??
-    (md.object_name as string | undefined) ??
+  const raw =
+    (md.title as unknown) ??
+    (md.name as unknown) ??
+    (md.object_name as unknown) ??
     event.object_id;
+  const title = sanitizeMetadataTitle(raw);
   return `${labelFor(event.event_type)}: ${title}`;
 }
 
@@ -330,10 +383,13 @@ function buildEmailHtml(
             )}</li>`
         )
         .join("");
+      // Workspace name is user-controlled too — pass it through the
+      // same sanitizer so PII in a workspace title can't leak.
+      const safeWorkspaceName = sanitizeMetadataTitle(s.workspace_name);
       return `
         <tr><td style="padding:12px 0 4px;border-top:1px solid #eee;">
           <h2 style="margin:0 0 8px;font-size:16px;font-weight:600;">${escapeHtml(
-            s.workspace_name
+            safeWorkspaceName
           )}</h2>
           <ul style="margin:0 0 8px;padding-left:18px;">${rows}</ul>
           ${
@@ -369,7 +425,8 @@ function buildEmailHtml(
     `Your ${cadence} Context Store digest`,
     ``,
     ...summaries.flatMap((s) => {
-      const header = `${s.workspace_name} (${s.total})`;
+      const safeWorkspaceName = sanitizeMetadataTitle(s.workspace_name);
+      const header = `${safeWorkspaceName} (${s.total})`;
       const counts = [...s.by_event_type.entries()].map(
         ([ev, count]) => `  - ${labelFor(ev)}: ${count}`
       );
@@ -408,6 +465,12 @@ async function sendDigestEmail(
 
   if (!res.ok) {
     const body = await res.text().catch(() => "");
+    // Aggregate-only error log. Never include the `summaries` array —
+    // it can carry user-controlled PII. The response body is already
+    // length-capped by the thrown error message.
+    console.error("[email_digest] send failed", {
+      status: res.status,
+    });
     throw new Error(
       `resend responded ${res.status}: ${body.slice(0, 300)}`
     );

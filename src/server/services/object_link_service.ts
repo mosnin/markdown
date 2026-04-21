@@ -84,10 +84,18 @@ export async function createLink(
 
 export async function removeLink(
   supabase: SupabaseClient,
-  _workspaceId: string,
+  workspaceId: string,
   linkId: string
 ): Promise<void> {
-  await deleteObjectLink(supabase, linkId);
+  const { data: link } = await supabase
+    .from("object_links")
+    .select("id, workspace_id")
+    .eq("id", linkId)
+    .maybeSingle();
+  if (!link || link.workspace_id !== workspaceId) {
+    throw new Error("Link not found");
+  }
+  await deleteObjectLink(supabase, linkId, workspaceId);
 }
 
 export async function getLinksForObject(

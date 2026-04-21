@@ -433,14 +433,15 @@ export async function resolveAccessToken(
   if (a.length !== b.length || !timingSafeEqual(a, b)) return null;
 
   // Check that the consent this token derived from is still active.
-  const { data: consent } = await supabase
+  const { data: consent, error: consentError } = await supabase
     .from("oauth_consents")
     .select("revoked_at")
     .eq("user_id", row.user_id)
     .eq("client_id", row.client_id)
     .eq("workspace_id", row.workspace_id)
     .maybeSingle();
-  if (consent?.revoked_at) return null;
+  if (consentError) return null;
+  if (!consent || consent.revoked_at) return null;
 
   // Best-effort last_used_at update; we don't fail the request on error.
   // Populate first_used_at exactly once, the first time the token

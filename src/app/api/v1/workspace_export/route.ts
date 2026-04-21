@@ -8,7 +8,9 @@ import {
   E_UNAUTHORIZED,
   E_FORBIDDEN,
   E_INTERNAL,
+  E_RATE_LIMITED,
 } from "@/lib/api/response";
+import { importExportLimit } from "@/lib/api/rate_limit";
 
 /**
  * GET /api/v1/workspace_export
@@ -28,6 +30,10 @@ export async function GET(_request: NextRequest) {
   if (!canAdmin(ctx.workspace.role)) {
     return E_FORBIDDEN("Admin access required for workspace export");
   }
+
+  // Rate limit import/export operations per user.
+  const rl = importExportLimit(ctx.user.id);
+  if (!rl.allowed) return E_RATE_LIMITED(rl.retryAfter);
 
   const supabase = await createClient();
 

@@ -16,9 +16,12 @@ Required secrets (configure once via `modal secret create`):
 
 from __future__ import annotations
 
+import hmac
 import json
+import os
 
 import modal
+from fastapi import Header, HTTPException
 
 from workspace_operator.models import OperatorInput, OperatorResult
 from workspace_operator.operator import run_operator
@@ -50,7 +53,10 @@ app = modal.App("poggle-workspace-operator")
 )
 @modal.concurrent(max_inputs=10)
 @modal.fastapi_endpoint(method="POST")
-async def invoke(payload: dict) -> dict:
+async def invoke(
+    payload: dict,
+    x_workspace_operator_secret: str | None = Header(default=None),
+) -> dict:
     """HTTP entrypoint called by the Next.js server action.
 
     Validates the payload, enforces the shared-secret header matches the
@@ -59,13 +65,17 @@ async def invoke(payload: dict) -> dict:
     as `status: "failed"` rather than raised — the caller always gets a
     structured response.
     """
-    from fastapi import Header, HTTPException
+    # Auth check FIRST, before any work. The expected secret is read directly
+    # from env (same value Settings.from_env() requires) so a malformed
+    # payload cannot be used to distinguish auth state from payload state.
+    expected_secret = os.environ.get("WORKSPACE_OPERATOR_SHARED_SECRET", "")
+    provided_secret = x_workspace_operator_secret or ""
+    if not expected_secret or not hmac.compare_digest(
+        expected_secret, provided_secret
+    ):
+        raise HTTPException(status_code=401, detail="unauthorized")
 
     settings = Settings.from_env()
-    # FastAPI won't let us use dependency injection here without reworking
-    # the signature; we read headers off the raw request in a wrapper
-    # instead. Keep the verification inline for v1 — this is a single
-    # endpoint.
     # NOTE: The shared secret is also verified on the Poggle side for every
     # tool call, so this is defense-in-depth.
 
