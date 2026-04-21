@@ -780,6 +780,34 @@ export async function autoOrganizeWorkspaceAction(
       }
     }
 
+    // Seed a guide note in the fallback Inbox box so new users understand
+    // how to use it. Only fires when clustering was skipped and a single
+    // default Inbox box was created.
+    if (clusteredK === null && createdBoxes.length === 1) {
+      const inboxBox = createdBoxes[0];
+      const INBOX_GUIDE_CONTENT = `# Your Inbox — how it works
+
+This is your capture zone. Anything you save quickly — from your phone, browser, or voice — lands here first.
+
+**How to use it:**
+- Drop raw thoughts here, then move them to the right box later
+- Use the "Ask Pog" conversation to triage: "Organize my inbox notes into the right boxes"
+- Notes here show up in workspace-wide searches immediately
+
+**Tip:** Keep this box for unprocessed captures. When it grows past ~20 notes, ask Pog to help you sort them.`;
+      try {
+        await createNote(supabase, userId, workspaceId, {
+          boxId: inboxBox.id,
+          title: "How your Inbox works",
+          markdownContent: INBOX_GUIDE_CONTENT,
+          kind: "guide",
+        });
+      } catch (guideErr) {
+        // Non-fatal: boxes and notes were created; log and continue.
+        console.error("[auto_organize] Failed to seed Inbox guide note", guideErr);
+      }
+    }
+
     // Map cluster index → box id for note placement. Clusters whose
     // box creation failed simply drop their notes.
     const clusterIndexToBoxId = new Map<number, string>();

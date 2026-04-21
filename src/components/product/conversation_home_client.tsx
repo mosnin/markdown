@@ -73,8 +73,14 @@ export function ConversationHomeClient({
             </div>
 
             {importToast && (
-              <div className="rounded-md border border-green-500/30 bg-green-500/10 px-3 py-2 text-sm text-green-700 dark:text-green-400">
-                {importToast}
+              <div className="rounded-lg border border-violet-500/30 bg-violet-500/10 px-4 py-3">
+                <p className="text-sm font-medium text-foreground">
+                  Workspace organized
+                </p>
+                <p className="mt-0.5 text-xs text-muted-foreground">{importToast}</p>
+                <p className="mt-2 text-xs text-violet-700 dark:text-violet-400">
+                  Pog is ready — try asking: <span className="italic">&quot;What did you find interesting about my notes?&quot;</span> or <span className="italic">&quot;Summarize my workspace.&quot;</span>
+                </p>
               </div>
             )}
 
