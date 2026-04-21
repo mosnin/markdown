@@ -43,6 +43,12 @@ export default async function OperatorRunDetailPage({ params }: PageProps) {
           >
             ← Back to history
           </Link>
+          <Link
+            href={`/app/workspace_operator/${runId}/replay`}
+            className="ml-3 text-xs text-muted-foreground hover:text-foreground hover:underline"
+          >
+            Open replay →
+          </Link>
           <h1 className="mt-1 text-2xl font-semibold tracking-tight text-foreground">
             Operator run
           </h1>
