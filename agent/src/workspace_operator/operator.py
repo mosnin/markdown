@@ -42,7 +42,11 @@ from workspace_operator.tools import (
     build_web_search_tool,
     build_write_memory_tool,
 )
-from workspace_operator.persona import filter_tools_by_allowlist  # noqa: E402
+from workspace_operator.persona import (  # noqa: E402
+    PersonaConfig,
+    apply_persona_to_instructions,
+    filter_tools_by_allowlist,
+)
 from workspace_operator.tracing import flush_tracing, setup_tracing  # tracing: Phase 3 Agent 4
 
 # V3 harness: streaming hooks, approval gate, steering poller.
@@ -518,6 +522,7 @@ def _build_operator(
     must_cite_per_claim: bool = False,
     workspace_context_block: str = "",
     tool_allowlist: list[str] | None = None,
+    persona: PersonaConfig | None = None,
 ) -> Agent:
     """Construct the main Operator agent.
 
@@ -528,6 +533,11 @@ def _build_operator(
     `workspace_context_block` is appended to SYSTEM_PROMPT to form a
     byte-stable prefix for prompt caching — see
     `_build_workspace_context_block`.
+
+    When `persona` is provided, its `system_prompt` override is applied on
+    top of the assembled instructions (preserving the workspace-context
+    tail for cache stability), and its `tool_allowlist` is consulted when
+    the explicit `tool_allowlist` parameter is None.
     """
     output_guardrails = [build_cite_output_guardrail()]
     if must_cite_per_claim:
@@ -538,6 +548,8 @@ def _build_operator(
         else SYSTEM_PROMPT
     )
     instructions = _bound_system_prompt(instructions)
+    if persona is not None:
+        instructions = apply_persona_to_instructions(instructions, persona)
     full_tools = [
         build_hybrid_search_tool(client),
         build_list_notes_in_box_tool(client),
@@ -557,7 +569,13 @@ def _build_operator(
         build_read_memories_tool(client),
         build_write_memory_tool(client),
     ]
-    tools = filter_tools_by_allowlist(full_tools, tool_allowlist or [])
+    # Persona allowlist is a fallback: an explicit per-run override wins.
+    effective_allowlist: list[str] = []
+    if tool_allowlist:
+        effective_allowlist = tool_allowlist
+    elif persona is not None and persona.tool_allowlist:
+        effective_allowlist = persona.tool_allowlist
+    tools = filter_tools_by_allowlist(full_tools, effective_allowlist)
     return Agent(
         name="Workspace Operator",
         instructions=instructions,
@@ -570,6 +588,7 @@ def _build_plan_agent(
     client: PoggleClient,
     *,
     workspace_context_block: str = "",
+    persona: PersonaConfig | None = None,
 ) -> Agent:
     """Agent used in plan mode — search/read only, no writes, no cite guardrail.
 
@@ -577,6 +596,10 @@ def _build_plan_agent(
     in external context (`web_fetch`) so the proposed plan can reference
     real titles and URLs, but it cannot draft, edit, link, or apply
     templates — those are write tools reserved for execute/full.
+
+    When `persona` is provided, its `system_prompt` override is applied
+    on top of the assembled instructions. Persona `tool_allowlist` is
+    honoured against plan-mode's fixed read-only tool set.
     """
     instructions = (
         PLAN_SYSTEM_PROMPT + "\n\n" + workspace_context_block
@@ -584,16 +607,23 @@ def _build_plan_agent(
         else PLAN_SYSTEM_PROMPT
     )
     instructions = _bound_system_prompt(instructions)
+    if persona is not None:
+        instructions = apply_persona_to_instructions(instructions, persona)
+    full_tools = [
+        build_hybrid_search_tool(client),
+        build_list_notes_in_box_tool(client),
+        build_read_note_tool(client),
+        build_web_search_tool(client),
+        build_web_fetch_tool(client),
+    ]
+    if persona is not None and persona.tool_allowlist:
+        tools = filter_tools_by_allowlist(full_tools, persona.tool_allowlist)
+    else:
+        tools = full_tools
     return Agent(
         name="Workspace Operator (Planning)",
         instructions=instructions,
-        tools=[
-            build_hybrid_search_tool(client),
-            build_list_notes_in_box_tool(client),
-            build_read_note_tool(client),
-            build_web_search_tool(client),
-            build_web_fetch_tool(client),
-        ],
+        tools=tools,
     )
 
 
@@ -632,8 +662,18 @@ def _make_client(payload: OperatorInput, settings: Settings) -> PoggleClient:
 async def _run_plan(payload: OperatorInput, settings: Settings) -> OperatorResult:
     """Run the planning agent and return a structured PlanResult."""
     client = _make_client(payload, settings)
-    model = _resolve_model(payload, settings)
+    persona = await _load_persona(client, payload.persona_slug)
+    # Persona model override only wins when the caller didn't pin one.
+    model = payload.model or persona.model or settings.model
+    if model not in ALLOWED_OPERATOR_MODELS:
+        raise ValueError(
+            f"model {model!r} is not in ALLOWED_OPERATOR_MODELS={ALLOWED_OPERATOR_MODELS}"
+        )
     try:
+        await client.report_progress(
+            event_type="persona_loaded",
+            detail=f"persona={persona.slug} allowlist={len(persona.tool_allowlist)}",
+        )
         # Wave 1 F — short-circuit if the user already cancelled before we
         # even start. Saves a model call.
         if await _was_cancelled(client, payload.run_id):
@@ -645,7 +685,11 @@ async def _run_plan(payload: OperatorInput, settings: Settings) -> OperatorResul
             workspace_id=payload.workspace_id,
             box_id=payload.box_id,
         )
-        agent = _build_plan_agent(client, workspace_context_block=workspace_context)
+        agent = _build_plan_agent(
+            client,
+            workspace_context_block=workspace_context,
+            persona=persona,
+        )
         run_config = RunConfig(
             model=model,
             workflow_name="workspace_operator",
@@ -729,6 +773,29 @@ async def _run_plan(payload: OperatorInput, settings: Settings) -> OperatorResul
 # ---------------------------------------------------------------------------
 # V3 harness — tool approval gate + steer poller factories
 # ---------------------------------------------------------------------------
+
+
+async def _load_persona(
+    client: PoggleClient, slug: str | None
+) -> PersonaConfig:
+    """Resolve the run's PersonaConfig, falling back to default on miss.
+
+    Called at the top of each run-mode entry point. When the payload
+    carries no slug (or an empty one), we return `PersonaConfig.default()`
+    — the pass-through persona. Otherwise we call `client.fetch_persona`;
+    a `None` response (unknown slug, RLS-hidden row, etc.) degrades to
+    the default persona with a logged warning rather than failing the run.
+    """
+    if not slug:
+        return PersonaConfig.default()
+    persona_dict = await client.fetch_persona(slug=slug)
+    if persona_dict is None:
+        log.warning(
+            "[operator] persona slug %r not found; falling back to default",
+            slug,
+        )
+        return PersonaConfig.default()
+    return PersonaConfig.from_dict(persona_dict)
 
 
 def _make_tool_gate(
@@ -919,16 +986,29 @@ def _extract_json_object(text: str) -> dict | None:
 
 async def _run_execute(payload: OperatorInput, settings: Settings) -> OperatorResult:
     """Execute an approved plan with progress reporting."""
-    model = _resolve_model(payload, settings)
     if not payload.approved_plan:
         return OperatorResult(
             run_id=payload.run_id,
             status="failed",
             error="execute mode requires approved_plan",
-            model=model,
+            model=_resolve_model(payload, settings),
         )
 
     client = _make_client(payload, settings)
+    persona = await _load_persona(client, payload.persona_slug)
+    # Persona model override only wins when the caller didn't pin one.
+    model = payload.model or persona.model or settings.model
+    if model not in ALLOWED_OPERATOR_MODELS:
+        raise ValueError(
+            f"model {model!r} is not in ALLOWED_OPERATOR_MODELS={ALLOWED_OPERATOR_MODELS}"
+        )
+    # OR the persona's behavioural flags with the payload's. The stricter
+    # choice wins so an admin-configured persona can't be weakened by a
+    # dispatcher that forgot to set them.
+    requires_approval_effective = payload.requires_approval or persona.requires_approval
+    must_cite_per_claim_effective = (
+        payload.must_cite_per_claim or persona.must_cite_per_claim
+    )
     notes_created: list[str] = []
 
     def _on_draft(note_id: str) -> None:
@@ -948,6 +1028,10 @@ async def _run_execute(payload: OperatorInput, settings: Settings) -> OperatorRe
     client.draft_note = draft_note_capturing  # type: ignore[assignment]
 
     try:
+        await client.report_progress(
+            event_type="persona_loaded",
+            detail=f"persona={persona.slug} allowlist={len(persona.tool_allowlist)}",
+        )
         # Wave 1 F — phase-boundary cancel check.
         if await _was_cancelled(client, payload.run_id):
             return OperatorResult(
@@ -977,9 +1061,10 @@ async def _run_execute(payload: OperatorInput, settings: Settings) -> OperatorRe
         agent = _build_operator(
             client,
             box_id=payload.box_id,
-            must_cite_per_claim=payload.must_cite_per_claim,
+            must_cite_per_claim=must_cite_per_claim_effective,
             workspace_context_block=workspace_context,
             tool_allowlist=payload.tool_allowlist or None,
+            persona=persona,
         )
         run_config = RunConfig(
             model=model,
@@ -991,9 +1076,9 @@ async def _run_execute(payload: OperatorInput, settings: Settings) -> OperatorRe
             _make_tool_gate(
                 client,
                 run_id=payload.run_id,
-                requires_approval=payload.requires_approval,
+                requires_approval=requires_approval_effective,
             )
-            if payload.requires_approval
+            if requires_approval_effective
             else None
         )
         budget_hooks = StreamingOperatorHooks(
@@ -1114,7 +1199,35 @@ async def _run_execute(payload: OperatorInput, settings: Settings) -> OperatorRe
 async def _run_full(payload: OperatorInput, settings: Settings) -> OperatorResult:
     """Phase 1 full flow — search + draft in a single pass."""
     client = _make_client(payload, settings)
-    model = _resolve_model(payload, settings)
+    persona = await _load_persona(client, payload.persona_slug)
+    # Persona model override only wins when the caller didn't pin one.
+    model = payload.model or persona.model or settings.model
+    if model not in ALLOWED_OPERATOR_MODELS:
+        raise ValueError(
+            f"model {model!r} is not in ALLOWED_OPERATOR_MODELS={ALLOWED_OPERATOR_MODELS}"
+        )
+    # OR the persona's behavioural flags with the payload's; the stricter
+    # choice wins.
+    requires_approval_effective = payload.requires_approval or persona.requires_approval
+    plan_first_effective = payload.plan_first or persona.plan_first
+    must_cite_per_claim_effective = (
+        payload.must_cite_per_claim or persona.must_cite_per_claim
+    )
+    if plan_first_effective:
+        # TODO: actual plan-first routing (dispatch to _run_plan then wait
+        # for approval) is out of scope for this task — the dispatcher
+        # handles mode selection. Proceed with full-mode execution and log
+        # the flag for observability.
+        log.warning(
+            "[operator] persona %s requests plan_first but run is in full mode; "
+            "honouring full-mode flow",
+            persona.slug,
+        )
+
+    await client.report_progress(
+        event_type="persona_loaded",
+        detail=f"persona={persona.slug} allowlist={len(persona.tool_allowlist)}",
+    )
 
     notes_created: list[str] = []
 
@@ -1138,9 +1251,10 @@ async def _run_full(payload: OperatorInput, settings: Settings) -> OperatorResul
     agent = _build_operator(
         client,
         box_id=payload.box_id,
-        must_cite_per_claim=payload.must_cite_per_claim,
+        must_cite_per_claim=must_cite_per_claim_effective,
         workspace_context_block=workspace_context,
         tool_allowlist=payload.tool_allowlist or None,
+        persona=persona,
     )
     run_config = RunConfig(
         model=model,
@@ -1152,9 +1266,9 @@ async def _run_full(payload: OperatorInput, settings: Settings) -> OperatorResul
         _make_tool_gate(
             client,
             run_id=payload.run_id,
-            requires_approval=payload.requires_approval,
+            requires_approval=requires_approval_effective,
         )
-        if payload.requires_approval
+        if requires_approval_effective
         else None
     )
     budget_hooks = StreamingOperatorHooks(

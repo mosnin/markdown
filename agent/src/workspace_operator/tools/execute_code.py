@@ -1,25 +1,31 @@
 """`execute_code` tool — run a Python or JavaScript snippet in a sandbox.
 
-The actual sandbox lives behind the Next.js route
-`/api/agent/tools/execute_code`, which dispatches to a Modal container.
-The agent never talks to the sandbox directly — that way the secret
-bearer-envelope stays on the Next.js side and the Modal operator
-doesn't need to hold sandbox credentials.
+Execution happens in a fresh `modal.Sandbox` spawned from the running
+Workspace Operator app (see `workspace_operator.sandbox.run_sandboxed`).
+After the run completes the tool forwards the captured result to the
+Next.js audit endpoint `/api/agent/tools/execute_code` via
+`PoggleClient.execute_code(...)` so the row shows up in the run
+timeline. The LLM sees the same JSON shape as before — the audit hop
+is invisible to the model.
 
 Use this for short, bounded computations (parsing a blob, checking a
 regex, confirming a calculation). Do NOT pipe secrets through the
-snippet — the code and its stdout are persisted to
-`agent_code_executions` for audit.
+snippet — the code, its stdout, and its stderr are persisted for
+audit.
 """
 
 from __future__ import annotations
 
+import logging
 from typing import Any, Literal
 
 from agents import RunContextWrapper, function_tool
 from pydantic import BaseModel, Field
 
 from workspace_operator.client import PoggleClient
+from workspace_operator.sandbox import run_sandboxed
+
+log = logging.getLogger(__name__)
 
 
 class ExecuteCodeInput(BaseModel):
@@ -65,26 +71,49 @@ def build_execute_code_tool(client: PoggleClient) -> Any:
     async def execute_code(
         _ctx: RunContextWrapper[Any], args: ExecuteCodeInput
     ) -> ExecuteCodeOutput:
-        result = await client.execute_code(
+        # 1. Actually run the snippet in a fresh modal.Sandbox.
+        sb_result = await run_sandboxed(
             language=args.language,
             code=args.code,
-            timeout_seconds=args.timeout_seconds,
+            timeout_seconds=float(args.timeout_seconds),
         )
+
+        # 2. Forward the computed result to Next.js for audit logging.
+        #    Failures here must not mask the real execution — log and
+        #    fall through with a null execution_id.
+        execution_id: str | None = None
+        try:
+            audit = await client.execute_code(
+                language=args.language,
+                code=args.code,
+                stdout=sb_result.stdout,
+                stderr=sb_result.stderr,
+                return_value=None,
+                exit_code=sb_result.exit_code,
+                elapsed_ms=sb_result.elapsed_ms,
+                truncated=sb_result.truncated,
+                error=sb_result.error,
+            )
+            raw_id = audit.get("execution_id") if isinstance(audit, dict) else None
+            if raw_id is not None:
+                execution_id = str(raw_id)
+        except Exception:  # noqa: BLE001
+            log.warning("execute_code audit POST failed", exc_info=True)
+
+        # 3. Return the same shape the LLM has been seeing. Any sandbox
+        #    layer error is surfaced via stderr so the model can react.
+        stderr_out = sb_result.stderr
+        if sb_result.error is not None:
+            suffix = f"[sandbox {sb_result.error}]"
+            stderr_out = f"{stderr_out}\n{suffix}" if stderr_out else suffix
+
         return ExecuteCodeOutput(
-            stdout=str(result.get("stdout") or ""),
-            stderr=str(result.get("stderr") or ""),
-            return_value=(
-                str(result["return_value"])
-                if result.get("return_value") is not None
-                else None
-            ),
-            exit_code=int(result.get("exit_code") or 0),
-            elapsed_ms=int(result.get("elapsed_ms") or 0),
-            execution_id=(
-                str(result["execution_id"])
-                if result.get("execution_id") is not None
-                else None
-            ),
+            stdout=sb_result.stdout,
+            stderr=stderr_out,
+            return_value=None,
+            exit_code=sb_result.exit_code,
+            elapsed_ms=sb_result.elapsed_ms,
+            execution_id=execution_id,
         )
 
     return execute_code

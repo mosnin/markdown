@@ -366,12 +366,30 @@ class PoggleClient:
         *,
         language: str,
         code: str,
-        timeout_seconds: int = 15,
+        stdout: str,
+        stderr: str,
+        return_value: object | None,
+        exit_code: int,
+        elapsed_ms: int,
+        truncated: bool,
+        error: str | None,
     ) -> dict[str, Any]:
-        """Execute code in a sandboxed environment."""
+        """Record an already-executed code snippet for audit. The sandbox
+        runs inside the agent process via `sandbox.run_sandboxed`; this
+        endpoint persists the result row so the UI can render it."""
         return await self._post(
             "/api/agent/tools/execute_code",
-            {"language": language, "code": code, "timeout_seconds": timeout_seconds},
+            {
+                "language": language,
+                "code": code,
+                "stdout": stdout,
+                "stderr": stderr,
+                "return_value": return_value,
+                "exit_code": exit_code,
+                "elapsed_ms": elapsed_ms,
+                "truncated": truncated,
+                "error": error,
+            },
         )
 
     async def propose_box_structure(
@@ -385,6 +403,19 @@ class PoggleClient:
             "/api/agent/tools/propose_box_structure",
             {"workspace_scope": workspace_scope, "box_id": box_id},
         )
+
+    async def fetch_persona(self, *, slug: str) -> dict[str, Any] | None:
+        """Fetch a persona config by slug. Returns None when slug is
+        unknown or hidden by RLS; the operator falls back to default
+        persona semantics in that case."""
+        payload = await self._post(
+            "/api/agent/tools/persona",
+            {"slug": slug},
+        )
+        persona = payload.get("persona")
+        if persona is None:
+            return None
+        return persona  # type: ignore[return-value]
 
     async def report_progress(
         self,
