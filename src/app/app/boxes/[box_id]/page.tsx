@@ -56,6 +56,7 @@ import { BoxOverviewPanel } from "@/components/product/box_overview_panel";
 import { BoxTemplateSetup } from "@/components/product/box_template_setup";
 import { WorkspaceLiveRefresh } from "@/components/product/workspace_live_refresh";
 import { ActiveBranchBannerServer } from "@/components/product/active_branch_banner_server";
+import { ShareBoxButton } from "@/components/product/share_box_button";
 import { type Folder as FolderType } from "@/server/domain/types/folder";
 import { type Note } from "@/server/domain/types/note";
 import { formatAbsoluteDate, formatRelativeDate } from "@/lib/format_date";
@@ -456,6 +457,7 @@ export default async function BoxPage({
                 <FileText className="h-3.5 w-3.5" aria-hidden="true" />
                 Templates
               </Link>
+              <ShareBoxButton boxId={box.id} />
               <CreateFolderDialog boxId={box.id} />
               <CreateNoteDialog boxId={box.id} folders={folders} savedTemplates={savedTemplates.map((t) => ({ id: t.id, name: t.name, description: t.description, markdown_content: t.markdown_content }))} />
             </div>
