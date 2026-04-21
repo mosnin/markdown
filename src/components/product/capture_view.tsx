@@ -9,10 +9,24 @@ import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { cn } from "@/lib/utils";
 
+function formatRelativeTime(date: Date): string {
+  const secs = Math.floor((Date.now() - date.getTime()) / 1000);
+  if (secs < 60) return "just now";
+  if (secs < 3600) return `${Math.floor(secs / 60)}m ago`;
+  return `${Math.floor(secs / 3600)}h ago`;
+}
+
 interface BoxRef {
   id: string;
   name: string;
   slug: string;
+}
+
+interface CaptureEntry {
+  id: string;
+  title: string;
+  boxName: string;
+  savedAt: Date;
 }
 
 export interface CaptureViewProps {
@@ -36,7 +50,7 @@ export function CaptureView(props: CaptureViewProps) {
   );
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [savedToast, setSavedToast] = useState<string | null>(null);
+  const [recentCaptures, setRecentCaptures] = useState<CaptureEntry[]>([]);
   const bodyRef = useRef<HTMLTextAreaElement>(null);
 
   // Focus body on mount (mobile keyboard + ready to type immediately)
@@ -63,13 +77,24 @@ export function CaptureView(props: CaptureViewProps) {
         setError(result.error);
         return;
       }
-      setSavedToast(`Saved to ${result.data.boxName}`);
+      setRecentCaptures((prev) =>
+        [
+          {
+            id: result.data.noteId,
+            title:
+              trimmedTitle ||
+              trimmed.split("\n")[0].slice(0, 60) ||
+              "Untitled",
+            boxName: result.data.boxName,
+            savedAt: new Date(),
+          },
+          ...prev,
+        ].slice(0, 10)
+      );
       // Clear for the next capture
       setTitle("");
       setBody("");
       bodyRef.current?.focus();
-      // Hide the toast after 2.5s
-      setTimeout(() => setSavedToast(null), 2500);
       // If a new box was auto-created, refresh the list so the picker reflects it
       router.refresh();
     } catch (err) {
@@ -112,12 +137,6 @@ export function CaptureView(props: CaptureViewProps) {
           {pending ? "Saving" : "Save"}
         </Button>
       </header>
-
-      {savedToast && (
-        <div className="border-b border-border bg-green-500/10 px-4 py-2 text-center text-sm text-green-700 dark:text-green-400">
-          {savedToast}
-        </div>
-      )}
 
       {error && (
         <div className="border-b border-destructive/30 bg-destructive/10 px-4 py-2 text-sm text-destructive">
@@ -185,6 +204,34 @@ export function CaptureView(props: CaptureViewProps) {
         <p className="text-center text-[10px] text-muted-foreground">
           {body.length} chars · ⌘↵ to save
         </p>
+
+        {recentCaptures.length > 0 && (
+          <div className="border-t border-border pt-4 mt-2">
+            <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground/60 mb-2">
+              Saved this session
+            </p>
+            <ul className="space-y-1.5">
+              {recentCaptures.map((entry) => (
+                <li
+                  key={entry.id}
+                  className="flex items-center justify-between gap-2 rounded-md px-2 py-1.5 hover:bg-muted/40 transition-colors"
+                >
+                  <div className="min-w-0">
+                    <p className="truncate text-sm text-foreground">
+                      {entry.title}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {entry.boxName}
+                    </p>
+                  </div>
+                  <span className="shrink-0 text-xs text-muted-foreground/50">
+                    {formatRelativeTime(entry.savedAt)}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
       </div>
     </div>
   );
