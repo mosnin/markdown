@@ -49,14 +49,7 @@ export function LocalSearchResults({
     return null;
   }
 
-  // Render up to 12 hits, skipping any noteId not present in noteIndex.
-  const visibleHits = hits
-    .filter((hit) => noteIndex[hit.noteId] !== undefined)
-    .slice(0, 12);
-
-  if (visibleHits.length === 0) {
-    return null;
-  }
+  const visibleHits = hits.slice(0, 12);
 
   return (
     <section aria-label="Local on-device search results">
@@ -64,8 +57,6 @@ export function LocalSearchResults({
       <ul className="flex flex-col gap-1.5 list-none">
         {visibleHits.map((hit) => {
           const meta = noteIndex[hit.noteId];
-          // Already filtered above, but keep the guard for type safety.
-          if (!meta) return null;
           return (
             <li key={hit.noteId}>
               <Link
@@ -76,7 +67,7 @@ export function LocalSearchResults({
                 )}
               >
                 <span className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">
-                  {meta.title}
+                  {meta?.title ?? "Note"}
                 </span>
                 <span className="shrink-0 tabular-nums text-[10px] text-muted-foreground/70">
                   {(hit.score * 100).toFixed(0)}% match

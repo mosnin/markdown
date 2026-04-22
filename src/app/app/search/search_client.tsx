@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import {
   Bot,
   FileText,
@@ -17,6 +18,14 @@ import {
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+
+const LocalSearchResults = dynamic(
+  () =>
+    import("@/components/product/local_search_results").then(
+      (m) => m.LocalSearchResults
+    ),
+  { ssr: false }
+);
 import {
   searchWorkspaceAction,
   hybridSearchAction,
@@ -169,6 +178,21 @@ export function WorkspaceSearchClient({
     }
   }
 
+  // Build a noteIndex from server hits so LocalSearchResults can show titles.
+  // Partial coverage is fine — local-only hits fall back to "Note" as label.
+  const noteIndex = useMemo(() => {
+    const idx: Record<string, { title: string; boxId: string }> = {};
+    for (const h of hits) {
+      if (h.objectType === "note") {
+        idx[h.id] = { title: h.title, boxId: (h as { boxId?: string }).boxId ?? "" };
+      }
+    }
+    for (const h of semanticHits) {
+      idx[h.noteId] = { title: h.title, boxId: "" };
+    }
+    return idx;
+  }, [hits, semanticHits]);
+
   const grouped = useMemo(() => {
     const order: WorkspaceSearchObjectType[] = [
       "note",
@@ -307,7 +331,10 @@ export function WorkspaceSearchClient({
           </div>
         )
       ) : hits.length === 0 && hasSearched ? (
-        <NoResults query={query} />
+        <>
+          <NoResults query={query} />
+          <LocalSearchResults query={query} noteIndex={noteIndex} />
+        </>
       ) : (
         <div className="space-y-6">
           {grouped.map(({ type, items }) => (
@@ -331,6 +358,7 @@ export function WorkspaceSearchClient({
               </ul>
             </section>
           ))}
+          <LocalSearchResults query={query} noteIndex={noteIndex} />
         </div>
       )}
     </div>
