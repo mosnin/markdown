@@ -20,6 +20,7 @@ import { SkillHistoryPanel, SkillLifecycleControls } from "@/components/product/
 import { SkillSourceEditor } from "@/components/product/skill_source_editor";
 import { SkillChildrenPanel } from "@/components/product/skill_children_panel";
 import { SkillTestSandbox } from "@/components/product/skill_test_sandbox";
+import { SkillSubagentPanel } from "@/components/product/skill_subagent_panel";
 import { OBJECT_TYPE } from "@/server/domain/constants/object_constants";
 import { WorkspaceLiveRefresh } from "@/components/product/workspace_live_refresh";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -77,7 +78,17 @@ export default async function SkillPage({
     }
   }
 
-  const [versions, pendingProposals, attachments, links, boxFiles, boxFolders] = await Promise.all([
+  // Sub-agent config lives on three columns that aren't yet part of
+  // the Skill domain type (added by migration 20260425000001). Read
+  // them directly for the editor panel.
+  const subagentConfigPromise = supabase
+    .from("skills")
+    .select("is_subagent, subagent_tools, subagent_max_turns")
+    .eq("id", skill_id)
+    .maybeSingle()
+    .then((res) => res.data ?? null);
+
+  const [versions, pendingProposals, attachments, links, boxFiles, boxFolders, subagentConfig] = await Promise.all([
     listObjectVersions(supabase, "skill", skill_id, { limit: 50 }),
     listPendingProposalsForObject(supabase, ctx.workspace.id, "skill", skill_id),
     skill.is_reusable
@@ -93,6 +104,7 @@ export default async function SkillPage({
           branchId: ctx.activeBranchId,
         })
       : Promise.resolve([]),
+    subagentConfigPromise,
   ]);
 
   const childLinkIds = new Set(
@@ -250,6 +262,7 @@ export default async function SkillPage({
             </TabsTrigger>
             <TabsTrigger value="history" className="pb-3">History</TabsTrigger>
             <TabsTrigger value="sandbox" className="pb-3">Try it</TabsTrigger>
+            <TabsTrigger value="subagent" className="pb-3">Sub-agent</TabsTrigger>
           </TabsList>
         </div>
 
@@ -372,6 +385,20 @@ export default async function SkillPage({
               }}
               defaultBoxId={sandboxBoxId}
             />
+          </ScrollArea>
+        </TabsContent>
+
+        {/* ── Sub-agent tab ── */}
+        <TabsContent value="subagent" className="flex-1 overflow-hidden">
+          <ScrollArea className="h-full">
+            <div className="mx-auto max-w-3xl px-6 py-6 space-y-4">
+              <SkillSubagentPanel
+                skillId={skill_id}
+                initialIsSubagent={subagentConfig?.is_subagent ?? false}
+                initialTools={(subagentConfig?.subagent_tools as string[] | null | undefined) ?? null}
+                initialMaxTurns={(subagentConfig?.subagent_max_turns as number | null | undefined) ?? null}
+              />
+            </div>
           </ScrollArea>
         </TabsContent>
       </Tabs>
