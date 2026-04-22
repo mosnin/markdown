@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition, useEffect } from "react";
-import { Plus, Trash2, Zap, Clock, FileText, MousePointerClick, ToggleLeft, ToggleRight, Loader2, Play } from "lucide-react";
+import { Plus, Trash2, Zap, Clock, FileText, MousePointerClick, ToggleLeft, ToggleRight, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { describeCron, formatRelativeFromNow } from "@/lib/cron";
 import {
@@ -11,9 +11,6 @@ import {
   toggleAgentTriggerAction,
   type AgentTrigger,
 } from "@/app/app/agents/trigger_actions";
-import { runTriggerNowAction } from "@/app/app/agents/trigger_run_now_action";
-import { TriggerRunsSummaryBadge } from "@/components/product/trigger_runs_summary_badge";
-import { TriggerRunsHistoryDialog } from "@/components/product/trigger_runs_history_dialog";
 
 const TRIGGER_TYPE_META: Record<AgentTrigger["trigger_type"], { label: string; description: string; icon: React.ElementType }> = {
   note_created: { label: "Note created", description: "Runs when a new note is added to a box", icon: FileText },
@@ -37,9 +34,6 @@ export function AgentTriggersPanel({ agentId, boxes, initialTriggers = [] }: Age
   const [formCron, setFormCron] = useState("0 9 * * 1");
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
-  const [historyOpenFor, setHistoryOpenFor] = useState<string | null>(null);
-  const [runNowPending, setRunNowPending] = useState<string | null>(null);
-  const [runNowFeedback, setRunNowFeedback] = useState<{ id: string; type: "ok" | "error"; message: string } | null>(null);
 
   const cronValidation = formType === "schedule" ? describeCron(formCron) : null;
 
@@ -92,18 +86,6 @@ export function AgentTriggersPanel({ agentId, boxes, initialTriggers = [] }: Age
     startTransition(async () => {
       await toggleAgentTriggerAction(triggerId, !current);
     });
-  }
-
-  async function handleRunNow(triggerId: string) {
-    setRunNowPending(triggerId);
-    setRunNowFeedback(null);
-    const result = await runTriggerNowAction(triggerId);
-    setRunNowPending(null);
-    if (result.ok) {
-      setRunNowFeedback({ id: triggerId, type: "ok", message: "Queued — check run history in a few seconds" });
-    } else {
-      setRunNowFeedback({ id: triggerId, type: "error", message: result.error });
-    }
   }
 
   return (
@@ -254,33 +236,8 @@ export function AgentTriggersPanel({ agentId, boxes, initialTriggers = [] }: Age
                       </p>
                     ) : null;
                   })()}
-                  <div className="mt-1.5 flex items-center gap-2">
-                    <TriggerRunsSummaryBadge
-                      triggerId={trigger.id}
-                      onOpenHistory={() => setHistoryOpenFor(trigger.id)}
-                    />
-                    {runNowFeedback?.id === trigger.id && (
-                      <span className={cn(
-                        "text-[10px]",
-                        runNowFeedback.type === "ok" ? "text-emerald-600 dark:text-emerald-400" : "text-red-500"
-                      )}>
-                        {runNowFeedback.message}
-                      </span>
-                    )}
-                  </div>
                 </div>
                 <div className="flex items-center gap-1.5 shrink-0">
-                  <button
-                    onClick={() => handleRunNow(trigger.id)}
-                    disabled={!trigger.is_enabled || runNowPending === trigger.id}
-                    title="Run this trigger now"
-                    className="rounded p-1 text-muted-foreground hover:text-violet-600 transition-colors disabled:opacity-50"
-                  >
-                    {runNowPending === trigger.id
-                      ? <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
-                      : <Play className="h-3.5 w-3.5" aria-hidden="true" />
-                    }
-                  </button>
                   <button
                     onClick={() => handleToggle(trigger.id, trigger.is_enabled)}
                     title={trigger.is_enabled ? "Disable" : "Enable"}
@@ -303,15 +260,6 @@ export function AgentTriggersPanel({ agentId, boxes, initialTriggers = [] }: Age
             );
           })}
         </div>
-      )}
-
-      {historyOpenFor && (
-        <TriggerRunsHistoryDialog
-          triggerId={historyOpenFor}
-          triggerLabel={triggers.find((t) => t.id === historyOpenFor)?.label ?? ""}
-          open={true}
-          onClose={() => setHistoryOpenFor(null)}
-        />
       )}
     </div>
   );
