@@ -469,11 +469,9 @@ export default async function BoxPage({
               <TabsTrigger value="overview" className="pb-3">
                 Overview
               </TabsTrigger>
-              {folders.length > 0 && (
-                <TabsTrigger value="tree" className="pb-3">
-                  Tree
-                </TabsTrigger>
-              )}
+              <TabsTrigger value="tree" className="pb-3">
+                Tree
+              </TabsTrigger>
               <TabsTrigger value="guide" className="pb-3">
                 Guide
               </TabsTrigger>
