@@ -47,9 +47,11 @@ interface NoteEditorProps {
   initialMode?: NoteViewMode;
   /** Current user info for presence tracking. When absent, presence is disabled. */
   currentUser?: { userId: string; displayName: string };
+  /** When provided, enables inline AI quick-action buttons in the selection popover. */
+  workspaceId?: string;
 }
 
-export function NoteEditor({ note, initialMode = "document", currentUser }: NoteEditorProps) {
+export function NoteEditor({ note, initialMode = "document", currentUser, workspaceId }: NoteEditorProps) {
   const [title, setTitle] = useState(note.title);
   const [content, setContent] = useState(note.markdown_content);
   const [summary, setSummary] = useState(note.summary ?? "");
@@ -430,6 +432,8 @@ export function NoteEditor({ note, initialMode = "document", currentUser }: Note
             <AskPogSelectionPopover
               textareaRef={documentTextareaRef}
               contextLabel={`Looking at the note titled "${note.title}".`}
+              workspaceId={workspaceId}
+              boxId={note.box_id}
             />
           </div>
         )}
@@ -473,6 +477,8 @@ export function NoteEditor({ note, initialMode = "document", currentUser }: Note
             <AskPogSelectionPopover
               textareaRef={markdownTextareaRef}
               contextLabel={`Looking at the markdown source of the note titled "${note.title}".`}
+              workspaceId={workspaceId}
+              boxId={note.box_id}
             />
           </div>
         )}

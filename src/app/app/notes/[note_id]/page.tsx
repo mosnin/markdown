@@ -667,6 +667,7 @@ export default async function NotePage({
               userId: ctx.user.id,
               displayName: currentUserDisplayName,
             }}
+            workspaceId={ctx.workspace.id}
           />
         </div>
       </div>
