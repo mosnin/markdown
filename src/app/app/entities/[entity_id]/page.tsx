@@ -9,6 +9,7 @@ import { listEdgesForEntity } from "@/server/repositories/entity_edge_repository
 import { getNoteById } from "@/server/repositories/note_repository";
 import { EntityChip } from "@/components/product/entity_chip";
 import type { EntityChipType } from "@/components/product/entity_chip";
+import { EntityMergeDialog } from "@/components/product/entity_merge_dialog";
 
 export default async function EntityPage({ params }: { params: Promise<{ entity_id: string }> }) {
   const { entity_id } = await params;
@@ -42,6 +43,9 @@ export default async function EntityPage({ params }: { params: Promise<{ entity_
         </Link>
         <div className="flex items-center gap-3">
           <EntityChip id={entity.id} name={entity.name} type={entity.entity_type as EntityChipType} interactive={false} size="md" mentionCount={entity.mention_count} />
+          <div className="ml-auto">
+            <EntityMergeDialog sourceEntity={{ id: entity.id, name: entity.name, entity_type: entity.entity_type as EntityChipType }} />
+          </div>
         </div>
         {entity.description && (
           <p className="mt-2 text-sm text-muted-foreground max-w-3xl">{entity.description}</p>

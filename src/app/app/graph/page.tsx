@@ -2,13 +2,17 @@ import { Network } from "lucide-react";
 import { requireAuthenticatedUser } from "@/server/auth/require_authenticated_user";
 import { createClient } from "@/lib/supabase/server";
 import { listEntitiesByWorkspace } from "@/server/repositories/entity_repository";
-import { KnowledgeGraphList } from "@/components/product/knowledge_graph_list";
+import { listEdgesByWorkspace } from "@/server/repositories/entity_edge_repository";
+import { KnowledgeGraphTabs } from "@/components/product/knowledge_graph_tabs";
 import { ActiveBranchBannerServer } from "@/components/product/active_branch_banner_server";
 
 export default async function GraphPage() {
   const ctx = await requireAuthenticatedUser();
   const supabase = await createClient();
-  const entities = await listEntitiesByWorkspace(supabase, ctx.workspace.id, { limit: 500 });
+  const [entities, edges] = await Promise.all([
+    listEntitiesByWorkspace(supabase, ctx.workspace.id, { limit: 500 }),
+    listEdgesByWorkspace(supabase, ctx.workspace.id, { limit: 2000 }),
+  ]);
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
@@ -43,7 +47,15 @@ export default async function GraphPage() {
             </div>
           </div>
         ) : (
-          <KnowledgeGraphList entities={entities} />
+          <KnowledgeGraphTabs
+            entities={entities}
+            edges={edges.map((e) => ({
+              source: e.source_entity_id,
+              target: e.target_entity_id,
+              edge_type: e.edge_type,
+              confidence: e.confidence,
+            }))}
+          />
         )}
       </div>
     </div>
