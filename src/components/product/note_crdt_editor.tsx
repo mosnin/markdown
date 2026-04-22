@@ -157,6 +157,16 @@ export function NoteCrdtEditor({
 
   const theme = resolvedTheme === "dark" ? "dark" : "light";
 
+  // Unmount guard so a long-running poll doesn't dispatch a CodeMirror
+  // transaction on a stale view after the user navigates away.
+  const mountedRef = useRef(true);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
+
   const dispatchCommand = useCallback(
     async (
       selection:
@@ -168,6 +178,7 @@ export function NoteCrdtEditor({
 
       const triggerPos = slashMenu.triggerPos;
       const caretPos = view.state.selection.main.head;
+      const triggerText = view.state.doc.sliceString(triggerPos, caretPos);
       const commandId =
         selection.kind === "builtin" ? selection.id : `skill:${selection.id}`;
 
@@ -192,16 +203,29 @@ export function NoteCrdtEditor({
       });
 
       if (!res.ok) {
-        setStreamingNotice(null);
+        // Restore the original `/query` text so the user doesn't lose
+        // their input just because the dispatch failed.
+        if (mountedRef.current) {
+          setStreamingNotice(null);
+          const restoreView = cmRef.current?.view;
+          if (restoreView) {
+            restoreView.dispatch({
+              changes: { from: triggerPos, to: triggerPos, insert: triggerText },
+              selection: { anchor: triggerPos + triggerText.length },
+            });
+          }
+        }
         console.error("[slash_command]", res.error);
         return;
       }
 
-      // Poll for completion (v1; streaming-into-editor deferred to 7E).
+      // Poll for completion. Streaming token-by-token into the editor is
+      // wired up in 7E once Modal emits text_delta events.
       const deadline = Date.now() + 90_000;
       let output: string | null = null;
-      while (Date.now() < deadline) {
+      while (mountedRef.current && Date.now() < deadline) {
         await new Promise((r) => setTimeout(r, 1000));
+        if (!mountedRef.current) return;
         const status = await getInlineCommandStatusAction(res.invocation_id);
         if (!status.ok) break;
         if (status.status === "completed") {
@@ -211,6 +235,7 @@ export function NoteCrdtEditor({
         if (status.status === "failed" || status.status === "cancelled") break;
       }
 
+      if (!mountedRef.current) return;
       setStreamingNotice(null);
 
       if (output) {

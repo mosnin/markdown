@@ -18,12 +18,25 @@ export interface SubagentDispatchInput {
   invocationId: string;
   workspaceId: string;
   userId: string;
-  skillId: string;
+  /** Null when dispatching a built-in command (systemPromptOverride is set instead). */
+  skillId: string | null;
   task: string;
   allowedTools: string[] | null;
   maxTurns: number;
   depth: number;
   parentRunId: string | null;
+  /**
+   * Built-in command override. When set, Modal uses this system prompt
+   * directly and does not look up a skill row. Used by inline slash
+   * commands like `/summarize` and `/rewrite` that don't map to a
+   * user-defined skill.
+   */
+  systemPromptOverride?: string | null;
+  /**
+   * Stable identifier for the originating inline command (if any). Modal
+   * writes back to inline_command_invocations via this id on completion.
+   */
+  inlineCommandId?: string | null;
 }
 
 export interface SubagentDispatchResult {
@@ -75,6 +88,8 @@ export async function dispatchSubagentRun(
         max_turns: input.maxTurns,
         depth: input.depth,
         parent_run_id: input.parentRunId,
+        system_prompt_override: input.systemPromptOverride ?? null,
+        inline_command_id: input.inlineCommandId ?? null,
       }),
       signal: controller.signal,
     });

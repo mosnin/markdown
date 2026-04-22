@@ -80,11 +80,16 @@ export async function POST(request: NextRequest) {
     return apiError("forbidden", "Invocation not in this workspace", 403);
   }
 
+  const terminalStatus = status as "completed" | "failed" | "cancelled";
+  const summary = typeof body.summary === "string" ? body.summary : null;
+  const errorField = typeof body.error === "string" ? body.error : null;
+  const now = new Date().toISOString();
+
   await updateSubagentInvocation(supabase, invocationId, {
-    status: status as "completed" | "failed" | "cancelled",
-    summary: typeof body.summary === "string" ? body.summary : null,
-    error: typeof body.error === "string" ? body.error : null,
-    completed_at: new Date().toISOString(),
+    status: terminalStatus,
+    summary,
+    error: errorField,
+    completed_at: now,
     tool_calls_count:
       typeof body.tool_calls_count === "number" &&
       Number.isFinite(body.tool_calls_count)
@@ -100,6 +105,27 @@ export async function POST(request: NextRequest) {
         ? Math.max(0, Math.floor(body.output_tokens))
         : undefined,
   });
+
+  // Cascade to any inline_command_invocations that delegated to this
+  // subagent. Without this, the slash-command UI polls forever on a row
+  // whose status never transitions to completed.
+  const { data: linked } = await supabase
+    .from("inline_command_invocations")
+    .select("id, status")
+    .eq("subagent_invocation_id", invocationId)
+    .eq("status", "running");
+  if (linked && linked.length > 0) {
+    await supabase
+      .from("inline_command_invocations")
+      .update({
+        status: terminalStatus,
+        output: summary,
+        error: errorField,
+        completed_at: now,
+      })
+      .eq("subagent_invocation_id", invocationId)
+      .eq("status", "running");
+  }
 
   return apiOk({ run_id: ctx.runId, invocation_id: invocationId, status });
 }

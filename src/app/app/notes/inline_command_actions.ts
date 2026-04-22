@@ -119,29 +119,26 @@ export async function runInlineCommandAction(input: {
       : "";
     const task = `${taskPrefix}Context:\n\n${input.context}${argSuffix}`;
 
-    // Dispatch via sub-agent infrastructure. For built-ins without a
-    // backing skill, we still need a skill id — the Modal runtime resolves
-    // "built-in" commands by matching command_id. For v1, require a
-    // skill when command_id !== built-in; built-ins run as a thin Pog call
-    // without delegation.
-    //
-    // Simpler v1: for built-ins without a skill, we return the invocation
-    // id and defer resolution to the Modal harness (which reads
-    // inline_command_invocations directly by id). For skill-backed
-    // commands, we link to a sub-agent invocation row.
+    // Two dispatch paths:
+    //   - Skill-backed command: create a subagent_invocations row and
+    //     dispatch with the skill id so Modal resolves the system prompt
+    //     and tool whitelist from the skill row.
+    //   - Built-in command: dispatch with skill_id=null and pass the
+    //     built-in system prompt as systemPromptOverride. Modal writes
+    //     the final output back via /api/agent/tools/inline_command_complete.
     let subagentInvocationId: string | null = null;
-    if (skillId) {
-      const subagent = await createSubagentInvocation(admin, {
-        workspace_id: ctx.workspace.id,
-        parent_operator_run_id: null,
-        skill_id: skillId,
-        user_id: ctx.user.id,
-        task,
-        depth: 1,
-      });
-      subagentInvocationId = subagent.id;
+    try {
+      if (skillId) {
+        const subagent = await createSubagentInvocation(admin, {
+          workspace_id: ctx.workspace.id,
+          parent_operator_run_id: null,
+          skill_id: skillId,
+          user_id: ctx.user.id,
+          task,
+          depth: 1,
+        });
+        subagentInvocationId = subagent.id;
 
-      try {
         const { modalRunId } = await dispatchSubagentRun({
           invocationId: subagent.id,
           workspaceId: ctx.workspace.id,
@@ -151,7 +148,10 @@ export async function runInlineCommandAction(input: {
           allowedTools: null,
           maxTurns: resolveMaxTurns(null),
           depth: 1,
-          parentRunId: invocation.id,
+          // parent_run_id is for a workspace_operator_runs.id; inline
+          // commands don't have one, so null is correct here.
+          parentRunId: null,
+          inlineCommandId: invocation.id,
         });
         await updateInlineCommandInvocation(admin, invocation.id, {
           subagent_invocation_id: subagent.id,
@@ -160,15 +160,31 @@ export async function runInlineCommandAction(input: {
           .from("subagent_invocations")
           .update({ status: "running", modal_run_id: modalRunId })
           .eq("id", subagent.id);
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        await updateInlineCommandInvocation(admin, invocation.id, {
-          status: "failed",
-          error: msg,
-          completed_at: new Date().toISOString(),
+      } else if (systemPrompt) {
+        // Built-in: dispatch directly with the system prompt override,
+        // no subagent_invocations row.
+        await dispatchSubagentRun({
+          invocationId: invocation.id,
+          workspaceId: ctx.workspace.id,
+          userId: ctx.user.id,
+          skillId: null,
+          task: input.context + (input.argument ? `\n\nTarget: ${input.argument}` : ""),
+          allowedTools: null,
+          maxTurns: resolveMaxTurns(null),
+          depth: 1,
+          parentRunId: null,
+          systemPromptOverride: systemPrompt,
+          inlineCommandId: invocation.id,
         });
-        return { ok: false, error: msg };
       }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      await updateInlineCommandInvocation(admin, invocation.id, {
+        status: "failed",
+        error: msg,
+        completed_at: new Date().toISOString(),
+      });
+      return { ok: false, error: msg };
     }
 
     return {

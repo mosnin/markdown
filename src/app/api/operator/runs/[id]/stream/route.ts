@@ -140,20 +140,30 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     return new Response("Not found", { status: 404 });
   }
 
-  // Cross-check the caller can see this workspace.
-  const { data: membership } = await admin
-    .from("workspace_memberships")
-    .select("workspace_id")
-    .eq("workspace_id", run.workspace_id)
-    .limit(1);
-  // When bearer-authenticated, auth.workspaceId is the key's workspace —
-  // reject if it doesn't match. When cookie-authenticated, check membership.
   const bearer = parseOperatorBearer(request.headers.get("authorization"));
   if (bearer) {
+    // Bearer path: the key's workspace must match the run's workspace.
     if (auth.workspaceId !== run.workspace_id) {
       return new Response("Not found", { status: 404 });
     }
   } else {
+    // Cookie path: resolve the caller's user id and verify an explicit
+    // membership row exists for THIS workspace (not just any workspace).
+    // A previous version only checked "does the workspace have any
+    // members", which trivially passed for any authenticated caller.
+    const sessionClient = await createSessionClient();
+    const {
+      data: { user },
+    } = await sessionClient.auth.getUser();
+    if (!user) {
+      return new Response("Not found", { status: 404 });
+    }
+    const { data: membership } = await admin
+      .from("workspace_memberships")
+      .select("workspace_id")
+      .eq("workspace_id", run.workspace_id)
+      .eq("user_id", user.id)
+      .limit(1);
     if (!membership || membership.length === 0) {
       return new Response("Not found", { status: 404 });
     }
