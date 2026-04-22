@@ -1,5 +1,6 @@
 "use server";
 
+import { after } from "next/server";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getRequestContext } from "@/server/auth/get_request_context";
@@ -13,6 +14,7 @@ import {
   type AssembleBundleOptions,
 } from "@/server/services/context_bundle_service";
 import { auditBundleRead } from "@/server/services/audit_service";
+import { extractAndStoreEntities } from "@/server/services/knowledge_graph_service";
 import { log } from "@/lib/logger";
 import { type ContextBundle } from "@/server/domain/types/context_bundle";
 
@@ -128,6 +130,29 @@ export async function saveNoteAction(
         readHint: readHint?.trim() ?? null,
       });
     }
+
+    // Fire-and-forget knowledge-graph extraction. Runs after the save has
+    // committed so a slow/failing LLM call never delays or breaks autosave.
+    // A fresh supabase client is created inside the callback because the
+    // outer request-scoped client may no longer be valid once `after()` runs.
+    after(async () => {
+      try {
+        const supa = await createClient();
+        await extractAndStoreEntities(supa, {
+          workspaceId,
+          noteId,
+          title: trimmedTitle,
+          content: markdownContent,
+          branchId: activeBranchId ?? null,
+        });
+      } catch (err) {
+        log.error("save_note_kg_extraction_failed", {
+          note_id: noteId,
+          reason: err instanceof Error ? err.message : "unknown",
+        });
+      }
+    });
+
     return { ok: true, data: {} };
   } catch (err) {
     const reason = err instanceof Error ? err.message : "Unknown error";
