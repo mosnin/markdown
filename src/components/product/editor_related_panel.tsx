@@ -92,7 +92,6 @@ export function EditorRelatedPanel({
           <ul className="flex flex-col gap-1 list-none">
             {qualifyingHits.map((hit) => {
               const meta = noteIndex[hit.noteId];
-              if (!meta) return null;
               return (
                 <li key={hit.noteId}>
                   <Link
@@ -103,7 +102,7 @@ export function EditorRelatedPanel({
                     )}
                   >
                     <span className="min-w-0 flex-1 truncate text-xs text-foreground group-hover:text-foreground">
-                      {meta.title}
+                      {meta?.title ?? "Note"}
                     </span>
                     <span className="shrink-0 tabular-nums text-[10px] text-muted-foreground/60">
                       {(hit.score * 100).toFixed(0)}%

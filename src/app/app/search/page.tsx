@@ -1,6 +1,15 @@
+import dynamic from "next/dynamic";
 import { requireAuthenticatedUser } from "@/server/auth/require_authenticated_user";
 import { PageHeader } from "@/components/product/page_header";
 import { WorkspaceSearchClient } from "./search_client";
+
+const LocalIndexBootstrap = dynamic(
+  () =>
+    import("@/components/product/local_index_bootstrap").then(
+      (m) => m.LocalIndexBootstrap
+    ),
+  { ssr: false }
+);
 
 /**
  * Workspace search page.
@@ -28,6 +37,7 @@ export default async function SearchPage() {
           <WorkspaceSearchClient />
         </div>
       </div>
+      <LocalIndexBootstrap />
     </div>
   );
 }

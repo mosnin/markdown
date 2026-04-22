@@ -22,6 +22,10 @@ export function useLocalSearch(
   const [status, setStatus] = useState<LocalSearchStatus>("idle");
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
 
+  // Stable dependency: joining to a string avoids re-firing when the caller
+  // passes a new array reference with the same contents on every render.
+  const noteIdsKey = workspaceNoteIds?.join(",");
+
   useEffect(() => {
     if (timeoutRef.current !== null) {
       clearTimeout(timeoutRef.current);
@@ -63,7 +67,10 @@ export function useLocalSearch(
         timeoutRef.current = null;
       }
     };
-  }, [query, workspaceNoteIds]);
+  // noteIdsKey is the stable serialisation of workspaceNoteIds — avoids
+  // re-firing when the caller passes a new array reference each render.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [query, noteIdsKey]);
 
   useEffect(() => {
     return () => {

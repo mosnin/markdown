@@ -114,3 +114,45 @@ export async function hybridSearchAction(
     };
   }
 }
+
+export type NoteIndexEntry = {
+  id: string;
+  title: string;
+  content: string;
+};
+
+export type WorkspaceNotesForIndexingResult =
+  | { ok: true; data: NoteIndexEntry[] }
+  | { ok: false; error: string };
+
+/**
+ * Returns a lightweight list of all notes in the workspace for local
+ * bootstrap indexing. Content is truncated to 1000 chars — the same
+ * slice the embedding worker uses — to keep the payload small.
+ */
+export async function getWorkspaceNotesForIndexingAction(): Promise<WorkspaceNotesForIndexingResult> {
+  try {
+    const ctx = await requireAuthenticatedUser();
+    const supabase = await createClient();
+    const { data, error } = await supabase
+      .from("notes")
+      .select("id, title, markdown_content")
+      .eq("workspace_id", ctx.workspace.id)
+      .is("deleted_at", null)
+      .limit(2000);
+    if (error) throw error;
+    return {
+      ok: true,
+      data: (data ?? []).map((n) => ({
+        id: n.id as string,
+        title: (n.title ?? "") as string,
+        content: ((n.markdown_content ?? "") as string).slice(0, 1000),
+      })),
+    };
+  } catch (err) {
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : "Failed to load notes for indexing",
+    };
+  }
+}

@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
+import dynamic from "next/dynamic";
 import { AlertTriangle, Code2, Eye, History } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,6 +19,15 @@ import { useConcurrentEditWarning } from "@/lib/hooks/use_concurrent_edit_warnin
 import { NotePresenceAvatars } from "@/components/product/note_presence_avatars";
 import { AskPogSelectionPopover } from "@/components/product/ask_pog_selection_popover";
 import { NoteHistoryDialog } from "@/components/product/note_history_dialog";
+import { useNoteEmbedding } from "@/hooks/use_note_embedding";
+
+const EditorRelatedPanel = dynamic(
+  () =>
+    import("@/components/product/editor_related_panel").then(
+      (m) => m.EditorRelatedPanel
+    ),
+  { ssr: false }
+);
 
 /**
  * Autosave debounce: 1500ms after the last content change.
@@ -53,6 +63,7 @@ interface NoteEditorProps {
 }
 
 export function NoteEditor({ note, initialMode = "document", currentUser, workspaceId }: NoteEditorProps) {
+  const { scheduleEmbed } = useNoteEmbedding(note.id);
   const [title, setTitle] = useState(note.title);
   const [content, setContent] = useState(note.markdown_content);
   const [summary, setSummary] = useState(note.summary ?? "");
@@ -219,6 +230,7 @@ export function NoteEditor({ note, initialMode = "document", currentUser, worksp
         const now = new Date();
         setSavedAt(now);
         setAutosaveState("saved");
+        scheduleEmbed(title, content);
         // Bug 3: Capture whether title changed before updating the snapshot, so
         // we can decide whether to call router.refresh() for sidebar sync.
         // Don't refresh after every autosave — it would clobber in-flight edits.
@@ -561,6 +573,13 @@ export function NoteEditor({ note, initialMode = "document", currentUser, worksp
           </details>
         </div>
       )}
+
+      {/* ── Related notes (on-device local search) ──────────────────────── */}
+      <EditorRelatedPanel
+        noteId={note.id}
+        noteTitle={title}
+        noteIndex={{}}
+      />
 
       {/* ── Version history dialog ───────────────────────────────────────── */}
       <NoteHistoryDialog
