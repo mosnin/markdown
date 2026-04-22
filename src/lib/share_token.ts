@@ -1,9 +1,21 @@
 import { createHmac } from "crypto";
 
-const secret = () => {
-  const s = process.env.SHARE_SECRET ?? "dev-share-secret-change-in-prod";
-  return s;
-};
+function getShareSecret(): string {
+  const secret = process.env.SHARE_SECRET;
+  if (!secret) {
+    if (process.env.NODE_ENV === "production") {
+      throw new Error(
+        "SHARE_SECRET environment variable is required in production. " +
+        "Set it to a random 32+ character string."
+      );
+    }
+    // Dev/test fallback — intentionally weak so it's obvious this isn't prod
+    return "dev-share-secret-change-in-prod";
+  }
+  return secret;
+}
+
+const secret = getShareSecret;
 
 export function signBoxToken(boxId: string): string {
   const mac = createHmac("sha256", secret()).update(boxId).digest("hex");
