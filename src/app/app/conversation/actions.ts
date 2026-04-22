@@ -844,11 +844,14 @@ This is your capture zone. Anything you save quickly — from your phone, browse
     }
 
     // 7. Best-effort embedding upsert so future semantic search works.
-    //    Failures are swallowed — must not abort the import.
+    //    Failures are swallowed — must not abort the import — but we count
+    //    them so the summary can surface a search-quality warning to the user.
+    let embeddingFailures = 0;
     for (const { noteId, content } of createdNoteIds) {
       try {
         await upsertNoteEmbedding(supabase, noteId, content);
       } catch (err) {
+        embeddingFailures++;
         console.error(
           "[auto_organize] upsertNoteEmbedding failed for",
           noteId,
@@ -876,6 +879,9 @@ This is your capture zone. Anything you save quickly — from your phone, browse
     }
     if (boxesOut.length === 0) {
       summary = `Imported ${totalNotes} note(s); no boxes were created.`;
+    }
+    if (embeddingFailures > 0) {
+      summary += ` (${embeddingFailures} note${embeddingFailures === 1 ? "" : "s"} couldn't be indexed for search — check EMBEDDING_API_KEY)`;
     }
 
     return {
