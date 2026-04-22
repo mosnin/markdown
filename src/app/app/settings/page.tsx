@@ -30,6 +30,7 @@ import {
 } from "./settings_client";
 import type { Theme, NotificationPreferences } from "./actions";
 import { DeleteAccountButton } from "./delete_account_button";
+import { KgBackfillButton } from "@/components/product/kg_backfill_button";
 import { MembersSection } from "./members_section";
 import { canAdmin } from "@/server/auth/require_role";
 import { ConnectedAppsSection } from "./connected_apps_section";
@@ -252,6 +253,34 @@ export default async function SettingsPage() {
             <DeveloperAppsSection />
 
             <SecuritySection />
+
+            {/* Knowledge Graph — backfill + opt-out surface */}
+            <Card id="settings-knowledge-graph">
+              <CardHeader className="px-6 pt-6 pb-4">
+                <CardTitle className="text-base font-semibold">
+                  Knowledge Graph
+                </CardTitle>
+                <CardDescription className="text-sm text-muted-foreground">
+                  Entity and relationship extraction from your notes. Powers
+                  GraphRAG context in the Pog agent.
+                </CardDescription>
+              </CardHeader>
+              <Separator />
+              <CardContent className="px-6 pt-5 pb-6 space-y-4">
+                <div className="flex flex-col gap-1.5">
+                  <p className="text-sm font-medium text-foreground">
+                    Backfill existing notes
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    Run entity extraction over all notes in your workspace.
+                    New notes are extracted automatically on save.
+                  </p>
+                  <div className="mt-1">
+                    <KgBackfillButton />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
 
             <DangerZoneSection />
           </div>

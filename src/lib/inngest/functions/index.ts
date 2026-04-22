@@ -9,16 +9,19 @@
 import { executeManualTrigger } from "./execute_manual_trigger";
 import { executeNoteTrigger } from "./execute_note_trigger";
 import { executeScheduledTriggers } from "./execute_scheduled_triggers";
+import { clearStuckTriggerRuns } from "./clear_stuck_trigger_runs";
 
 export const allFunctions = [
   executeManualTrigger,
   executeNoteTrigger,
   executeScheduledTriggers,
+  clearStuckTriggerRuns,
 ];
 
 export {
   executeManualTrigger,
   executeNoteTrigger,
   executeScheduledTriggers,
+  clearStuckTriggerRuns,
 };
 export { runAgentExecution } from "./run_agent_execution";
