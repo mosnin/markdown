@@ -214,6 +214,7 @@ export async function createReusableAgentAction(
     modelHint?: string | null;
     systemPrompt?: string | null;
     description?: string | null;
+    tags?: string[];
     initialContent?: string;
   }
 ): Promise<ActionResult<{ id: string }>> {
@@ -236,6 +237,7 @@ export async function createReusableAgentAction(
       modelHint: params.modelHint?.trim() || null,
       systemPrompt: params.systemPrompt?.trim() || null,
       description: params.description?.trim() || null,
+      tags: params.tags,
       isReusable: true,
     });
 

@@ -6,6 +6,7 @@ import { listBoxesByWorkspace } from "@/server/repositories/box_repository";
 import Link from "next/link";
 import { AgentCreateDialog } from "@/components/product/agent_create_dialog";
 import { AgentImportTrigger } from "@/components/product/agent_import_dialog";
+import { AgentFromTemplateDialog } from "@/components/product/agent_from_template_dialog";
 import { WorkspaceLiveRefresh } from "@/components/product/workspace_live_refresh";
 import { ActiveBranchBannerServer } from "@/components/product/active_branch_banner_server";
 import { AgentsListClient } from "@/components/product/agents_list_client";
@@ -76,6 +77,7 @@ export default async function AgentsPage() {
               <History className="h-3.5 w-3.5" aria-hidden="true" />
               Recent operator runs
             </Link>
+            <AgentFromTemplateDialog />
             <AgentImportTrigger />
             <AgentCreateDialog forceReusable />
           </div>
