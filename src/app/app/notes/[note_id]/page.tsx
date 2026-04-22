@@ -37,6 +37,7 @@ import { NoteImportButton } from "@/components/product/note_import_dialog";
 import { NoteLifecycleMenu } from "@/components/product/note_lifecycle_menu";
 import { SaveAsTemplateButton } from "@/components/product/save_as_template_button";
 import { NoteCommentsPanel } from "@/components/product/note_comments_panel";
+import { ShareNoteButton } from "@/components/product/share_note_button";
 import { GeneratedNoteBanner } from "@/components/product/generated_note_banner";
 import { RetrievalHintBadge } from "@/components/product/retrieval_hint_badge";
 import { Badge } from "@/components/ui/badge";
@@ -613,6 +614,7 @@ export default async function NotePage({
             <SaveAsTemplateButton noteId={note_id} noteTitle={note.title} />
             <NoteImportButton noteId={note_id} noteTitle={note.title} />
             <NoteExportMenu noteId={note_id} noteTitle={note.title} />
+            <ShareNoteButton noteId={note.id} />
           </div>
         </div>
 
