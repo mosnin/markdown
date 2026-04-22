@@ -40,10 +40,19 @@ import { WorkspaceSwitcher } from "@/components/product/workspace_switcher";
 
 // ─── Nav items ────────────────────────────────────────────────────────────────
 
-const mainNav = [
+const mainNav: Array<{
+  label: string;
+  href: string;
+  icon: React.ElementType;
+  /**
+   * Optional keyboard hint rendered as a small <kbd> next to the label.
+   * Used to surface that the palette (Cmd/Ctrl+K) is the faster path.
+   */
+  shortcut?: string;
+}> = [
   { label: "Home", href: "/app", icon: Home01Icon },
   { label: "Dashboard", href: "/app/dashboard", icon: LayoutDashboard },
-  { label: "Search", href: "/app/search", icon: SearchAreaIcon },
+  { label: "Search", href: "/app/search", icon: SearchAreaIcon, shortcut: "⌘K" },
   { label: "Workspaces", href: "/app/workspaces", icon: Satellite01Icon },
 ];
 
@@ -68,11 +77,14 @@ function NavItem({
   icon: Icon,
   label,
   isActive,
+  shortcut,
 }: {
   href: string;
   icon: React.ElementType;
   label: string;
   isActive: boolean;
+  /** Optional keyboard hint rendered as a trailing <kbd>. */
+  shortcut?: string;
 }) {
   return (
     <Tooltip>
@@ -93,6 +105,14 @@ function NavItem({
       >
         <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
         <span className="truncate">{label}</span>
+        {shortcut && (
+          <kbd
+            className="ml-auto hidden items-center rounded border border-border bg-background px-1 text-[10px] font-medium text-muted-foreground/70 md:inline-flex"
+            aria-label={`${label} shortcut ${shortcut}`}
+          >
+            {shortcut}
+          </kbd>
+        )}
       </TooltipTrigger>
       <TooltipContent side="right" sideOffset={8} className="text-xs">
         {label}
@@ -175,6 +195,7 @@ export function AppSidebar({
                   href={item.href}
                   icon={item.icon}
                   label={item.label}
+                  shortcut={item.shortcut}
                   isActive={
                     item.href === "/app"
                       ? pathname === "/app"
