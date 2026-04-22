@@ -26,6 +26,7 @@ import {
   dispatchOperatorRun,
   type OperatorRunResult,
 } from "@/server/services/workspace_operator_service";
+import { buildPogGraphContext } from "@/server/services/pog_context_service";
 import { recordOperatorUsage } from "@/server/services/workspace_operator_usage_service";
 import { createAuditEvent } from "@/server/repositories/audit_event_repository";
 import { safeNotify } from "@/app/app/workspace_operator/actions";
@@ -174,6 +175,25 @@ async function runDispatchInBackground(
   const supabase = await createClient();
   const startedAt = Date.now();
 
+  // Build the knowledge-graph context block and prepend it to the user's
+  // prompt so Pog's system prompt includes the relevant workspace entities
+  // and their connected notes. Fails open to an empty string — a graph
+  // lookup hiccup must never block dispatch.
+  const graphContext = await buildPogGraphContext(
+    supabase,
+    input.workspaceId,
+    input.prompt
+  ).catch((err) => {
+    console.error(
+      "[startConversationTurnAction] graph context failed:",
+      err
+    );
+    return "";
+  });
+  const augmentedPrompt = graphContext
+    ? `${graphContext}\n\n---\n\nUser request: ${input.prompt}`
+    : input.prompt;
+
   let result: OperatorRunResult;
   try {
     result = await dispatchOperatorRun({
@@ -182,7 +202,7 @@ async function runDispatchInBackground(
       workspaceId: input.workspaceId,
       branchId: input.branchId,
       boxId: input.boxId,
-      prompt: input.prompt,
+      prompt: augmentedPrompt,
       model: input.model,
       maxInputTokens: input.maxInputTokens,
       maxOutputTokens: input.maxOutputTokens,
