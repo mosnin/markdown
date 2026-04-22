@@ -19,6 +19,8 @@ import { getConnectionById } from "@/server/repositories/connection_repository";
 import { listLinksForNote } from "@/server/services/link_service";
 import { listNoteComments, countUnresolvedComments } from "@/server/services/note_comment_service";
 import { assembleContextBundle } from "@/server/services/context_bundle_service";
+import { listMentionsByNote } from "@/server/repositories/entity_mention_repository";
+import { getEntityById } from "@/server/repositories/entity_repository";
 import {
   getCachedNoteById,
   getCachedBoxById,
@@ -37,6 +39,8 @@ import { NoteImportButton } from "@/components/product/note_import_dialog";
 import { NoteLifecycleMenu } from "@/components/product/note_lifecycle_menu";
 import { SaveAsTemplateButton } from "@/components/product/save_as_template_button";
 import { NoteCommentsPanel } from "@/components/product/note_comments_panel";
+import { NoteEntitiesPanel } from "@/components/product/note_entities_panel";
+import type { EntityChipType } from "@/components/product/entity_chip";
 import { ShareNoteButton } from "@/components/product/share_note_button";
 import { GeneratedNoteBanner } from "@/components/product/generated_note_banner";
 import { RetrievalHintBadge } from "@/components/product/retrieval_hint_badge";
@@ -140,6 +144,7 @@ function NoteContextPanel({
   commentThreads,
   unresolvedCommentCount,
   currentUserId,
+  noteEntities,
   defaultTab = "info",
   nowIso,
 }: {
@@ -160,6 +165,7 @@ function NoteContextPanel({
   commentThreads: Awaited<ReturnType<typeof listNoteComments>>;
   unresolvedCommentCount: number;
   currentUserId: string;
+  noteEntities: React.ComponentProps<typeof NoteEntitiesPanel>["entities"];
   defaultTab?: NoteContextTab;
   /**
    * Wall-clock "now" frozen at the top of the server render so
@@ -382,6 +388,11 @@ function NoteContextPanel({
               </InfoSection>
             )}
 
+            {/* Entities */}
+            <InfoSection>
+              <NoteEntitiesPanel entities={noteEntities} />
+            </InfoSection>
+
             {/* Version */}
             <InfoSection border={false}>
               <InfoLabel>Version</InfoLabel>
@@ -501,7 +512,7 @@ export default async function NotePage({
   const box = await getCachedBoxById(supabase, note.box_id);
   if (!box || box.workspace_id !== ctx.workspace.id) notFound();
 
-  const [folder, allBoxNotes, links, historyResult, generatingConnection, commentThreads, unresolvedCommentCount] =
+  const [folder, allBoxNotes, links, historyResult, generatingConnection, commentThreads, unresolvedCommentCount, mentions] =
     await Promise.all([
       note.folder_id
         ? getFolderById(supabase, note.folder_id)
@@ -518,7 +529,39 @@ export default async function NotePage({
         : Promise.resolve(null),
       listNoteComments(supabase, note_id),
       countUnresolvedComments(supabase, note_id),
+      listMentionsByNote(supabase, note_id),
     ]);
+
+  // Resolve entities referenced by this note's mentions. An entity can be
+  // mentioned multiple times in the same note; we dedupe by entity id so the
+  // sidebar lists each entity once, with its global mention_count.
+  const uniqueEntityIds = [...new Set(mentions.map((m) => m.entity_id))];
+  const entityRows = await Promise.all(
+    uniqueEntityIds.map((id) => getEntityById(supabase, id))
+  );
+  const entityMap = new Map(
+    entityRows.filter((e): e is NonNullable<typeof e> => e !== null).map((e) => [e.id, e])
+  );
+  const noteEntities = Array.from(
+    new Map(
+      mentions
+        .filter((m) => entityMap.has(m.entity_id))
+        .map((m) => {
+          const e = entityMap.get(m.entity_id)!;
+          return [
+            e.id,
+            {
+              id: e.id,
+              name: e.name,
+              entity_type: e.entity_type as EntityChipType,
+              mention_count: e.mention_count,
+              surface_form: m.surface_form,
+              context: m.context,
+            },
+          ] as const;
+        })
+    ).values()
+  );
 
   const initialBundle = await getCachedContextBundle(
     supabase,
@@ -694,6 +737,7 @@ export default async function NotePage({
           commentThreads={commentThreads}
           unresolvedCommentCount={unresolvedCommentCount}
           currentUserId={ctx.user!.id}
+          noteEntities={noteEntities}
           defaultTab={defaultTab}
           nowIso={nowIso}
         />
