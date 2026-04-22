@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { LayoutDashboard } from "lucide-react";
+import { LayoutDashboard, X } from "lucide-react";
 import type { WorkspaceOperatorRunRow } from "@/server/services/workspace_operator_runs_service";
 import { WorkspaceConversation } from "@/components/product/workspace_conversation";
 import { ConversationComposer } from "@/components/product/conversation_composer";
@@ -33,6 +33,7 @@ export function ConversationHomeClient({
   const [activeRunId, setActiveRunId] = useState<string | null>(null);
   const [importToast, setImportToast] = useState<string | null>(null);
   const [suggestionPending, setSuggestionPending] = useState(false);
+  const [calloutDismissed, setCalloutDismissed] = useState<boolean>(false);
   const router = useRouter();
 
   async function startSuggestedPrompt(prompt: string) {
@@ -110,14 +111,21 @@ export function ConversationHomeClient({
               }}
             />
 
-            <details className="rounded-md border border-border bg-muted/30 px-4 py-3">
-              <summary className="cursor-pointer text-xs font-medium uppercase tracking-wider text-muted-foreground hover:text-foreground">
-                Or learn the mental model first
-              </summary>
-              <div className="mt-3">
+            {!calloutDismissed && (
+              <div className="rounded-md border border-border bg-muted/20 px-4 py-3">
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-xs font-medium text-muted-foreground">How Pog works</p>
+                  <button
+                    onClick={() => setCalloutDismissed(true)}
+                    className="text-muted-foreground/50 hover:text-muted-foreground transition-colors"
+                    aria-label="Dismiss"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </div>
                 <OnboardingCallout />
               </div>
-            </details>
+            )}
           </div>
         </div>
       ) : (
@@ -137,7 +145,7 @@ export function ConversationHomeClient({
             />
           </div>
 
-          {!activeRunId && (
+          {initialRuns.length === 0 && !activeRunId && (
             <div className="flex flex-wrap gap-2 px-1 pb-2 pt-1">
               {[
                 "What should I work on today?",

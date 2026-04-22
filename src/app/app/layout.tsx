@@ -12,6 +12,7 @@ import { OperatorPanelTrigger } from "@/components/product/operator_panel_trigge
 import { ActivityBell } from "@/components/product/activity_bell";
 import { LegalStickyFooter } from "@/components/legal/legal_modal";
 import { CommandPaletteProvider } from "@/components/product/command_palette_provider";
+import { ToastProvider } from "@/components/product/toast_provider";
 
 /**
  * Authenticated app layout.
@@ -64,6 +65,7 @@ export default async function AppLayout({
   }));
 
   return (
+    <ToastProvider>
     <div className="flex h-full w-full overflow-hidden bg-background">
       {/* Skip to main content — visually hidden until focused (accessibility) */}
       <a
@@ -146,5 +148,6 @@ export default async function AppLayout({
       {/* Global Cmd/Ctrl+K command palette — renders a portal dialog */}
       <CommandPaletteProvider />
     </div>
+    </ToastProvider>
   );
 }

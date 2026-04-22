@@ -1,3 +1,4 @@
+import { type Metadata } from "next";
 import { notFound } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getWorkspaceBySlug, listPublicBoxesByWorkspace } from "@/server/repositories/box_repository";
@@ -6,6 +7,30 @@ import Link from "next/link";
 
 interface PageProps {
   params: Promise<{ workspaceSlug: string }>;
+}
+
+export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
+  const { workspaceSlug } = await params;
+  const supabase = createAdminClient();
+  const workspace = await getWorkspaceBySlug(supabase, workspaceSlug);
+
+  if (!workspace) {
+    return { title: "Not found" };
+  }
+
+  return {
+    title: `${workspace.name} — Public Boxes`,
+    description: `Browse public knowledge boxes shared by ${workspace.name}.`,
+    openGraph: {
+      title: `${workspace.name} — Public Boxes`,
+      description: `Browse public knowledge boxes shared by ${workspace.name}.`,
+      type: "profile",
+    },
+    twitter: {
+      card: "summary",
+      title: `${workspace.name} on Pog`,
+    },
+  };
 }
 
 export default async function UserProfilePage({ params }: PageProps) {

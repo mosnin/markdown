@@ -434,6 +434,8 @@ export default async function BoxPage({
               )}
             </div>
             <div className="flex shrink-0 flex-wrap items-center gap-2">
+              <CreateNoteDialog boxId={box.id} folders={folders} savedTemplates={savedTemplates.map((t) => ({ id: t.id, name: t.name, description: t.description, markdown_content: t.markdown_content }))} />
+              <CreateFolderDialog boxId={box.id} />
               <AskPogInlineButton
                 label="Ask Pog about this box"
                 prompt={`Working in the box "${box.name}". Start by summarizing what's already in this box and what's missing, then draft any follow-up notes I should have.`}
@@ -448,21 +450,11 @@ export default async function BoxPage({
                 }))}
               />
               <BoxExportMenu boxId={box.id} boxName={box.name} />
+              <ShareBoxButton boxId={box.id} />
               <BoxLifecycleMenu
                 boxId={box.id}
                 boxStatus={box.status as "active" | "archived"}
               />
-              <Link
-                href={`/app/boxes/${box.id}/templates`}
-                className="inline-flex items-center gap-1.5 rounded-md border border-input bg-background px-3 py-1.5 text-xs font-medium text-foreground shadow-sm transition-fast hover:bg-accent hover:text-accent-foreground"
-              >
-                <FileText className="h-3.5 w-3.5" aria-hidden="true" />
-                Templates
-              </Link>
-              <BoxPublicToggle boxId={box.id} initialIsPublic={box.is_public} />
-              <ShareBoxButton boxId={box.id} />
-              <CreateFolderDialog boxId={box.id} />
-              <CreateNoteDialog boxId={box.id} folders={folders} savedTemplates={savedTemplates.map((t) => ({ id: t.id, name: t.name, description: t.description, markdown_content: t.markdown_content }))} />
             </div>
           </div>
         </div>
@@ -477,9 +469,11 @@ export default async function BoxPage({
               <TabsTrigger value="overview" className="pb-3">
                 Overview
               </TabsTrigger>
-              <TabsTrigger value="tree" className="pb-3">
-                Tree
-              </TabsTrigger>
+              {folders.length > 0 && (
+                <TabsTrigger value="tree" className="pb-3">
+                  Tree
+                </TabsTrigger>
+              )}
               <TabsTrigger value="guide" className="pb-3">
                 Guide
               </TabsTrigger>

@@ -1,9 +1,12 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   Bot,
+  ChevronDown,
+  ChevronRight,
   FileText,
   GitBranch,
   LayoutDashboard,
@@ -36,11 +39,14 @@ import { WorkspaceSwitcher } from "@/components/product/workspace_switcher";
 
 // ─── Nav items ────────────────────────────────────────────────────────────────
 
-const primaryNav = [
+const mainNav = [
   { label: "Home", href: "/app", icon: Home01Icon },
   { label: "Dashboard", href: "/app/dashboard", icon: LayoutDashboard },
   { label: "Search", href: "/app/search", icon: SearchAreaIcon },
   { label: "Workspaces", href: "/app/workspaces", icon: Satellite01Icon },
+];
+
+const advancedNav = [
   { label: "Agents", href: "/app/agents", icon: LaborIcon },
   { label: "Pog Agent", href: "/app/workspace_operator", icon: Bot },
   { label: "Skills", href: "/app/skills", icon: ToolsIcon },
@@ -122,6 +128,7 @@ export function AppSidebar({
   recentNotes,
 }: AppSidebarProps) {
   const pathname = usePathname();
+  const [advancedOpen, setAdvancedOpen] = useState(false);
 
   // Extract the current box and note IDs from the pathname
   const boxMatch = pathname.match(/\/app\/boxes\/([^/]+)/);
@@ -157,7 +164,7 @@ export function AppSidebar({
       <div className="px-2 pt-1 pb-1">
         <nav aria-label="Primary navigation">
           <ul className="flex flex-col gap-0.5 list-none">
-            {primaryNav.map((item) => (
+            {mainNav.map((item) => (
               <li key={item.href}>
                 <NavItem
                   href={item.href}
@@ -172,6 +179,42 @@ export function AppSidebar({
               </li>
             ))}
           </ul>
+
+          {/* Collapsible Advanced section */}
+          <div className="mt-1">
+            <button
+              type="button"
+              onClick={() => setAdvancedOpen((prev) => !prev)}
+              className={cn(
+                "flex w-full items-center gap-1 px-2.5 py-1.5 text-[10px] font-medium uppercase tracking-wider",
+                "text-muted-foreground/60 hover:text-foreground transition-colors"
+              )}
+            >
+              {advancedOpen ? (
+                <ChevronDown className="h-3 w-3 shrink-0" aria-hidden="true" />
+              ) : (
+                <ChevronRight className="h-3 w-3 shrink-0" aria-hidden="true" />
+              )}
+              Advanced
+            </button>
+
+            {advancedOpen && (
+              <ul className="flex flex-col gap-0.5 list-none">
+                {advancedNav.map((item) => (
+                  <li key={item.href}>
+                    <NavItem
+                      href={item.href}
+                      icon={item.icon}
+                      label={item.label}
+                      isActive={
+                        pathname === item.href || pathname.startsWith(item.href + "/")
+                      }
+                    />
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
         </nav>
       </div>
 
@@ -198,6 +241,13 @@ export function AppSidebar({
                   <span className="truncate">{note.title}</span>
                 </Link>
               ))}
+              <Link
+                href="/app/search"
+                className="flex items-center gap-1 px-2 pt-1 pb-0.5 text-[10px] text-muted-foreground/50 hover:text-muted-foreground transition-colors"
+              >
+                View all
+                <ChevronRight className="h-3 w-3" />
+              </Link>
             </div>
           </div>
           <Separator className="mx-2 my-1" />
