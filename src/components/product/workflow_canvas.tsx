@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
@@ -126,14 +126,13 @@ function NodeConfigPanel({ node, onClose, onApply }: NodeConfigPanelProps) {
   const [skills, setSkills] = useState<SkillOption[]>([]);
   const [skillsLoaded, setSkillsLoaded] = useState(false);
 
-  // Reset local config when selected node changes
-  const prevNodeId = useRef<string | null>(null);
-  useEffect(() => {
-    if (prevNodeId.current !== node.id) {
-      setConfig((node.data as { config: Record<string, unknown> }).config ?? {});
-      prevNodeId.current = node.id;
-    }
-  }, [node.id, node.data]);
+  // Reset local config when the selected node changes — derived state from
+  // props pattern (https://react.dev/reference/react/useState#storing-information-from-previous-renders).
+  const [prevNodeId, setPrevNodeId] = useState<string>(node.id);
+  if (prevNodeId !== node.id) {
+    setPrevNodeId(node.id);
+    setConfig(initialConfig);
+  }
 
   // Load skills for subagent nodes
   useEffect(() => {
