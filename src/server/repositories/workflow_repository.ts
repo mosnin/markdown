@@ -102,21 +102,39 @@ export async function deleteWorkflow(
 /**
  * Replace a workflow's graph (nodes + edges) with a fresh snapshot.
  *
- * Edges are deleted first (so they don't block node deletion via FK), then
- * nodes. New nodes are inserted with fresh uuids when not provided, then
- * edges are rewritten using a node_key → new db id map. Finally the
- * `workflows.graph` denormalised snapshot is refreshed for fast reads.
- *
- * No SQL transaction is used — the UI re-saves on failure.
+ * Edges are deleted first (FK requires this), then nodes. If any step after
+ * deletion fails, we attempt to restore the previous graph. The UI should
+ * also retry on failure.
  */
 export async function replaceWorkflowGraph(
   supabase: SupabaseClient,
   workflowId: string,
   graph: WorkflowGraphInput
 ): Promise<void> {
+  // Snapshot existing graph for rollback on insertion failure.
+  const { data: existingNodes } = await supabase
+    .from("workflow_nodes")
+    .select("*")
+    .eq("workflow_id", workflowId);
+  const { data: existingEdges } = await supabase
+    .from("workflow_edges")
+    .select("*")
+    .eq("workflow_id", workflowId);
+
+  const rollback = async () => {
+    // Best-effort restore of previous state. Ignore errors — caller retries.
+    await supabase.from("workflow_edges").delete().eq("workflow_id", workflowId);
+    await supabase.from("workflow_nodes").delete().eq("workflow_id", workflowId);
+    if (existingNodes && existingNodes.length > 0) {
+      await supabase.from("workflow_nodes").insert(existingNodes);
+    }
+    if (existingEdges && existingEdges.length > 0) {
+      await supabase.from("workflow_edges").insert(existingEdges);
+    }
+  };
+
   try {
-    // 1. Delete existing edges first (before nodes, so FK doesn't cascade
-    //    unexpectedly and so we keep ordering explicit).
+    // 1. Delete existing edges first (before nodes — FK constraint).
     const { error: edgeDelErr } = await supabase
       .from("workflow_edges")
       .delete()
@@ -204,6 +222,8 @@ export async function replaceWorkflowGraph(
       .eq("id", workflowId);
     if (updErr) throw updErr;
   } catch (err) {
+    // Attempt to restore the previous graph before re-throwing.
+    await rollback().catch(() => {});
     throw err instanceof Error
       ? err
       : new Error(`replaceWorkflowGraph failed: ${String(err)}`);

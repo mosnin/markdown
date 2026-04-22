@@ -26,9 +26,9 @@ const TEMPLATE_FIELDS_BY_TYPE: Partial<Record<WorkflowNodeType, string[]>> = {
  * `eval` is never needed at runtime and RCE via injection is blocked.
  */
 const CONDITION_EXPRESSION_RE =
-  /^\s*{{[a-z0-9_]+\.[a-z0-9_.[\]]+}}\s*(==|!=|>|<|>=|<=)\s*("[^"]*"|\d+)\s*$/;
+  /^\s*{{[a-zA-Z0-9_]+\.[a-zA-Z0-9_.[\]]+}}\s*(==|!=|>|<|>=|<=)\s*("[^"]*"|\d+)\s*$/;
 
-const TEMPLATE_NODE_KEY_RE = /{{\s*([a-z0-9_]+)\./gi;
+const TEMPLATE_NODE_KEY_RE = /{{\s*([a-zA-Z0-9_]+)\./gi;
 
 export function validateWorkflowGraph(
   graph: WorkflowGraphInput

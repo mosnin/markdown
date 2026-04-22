@@ -180,7 +180,7 @@ export function WorkflowCanvas({ workflow }: WorkflowCanvasProps) {
     const result = await runWorkflowAction(workflow.id);
     setIsRunning(false);
     if (result.ok) {
-      router.push(`/app/workflows/${workflow.id}/runs/${result.runId}`);
+      router.push(`/app/workflows/${workflow.id}/runs`);
     } else {
       setSaveError(result.error);
     }
