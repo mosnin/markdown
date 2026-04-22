@@ -20,6 +20,7 @@ import { NotePresenceAvatars } from "@/components/product/note_presence_avatars"
 import { NoteHistoryDialog } from "@/components/product/note_history_dialog";
 import { useNoteEmbedding } from "@/hooks/use_note_embedding";
 import { CrdtPresenceBar } from "@/components/product/crdt_presence_bar";
+import { useYjsCursorBroadcast } from "@/lib/crdt/yjs_awareness";
 
 const NoteCrdtEditor = dynamic(
   () =>
@@ -97,6 +98,15 @@ export function NoteEditor({ note, initialMode = "document", currentUser, worksp
       userId: currentUser?.userId ?? "",
       displayName: currentUser?.displayName ?? "",
     }
+  );
+
+  // CRDT awareness: tracks the local user on the note_crdt_awareness channel
+  // so other sessions' CrdtPresenceBar can see us. Without this call, the
+  // presence bar channel has no writers and always shows empty.
+  useYjsCursorBroadcast(
+    note.id,
+    currentUser?.userId ?? "",
+    currentUser?.displayName ?? ""
   );
 
   const {
