@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, Check, ChevronDown, Mic, MicOff } from "lucide-react";
+import { ArrowLeft, ArrowRight, Check, ChevronDown, Mic, MicOff } from "lucide-react";
 import { quickCaptureAction } from "@/app/capture/actions";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
@@ -256,6 +256,15 @@ export function CaptureView(props: CaptureViewProps) {
                 </li>
               ))}
             </ul>
+            <div className="mt-4">
+              <a
+                href="/app"
+                className="inline-flex items-center gap-2 rounded-lg bg-violet-600 px-4 py-2.5 text-sm font-medium text-white shadow-sm transition-colors hover:bg-violet-700"
+              >
+                <ArrowRight className="h-4 w-4" aria-hidden="true" />
+                View in workspace
+              </a>
+            </div>
           </div>
         )}
       </div>
