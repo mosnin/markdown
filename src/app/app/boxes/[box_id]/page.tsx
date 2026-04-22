@@ -450,6 +450,14 @@ export default async function BoxPage({
                 }))}
               />
               <BoxExportMenu boxId={box.id} boxName={box.name} />
+              <Link
+                href={`/app/boxes/${box.id}/templates`}
+                className="inline-flex items-center gap-1.5 rounded-md border border-input bg-background px-3 py-1.5 text-xs font-medium text-foreground shadow-sm transition-fast hover:bg-accent hover:text-accent-foreground"
+              >
+                <FileText className="h-3.5 w-3.5" aria-hidden="true" />
+                Templates
+              </Link>
+              <BoxPublicToggle boxId={box.id} initialIsPublic={box.is_public} />
               <ShareBoxButton boxId={box.id} />
               <BoxLifecycleMenu
                 boxId={box.id}
