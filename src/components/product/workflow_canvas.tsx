@@ -717,6 +717,15 @@ function ScheduleDialog({ workflowId, onClose }: ScheduleDialogProps) {
     };
   }, [workflowId]);
 
+  // Close on Escape — matches backdrop-click behavior for the modal.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
   // Live validation of the cron expression — only when non-empty.
   const validation = useMemo(() => {
     if (!cron.trim()) return null;

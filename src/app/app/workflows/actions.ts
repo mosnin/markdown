@@ -250,14 +250,29 @@ export async function setWorkflowScheduleAction(
       return { ok: true, triggerId: workflow.trigger_id };
     }
 
+    // Insert the trigger disabled so it can't fire until the workflow
+    // successfully points at it. If the pair-linking update fails we
+    // delete the trigger to avoid orphan rows that would still match the
+    // cron selector once re-enabled by another path.
     const trigger = await createWorkflowScheduleTrigger(supabase, {
       workspaceId: ctx.workspace.id,
       workflowId,
       cronExpression: cronExpression.trim(),
-      isEnabled: enabled,
+      isEnabled: false,
     });
 
-    await updateWorkflow(supabase, workflowId, { trigger_id: trigger.id });
+    try {
+      await updateWorkflow(supabase, workflowId, { trigger_id: trigger.id });
+    } catch (linkErr) {
+      await deleteWorkflowScheduleTrigger(supabase, trigger.id).catch(() => {});
+      throw linkErr;
+    }
+
+    if (enabled) {
+      await updateWorkflowScheduleTrigger(supabase, trigger.id, {
+        isEnabled: true,
+      });
+    }
 
     revalidatePath(`/app/workflows/${workflowId}/edit`);
     return { ok: true, triggerId: trigger.id };
