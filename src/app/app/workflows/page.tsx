@@ -1,4 +1,5 @@
-import { GitFork } from "lucide-react";
+import Link from "next/link";
+import { GitFork, LayoutTemplate } from "lucide-react";
 import { requireAuthenticatedUser } from "@/server/auth/require_authenticated_user";
 import { createClient } from "@/lib/supabase/server";
 import { listWorkflowsByWorkspace } from "@/server/repositories/workflow_repository";
@@ -54,7 +55,16 @@ export default async function WorkflowsPage() {
               {workflows.length}{" "}
               {workflows.length === 1 ? "workflow" : "workflows"}
             </p>
-            <CreateWorkflowButton />
+            <div className="flex items-center gap-2">
+              <Link
+                href="/app/workflows/templates"
+                className="inline-flex items-center gap-1.5 rounded-md border border-border bg-background px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-accent"
+              >
+                <LayoutTemplate className="h-3.5 w-3.5" aria-hidden="true" />
+                Browse templates
+              </Link>
+              <CreateWorkflowButton />
+            </div>
           </div>
 
           {workflows.length === 0 ? (
