@@ -31,6 +31,7 @@ import {
 import type { Theme, NotificationPreferences } from "./actions";
 import { DeleteAccountButton } from "./delete_account_button";
 import { KgBackfillButton } from "@/components/product/kg_backfill_button";
+import { WebBudgetCard } from "@/components/product/web_budget_card";
 import { MembersSection } from "./members_section";
 import { canAdmin } from "@/server/auth/require_role";
 import { ConnectedAppsSection } from "./connected_apps_section";
@@ -253,6 +254,23 @@ export default async function SettingsPage() {
             <DeveloperAppsSection />
 
             <SecuritySection />
+
+            {/* Web tool budget — per-month cap on Exa + Browserbase + web_fetch */}
+            <Card id="settings-web-budget">
+              <CardHeader className="px-6 pt-6 pb-4">
+                <CardTitle className="text-base font-semibold">
+                  Web tool budget
+                </CardTitle>
+                <CardDescription className="text-sm text-muted-foreground">
+                  Monthly cap on web search and browsing costs. Agents stop
+                  calling web tools when this limit is reached.
+                </CardDescription>
+              </CardHeader>
+              <Separator />
+              <CardContent className="px-6 pt-5 pb-6">
+                <WebBudgetCard />
+              </CardContent>
+            </Card>
 
             {/* Knowledge Graph — backfill + opt-out surface */}
             <Card id="settings-knowledge-graph">
