@@ -17,9 +17,17 @@ import { formatAbsoluteDate } from "@/lib/format_date";
 import { useNotePresence } from "@/lib/hooks/use_note_presence";
 import { useConcurrentEditWarning } from "@/lib/hooks/use_concurrent_edit_warning";
 import { NotePresenceAvatars } from "@/components/product/note_presence_avatars";
-import { AskPogSelectionPopover } from "@/components/product/ask_pog_selection_popover";
 import { NoteHistoryDialog } from "@/components/product/note_history_dialog";
 import { useNoteEmbedding } from "@/hooks/use_note_embedding";
+import { CrdtPresenceBar } from "@/components/product/crdt_presence_bar";
+
+const NoteCrdtEditor = dynamic(
+  () =>
+    import("@/components/product/note_crdt_editor").then(
+      (m) => m.NoteCrdtEditor
+    ),
+  { ssr: false }
+);
 
 const EditorRelatedPanel = dynamic(
   () =>
@@ -77,11 +85,6 @@ export function NoteEditor({ note, initialMode = "document", currentUser, worksp
   const [isSaving, setIsSaving] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
 
-  // Textarea refs — shared by both modes so the selection popover can watch
-  // whichever editor is currently mounted.
-  const documentTextareaRef = useRef<HTMLTextAreaElement | null>(null);
-  const markdownTextareaRef = useRef<HTMLTextAreaElement | null>(null);
-
   // Ref-based guard to prevent concurrent saves across stale closures (Bug 2)
   const isSavingRef = useRef(false);
   // Ref to track the status-fade timeout so we can cancel it before setting a new one (Bug 4)
@@ -100,7 +103,6 @@ export function NoteEditor({ note, initialMode = "document", currentUser, worksp
     showWarning: showConcurrentWarning,
     savedBy: concurrentSavedBy,
     broadcastSave,
-    broadcastEdit,
     dismiss: dismissConcurrentWarning,
   } = useConcurrentEditWarning(note.id, currentUser?.userId ?? "");
 
@@ -153,38 +155,6 @@ export function NoteEditor({ note, initialMode = "document", currentUser, worksp
       .map((t) => t.trim().toLowerCase())
       .filter(Boolean);
   }
-
-  /**
-   * Compute the 1-indexed line number of the caret inside a textarea.
-   * Used to feed `broadcastEdit` so collaborators see cursor movement
-   * even when typing is sparse. Falls back to 1 if the caret can't be
-   * read (e.g. event fired from a programmatic change).
-   */
-  function caretLine(el: HTMLTextAreaElement): number {
-    const pos = el.selectionStart;
-    if (typeof pos !== "number" || pos < 0) return 1;
-    // Count newlines in the prefix. Simple, allocation-light, and
-    // accurate for the CodeMirror-free textareas we use here.
-    let line = 1;
-    const src = el.value;
-    for (let i = 0; i < pos && i < src.length; i++) {
-      if (src.charCodeAt(i) === 10 /* \n */) line++;
-    }
-    return line;
-  }
-
-  /**
-   * Fire a throttled edit-in-progress broadcast. The hook itself
-   * enforces the "3s OR >5 line delta" rule via `shouldBroadcast`, so
-   * this wrapper is just a no-op when presence isn't wired up.
-   */
-  const notifyEdit = useCallback(
-    (el: HTMLTextAreaElement) => {
-      if (!currentUser) return;
-      broadcastEdit(currentUser.userId, currentUser.displayName, caretLine(el));
-    },
-    [broadcastEdit, currentUser]
-  );
 
   // Reading refs during render is intentional here: lastSavedSnapshot tracks the
   // last persisted state for dirty-checking without causing re-renders on every
@@ -369,6 +339,12 @@ export function NoteEditor({ note, initialMode = "document", currentUser, worksp
           {presenceUsers.length > 0 && (
             <NotePresenceAvatars users={presenceUsers} />
           )}
+          {currentUser && (
+            <CrdtPresenceBar
+              noteId={note.id}
+              currentUserId={currentUser.userId}
+            />
+          )}
           <span
             className={cn(
               "transition-opacity duration-300",
@@ -430,82 +406,24 @@ export function NoteEditor({ note, initialMode = "document", currentUser, worksp
       )}
 
       {/* ── Content area ──────────────────────────────────────────────────── */}
-      <div className="flex-1 overflow-auto">
-
-        {/* Document mode — editable proportional-font textarea for natural writing */}
-        {mode === "document" && (
-          <div role="tabpanel" aria-label="Document view" className="flex h-full flex-col">
-            <textarea
-              ref={documentTextareaRef}
-              value={content}
-              onChange={(e) => {
-                setContent(e.target.value);
-                notifyEdit(e.currentTarget);
-              }}
-              data-editor-dirty={isDirty}
-              placeholder="Start writing…"
-              spellCheck
-              aria-label="Note content"
-              className={cn(
-                "flex-1 resize-none bg-transparent px-8 py-6",
-                "text-base leading-8 text-foreground",
-                "placeholder:text-muted-foreground/40 focus:outline-none"
-              )}
-            />
-            <AskPogSelectionPopover
-              textareaRef={documentTextareaRef}
-              contextLabel={`Looking at the note titled "${note.title}".`}
-              workspaceId={workspaceId}
-              boxId={note.box_id}
-            />
-          </div>
-        )}
-
-        {/* Markdown mode — editable raw source, labeled as AI-facing */}
-        {mode === "markdown" && (
-          <div
-            role="tabpanel"
-            aria-label="Markdown editor"
-            className="flex h-full flex-col"
-          >
-            {/* Source label — tells the user this is what the AI receives */}
-            <div className="flex items-center gap-2 border-b border-border/40 bg-muted/20 px-8 py-1.5">
-              <Code2
-                className="h-3.5 w-3.5 shrink-0 text-muted-foreground/60"
-                aria-hidden="true"
-              />
-              <p className="text-xs text-muted-foreground/70">
-                Raw markdown — the exact source the AI model receives
-              </p>
-            </div>
-
-            {/* Editable textarea */}
-            <textarea
-              ref={markdownTextareaRef}
-              value={content}
-              onChange={(e) => {
-                setContent(e.target.value);
-                notifyEdit(e.currentTarget);
-              }}
-              data-editor-dirty={isDirty}
-              placeholder="Write in Markdown…"
-              spellCheck
-              aria-label="Markdown content"
-              className={cn(
-                "flex-1 resize-none bg-transparent px-8 py-6",
-                "font-mono text-sm leading-7 text-foreground",
-                "placeholder:text-muted-foreground/40 focus:outline-none"
-              )}
-            />
-            <AskPogSelectionPopover
-              textareaRef={markdownTextareaRef}
-              contextLabel={`Looking at the markdown source of the note titled "${note.title}".`}
-              workspaceId={workspaceId}
-              boxId={note.box_id}
-            />
-          </div>
-        )}
-      </div>
+      {/* Markdown mode source label — shown above the CRDT editor in markdown mode */}
+      {mode === "markdown" && (
+        <div className="flex items-center gap-2 border-b border-border/40 bg-muted/20 px-8 py-1.5">
+          <Code2
+            className="h-3.5 w-3.5 shrink-0 text-muted-foreground/60"
+            aria-hidden="true"
+          />
+          <p className="text-xs text-muted-foreground/70">
+            Raw markdown — the exact source the AI model receives
+          </p>
+        </div>
+      )}
+      <NoteCrdtEditor
+        noteId={note.id}
+        initialContent={note.markdown_content}
+        mode={mode}
+        onChange={setContent}
+      />
 
       {/* ── Metadata — shown in markdown mode ─────────────────────────────── */}
       {mode === "markdown" && (
