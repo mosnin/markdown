@@ -6,11 +6,12 @@
  *
  * See docs/automation_v1.md for the full architecture.
  */
-import { Inngest } from "inngest";
+import { Inngest, EventSchemas } from "inngest";
 import type { AppEvents } from "@/lib/inngest/events";
 
-export const inngest = new Inngest<{ events: AppEvents }>({
+export const inngest = new Inngest({
   id: "poggle",
+  schemas: new EventSchemas().fromRecord<AppEvents>(),
   // Event key: required for production. In dev mode (INNGEST_DEV=1) the
   // inngest-cli dev server accepts unauthenticated publishes, so this
   // can be any string locally.

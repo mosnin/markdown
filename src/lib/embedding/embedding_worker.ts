@@ -1,10 +1,20 @@
-import { pipeline, type FeatureExtractionPipeline } from "@huggingface/transformers";
+import { pipeline } from "@huggingface/transformers";
 
-let cachedPipeline: FeatureExtractionPipeline | null = null;
+// Intentionally loosely typed: the specific FeatureExtractionPipeline
+// generic from @huggingface/transformers produces a union that exceeds
+// the TS complexity limit. The runtime surface we use is stable: call
+// it as a function with (text, options) → { data: Float32Array }.
+type Extractor = (
+  text: string,
+  options: { pooling: "mean"; normalize: boolean }
+) => Promise<{ data: Float32Array }>;
 
-async function getPipeline(): Promise<FeatureExtractionPipeline> {
+let cachedPipeline: Extractor | null = null;
+
+async function getPipeline(): Promise<Extractor> {
   if (!cachedPipeline) {
-    cachedPipeline = await pipeline("feature-extraction", "Xenova/all-MiniLM-L6-v2");
+    const p = await pipeline("feature-extraction", "Xenova/all-MiniLM-L6-v2");
+    cachedPipeline = p as unknown as Extractor;
   }
   return cachedPipeline;
 }
@@ -25,8 +35,7 @@ self.onmessage = async (event: MessageEvent) => {
 
       for (const text of texts) {
         const output = await extractor(text, { pooling: "mean", normalize: true });
-        const data: Float32Array = output.data;
-        vectors.push(Array.from(data));
+        vectors.push(Array.from(output.data));
       }
 
       self.postMessage({ type: "result", id, vectors });

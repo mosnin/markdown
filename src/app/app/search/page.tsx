@@ -1,15 +1,10 @@
-import dynamic from "next/dynamic";
 import { requireAuthenticatedUser } from "@/server/auth/require_authenticated_user";
 import { PageHeader } from "@/components/product/page_header";
 import { WorkspaceSearchClient } from "./search_client";
-
-const LocalIndexBootstrap = dynamic(
-  () =>
-    import("@/components/product/local_index_bootstrap").then(
-      (m) => m.LocalIndexBootstrap
-    ),
-  { ssr: false }
-);
+// LocalIndexBootstrap is a "use client" component with all browser-only
+// code inside useEffect — safe to render in a server component without
+// dynamic(ssr:false), which Next.js 16 disallows in server components.
+import { LocalIndexBootstrap } from "@/components/product/local_index_bootstrap";
 
 /**
  * Workspace search page.

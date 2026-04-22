@@ -6,7 +6,6 @@
  * to publish anything else at compile time.
  */
 
-import type { EventSchemas, EventPayload } from "inngest";
 
 // ─── note lifecycle ─────────────────────────────────────────────────────
 export interface NoteCreatedEvent {

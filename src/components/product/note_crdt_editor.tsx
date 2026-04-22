@@ -79,7 +79,6 @@ export function NoteCrdtEditor({
       }),
       mode === "document" ? documentTheme : markdownTheme,
     ],
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     [yText, undoManager, mode]
     // onChange/onEdit intentionally omitted — accessed via stable refs above.
   );
