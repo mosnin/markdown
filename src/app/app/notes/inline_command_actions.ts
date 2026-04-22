@@ -15,10 +15,7 @@ import {
   dispatchSubagentRun,
   resolveMaxTurns,
 } from "@/server/services/subagent_dispatch_service";
-import {
-  BUILT_IN_COMMANDS,
-  type BuiltInCommandId,
-} from "@/server/domain/types/inline_command";
+import { BUILT_IN_COMMANDS } from "@/server/domain/types/inline_command";
 import { checkRateLimit } from "@/lib/api/rate_limit";
 
 export type RunInlineCommandResult =

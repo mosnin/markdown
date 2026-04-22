@@ -39,8 +39,22 @@ export interface AgentTriggerManualEvent {
   };
 }
 
+// ─── workflow execution ─────────────────────────────────────────────────
+export interface WorkflowRunEvent {
+  name: "workflow.run";
+  data: {
+    workflowId: string;
+    workspaceId: string;
+    userId: string | null;
+    input: Record<string, unknown>;
+    /** Pre-created workflow_runs row id. */
+    runId: string;
+  };
+}
+
 export type AppEvents = {
   "note.created": NoteCreatedEvent;
   "note.updated": NoteUpdatedEvent;
   "agent_trigger.manual": AgentTriggerManualEvent;
+  "workflow.run": WorkflowRunEvent;
 };
