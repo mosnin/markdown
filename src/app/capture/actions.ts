@@ -7,6 +7,7 @@ import {
   createBox,
 } from "@/server/repositories/box_repository";
 import { createNote } from "@/server/services/note_service";
+import { inngest } from "@/lib/inngest/client";
 
 export type ActionResult<T> =
   | { ok: true; data: T }
@@ -129,6 +130,24 @@ This is your capture zone. Anything you save quickly — from your phone, browse
       title: title || markdown.split("\n")[0].slice(0, 80) || "Untitled capture",
       markdownContent: markdown,
     });
+
+    // Emit note.created so Inngest can fan out to any note_created triggers.
+    // Publish latency / transient Inngest failures must not block the capture
+    // response, so we swallow errors here.
+    try {
+      await inngest.send({
+        name: "note.created",
+        data: {
+          workspaceId: ctx.workspace.id,
+          noteId: note.id,
+          boxId: resolvedBoxId!,
+          userId: ctx.user.id,
+        },
+      });
+    } catch (err) {
+      console.error("[quickCaptureAction] inngest emit failed:", err);
+    }
+
     return {
       ok: true,
       data: {

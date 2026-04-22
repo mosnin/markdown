@@ -17,6 +17,7 @@ import { auditBundleRead } from "@/server/services/audit_service";
 import { extractAndStoreEntities } from "@/server/services/knowledge_graph_service";
 import { log } from "@/lib/logger";
 import { type ContextBundle } from "@/server/domain/types/context_bundle";
+import { inngest } from "@/lib/inngest/client";
 
 export type ActionResult<T = void> =
   | { ok: true; data: T }
@@ -102,12 +103,14 @@ export async function saveNoteAction(
 
   try {
     const { supabase, userId, workspaceId, activeBranchId } = await requireContext();
+    let savedBoxId: string | null = null;
+    let versionNumber: number | null = null;
     if (activeBranchId) {
       // Branch save — new immutable version lands on branch_heads;
       // main's `notes.current_version_id` is untouched. Branch writes
       // don't carry summary/tags/read_hint onto the notes row today;
       // those fields stay on main until promote.
-      await updateNoteOnBranch(
+      const branchResult = await updateNoteOnBranch(
         supabase,
         userId,
         workspaceId,
@@ -121,14 +124,19 @@ export async function saveNoteAction(
           readHint: readHint?.trim() ?? null,
         }
       );
+      versionNumber = branchResult.version_number;
+      // Branch writes don't return box_id directly — fetch from the note.
+      const branchNote = await getNoteForWorkspace(supabase, noteId, workspaceId);
+      savedBoxId = branchNote?.box_id ?? null;
     } else {
-      await updateNote(supabase, userId, workspaceId, noteId, {
+      const savedNote = await updateNote(supabase, userId, workspaceId, noteId, {
         title: trimmedTitle,
         markdownContent,
         summary: summary?.trim() ?? null,
         tags: tags ?? [],
         readHint: readHint?.trim() ?? null,
       });
+      savedBoxId = savedNote.box_id;
     }
 
     // Fire-and-forget knowledge-graph extraction. Runs after the save has
@@ -149,6 +157,34 @@ export async function saveNoteAction(
         log.error("save_note_kg_extraction_failed", {
           note_id: noteId,
           reason: err instanceof Error ? err.message : "unknown",
+        });
+      }
+
+      // Emit note.updated so Inngest can fan out to any note_updated triggers.
+      // Publish latency must not block the user's save — keep this inside
+      // after() and swallow failures so a transient Inngest outage doesn't
+      // surface as an autosave error.
+      try {
+        if (savedBoxId) {
+          await inngest.send({
+            name: "note.updated",
+            data: {
+              workspaceId,
+              noteId,
+              boxId: savedBoxId,
+              userId,
+              // versionNumber is only known on the branch path today; on the
+              // main path we can't reliably detect first save here, so fall
+              // back to false. Worst case: note_created triggers don't fire
+              // on first save for a main-path edit — tracked as a follow-up.
+              isFirstSave: versionNumber === 1,
+            },
+          });
+        }
+      } catch (err) {
+        log.error("save_note_inngest_emit_failed", {
+          note_id: noteId,
+          reason: err instanceof Error ? err.message : String(err),
         });
       }
     });
