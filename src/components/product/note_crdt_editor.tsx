@@ -18,6 +18,9 @@ import {
   getInlineCommandStatusAction,
 } from "@/app/app/notes/inline_command_actions";
 import type { BuiltInCommandId } from "@/server/domain/types/inline_command";
+import { ImageAttachment } from "@/components/product/image_attachment";
+import { useImagePaste } from "@/hooks/use_image_paste";
+import { VoiceRecorderButton } from "@/components/product/voice_recorder_button";
 
 /**
  * Document mode theme: prose-like proportional font, large leading.
@@ -157,6 +160,31 @@ export function NoteCrdtEditor({
 
   const theme = resolvedTheme === "dark" ? "dark" : "light";
 
+  // Insert image markdown at cursor position (or end of document).
+  const insertImageMarkdown = useCallback(
+    (url: string, description: string) => {
+      const view = cmRef.current?.view;
+      const text = `![${description}](${url})\n`;
+      if (view) {
+        const pos = view.state.selection.main.head;
+        view.dispatch({
+          changes: { from: pos, to: pos, insert: text },
+          selection: { anchor: pos + text.length },
+        });
+      } else {
+        // Fallback: append to Yjs doc directly.
+        yText.insert(yText.length, text);
+      }
+    },
+    [yText]
+  );
+
+  // Wire paste-to-upload.
+  const { isUploading: isPasteUploading, error: pasteError } = useImagePaste(
+    noteId,
+    insertImageMarkdown
+  );
+
   // Unmount guard so a long-running poll doesn't dispatch a CodeMirror
   // transaction on a stale view after the user navigates away.
   const mountedRef = useRef(true);
@@ -251,8 +279,40 @@ export function NoteCrdtEditor({
     [noteId, slashMenu]
   );
 
+  // Insert transcribed voice text at the current cursor position (or at end).
+  const handleTranscription = useCallback(
+    (text: string) => {
+      const view = cmRef.current?.view;
+      if (!view) {
+        // Fallback: append directly to the Yjs doc.
+        yText.insert(yText.length, text);
+        return;
+      }
+      const pos = view.state.selection.main.head;
+      const insert = text.endsWith("\n") ? text : `${text} `;
+      view.dispatch({
+        changes: { from: pos, to: pos, insert },
+        selection: { anchor: pos + insert.length },
+      });
+    },
+    [yText]
+  );
+
   return (
     <div className="relative flex-1 overflow-auto">
+      {/* Toolbar */}
+      <div className="flex items-center gap-1 border-b px-3 py-1">
+        <ImageAttachment noteId={noteId} onInserted={insertImageMarkdown} />
+        <VoiceRecorderButton noteId={noteId} onTranscription={handleTranscription} />
+        {isPasteUploading && (
+          <span className="text-xs text-muted-foreground">Uploading…</span>
+        )}
+        {pasteError && (
+          <span className="text-xs text-destructive" title={pasteError}>
+            {pasteError.length > 60 ? `${pasteError.slice(0, 57)}…` : pasteError}
+          </span>
+        )}
+      </div>
       <CodeMirror
         ref={cmRef}
         value={undefined}
