@@ -23,7 +23,7 @@ import {
   SearchAreaIcon,
   ToolsIcon,
 } from "hugeicons-react";
-import { Globe, Lightbulb, Network } from "lucide-react";
+import { Globe, Lightbulb, Network, Workflow } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { type Box as BoxType } from "@/server/domain/types/box";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -54,6 +54,7 @@ const advancedNav = [
   { label: "Graph", href: "/app/graph", icon: Network },
   { label: "Insights", href: "/app/insights", icon: Lightbulb },
   { label: "Web sessions", href: "/app/web_sessions", icon: Globe },
+  { label: "Sub-agents", href: "/app/sub_agents", icon: Workflow },
   { label: "Proposals", href: "/app/proposals", icon: Alert01Icon },
   { label: "Branches", href: "/app/branches", icon: GitBranch },
   { label: "History", href: "/app/history", icon: Undo2 },
