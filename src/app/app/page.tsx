@@ -5,6 +5,7 @@ import { listOperatorRuns } from "@/server/services/workspace_operator_runs_serv
 import { listBoxesByWorkspace } from "@/server/repositories/box_repository";
 import { ConversationHomeClient } from "@/components/product/conversation_home_client";
 import { ensureDailyNoteAction } from "@/app/app/daily_note/actions";
+import { isWorkspaceOperatorEnabled } from "@/lib/env";
 
 export default async function ConversationHomePage() {
   const ctx = await requireAuthenticatedUser();
@@ -35,6 +36,7 @@ export default async function ConversationHomePage() {
   const defaultBoxId = boxes[0]?.id ?? null;
   const userDisplayName = ctx.user?.email ?? null;
   const nowIso = new Date().toISOString();
+  const operatorEnabled = isWorkspaceOperatorEnabled();
 
   return (
     <ConversationHomeClient
@@ -45,6 +47,7 @@ export default async function ConversationHomePage() {
       nowIso={nowIso}
       userDisplayName={userDisplayName}
       workspaceName={ctx.workspace.name}
+      operatorEnabled={operatorEnabled}
     />
   );
 }

@@ -19,6 +19,7 @@ export interface ConversationHomeClientProps {
   hasNoBoxes: boolean;
   nowIso: string;
   userDisplayName: string | null;
+  operatorEnabled: boolean;
 }
 
 export function ConversationHomeClient({
@@ -29,6 +30,7 @@ export function ConversationHomeClient({
   hasNoBoxes,
   nowIso,
   userDisplayName,
+  operatorEnabled,
 }: ConversationHomeClientProps) {
   const [activeRunId, setActiveRunId] = useState<string | null>(null);
   const [importToast, setImportToast] = useState<string | null>(null);
@@ -170,6 +172,7 @@ export function ConversationHomeClient({
               defaultBoxId={defaultBoxId}
               hasHistory={initialRuns.length > 0}
               onRunStarted={setActiveRunId}
+              operatorEnabled={operatorEnabled}
             />
           </div>
         </div>

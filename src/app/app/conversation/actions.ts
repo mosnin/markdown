@@ -29,6 +29,7 @@ import {
 import { recordOperatorUsage } from "@/server/services/workspace_operator_usage_service";
 import { createAuditEvent } from "@/server/repositories/audit_event_repository";
 import { safeNotify } from "@/app/app/workspace_operator/actions";
+import { operatorRunLimit } from "@/lib/api/rate_limit";
 import {
   OPERATOR_MODELS,
   DEFAULT_OPERATOR_MODEL,
@@ -303,6 +304,12 @@ export async function startConversationTurnAction(
     const ctx = await getRequestContext();
     if (!ctx.isAuthenticated || !ctx.user || !ctx.workspace) {
       return { ok: false, error: "Unauthenticated." };
+    }
+
+    // 3a. Rate limit AI runs (more expensive than regular writes).
+    const rl = await operatorRunLimit(ctx.user.id);
+    if (!rl.allowed) {
+      return { ok: false, error: `Rate limit exceeded. Try again in ${rl.retryAfter} seconds.` };
     }
 
     const supabase = await createClient();

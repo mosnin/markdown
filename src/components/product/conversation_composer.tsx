@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Send } from "lucide-react";
+import { Bot, Send } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -45,6 +45,9 @@ export interface ConversationComposerProps {
    *  runId. The parent updates its `activeRunId` so the transcript
    *  starts streaming events. */
   onRunStarted: (runId: string) => void;
+  /** When false, renders a disabled "AI not configured" banner instead of
+   *  the normal composer. Defaults to true. */
+  operatorEnabled?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -65,6 +68,7 @@ export function ConversationComposer({
   defaultBoxId,
   hasHistory,
   onRunStarted,
+  operatorEnabled = true,
 }: ConversationComposerProps) {
   const [value, setValue] = useState("");
   const [pending, setPending] = useState(false);
@@ -148,6 +152,15 @@ export function ConversationComposer({
   const placeholder = hasHistory
     ? "Ask Pog…"
     : "Ask anything — Pog will plan, search, and draft.";
+
+  if (!operatorEnabled) {
+    return (
+      <div className="flex items-center gap-2 rounded-lg border border-border bg-muted/30 px-4 py-3 text-xs text-muted-foreground">
+        <Bot className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+        <span>AI features are not configured for this workspace. Set <code className="rounded bg-muted px-1 font-mono">WORKSPACE_OPERATOR_ENABLED=true</code> to enable Pog.</span>
+      </div>
+    );
+  }
 
   return (
     <div className="w-full">

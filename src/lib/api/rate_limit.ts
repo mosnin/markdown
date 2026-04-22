@@ -209,3 +209,6 @@ export const apiWriteLimit = (key: string) => checkRateLimit(key, 20, 60);
 
 /** 5 import/export initiations per minute. */
 export const importExportLimit = (key: string) => checkRateLimit(key, 5, 60);
+
+/** 5 AI operator runs per minute per user. */
+export const operatorRunLimit = (key: string) => checkRateLimit(key, 5, 60);
