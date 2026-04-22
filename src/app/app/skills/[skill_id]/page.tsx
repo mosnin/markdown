@@ -13,11 +13,13 @@ import { listFilesByBox } from "@/server/repositories/file_repository";
 import { listFoldersByBox } from "@/server/repositories/folder_repository";
 import { ReferenceContextBanner } from "@/components/product/reference_context_banner";
 import { SkillExportMenu } from "@/components/product/export_menu";
+import { CopyAsJsonButton } from "@/components/product/copy_as_json_button";
 import { ObjectTrustHeader } from "@/components/product/object_trust_header";
 import { MachineProvenancePanel } from "@/components/product/machine_provenance_panel";
 import { SkillHistoryPanel, SkillLifecycleControls } from "@/components/product/skill_trust_panels";
 import { SkillSourceEditor } from "@/components/product/skill_source_editor";
 import { SkillChildrenPanel } from "@/components/product/skill_children_panel";
+import { SkillTestSandbox } from "@/components/product/skill_test_sandbox";
 import { OBJECT_TYPE } from "@/server/domain/constants/object_constants";
 import { WorkspaceLiveRefresh } from "@/components/product/workspace_live_refresh";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -175,6 +177,21 @@ export default async function SkillPage({
 
   const rollbackDisabled = skill.status === "archived" || skill.status === "trashed";
 
+  const sandboxBoxId = attachments.length > 0 ? attachments[0].box_id : null;
+
+  const skillExportData = {
+    _type: "pog_skill",
+    _version: "1",
+    name: skill.name,
+    description: skill.description,
+    canonical_format: skill.canonical_format,
+    tags: skill.tags,
+    source_content: skill.source_content,
+    is_reusable: skill.is_reusable,
+    origin_type: skill.origin_type,
+    exported_at: new Date().toISOString(),
+  };
+
   return (
     <div className="flex h-full flex-col overflow-hidden">
       <ActiveBranchBannerServer objectType="skill" objectId={skill_id} />
@@ -199,6 +216,7 @@ export default async function SkillPage({
             )}
           </div>
           <div className="ml-auto flex items-center gap-2 shrink-0">
+            <CopyAsJsonButton data={skillExportData} label="Copy JSON" />
             <SkillExportMenu skillId={skill_id} skillName={skill.name} />
           </div>
         </div>
@@ -231,6 +249,7 @@ export default async function SkillPage({
               )}
             </TabsTrigger>
             <TabsTrigger value="history" className="pb-3">History</TabsTrigger>
+            <TabsTrigger value="sandbox" className="pb-3">Try it</TabsTrigger>
           </TabsList>
         </div>
 
@@ -339,6 +358,20 @@ export default async function SkillPage({
                 rollbackDisabled={rollbackDisabled}
               />
             </div>
+          </ScrollArea>
+        </TabsContent>
+
+        {/* ── Try it / sandbox tab ── */}
+        <TabsContent value="sandbox" className="flex-1 overflow-hidden">
+          <ScrollArea className="h-full">
+            <SkillTestSandbox
+              skill={{
+                id: skill.id,
+                name: skill.name,
+                source_content: skill.source_content,
+              }}
+              defaultBoxId={sandboxBoxId}
+            />
           </ScrollArea>
         </TabsContent>
       </Tabs>

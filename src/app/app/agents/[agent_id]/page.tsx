@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { Archive, Bot, ChevronRight, History, Trash2 } from "lucide-react";
 import { AgentExportMenu } from "@/components/product/export_menu";
+import { CopyAsJsonButton } from "@/components/product/copy_as_json_button";
 import Link from "next/link";
 import { requireAuthenticatedUser } from "@/server/auth/require_authenticated_user";
 import { createClient } from "@/lib/supabase/server";
@@ -242,6 +243,22 @@ export default async function AgentPage({
 
   const rollbackDisabled = agent.status === "archived" || agent.status === "trashed";
 
+  const agentExportData = {
+    _type: "pog_agent",
+    _version: "1",
+    name: agent.name,
+    description: agent.description,
+    canonical_format: agent.canonical_format,
+    agent_type: agent.agent_type,
+    model_hint: agent.model_hint,
+    system_prompt: agent.system_prompt,
+    tags: agent.tags,
+    source_content: agent.source_content,
+    is_reusable: agent.is_reusable,
+    origin_type: agent.origin_type,
+    exported_at: new Date().toISOString(),
+  };
+
   // Resolution maps
   const noteMap = new Map(boxNotes.map((n) => [n.id, { id: n.id, title: n.title }]));
   const fileMap = new Map(
@@ -336,6 +353,7 @@ export default async function AgentPage({
               </Badge>
             )}
             {/* Export */}
+            <CopyAsJsonButton data={agentExportData} label="Copy JSON" />
             <AgentExportMenu agentId={agent_id} agentName={agent.name} />
             {/* History shortcut */}
             <Link
