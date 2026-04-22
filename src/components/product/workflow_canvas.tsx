@@ -25,12 +25,18 @@ import {
   Loader2,
   AlertCircle,
   X,
+  Clock,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { describeCron } from "@/lib/cron";
 import type { Workflow, WorkflowNodeType } from "@/server/domain/types/workflow";
 import {
   saveWorkflowAction,
   runWorkflowAction,
+  setWorkflowScheduleAction,
+  clearWorkflowScheduleAction,
+  getWorkflowScheduleAction,
+  type WorkflowScheduleInfo,
 } from "@/app/app/workflows/actions";
 import { listSkillsForSlashMenuAction } from "@/app/app/notes/inline_command_actions";
 
@@ -399,6 +405,7 @@ export function WorkflowCanvas({ workflow }: WorkflowCanvasProps) {
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
 
   const [selectedNode, setSelectedNode] = useState<Node | null>(null);
+  const [scheduleOpen, setScheduleOpen] = useState(false);
 
   const onConnect = useCallback(
     (connection: Connection) => setEdges((eds) => addEdge(connection, eds)),

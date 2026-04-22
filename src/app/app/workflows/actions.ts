@@ -11,7 +11,14 @@ import {
   replaceWorkflowGraph,
 } from "@/server/repositories/workflow_repository";
 import { createWorkflowRun } from "@/server/repositories/workflow_run_repository";
+import {
+  createWorkflowScheduleTrigger,
+  deleteWorkflowScheduleTrigger,
+  getWorkflowScheduleTrigger,
+  updateWorkflowScheduleTrigger,
+} from "@/server/repositories/agent_trigger_repository";
 import { validateWorkflowGraph } from "@/server/services/workflow_validation_service";
+import { describeCron } from "@/lib/cron";
 import { inngest } from "@/lib/inngest/client";
 import type { Workflow, WorkflowGraphInput } from "@/server/domain/types/workflow";
 
@@ -203,6 +210,143 @@ export async function getWorkflowAction(
     return {
       ok: false,
       error: err instanceof Error ? err.message : "Failed to load workflow",
+    };
+  }
+}
+
+// ─── Schedule (cron) trigger ─────────────────────────────────────────────────
+
+export type SetWorkflowScheduleResult =
+  | { ok: true; triggerId: string }
+  | { ok: false; error: string };
+
+export async function setWorkflowScheduleAction(
+  workflowId: string,
+  cronExpression: string,
+  enabled: boolean = true
+): Promise<SetWorkflowScheduleResult> {
+  try {
+    const ctx = await requireAuthenticatedUser();
+    const supabase = await createClient();
+
+    const validation = describeCron(cronExpression);
+    if (!validation.ok) {
+      return { ok: false, error: validation.error };
+    }
+
+    const workflow = await getWorkflowById(supabase, workflowId);
+    if (!workflow || workflow.workspace_id !== ctx.workspace.id) {
+      return { ok: false, error: "Workflow not found" };
+    }
+
+    // If the workflow already has a trigger, update it in place. Otherwise
+    // insert a new trigger row and point the workflow at it.
+    if (workflow.trigger_id) {
+      await updateWorkflowScheduleTrigger(supabase, workflow.trigger_id, {
+        cronExpression: cronExpression.trim(),
+        isEnabled: enabled,
+      });
+      revalidatePath(`/app/workflows/${workflowId}/edit`);
+      return { ok: true, triggerId: workflow.trigger_id };
+    }
+
+    const trigger = await createWorkflowScheduleTrigger(supabase, {
+      workspaceId: ctx.workspace.id,
+      workflowId,
+      cronExpression: cronExpression.trim(),
+      isEnabled: enabled,
+    });
+
+    await updateWorkflow(supabase, workflowId, { trigger_id: trigger.id });
+
+    revalidatePath(`/app/workflows/${workflowId}/edit`);
+    return { ok: true, triggerId: trigger.id };
+  } catch (err) {
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : "Failed to set schedule",
+    };
+  }
+}
+
+export type ClearWorkflowScheduleResult =
+  | { ok: true }
+  | { ok: false; error: string };
+
+export async function clearWorkflowScheduleAction(
+  workflowId: string
+): Promise<ClearWorkflowScheduleResult> {
+  try {
+    const ctx = await requireAuthenticatedUser();
+    const supabase = await createClient();
+
+    const workflow = await getWorkflowById(supabase, workflowId);
+    if (!workflow || workflow.workspace_id !== ctx.workspace.id) {
+      return { ok: false, error: "Workflow not found" };
+    }
+
+    if (workflow.trigger_id) {
+      // Null the workflow's FK first so the trigger row can be deleted
+      // without leaving a dangling reference.
+      await updateWorkflow(supabase, workflowId, { trigger_id: null });
+      await deleteWorkflowScheduleTrigger(supabase, workflow.trigger_id);
+    }
+
+    revalidatePath(`/app/workflows/${workflowId}/edit`);
+    return { ok: true };
+  } catch (err) {
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : "Failed to clear schedule",
+    };
+  }
+}
+
+export type WorkflowScheduleInfo = {
+  id: string;
+  cron_expression: string | null;
+  is_enabled: boolean;
+  label: string;
+};
+
+export type GetWorkflowScheduleResult =
+  | { ok: true; trigger: WorkflowScheduleInfo | null }
+  | { ok: false; error: string };
+
+export async function getWorkflowScheduleAction(
+  workflowId: string
+): Promise<GetWorkflowScheduleResult> {
+  try {
+    const ctx = await requireAuthenticatedUser();
+    const supabase = await createClient();
+
+    const workflow = await getWorkflowById(supabase, workflowId);
+    if (!workflow || workflow.workspace_id !== ctx.workspace.id) {
+      return { ok: false, error: "Workflow not found" };
+    }
+
+    if (!workflow.trigger_id) {
+      return { ok: true, trigger: null };
+    }
+
+    const row = await getWorkflowScheduleTrigger(supabase, workflow.trigger_id);
+    if (!row) {
+      return { ok: true, trigger: null };
+    }
+
+    return {
+      ok: true,
+      trigger: {
+        id: row.id,
+        cron_expression: row.cron_expression,
+        is_enabled: row.is_enabled,
+        label: row.label,
+      },
+    };
+  } catch (err) {
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : "Failed to load schedule",
     };
   }
 }
