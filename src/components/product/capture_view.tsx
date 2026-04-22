@@ -3,11 +3,12 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, Check, ChevronDown } from "lucide-react";
+import { ArrowLeft, Check, ChevronDown, Mic, MicOff } from "lucide-react";
 import { quickCaptureAction } from "@/app/capture/actions";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { cn } from "@/lib/utils";
+import { useVoiceCapture } from "@/lib/hooks/use_voice_capture";
 
 function formatRelativeTime(date: Date): string {
   const secs = Math.floor((Date.now() - date.getTime()) / 1000);
@@ -112,6 +113,10 @@ export function CaptureView(props: CaptureViewProps) {
     }
   }
 
+  const { state: voiceState, toggle: toggleVoice } = useVoiceCapture((transcript) => {
+    setBody((prev) => (prev ? `${prev} ${transcript}` : transcript));
+  });
+
   return (
     <div className="flex min-h-screen flex-col">
       {/* Header — sticky top, edge-to-edge on notched devices */}
@@ -124,18 +129,39 @@ export function CaptureView(props: CaptureViewProps) {
           Done
         </Link>
         <span className="text-sm font-medium">Capture</span>
-        <Button
-          size="sm"
-          onClick={save}
-          disabled={pending || (!title.trim() && !body.trim())}
-        >
-          {pending ? (
-            <Spinner size={14} />
-          ) : (
-            <Check className="h-4 w-4" aria-hidden="true" />
+        <div className="flex items-center gap-2">
+          {voiceState !== "unsupported" && (
+            <button
+              type="button"
+              onClick={toggleVoice}
+              title={voiceState === "listening" ? "Stop recording" : "Voice input"}
+              className={cn(
+                "flex h-8 w-8 items-center justify-center rounded-md border transition-colors",
+                voiceState === "listening"
+                  ? "border-red-500/50 bg-red-500/10 text-red-500"
+                  : "border-border bg-background text-muted-foreground hover:bg-muted hover:text-foreground"
+              )}
+            >
+              {voiceState === "listening" ? (
+                <MicOff className="h-4 w-4" aria-hidden="true" />
+              ) : (
+                <Mic className="h-4 w-4" aria-hidden="true" />
+              )}
+            </button>
           )}
-          {pending ? "Saving" : "Save"}
-        </Button>
+          <Button
+            size="sm"
+            onClick={save}
+            disabled={pending || (!title.trim() && !body.trim())}
+          >
+            {pending ? (
+              <Spinner size={14} />
+            ) : (
+              <Check className="h-4 w-4" aria-hidden="true" />
+            )}
+            {pending ? "Saving" : "Save"}
+          </Button>
+        </div>
       </header>
 
       {error && (

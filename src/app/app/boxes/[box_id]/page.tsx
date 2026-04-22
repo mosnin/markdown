@@ -54,6 +54,7 @@ import { FolderPolicyToggle } from "@/components/product/folder_policy_toggle";
 import { BoxEditDialog } from "@/components/product/box_edit_dialog";
 import { BoxOverviewPanel } from "@/components/product/box_overview_panel";
 import { BoxTemplateSetup } from "@/components/product/box_template_setup";
+import { BoxChatPanel } from "@/components/product/box_chat_panel";
 import { WorkspaceLiveRefresh } from "@/components/product/workspace_live_refresh";
 import { ActiveBranchBannerServer } from "@/components/product/active_branch_banner_server";
 import { ShareBoxButton } from "@/components/product/share_box_button";
@@ -365,7 +366,7 @@ export default async function BoxPage({
         protectWhileEditing
       />
       {/* Main content */}
-      <div className="flex flex-1 flex-col overflow-hidden min-w-0">
+      <div className="flex flex-1 flex-col overflow-hidden min-w-0 pb-16">
 
         {/* Box header */}
         <div className="border-b border-border px-4 py-4 md:px-6">
@@ -754,6 +755,11 @@ export default async function BoxPage({
         />
       </aside>
       </div>
+      <BoxChatPanel
+        workspaceId={ctx.workspace.id}
+        boxId={box.id}
+        boxName={box.name}
+      />
     </div>
   );
 }
