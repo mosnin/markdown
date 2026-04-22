@@ -49,6 +49,8 @@ export type OperatorRunEventType =
   | "guardrail_tripped"
   | "subagent_start"
   | "subagent_end"
+  /** Token-level streaming delta from Pog. Payload: { text: string }. Phase 7. */
+  | "text_delta"
   | "completed"
   | "failed"
   | "cancelled";
