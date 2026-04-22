@@ -10,6 +10,7 @@ import { AppBreadcrumbs } from "@/components/product/app_breadcrumbs";
 import { OperatorPanelTrigger } from "@/components/product/operator_panel_trigger";
 import { ActivityBell } from "@/components/product/activity_bell";
 import { LegalStickyFooter } from "@/components/legal/legal_modal";
+import { CommandPaletteProvider } from "@/components/product/command_palette_provider";
 
 /**
  * Authenticated app layout.
@@ -126,6 +127,9 @@ export default async function AppLayout({
         {/* Sticky legal footer — clicking any link opens the full document in a modal */}
         <LegalStickyFooter />
       </div>
+
+      {/* Global Cmd/Ctrl+K command palette — renders a portal dialog */}
+      <CommandPaletteProvider />
     </div>
   );
 }
