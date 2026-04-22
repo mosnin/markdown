@@ -218,6 +218,41 @@ export async function getInlineCommandStatusAction(
   }
 }
 
+export type ListSkillsForSlashResult =
+  | {
+      ok: true;
+      data: Array<{ id: string; name: string; description: string | null }>;
+    }
+  | { ok: false; error: string };
+
+export async function listSkillsForSlashMenuAction(): Promise<ListSkillsForSlashResult> {
+  try {
+    const ctx = await requireAuthenticatedUser();
+    const supabase = await createClient();
+    const { data, error } = await supabase
+      .from("skills")
+      .select("id, name, description")
+      .eq("workspace_id", ctx.workspace.id)
+      .eq("is_subagent", true)
+      .order("updated_at", { ascending: false })
+      .limit(20);
+    if (error) throw error;
+    return {
+      ok: true,
+      data: (data ?? []).map((r) => ({
+        id: r.id as string,
+        name: (r.name as string) ?? "",
+        description: (r.description as string | null) ?? null,
+      })),
+    };
+  } catch (err) {
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : "Failed to load skills",
+    };
+  }
+}
+
 export async function cancelInlineCommandAction(
   invocationId: string
 ): Promise<{ ok: true } | { ok: false; error: string }> {
