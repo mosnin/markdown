@@ -546,6 +546,17 @@ export function WorkflowCanvas({ workflow }: WorkflowCanvasProps) {
         />
         <div className="ml-auto flex items-center gap-2">
           <button
+            onClick={() => setScheduleOpen(true)}
+            className={cn(
+              "inline-flex items-center gap-1.5 rounded-md border border-border bg-background px-3 py-1.5 text-xs font-medium text-foreground",
+              "transition-colors hover:bg-accent"
+            )}
+            aria-label="Schedule workflow"
+          >
+            <Clock className="h-3.5 w-3.5" aria-hidden="true" />
+            Schedule
+          </button>
+          <button
             onClick={handleSave}
             disabled={isSaving}
             className={cn(
@@ -653,6 +664,280 @@ export function WorkflowCanvas({ workflow }: WorkflowCanvasProps) {
           />
         )}
       </div>
+
+      {/* Schedule dialog */}
+      {scheduleOpen && (
+        <ScheduleDialog
+          workflowId={workflow.id}
+          onClose={() => setScheduleOpen(false)}
+        />
+      )}
     </div>
+  );
+}
+
+// ─── Schedule dialog ──────────────────────────────────────────────────────────
+
+interface ScheduleDialogProps {
+  workflowId: string;
+  onClose: () => void;
+}
+
+function ScheduleDialog({ workflowId, onClose }: ScheduleDialogProps) {
+  const [loading, setLoading] = useState(true);
+  const [current, setCurrent] = useState<WorkflowScheduleInfo | null>(null);
+  const [cron, setCron] = useState("");
+  const [enabled, setEnabled] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [clearing, setClearing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // Load the current schedule when the dialog opens. `loading` starts true
+  // and the dialog is mounted fresh per open, so no sync setLoading needed.
+  useEffect(() => {
+    let cancelled = false;
+    getWorkflowScheduleAction(workflowId).then((result) => {
+      if (cancelled) return;
+      if (result.ok) {
+        setCurrent(result.trigger);
+        if (result.trigger) {
+          setCron(result.trigger.cron_expression ?? "");
+          setEnabled(result.trigger.is_enabled);
+        } else {
+          setCron("");
+          setEnabled(true);
+        }
+      } else {
+        setError(result.error);
+      }
+      setLoading(false);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [workflowId]);
+
+  // Live validation of the cron expression — only when non-empty.
+  const validation = useMemo(() => {
+    if (!cron.trim()) return null;
+    return describeCron(cron);
+  }, [cron]);
+
+  const canSave =
+    !saving &&
+    !loading &&
+    validation !== null &&
+    validation.ok === true;
+
+  const handleSave = useCallback(async () => {
+    setSaving(true);
+    setError(null);
+    const result = await setWorkflowScheduleAction(workflowId, cron, enabled);
+    setSaving(false);
+    if (!result.ok) {
+      setError(result.error);
+      return;
+    }
+    // Refresh current state from server.
+    const refreshed = await getWorkflowScheduleAction(workflowId);
+    if (refreshed.ok) {
+      setCurrent(refreshed.trigger);
+    }
+  }, [workflowId, cron, enabled]);
+
+  const handleClear = useCallback(async () => {
+    setClearing(true);
+    setError(null);
+    const result = await clearWorkflowScheduleAction(workflowId);
+    setClearing(false);
+    if (!result.ok) {
+      setError(result.error);
+      return;
+    }
+    setCurrent(null);
+    setCron("");
+    setEnabled(true);
+  }, [workflowId]);
+
+  const inputClass =
+    "w-full rounded-md border border-border bg-background px-2.5 py-1.5 text-xs text-foreground placeholder:text-muted-foreground focus:border-ring focus:outline-none";
+  const labelClass =
+    "mb-1 block text-[10px] font-semibold uppercase tracking-wider text-muted-foreground";
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+      onClick={onClose}
+      role="dialog"
+      aria-modal="true"
+      aria-label="Schedule workflow"
+    >
+      <div
+        className="w-full max-w-md rounded-lg border border-border bg-card shadow-lg"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="flex items-center gap-2 border-b border-border px-4 py-3">
+          <Clock className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+          <h2 className="flex-1 text-sm font-semibold text-foreground">
+            Schedule
+          </h2>
+          <button
+            onClick={onClose}
+            aria-label="Close schedule dialog"
+            className="flex h-6 w-6 items-center justify-center rounded hover:bg-accent"
+          >
+            <X className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
+          </button>
+        </div>
+
+        {/* Body */}
+        <div className="flex flex-col gap-4 px-4 py-4">
+          {loading ? (
+            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              <Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" />
+              Loading schedule…
+            </div>
+          ) : (
+            <>
+              {/* Current state */}
+              <div className="rounded-md border border-border bg-background px-3 py-2 text-xs">
+                {current && current.cron_expression ? (
+                  <CurrentScheduleSummary
+                    expression={current.cron_expression}
+                    isEnabled={current.is_enabled}
+                  />
+                ) : (
+                  <span className="text-muted-foreground">No schedule</span>
+                )}
+              </div>
+
+              {/* Cron input */}
+              <div>
+                <label className={labelClass} htmlFor="cron-input">
+                  Cron expression (UTC)
+                </label>
+                <input
+                  id="cron-input"
+                  type="text"
+                  value={cron}
+                  onChange={(e) => setCron(e.target.value)}
+                  placeholder="0 9 * * 1"
+                  className={inputClass}
+                  autoComplete="off"
+                  spellCheck={false}
+                />
+                {validation !== null && (
+                  <p
+                    className={cn(
+                      "mt-1 text-[11px]",
+                      validation.ok
+                        ? "text-emerald-600 dark:text-emerald-400"
+                        : "text-rose-600 dark:text-rose-400"
+                    )}
+                  >
+                    {validation.ok ? validation.description : validation.error}
+                  </p>
+                )}
+                <div className="mt-2 space-y-0.5 text-[10px] text-muted-foreground">
+                  <p>Every hour: <code>0 * * * *</code></p>
+                  <p>Weekdays 9am UTC: <code>0 9 * * 1-5</code></p>
+                  <p>Daily at midnight UTC: <code>0 0 * * *</code></p>
+                </div>
+              </div>
+
+              {/* Enabled toggle */}
+              <label className="flex cursor-pointer items-center gap-2 text-xs text-foreground">
+                <input
+                  type="checkbox"
+                  checked={enabled}
+                  onChange={(e) => setEnabled(e.target.checked)}
+                  className="h-3.5 w-3.5 rounded border-border"
+                />
+                Enabled
+              </label>
+
+              {error && (
+                <p className="flex items-center gap-1.5 rounded-md border border-rose-200 bg-rose-50 px-2.5 py-1.5 text-xs text-rose-600 dark:border-rose-900/40 dark:bg-rose-950/20 dark:text-rose-400">
+                  <AlertCircle className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                  {error}
+                </p>
+              )}
+            </>
+          )}
+        </div>
+
+        {/* Footer actions */}
+        <div className="flex items-center justify-between gap-2 border-t border-border px-4 py-3">
+          <div>
+            {current && (
+              <button
+                onClick={handleClear}
+                disabled={clearing || saving}
+                className={cn(
+                  "inline-flex items-center gap-1.5 rounded-md border border-border bg-background px-3 py-1.5 text-xs font-medium text-foreground",
+                  "transition-colors hover:bg-accent disabled:cursor-not-allowed disabled:opacity-60"
+                )}
+              >
+                {clearing ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+                ) : null}
+                Remove schedule
+              </button>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={onClose}
+              className={cn(
+                "inline-flex items-center rounded-md border border-border bg-background px-3 py-1.5 text-xs font-medium text-foreground",
+                "transition-colors hover:bg-accent"
+              )}
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleSave}
+              disabled={!canSave}
+              className={cn(
+                "inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground",
+                "transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
+              )}
+            >
+              {saving ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+              ) : null}
+              Save schedule
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function CurrentScheduleSummary({
+  expression,
+  isEnabled,
+}: {
+  expression: string;
+  isEnabled: boolean;
+}) {
+  const v = describeCron(expression);
+  const desc = v.ok ? v.description : expression;
+  return (
+    <span className="text-foreground">
+      Runs: <span className="font-medium">{desc}</span>{" "}
+      <span
+        className={cn(
+          "ml-1 rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider",
+          isEnabled
+            ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300"
+            : "bg-muted text-muted-foreground"
+        )}
+      >
+        {isEnabled ? "Enabled" : "Paused"}
+      </span>
+    </span>
   );
 }
