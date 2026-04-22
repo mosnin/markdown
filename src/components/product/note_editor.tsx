@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { AlertTriangle, Code2, Eye } from "lucide-react";
+import { AlertTriangle, Code2, Eye, History } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
@@ -17,6 +17,7 @@ import { useNotePresence } from "@/lib/hooks/use_note_presence";
 import { useConcurrentEditWarning } from "@/lib/hooks/use_concurrent_edit_warning";
 import { NotePresenceAvatars } from "@/components/product/note_presence_avatars";
 import { AskPogSelectionPopover } from "@/components/product/ask_pog_selection_popover";
+import { NoteHistoryDialog } from "@/components/product/note_history_dialog";
 
 /**
  * Autosave debounce: 1500ms after the last content change.
@@ -63,6 +64,7 @@ export function NoteEditor({ note, initialMode = "document", currentUser, worksp
   const [savedAt, setSavedAt] = useState<Date | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
 
   // Textarea refs — shared by both modes so the selection popover can watch
   // whichever editor is currently mounted.
@@ -343,6 +345,15 @@ export function NoteEditor({ note, initialMode = "document", currentUser, worksp
 
         {/* Presence + Save state + retry */}
         <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setHistoryOpen(true)}
+            title="Version history"
+            className="inline-flex items-center gap-1 rounded-md border border-border bg-background px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+          >
+            <History className="h-3.5 w-3.5" aria-hidden="true" />
+            History
+          </button>
           {presenceUsers.length > 0 && (
             <NotePresenceAvatars users={presenceUsers} />
           )}
@@ -550,6 +561,13 @@ export function NoteEditor({ note, initialMode = "document", currentUser, worksp
           </details>
         </div>
       )}
+
+      {/* ── Version history dialog ───────────────────────────────────────── */}
+      <NoteHistoryDialog
+        noteId={note.id}
+        open={historyOpen}
+        onOpenChange={setHistoryOpen}
+      />
     </div>
   );
 }
