@@ -12,6 +12,7 @@ type Skill = {
   description: string | null;
   canonical_format: string;
   tags: string[];
+  source_content: string | null;
 };
 
 type Box = { id: string; name: string };
@@ -95,7 +96,13 @@ export function SkillsListClient({
   );
 }
 
+function detectParameters(content: string | null): boolean {
+  if (!content) return false;
+  return /\{\{\w+\}\}/.test(content);
+}
+
 function SkillCard({ skill, boxes }: { skill: Skill; boxes: Box[] }) {
+  const hasParams = detectParameters(skill.source_content);
   return (
     <div className="relative flex flex-col gap-0">
       <Link
@@ -122,6 +129,11 @@ function SkillCard({ skill, boxes }: { skill: Skill; boxes: Box[] }) {
               {tag}
             </span>
           ))}
+          {hasParams && (
+            <span className="rounded bg-violet-500/10 px-1.5 py-0.5 text-[10px] font-medium text-violet-600 dark:text-violet-400">
+              Has params
+            </span>
+          )}
           <div className="ml-auto">
             <AttachToBoxTrigger
               objectType="skill"
