@@ -5,15 +5,22 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { requireAuthenticatedUser } from "@/server/auth/require_authenticated_user";
 import { getNoteById } from "@/server/repositories/note_repository";
 import { getBoxById } from "@/server/repositories/box_repository";
+import { checkRateLimit } from "@/lib/api/rate_limit";
 import { randomUUID } from "crypto";
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 const BUCKET = "note-images";
 
-function getExtension(mimeType: string): string {
-  const parts = mimeType.split("/");
-  return parts[1] ?? "bin";
-}
+// Whitelist of safe raster image types. SVG is deliberately excluded — SVGs
+// can contain <script> tags and would execute as XSS if served from a public
+// bucket.
+const MIME_TO_EXT: Record<string, string> = {
+  "image/jpeg": "jpg",
+  "image/jpg": "jpg",
+  "image/png": "png",
+  "image/webp": "webp",
+  "image/gif": "gif",
+};
 
 export type UploadNoteImageResult =
   | { ok: true; url: string; path: string }
@@ -40,17 +47,19 @@ export async function uploadNoteImageAction(
       return { ok: false, error: "No image file provided" };
     }
 
-    // Validate MIME type.
-    if (!file.type.startsWith("image/")) {
-      return { ok: false, error: "File must be an image" };
+    // Validate MIME type against the safe whitelist.
+    const ext = MIME_TO_EXT[file.type];
+    if (!ext) {
+      return {
+        ok: false,
+        error: "Unsupported image type. Use JPEG, PNG, WebP, or GIF.",
+      };
     }
 
     // Validate size.
     if (file.size > MAX_FILE_SIZE) {
       return { ok: false, error: "Image must be 10MB or smaller" };
     }
-
-    const ext = getExtension(file.type);
     const uuid = randomUUID();
     const path = `${ctx.workspace.id}/${noteId}/${uuid}.${ext}`;
 
@@ -106,6 +115,15 @@ export async function describeImageAction(
   try {
     const ctx = await requireAuthenticatedUser();
     const supabase = await createClient();
+
+    // Rate limit: 10 vision calls per minute per user. Vision is expensive.
+    const rl = await checkRateLimit(`image:describe:${ctx.user.id}`, 10, 60);
+    if (!rl.allowed) {
+      return {
+        ok: false,
+        error: `Too many image descriptions. Try again in ${rl.retryAfter}s.`,
+      };
+    }
 
     // Authorize.
     const note = await getNoteById(supabase, noteId);

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   uploadNoteImageAction,
   describeImageAction,
@@ -17,6 +17,11 @@ export function useImagePaste(
 ): { isUploading: boolean; error: string | null } {
   const [isUploading, setIsUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Stabilize the callback so the paste listener isn't re-registered every
+  // time the parent re-renders with a fresh inline callback.
+  const onImageInsertedRef = useRef(onImageInserted);
+  onImageInsertedRef.current = onImageInserted;
 
   useEffect(() => {
     let cancelled = false;
@@ -64,7 +69,7 @@ export function useImagePaste(
         if (cancelled) return;
 
         const description = describeResult.ok ? describeResult.description : "";
-        onImageInserted(url, description);
+        onImageInsertedRef.current(url, description);
       } catch (err) {
         if (!cancelled) {
           setError(
@@ -83,7 +88,7 @@ export function useImagePaste(
       cancelled = true;
       document.removeEventListener("paste", handlePaste);
     };
-  }, [noteId, onImageInserted]);
+  }, [noteId]);
 
   return { isUploading, error };
 }

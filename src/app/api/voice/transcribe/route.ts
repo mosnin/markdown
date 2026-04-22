@@ -64,6 +64,14 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  const MAX_AUDIO_BYTES = 25 * 1024 * 1024; // 25MB, matches Whisper API limit
+  if (audioField.size > MAX_AUDIO_BYTES) {
+    return Response.json(
+      { ok: false, error: "Audio file exceeds maximum size (25MB)" },
+      { status: 413 }
+    );
+  }
+
   if (!noteId || typeof noteId !== "string") {
     return Response.json(
       { ok: false, error: "Missing or invalid 'note_id' field" },

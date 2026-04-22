@@ -282,17 +282,17 @@ export function NoteCrdtEditor({
   // Insert transcribed voice text at the current cursor position (or at end).
   const handleTranscription = useCallback(
     (text: string) => {
+      const normalized =
+        text.endsWith(" ") || text.endsWith("\n") ? text : `${text} `;
       const view = cmRef.current?.view;
       if (!view) {
-        // Fallback: append directly to the Yjs doc.
-        yText.insert(yText.length, text);
+        yText.insert(yText.length, normalized);
         return;
       }
       const pos = view.state.selection.main.head;
-      const insert = text.endsWith("\n") ? text : `${text} `;
       view.dispatch({
-        changes: { from: pos, to: pos, insert },
-        selection: { anchor: pos + insert.length },
+        changes: { from: pos, to: pos, insert: normalized },
+        selection: { anchor: pos + normalized.length },
       });
     },
     [yText]
