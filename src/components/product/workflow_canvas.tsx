@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
@@ -24,6 +24,7 @@ import {
   Plus,
   Loader2,
   AlertCircle,
+  X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Workflow, WorkflowNodeType } from "@/server/domain/types/workflow";
@@ -31,6 +32,7 @@ import {
   saveWorkflowAction,
   runWorkflowAction,
 } from "@/app/app/workflows/actions";
+import { listSkillsForSlashMenuAction } from "@/app/app/notes/inline_command_actions";
 
 // ─── Node type icons / labels ─────────────────────────────────────────────────
 
@@ -102,6 +104,281 @@ function workflowToRFEdges(workflow: Workflow): Edge[] {
   }));
 }
 
+// ─── Config panel types ───────────────────────────────────────────────────────
+
+type SkillOption = { id: string; name: string };
+
+// ─── Config panel component ───────────────────────────────────────────────────
+
+interface NodeConfigPanelProps {
+  node: Node;
+  onClose: () => void;
+  onApply: (nodeId: string, config: Record<string, unknown>) => void;
+}
+
+function NodeConfigPanel({ node, onClose, onApply }: NodeConfigPanelProps) {
+  const nodeType = node.type as WorkflowNodeType;
+  const initialConfig = (node.data as { config: Record<string, unknown> }).config ?? {};
+  const nodeKey = (node.data as { node_key: string }).node_key;
+  const meta = NODE_TYPE_META[nodeType];
+
+  const [config, setConfig] = useState<Record<string, unknown>>(initialConfig);
+  const [skills, setSkills] = useState<SkillOption[]>([]);
+  const [skillsLoaded, setSkillsLoaded] = useState(false);
+
+  // Reset local config when selected node changes
+  const prevNodeId = useRef<string | null>(null);
+  useEffect(() => {
+    if (prevNodeId.current !== node.id) {
+      setConfig((node.data as { config: Record<string, unknown> }).config ?? {});
+      prevNodeId.current = node.id;
+    }
+  }, [node.id, node.data]);
+
+  // Load skills for subagent nodes
+  useEffect(() => {
+    if (nodeType !== "subagent") return;
+    let cancelled = false;
+    listSkillsForSlashMenuAction().then((result) => {
+      if (cancelled) return;
+      if (result.ok) {
+        setSkills(result.data.map((s) => ({ id: s.id, name: s.name })));
+      }
+      setSkillsLoaded(true);
+    });
+    return () => { cancelled = true; };
+  }, [nodeType]);
+
+  const setField = useCallback((key: string, value: unknown) => {
+    setConfig((prev) => ({ ...prev, [key]: value }));
+  }, []);
+
+  const handleApply = useCallback(() => {
+    onApply(node.id, config);
+  }, [node.id, config, onApply]);
+
+  const inputClass =
+    "w-full rounded-md border border-border bg-background px-2.5 py-1.5 text-xs text-foreground placeholder:text-muted-foreground focus:border-ring focus:outline-none";
+  const labelClass = "mb-1 block text-[10px] font-semibold uppercase tracking-wider text-muted-foreground";
+
+  function renderFields() {
+    switch (nodeType) {
+      case "start":
+      case "merge":
+      case "end":
+        return (
+          <p className="text-xs text-muted-foreground italic">No configuration needed.</p>
+        );
+
+      case "subagent": {
+        const skillId = (config.skill_id as string) ?? "";
+        const taskTemplate = (config.task_template as string) ?? "";
+        const showSelect = skillsLoaded && skills.length > 0;
+        return (
+          <>
+            <div>
+              <label className={labelClass}>Skill / Agent</label>
+              {!skillsLoaded ? (
+                <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" />
+                  Loading skills…
+                </div>
+              ) : showSelect ? (
+                <select
+                  value={skillId}
+                  onChange={(e) => setField("skill_id", e.target.value)}
+                  className={inputClass}
+                >
+                  <option value="">— select a skill —</option>
+                  {skills.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.name}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <input
+                  type="text"
+                  value={skillId}
+                  onChange={(e) => setField("skill_id", e.target.value)}
+                  placeholder="skill-id"
+                  className={inputClass}
+                />
+              )}
+            </div>
+            <div>
+              <label className={labelClass}>Task template</label>
+              <textarea
+                value={taskTemplate}
+                onChange={(e) => setField("task_template", e.target.value)}
+                placeholder="Describe what the agent should do. Use {{variable}} for inputs from previous nodes."
+                rows={5}
+                className={cn(inputClass, "resize-y")}
+              />
+            </div>
+          </>
+        );
+      }
+
+      case "web_search": {
+        const queryTemplate = (config.query_template as string) ?? "";
+        const provider = (config.provider as string) ?? "exa";
+        const numResults = (config.num_results as number) ?? 5;
+        return (
+          <>
+            <div>
+              <label className={labelClass}>Query template</label>
+              <input
+                type="text"
+                value={queryTemplate}
+                onChange={(e) => setField("query_template", e.target.value)}
+                placeholder="Search query or {{variable}}"
+                className={inputClass}
+              />
+            </div>
+            <div>
+              <label className={labelClass}>Provider</label>
+              <select
+                value={provider}
+                onChange={(e) => setField("provider", e.target.value)}
+                className={inputClass}
+              >
+                <option value="exa">Exa</option>
+                <option value="tavily">Tavily</option>
+              </select>
+            </div>
+            <div>
+              <label className={labelClass}>Number of results</label>
+              <input
+                type="number"
+                min={1}
+                max={20}
+                value={numResults}
+                onChange={(e) => setField("num_results", parseInt(e.target.value, 10) || 1)}
+                className={inputClass}
+              />
+            </div>
+          </>
+        );
+      }
+
+      case "web_fetch": {
+        const urlTemplate = (config.url_template as string) ?? "";
+        return (
+          <div>
+            <label className={labelClass}>URL template</label>
+            <input
+              type="text"
+              value={urlTemplate}
+              onChange={(e) => setField("url_template", e.target.value)}
+              placeholder="https://example.com or {{variable}}"
+              className={inputClass}
+            />
+          </div>
+        );
+      }
+
+      case "transform": {
+        const systemPrompt = (config.system_prompt as string) ?? "";
+        const userPromptTemplate = (config.user_prompt_template as string) ?? "";
+        const model = (config.model as string) ?? "";
+        return (
+          <>
+            <div>
+              <label className={labelClass}>System prompt</label>
+              <textarea
+                value={systemPrompt}
+                onChange={(e) => setField("system_prompt", e.target.value)}
+                placeholder="You are a helpful assistant..."
+                rows={4}
+                className={cn(inputClass, "resize-y")}
+              />
+            </div>
+            <div>
+              <label className={labelClass}>User prompt template</label>
+              <textarea
+                value={userPromptTemplate}
+                onChange={(e) => setField("user_prompt_template", e.target.value)}
+                placeholder="Transform this: {{input}}"
+                rows={4}
+                className={cn(inputClass, "resize-y")}
+              />
+            </div>
+            <div>
+              <label className={labelClass}>Model</label>
+              <input
+                type="text"
+                value={model}
+                onChange={(e) => setField("model", e.target.value)}
+                defaultValue="gpt-4o"
+                placeholder="gpt-4o"
+                className={inputClass}
+              />
+            </div>
+          </>
+        );
+      }
+
+      case "condition": {
+        const expression = (config.expression as string) ?? "";
+        return (
+          <div>
+            <label className={labelClass}>Expression</label>
+            <input
+              type="text"
+              value={expression}
+              onChange={(e) => setField("expression", e.target.value)}
+              placeholder="{{result}} contains 'success'"
+              className={inputClass}
+            />
+          </div>
+        );
+      }
+
+      default:
+        return null;
+    }
+  }
+
+  return (
+    <aside className="flex w-[280px] shrink-0 flex-col border-l border-border bg-card">
+      {/* Panel header */}
+      <div className="flex shrink-0 items-center gap-2 border-b border-border px-3 py-2.5">
+        <span aria-hidden="true" className="text-base">{meta.icon}</span>
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-xs font-semibold text-foreground">{meta.label}</p>
+          <p className="truncate text-[10px] text-muted-foreground">{nodeKey}</p>
+        </div>
+        <button
+          onClick={onClose}
+          aria-label="Close config panel"
+          className="ml-auto flex h-6 w-6 items-center justify-center rounded hover:bg-accent"
+        >
+          <X className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
+        </button>
+      </div>
+
+      {/* Fields */}
+      <div className="flex flex-1 flex-col gap-4 overflow-y-auto px-3 py-3">
+        {renderFields()}
+      </div>
+
+      {/* Apply button */}
+      <div className="shrink-0 border-t border-border px-3 py-2.5">
+        <button
+          onClick={handleApply}
+          className={cn(
+            "w-full rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground",
+            "transition-colors hover:bg-primary/90"
+          )}
+        >
+          Apply
+        </button>
+      </div>
+    </aside>
+  );
+}
+
 // ─── Main canvas component ────────────────────────────────────────────────────
 
 interface WorkflowCanvasProps {
@@ -122,9 +399,38 @@ export function WorkflowCanvas({ workflow }: WorkflowCanvasProps) {
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
 
+  const [selectedNode, setSelectedNode] = useState<Node | null>(null);
+
   const onConnect = useCallback(
     (connection: Connection) => setEdges((eds) => addEdge(connection, eds)),
     [setEdges]
+  );
+
+  const onNodeClick = useCallback((_event: React.MouseEvent, node: Node) => {
+    setSelectedNode(node);
+  }, []);
+
+  const onClosePanel = useCallback(() => {
+    setSelectedNode(null);
+  }, []);
+
+  const onApplyConfig = useCallback(
+    (nodeId: string, config: Record<string, unknown>) => {
+      setNodes((nds) =>
+        nds.map((n) =>
+          n.id === nodeId
+            ? { ...n, data: { ...n.data, config } }
+            : n
+        )
+      );
+      // Keep the selected node reference in sync with the updated data
+      setSelectedNode((prev) =>
+        prev && prev.id === nodeId
+          ? { ...prev, data: { ...prev.data, config } }
+          : prev
+      );
+    },
+    [setNodes]
   );
 
   // ── Save ────────────────────────────────────────────────────────────────────
@@ -321,6 +627,7 @@ export function WorkflowCanvas({ workflow }: WorkflowCanvasProps) {
             onNodesChange={onNodesChange}
             onEdgesChange={onEdgesChange}
             onConnect={onConnect}
+            onNodeClick={onNodeClick}
             nodeTypes={nodeTypes}
             fitView
             deleteKeyCode="Delete"
@@ -330,6 +637,15 @@ export function WorkflowCanvas({ workflow }: WorkflowCanvasProps) {
             <MiniMap />
           </ReactFlow>
         </div>
+
+        {/* Node config panel */}
+        {selectedNode && (
+          <NodeConfigPanel
+            node={selectedNode}
+            onClose={onClosePanel}
+            onApply={onApplyConfig}
+          />
+        )}
       </div>
     </div>
   );
