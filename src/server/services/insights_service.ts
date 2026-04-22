@@ -87,9 +87,9 @@ async function callModel(title: string, content: string): Promise<ExtractedInsig
       return null;
     }
     const json = (await resp.json()) as { choices?: Array<{ message?: { content?: string } }> };
-    const content = json.choices?.[0]?.message?.content;
-    if (!content) return null;
-    const parsed = JSON.parse(content) as { insights: ExtractedInsight[] };
+    const responseContent = json.choices?.[0]?.message?.content;
+    if (!responseContent) return null;
+    const parsed = JSON.parse(responseContent) as { insights: ExtractedInsight[] };
     return parsed.insights ?? [];
   } catch (err) {
     console.error("[insights_service] extraction error:", err instanceof Error ? err.message : err);
