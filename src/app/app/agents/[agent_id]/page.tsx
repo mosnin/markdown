@@ -6,7 +6,7 @@ import Link from "next/link";
 import { requireAuthenticatedUser } from "@/server/auth/require_authenticated_user";
 import { createClient } from "@/lib/supabase/server";
 import { getAgentForWorkspace } from "@/server/services/agent_service";
-import { getBoxById } from "@/server/repositories/box_repository";
+import { getBoxById, listBoxesByWorkspace } from "@/server/repositories/box_repository";
 import { getLinksForObject } from "@/server/services/object_link_service";
 import { listObjectVersions } from "@/server/repositories/object_version_repository";
 import {
@@ -28,6 +28,7 @@ import { AgentOverviewPanel } from "@/components/product/agent_overview_panel";
 import { AgentExportsPanel } from "@/components/product/agent_exports_panel";
 import { AgentChildrenPanel } from "@/components/product/agent_children_panel";
 import { AgentSkillsPanel } from "@/components/product/agent_skills_panel";
+import { AgentTriggersPanel } from "@/components/product/agent_triggers_panel";
 import { AgentContextPanel } from "@/components/product/agent_context_panel";
 import { AgentObjectLinksPanel } from "@/components/product/agent_object_links_panel";
 import { AgentLifecycleMenu } from "@/components/product/agent_lifecycle_menu";
@@ -147,7 +148,7 @@ function resolveLink(
 
 // ─── Valid tabs ───────────────────────────────────────────────────────────────
 
-const VALID_TABS = ["overview", "source", "exports", "children", "skills", "relationships", "trust"] as const;
+const VALID_TABS = ["overview", "source", "exports", "children", "skills", "triggers", "relationships", "trust"] as const;
 type AgentTab = typeof VALID_TABS[number];
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
@@ -193,7 +194,7 @@ export default async function AgentPage({
   }
 
   // Parallel data fetching
-  const [rawLinks, versions, attachments, pendingProposals, boxNotes, boxFiles, boxSkills, boxAgents, reusableAgents, reusableSkills, boxFolders] =
+  const [rawLinks, versions, attachments, pendingProposals, boxNotes, boxFiles, boxSkills, boxAgents, reusableAgents, reusableSkills, boxFolders, boxes] =
     await Promise.all([
       getLinksForObject(supabase, ctx.workspace.id, OBJECT_TYPE.AGENT, agent_id, {
         branchId: ctx.activeBranchId,
@@ -222,6 +223,7 @@ export default async function AgentPage({
             branchId: ctx.activeBranchId,
           })
         : Promise.resolve([]),
+      listBoxesByWorkspace(supabase, ctx.workspace.id),
     ]);
 
   const versionsWithCurrent = versions.map((v) => ({
@@ -453,6 +455,7 @@ export default async function AgentPage({
                   </span>
                 )}
               </TabsTrigger>
+              <TabsTrigger value="triggers" className="pb-2.5 text-xs">Triggers</TabsTrigger>
               <TabsTrigger value="relationships" className="pb-2.5 text-xs">
                 Relationships
                 {(outgoingLinks.length + incomingLinks.length) > 0 && (
@@ -506,6 +509,13 @@ export default async function AgentPage({
                     .map((s) => ({ id: s.id, name: s.name }))}
                 />
               </TabsContent>
+
+          <TabsContent value="triggers" className="flex-1 overflow-auto">
+            <AgentTriggersPanel
+              agentId={agent.id}
+              boxes={boxes.map((b) => ({ id: b.id, name: b.name }))}
+            />
+          </TabsContent>
 
           <TabsContent value="relationships" className="flex-1 overflow-hidden">
             <ScrollArea className="h-full">
