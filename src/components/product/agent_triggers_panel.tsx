@@ -3,6 +3,7 @@
 import { useState, useTransition, useEffect } from "react";
 import { Plus, Trash2, Zap, Clock, FileText, MousePointerClick, ToggleLeft, ToggleRight, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { describeCron, formatRelativeFromNow } from "@/lib/cron";
 import {
   listAgentTriggersAction,
   createAgentTriggerAction,
@@ -34,6 +35,8 @@ export function AgentTriggersPanel({ agentId, boxes, initialTriggers = [] }: Age
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
+  const cronValidation = formType === "schedule" ? describeCron(formCron) : null;
+
   // Load triggers
   useEffect(() => {
     listAgentTriggersAction(agentId).then((result) => {
@@ -44,6 +47,13 @@ export function AgentTriggersPanel({ agentId, boxes, initialTriggers = [] }: Age
   function handleCreate() {
     if (!formLabel.trim()) { setError("Label is required"); return; }
     if (formType === "schedule" && !formCron.trim()) { setError("Cron expression required"); return; }
+    if (formType === "schedule") {
+      const validation = describeCron(formCron);
+      if (!validation.ok) {
+        setError(`Invalid cron expression: ${validation.error}`);
+        return;
+      }
+    }
     setError(null);
     startTransition(async () => {
       const result = await createAgentTriggerAction(agentId, {
@@ -163,6 +173,18 @@ export function AgentTriggersPanel({ agentId, boxes, initialTriggers = [] }: Age
                 className="rounded-md border border-border bg-background px-3 py-1.5 font-mono text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-violet-500"
               />
               <p className="text-[10px] text-muted-foreground">Example: <code>0 9 * * 1</code> = every Monday at 9am UTC</p>
+              {cronValidation && (
+                <div className="mt-1">
+                  {cronValidation.ok ? (
+                    <div className="text-[10px] text-muted-foreground space-y-0.5">
+                      <p>{cronValidation.description}</p>
+                      <p>Next run: {formatRelativeFromNow(cronValidation.nextRuns[0])} ({new Date(cronValidation.nextRuns[0]).toLocaleString()})</p>
+                    </div>
+                  ) : (
+                    <p className="text-[10px] text-red-500">{cronValidation.error}</p>
+                  )}
+                </div>
+              )}
             </div>
           )}
 
@@ -206,6 +228,14 @@ export function AgentTriggersPanel({ agentId, boxes, initialTriggers = [] }: Age
                   {trigger.cron_expression && (
                     <p className="mt-0.5 font-mono text-[10px] text-muted-foreground/70">{trigger.cron_expression}</p>
                   )}
+                  {trigger.trigger_type === "schedule" && trigger.cron_expression && (() => {
+                    const v = describeCron(trigger.cron_expression);
+                    return v.ok ? (
+                      <p className="mt-0.5 text-[10px] text-muted-foreground">
+                        {v.description} · Next: {formatRelativeFromNow(v.nextRuns[0])}
+                      </p>
+                    ) : null;
+                  })()}
                 </div>
                 <div className="flex items-center gap-1.5 shrink-0">
                   <button
