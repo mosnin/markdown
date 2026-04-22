@@ -34,21 +34,19 @@ export async function findEntityByName(
   return (data as Entity) ?? null;
 }
 
+/**
+ * Atomically bump mention_count + last_seen_at via the
+ * `increment_entity_mention_count` SQL function (added in migration
+ * 20260423000002). Replaces a read-then-write that could lose counts
+ * under concurrent note saves.
+ */
 export async function incrementMentionCount(
   supabase: SupabaseClient,
   entityId: string
 ): Promise<void> {
-  const { data: current, error: readErr } = await supabase
-    .from("entities")
-    .select("mention_count")
-    .eq("id", entityId)
-    .single();
-  if (readErr) throw readErr;
-  const nextCount = (current?.mention_count ?? 0) + 1;
-  const { error } = await supabase
-    .from("entities")
-    .update({ mention_count: nextCount, last_seen_at: new Date().toISOString() })
-    .eq("id", entityId);
+  const { error } = await supabase.rpc("increment_entity_mention_count", {
+    p_entity_id: entityId,
+  });
   if (error) throw error;
 }
 

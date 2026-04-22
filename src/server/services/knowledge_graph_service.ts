@@ -228,12 +228,21 @@ async function callExtractionModel(
 }
 
 /**
+ * Debounce window — skip re-extraction when this note was processed
+ * within the last 30 seconds. Stops rapid autosaves from racking up
+ * LLM cost during a flurry of edits.
+ */
+const EXTRACTION_DEBOUNCE_MS = 30_000;
+
+/**
  * Extract entities/edges from a note and upsert them into the graph.
  *
  * - Re-runs delete existing mentions and edges for the note first, so the
  *   graph always reflects current content (no stale mentions after edits).
  * - Entity rows persist across re-extractions (just have their mention_count
  *   bumped). This avoids losing entity history when a user edits a note.
+ * - Honors the workspace `knowledge_graph_enabled` flag (privacy opt-out)
+ *   and the 30-second per-note debounce window (cost control).
  */
 export async function extractAndStoreEntities(
   supabase: SupabaseClient,
@@ -249,6 +258,25 @@ export async function extractAndStoreEntities(
   mentionsCreated: number;
   edgesCreated: number;
 } | null> {
+  // Privacy gate: workspace-level opt-out
+  const { data: ws } = await supabase
+    .from("workspaces")
+    .select("knowledge_graph_enabled")
+    .eq("id", params.workspaceId)
+    .maybeSingle();
+  if (ws && ws.knowledge_graph_enabled === false) return null;
+
+  // Cost gate: debounce per-note extraction
+  const { data: noteRow } = await supabase
+    .from("notes")
+    .select("kg_last_extracted_at")
+    .eq("id", params.noteId)
+    .maybeSingle();
+  if (noteRow?.kg_last_extracted_at) {
+    const last = new Date(noteRow.kg_last_extracted_at).getTime();
+    if (Date.now() - last < EXTRACTION_DEBOUNCE_MS) return null;
+  }
+
   const extraction = await callExtractionModel(params.title, params.content);
   if (!extraction) return null;
 
@@ -333,6 +361,13 @@ export async function extractAndStoreEntities(
       );
     }
   }
+
+  // Stamp the extraction timestamp so the debounce window applies to
+  // subsequent rapid saves.
+  await supabase
+    .from("notes")
+    .update({ kg_last_extracted_at: new Date().toISOString() })
+    .eq("id", params.noteId);
 
   return { entitiesCreated, mentionsCreated, edgesCreated };
 }
