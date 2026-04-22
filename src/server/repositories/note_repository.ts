@@ -347,3 +347,35 @@ export async function getNotesByIds(
   if (error || !data) return [];
   return data as Note[];
 }
+
+/**
+ * List the most recently updated active notes in a workspace.
+ *
+ * Joins through `boxes` since `notes` has no `workspace_id` column — the
+ * embedded `boxes!inner(workspace_id)` filter keeps the scoping at the
+ * database level. Used by the app sidebar's "Recent" surface to orient
+ * the user on every session entry.
+ *
+ * Branch semantics follow the same contract as `listNotesByBox`:
+ *   - branchId = null → main-only view (branch_id IS NULL)
+ *   - branchId = <uuid> → only rows with that exact branch_id (for the
+ *     sidebar we keep it simple and scope to main when no branch is
+ *     active; passing a branch uuid surfaces only branch-local rows).
+ */
+export async function listRecentNotesByWorkspace(
+  supabase: SupabaseClient,
+  workspaceId: string,
+  opts: { limit?: number; branchId?: string | null } = {}
+): Promise<Note[]> {
+  const limit = opts.limit ?? 5;
+  const { data, error } = await supabase
+    .from("notes")
+    .select("*, boxes!inner(workspace_id)")
+    .eq("boxes.workspace_id", workspaceId)
+    .eq("status", NOTE_STATUS.ACTIVE)
+    .is("branch_id", opts.branchId ?? null)
+    .order("updated_at", { ascending: false })
+    .limit(limit);
+  if (error) throw error;
+  return (data ?? []) as Note[];
+}

@@ -2,7 +2,14 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Bot, GitBranch, LayoutDashboard, Plus, Undo2 } from "lucide-react";
+import {
+  Bot,
+  FileText,
+  GitBranch,
+  LayoutDashboard,
+  Plus,
+  Undo2,
+} from "lucide-react";
 import {
   AccountSetting01Icon,
   Alert01Icon,
@@ -92,6 +99,18 @@ interface AppSidebarProps {
   boxes?: BoxType[];
   /** All workspaces the user owns; enables the multi-workspace switcher. */
   workspaces?: Array<{ id: string; name: string; slug: string }>;
+  /**
+   * 5 most-recently-updated notes in the workspace. Powers the "Recent"
+   * section between the primary nav and the boxes tree so users can
+   * jump back to what they were working on without reorienting via the
+   * full box tree each session.
+   */
+  recentNotes?: Array<{
+    id: string;
+    title: string;
+    box_id: string;
+    updated_at: string;
+  }>;
 }
 
 export function AppSidebar({
@@ -100,6 +119,7 @@ export function AppSidebar({
   workspaceId,
   boxes = [],
   workspaces = [],
+  recentNotes,
 }: AppSidebarProps) {
   const pathname = usePathname();
 
@@ -156,6 +176,33 @@ export function AppSidebar({
       </div>
 
       <Separator className="mx-2 my-1" />
+
+      {/* Recent notes — most-recently-updated notes in the workspace */}
+      {recentNotes && recentNotes.length > 0 && (
+        <>
+          <div className="px-3 pt-3 pb-1">
+            <p className="mb-1 text-[10px] font-medium uppercase tracking-wider text-muted-foreground/60">
+              Recent
+            </p>
+            <div className="space-y-0.5">
+              {recentNotes.map((note) => (
+                <Link
+                  key={note.id}
+                  href={`/app/notes/${note.id}`}
+                  className="flex items-center gap-2 rounded-md px-2 py-1 text-xs text-foreground/70 transition-colors hover:bg-accent hover:text-foreground"
+                >
+                  <FileText
+                    className="h-3 w-3 shrink-0 text-muted-foreground/60"
+                    aria-hidden="true"
+                  />
+                  <span className="truncate">{note.title}</span>
+                </Link>
+              ))}
+            </div>
+          </div>
+          <Separator className="mx-2 my-1" />
+        </>
+      )}
 
       {/* Workspace label + boxes tree */}
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden">

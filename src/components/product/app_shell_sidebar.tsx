@@ -11,6 +11,17 @@ interface AppShellSidebarProps {
   workspaceId?: string;
   boxes?: BoxType[];
   workspaces?: Array<{ id: string; name: string; slug: string }>;
+  /**
+   * Minimal shape of the 5 most-recently-updated notes in the workspace,
+   * rendered by AppSidebar's "Recent" section. Server-fetched in the
+   * /app layout and forwarded through this shell wrapper.
+   */
+  recentNotes?: Array<{
+    id: string;
+    title: string;
+    box_id: string;
+    updated_at: string;
+  }>;
 }
 
 /**

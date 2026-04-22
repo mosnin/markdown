@@ -2,6 +2,7 @@ import { type ReactNode } from "react";
 import { requireAuthenticatedUser } from "@/server/auth/require_authenticated_user";
 import { createClient } from "@/lib/supabase/server";
 import { listBoxesByWorkspace } from "@/server/repositories/box_repository";
+import { listRecentNotesByWorkspace } from "@/server/repositories/note_repository";
 import { listWorkspacesByOwner } from "@/server/repositories/workspace_repository";
 import { AppShellSidebar } from "@/components/product/app_shell_sidebar";
 import { MobileShellSidebar } from "@/components/product/mobile_shell_sidebar";
@@ -36,9 +37,13 @@ export default async function AppLayout({
 }) {
   const ctx = await requireAuthenticatedUser();
   const supabase = await createClient();
-  const [boxes, ownedWorkspaces] = await Promise.all([
+  const [boxes, ownedWorkspaces, recentNotes] = await Promise.all([
     listBoxesByWorkspace(supabase, ctx.workspace.id),
     listWorkspacesByOwner(supabase, ctx.user.id),
+    listRecentNotesByWorkspace(supabase, ctx.workspace.id, {
+      limit: 5,
+      branchId: ctx.activeBranchId,
+    }),
   ]);
 
   const userEmail = ctx.user?.email ?? "";
@@ -47,6 +52,15 @@ export default async function AppLayout({
     id: w.id,
     name: w.name,
     slug: w.slug,
+  }));
+
+  // Strip heavy markdown before handing notes to client components. The
+  // sidebar only needs identity + label + ordering key.
+  const recentNotesMini = recentNotes.map((n) => ({
+    id: n.id,
+    title: n.title,
+    box_id: n.box_id,
+    updated_at: n.updated_at,
   }));
 
   return (
@@ -67,6 +81,7 @@ export default async function AppLayout({
           workspaceId={ctx.workspace.id}
           boxes={boxes}
           workspaces={workspaces}
+          recentNotes={recentNotesMini}
         />
       </div>
 
