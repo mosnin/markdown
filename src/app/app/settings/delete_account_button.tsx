@@ -1,12 +1,15 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { deleteAccountAction } from "./delete_account_actions";
 
 export function DeleteAccountButton() {
   const [confirming, setConfirming] = useState(false);
   const [value, setValue] = useState("");
+  const [isPending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
 
   function handleCancel() {
     setConfirming(false);
@@ -49,14 +52,18 @@ export function DeleteAccountButton() {
             <Button
               variant="destructive"
               size="sm"
-              disabled={value !== "DELETE"}
+              disabled={isPending || value !== "DELETE"}
               onClick={() => {
-                // Deletion not yet implemented — show browser alert as placeholder
-                alert("Account deletion is coming soon. Please contact support to delete your account.");
-                handleCancel();
+                startTransition(async () => {
+                  const result = await deleteAccountAction();
+                  if (result && !result.ok) {
+                    setError(result.error);
+                  }
+                  // On success, the server action calls redirect("/") so we never reach here
+                });
               }}
             >
-              Confirm deletion
+              {isPending ? "Deleting…" : "Confirm deletion"}
             </Button>
             <Button
               variant="outline"
@@ -66,6 +73,7 @@ export function DeleteAccountButton() {
               Cancel
             </Button>
           </div>
+          {error && <p className="text-xs text-red-500">{error}</p>}
         </div>
       )}
     </>
