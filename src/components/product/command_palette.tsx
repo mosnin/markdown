@@ -57,10 +57,14 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
   const [entities, setEntities] = useState<PaletteEntity[]>([]);
 
   // Reset input whenever the palette toggles open so each summon starts
-  // from a clean state without leaking the prior search.
-  useEffect(() => {
+  // from a clean state without leaking the prior search. We use the
+  // derived-state-during-render pattern so the reset is synchronous and
+  // doesn't trigger a cascading re-render from an effect.
+  const [wasOpen, setWasOpen] = useState(open);
+  if (open !== wasOpen) {
+    setWasOpen(open);
     if (open) setQuery("");
-  }, [open]);
+  }
 
   // Initial load — fetch the non-query-dependent data once per open.
   useEffect(() => {

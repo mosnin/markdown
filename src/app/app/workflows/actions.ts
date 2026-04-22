@@ -13,7 +13,7 @@ import {
 import { createWorkflowRun } from "@/server/repositories/workflow_run_repository";
 import { validateWorkflowGraph } from "@/server/services/workflow_validation_service";
 import { inngest } from "@/lib/inngest/client";
-import type { Workflow, WorkflowGraphInput, WorkflowRun } from "@/server/domain/types/workflow";
+import type { Workflow, WorkflowGraphInput } from "@/server/domain/types/workflow";
 
 // ─── Create ──────────────────────────────────────────────────────────────────
 

@@ -88,10 +88,12 @@ export function SlashCommandMenu({
   }, [skillCommands, query]);
 
   const [highlight, setHighlight] = useState(0);
-
-  useEffect(() => {
+  const [resetKey, setResetKey] = useState(`${query}:${items.length}`);
+  const currentKey = `${query}:${items.length}`;
+  if (resetKey !== currentKey) {
+    setResetKey(currentKey);
     setHighlight(0);
-  }, [query, items.length]);
+  }
 
   useEffect(() => {
     if (!anchor) return;

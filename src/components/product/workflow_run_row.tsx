@@ -19,11 +19,11 @@ interface WorkflowRunRowProps {
 
 export function WorkflowRunRow({ run, workflowId }: WorkflowRunRowProps) {
   const Icon = statusIcon(run.status);
-  const startMs = run.started_at ? new Date(run.started_at).getTime() : Date.now();
-  const elapsed = run.completed_at
-    ? new Date(run.completed_at).getTime() - startMs
-    : Date.now() - startMs;
-  const elapsedSec = Math.round(elapsed / 1000);
+  const startMs = run.started_at ? new Date(run.started_at).getTime() : null;
+  const elapsedLabel =
+    run.completed_at && startMs !== null
+      ? `${Math.round((new Date(run.completed_at).getTime() - startMs) / 1000)}s`
+      : "Running…";
 
   return (
     <Link
@@ -49,7 +49,7 @@ export function WorkflowRunRow({ run, workflowId }: WorkflowRunRowProps) {
           {new Date(run.started_at).toLocaleString("en-US")}
         </p>
         <p className="mt-0.5 flex items-center gap-2 text-[11px] text-muted-foreground">
-          <span>{elapsedSec}s</span>
+          <span>{elapsedLabel}</span>
           {run.total_cost_cents > 0 && (
             <>
               <span>·</span>

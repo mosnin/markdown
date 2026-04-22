@@ -52,7 +52,6 @@ const NODE_TYPE_META: Record<
 
 function makeCustomNode(nodeType: WorkflowNodeType) {
   const meta = NODE_TYPE_META[nodeType];
-  // eslint-disable-next-line react/display-name
   return function CustomNode({ data }: { data: { node_key: string; config: Record<string, unknown> } }) {
     return (
       <div

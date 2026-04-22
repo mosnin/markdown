@@ -112,6 +112,19 @@ export function useOperatorRunStream(
   // but a Set gives us exact de-dup in the face of any ordering oddity.
   const seenSequencesRef = useRef<Set<number>>(new Set());
 
+  // Reset all stream state synchronously when `runId` changes — using the
+  // derived-state-during-render pattern so we don't trigger cascading
+  // re-renders from inside an effect.
+  const [activeRunId, setActiveRunId] = useState<string | null>(runId);
+  if (activeRunId !== runId) {
+    setActiveRunId(runId);
+    seenSequencesRef.current = new Set();
+    setEvents([]);
+    setStreamedText("");
+    setTerminalKind(null);
+    setStatus(runId ? "connecting" : "closed");
+  }
+
   const close = useCallback(() => {
     const es = esRef.current;
     if (es) {
@@ -127,21 +140,8 @@ export function useOperatorRunStream(
 
   useEffect(() => {
     if (!runId) {
-      // Reset state for the no-runId branch.
-      seenSequencesRef.current = new Set();
-      setEvents([]);
-      setStreamedText("");
-      setTerminalKind(null);
-      setStatus("closed");
       return;
     }
-
-    // Reset for a fresh subscription.
-    seenSequencesRef.current = new Set();
-    setEvents([]);
-    setStreamedText("");
-    setTerminalKind(null);
-    setStatus("connecting");
 
     if (typeof window === "undefined" || typeof EventSource === "undefined") {
       // SSR / non-browser safety: nothing to subscribe to.
