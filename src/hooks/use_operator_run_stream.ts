@@ -114,11 +114,11 @@ export function useOperatorRunStream(
 
   // Reset all stream state synchronously when `runId` changes — using the
   // derived-state-during-render pattern so we don't trigger cascading
-  // re-renders from inside an effect.
+  // re-renders from inside an effect. The sequence-de-dup ref is reset
+  // inside the subscribe effect below (can't mutate refs during render).
   const [activeRunId, setActiveRunId] = useState<string | null>(runId);
   if (activeRunId !== runId) {
     setActiveRunId(runId);
-    seenSequencesRef.current = new Set();
     setEvents([]);
     setStreamedText("");
     setTerminalKind(null);
@@ -139,6 +139,9 @@ export function useOperatorRunStream(
   }, []);
 
   useEffect(() => {
+    // Fresh subscription — clear the per-run dedup set before wiring up.
+    seenSequencesRef.current = new Set();
+
     if (!runId) {
       return;
     }
