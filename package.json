@@ -16,7 +16,10 @@
     "build:mcp": "tsc --project tsconfig.mcp.json",
     "test:e2e": "playwright test",
     "workers:dev": "cd workers/diff-worker && wrangler dev & cd workers/bundle-cache-worker && wrangler dev",
-    "workers:deploy": "cd workers/diff-worker && wrangler deploy && cd workers/bundle-cache-worker && wrangler deploy"
+    "workers:deploy": "cd workers/diff-worker && wrangler deploy && cd workers/bundle-cache-worker && wrangler deploy",
+    "deploy:check": "tsx scripts/deploy_check.ts",
+    "deploy:bucket": "tsx scripts/create_storage_bucket.ts",
+    "deploy:migrations": "bash scripts/push_migrations.sh"
   },
   "dependencies": {
     "@base-ui/react": "^1.3.0",
