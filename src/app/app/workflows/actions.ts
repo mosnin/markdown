@@ -20,6 +20,7 @@ import {
 import { validateWorkflowGraph } from "@/server/services/workflow_validation_service";
 import { describeCron } from "@/lib/cron";
 import { inngest } from "@/lib/inngest/client";
+import { findWorkflowTemplateById } from "@/server/domain/workflow_templates";
 import type { Workflow, WorkflowGraphInput } from "@/server/domain/types/workflow";
 
 // ─── Create ──────────────────────────────────────────────────────────────────
@@ -61,6 +62,53 @@ export async function createWorkflowAction(
     return {
       ok: false,
       error: err instanceof Error ? err.message : "Failed to create workflow",
+    };
+  }
+}
+
+// ─── Create from template ─────────────────────────────────────────────────────
+
+export type CreateWorkflowFromTemplateResult =
+  | { ok: true; workflowId: string }
+  | { ok: false; error: string };
+
+export async function createWorkflowFromTemplateAction(
+  templateId: string,
+  customName?: string
+): Promise<CreateWorkflowFromTemplateResult> {
+  try {
+    const template = findWorkflowTemplateById(templateId);
+    if (!template) {
+      return { ok: false, error: "Template not found" };
+    }
+
+    // Run validation up front so we fail cheaply before writing anything.
+    const validation = validateWorkflowGraph(template.graph);
+    if (!validation.ok) {
+      return {
+        ok: false,
+        error: `Template graph is invalid: ${validation.errors.join("; ")}`,
+      };
+    }
+
+    const ctx = await requireAuthenticatedUser();
+    const supabase = await createClient();
+
+    const workflow = await createWorkflow(supabase, {
+      workspace_id: ctx.workspace.id,
+      user_id: ctx.user.id,
+      name: (customName?.trim() ? customName.trim() : template.name),
+    });
+
+    await replaceWorkflowGraph(supabase, workflow.id, template.graph);
+
+    revalidatePath("/app/workflows");
+    return { ok: true, workflowId: workflow.id };
+  } catch (err) {
+    return {
+      ok: false,
+      error:
+        err instanceof Error ? err.message : "Failed to create workflow from template",
     };
   }
 }
