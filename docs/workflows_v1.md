@@ -214,3 +214,98 @@ Returns `{ ok: true } | { ok: false; errors: string[] }`. UI blocks save with an
 - **Parallel execution** — nodes execute sequentially even when the graph permits parallelism. Fan-out is deferred.
 - **Live editing** — no CRDT on the canvas; last-write-wins per save. Multiplayer editing of workflows is v2.
 - **Cross-workspace sharing** — a workflow belongs to one workspace. Template library (exports) is Phase 8F, also deferred.
+
+---
+
+## Schedule triggers (cron)
+
+Workflows can be set to fire automatically on a cron schedule. This builds on the existing `agent_triggers` table and Inngest `execute_scheduled_triggers` function.
+
+### How it works
+
+1. A `cron_expression` (standard 5-field POSIX cron) is stored in an `agent_triggers` row associated with the workflow via `workflows.trigger_id`.
+2. The Inngest `execute_scheduled_triggers` function runs on a cron and queries `agent_triggers` for rows whose next-fire time has passed.
+3. For each due trigger, it publishes a `workflow.run` event, which starts `executeWorkflow`.
+
+### Server actions
+
+All schedule actions are in `src/app/app/workflows/actions.ts`:
+
+#### `setWorkflowScheduleAction(workflowId, cronExpression, enabled?)`
+
+Creates or updates the cron trigger for a workflow. If a trigger already exists (`workflow.trigger_id` is set), it updates the expression and enabled state in place. On first creation:
+
+1. Creates the `agent_triggers` row with `is_enabled: false`.
+2. Links it to the workflow (`update workflows set trigger_id = ...`).
+3. If `enabled` is true, re-enables the trigger after the link succeeds.
+4. On link failure, deletes the orphan trigger row to avoid ghost rows.
+
+Returns `{ ok: true; triggerId: string } | { ok: false; error: string }`.
+
+#### `clearWorkflowScheduleAction(workflowId)`
+
+Removes the schedule. Nulls the workflow FK first, then deletes the `agent_triggers` row to avoid a dangling FK reference.
+
+#### `getWorkflowScheduleAction(workflowId)`
+
+Returns the current trigger info:
+
+```ts
+type WorkflowScheduleInfo = {
+  id: string;
+  cron_expression: string | null;
+  is_enabled: boolean;
+  label: string;        // human-readable, e.g. "Every day at 9:00 AM"
+};
+```
+
+### Cron expression format
+
+Cron expressions are validated and described by `describeCron()` in `src/lib/cron.ts` before they are persisted. Invalid expressions are rejected at the action layer with a user-facing error. The label field (e.g. "Every Monday at 9:00 AM") is computed from the expression and stored for display.
+
+Standard 5-field cron: `minute hour day-of-month month day-of-week`. Examples:
+
+| Expression | Meaning |
+|---|---|
+| `0 9 * * 1` | Every Monday at 09:00 UTC |
+| `0 */6 * * *` | Every 6 hours |
+| `30 8 * * 1-5` | Weekdays at 08:30 UTC |
+| `0 0 1 * *` | First day of every month |
+
+---
+
+## Built-in workflow templates
+
+Five templates ship with the app in `src/server/domain/workflow_templates.ts`. They are available via the **New from template** gallery in `/app/workflows`.
+
+| ID | Name | Category | Description |
+|---|---|---|---|
+| `news-digest` | Daily news digest | content | Search the web for today's top AI news and summarise it into a tidy bullet list. |
+| `competitor-monitor` | Competitor monitor | monitoring | Fetch a competitor's pricing page and call out any changes compared to the previous snapshot. |
+| `research-assistant` | Research assistant | research | Search the web on a topic, extract key facts, then hand the top results to a sub-agent for a deeper dive. |
+| `content-summarizer` | Content summarizer | content | Fetch a URL and condense the article into a crisp 200-word summary. |
+| `multi-source-aggregator` | Multi-source aggregator | research | Run two web searches and a page fetch in parallel, merge the results, then synthesise a unified brief. |
+
+Templates are cloned into a new `workflows` row via `createWorkflowFromTemplateAction`. The graph is validated before any DB writes; invalid template graphs surface as a `500` with detail.
+
+The `research-assistant` template contains a `subagent` node with `skill_id: "REPLACE_ME_WITH_SKILL_ID"` as a placeholder — users must substitute a real skill ID after cloning.
+
+---
+
+## Server actions reference
+
+All actions live in `src/app/app/workflows/actions.ts` and are `"use server"` functions requiring an authenticated session.
+
+| Action | Parameters | Returns |
+|---|---|---|
+| `createWorkflowAction` | `name: string` | `{ ok: true; workflowId }` |
+| `createWorkflowFromTemplateAction` | `templateId, customName?` | `{ ok: true; workflowId }` |
+| `saveWorkflowAction` | `workflowId, { name?, description?, graph? }` | `{ ok: true } \| { ok: false; validationErrors? }` |
+| `runWorkflowAction` | `workflowId, input?` | `{ ok: true; runId }` |
+| `listWorkflowsAction` | — | `{ ok: true; workflows: Workflow[] }` |
+| `getWorkflowAction` | `workflowId` | `{ ok: true; workflow }` |
+| `setWorkflowScheduleAction` | `workflowId, cronExpression, enabled?` | `{ ok: true; triggerId }` |
+| `clearWorkflowScheduleAction` | `workflowId` | `{ ok: true }` |
+| `getWorkflowScheduleAction` | `workflowId` | `{ ok: true; trigger: WorkflowScheduleInfo \| null }` |
+
+All actions revalidate the relevant Next.js path cache entries on success.
