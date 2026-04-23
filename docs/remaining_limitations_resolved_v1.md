@@ -228,10 +228,14 @@ attributes preserve the full name for hover / long-press inspection.
 
 ## Verification
 
-- `pnpm typecheck` — 0 errors.
-- `pnpm lint` — 0 errors (pre-existing unused-var warnings unchanged).
-- `pnpm test` — 209/209 pass.
-- `pnpm build` — all routes compile.
+Historical verification snapshot from the original pass:
+
+- `pnpm typecheck` — passed.
+- `pnpm lint` — passed with warnings.
+- `pnpm test` — passed (V1 snapshot at that time reported 209 tests).
+- `pnpm build` — all routes compiled.
+
+Current repository test counts have expanded since that snapshot.
 
 ---
 

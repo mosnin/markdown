@@ -112,8 +112,8 @@ Supabase credentials are needed in CI.
 
 ## MCP server deployment
 
-The MCP server is a **stdio process** — it runs on the AI agent's machine, not
-on Vercel. Typical deployment:
+The MCP server below is the **legacy stdio transport** — it runs on the AI
+agent's machine, not on Vercel. Typical deployment:
 
 1. Build the MCP binary:
    ```bash
@@ -143,6 +143,10 @@ on Vercel. Typical deployment:
 
 The MCP server logs to stderr only. No ports are opened. All data access goes
 through the canonical API with the provided bearer token.
+
+For connector-facing production integrations, prefer the OAuth 2.1 HTTP MCP
+endpoint at `/api/mcp` (documented in `docs/mcp_v1.md` and
+`docs/mcp_oauth_and_secure_connector_architecture_v1.md`).
 
 ---
 

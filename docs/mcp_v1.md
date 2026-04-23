@@ -338,13 +338,13 @@ Semantics:
 **Calls API over HTTP, never imports app services directly.**
 The MCP layer has no knowledge of database schemas, repository patterns, or service implementations. The canonical API is the single integration point. This means MCP and the app can evolve independently.
 
-**12 tools total: 9 read + 3 write.**
+**Legacy stdio tool surface: 12 tools total (9 read + 3 write).**
 Read tools match the canonical read API exactly — one tool per endpoint. Write tools match the 3 write endpoints added in V1. No synthetic aggregation, no client-side pagination (the API handles limits). Export tools are omitted: binary ZIP downloads are not useful over MCP.
 
 **All errors returned as tool errors, not thrown.**
 Network errors, auth failures, and 404s are caught and returned as `{ isError: true, content: [{ type: "text", text: "..." }] }` so the AI client receives a useful error message rather than an unhandled exception.
 
-**stdio transport in V1.**
+**Legacy stdio transport in V1.**
 Simple, universally supported, works with every MCP client. HTTP+SSE transport can be added later by swapping the transport in `index.ts` without touching the tools or server factory.
 
 ## Extension: HTTP MCP transport with OAuth 2.1 (v1.1)

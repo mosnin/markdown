@@ -119,7 +119,7 @@ These items were assessed and explicitly deferred to post-launch:
 |---|---|
 | Distributed rate limiting (Vercel KV) | Private beta; single-workspace usage bounded |
 | DB-level integration tests | Requires test Supabase instance |
-| E2E tests (Playwright) | No test infrastructure set up in V1 |
+| E2E coverage depth (Playwright) | Infrastructure is now in place (`playwright.config.ts`, `pnpm test:e2e`); scenario breadth remains a post-launch expansion item |
 | Source content size limit in service layer | API route enforces 500KB; service layer relies on this |
 | Realtime reconnection hardening | Supabase realtime already handles reconnect; UI has fallback refresh |
 | N+1 query optimization on skills/agents library | Observed but not measured; no user-visible perf issue at beta scale |
@@ -129,9 +129,13 @@ These items were assessed and explicitly deferred to post-launch:
 
 ## Verification
 
-After Phase 4:
+After Phase 4 (historical hardening snapshot on 2026-04-11):
 
 - Tests: 209/209 passing (18 test files)
 - New test files: 4 (all unit, zero DB dependencies)
 - Files modified: ~15
 - Files created: 1 (this document)
+
+For the evolving post-hardening test matrix (including Playwright and additional
+integration coverage), see `docs/testing_strategy_v1.md` and
+`docs/production_readiness_v1.md`.

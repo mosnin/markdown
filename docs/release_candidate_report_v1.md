@@ -134,10 +134,11 @@ Generated note banner on unpromoted notes. History panel with rollback in all ve
 - Rate limiting: `apiWriteLimit` (20 writes/min) on `POST /api/v1/write_proposals` and `POST /api/v1/generated_notes`
 - Response envelope: `{ data, meta: { api_version, request_id } }` / `{ error: { code, message } }`
 
-**MCP adapter** at `src/mcp/`:
-- Tools covering note CRUD, search, bundles, write proposals (all object types), generated notes, system guide
-- Thin adapter over canonical API — no second backend logic
-- `stdio` transport; configured in MCP client with `CONTEXT_STORE_API_KEY`
+**MCP surfaces**:
+- Legacy stdio server at `src/server/mcp/` (run with `pnpm mcp`)
+- Primary connector-facing HTTP MCP endpoint at `/api/mcp` (OAuth 2.1 bearer tokens)
+- Stdio server proxies canonical `/api/v1/**` routes and uses `CONTEXT_STORE_CONNECTION_SECRET` (`csk_v1_...`)
+- Both surfaces are intentionally thin adapters over canonical service/API seams (no separate backend domain logic)
 
 ---
 
@@ -158,7 +159,9 @@ Folder hierarchy restored via topological sort before note/object creation.
 
 **Test framework:** Vitest with `@vitest/coverage-v8`.
 
-**18 test files, 209 tests — all passing.**
+**V1 release-gate snapshot (2026-04-11): 18 test files, 209 tests — all passing.**
+
+Current repository state has expanded test coverage beyond this snapshot.
 
 ### Unit tests
 
@@ -232,12 +235,12 @@ Folder hierarchy restored via topological sort before note/object creation.
 - **Mitigation:** 90-day default applied to all new and rotated tokens.
 - **Post-launch consideration:** Enforce hard max token lifetime in V2.
 
-### No DB integration or E2E tests
+### No DB integration tests
 
-- **Risk:** DB-dependent behavior (RPC atomicity, import collision modes) not
-  in automated tests.
+- **Risk:** DB-dependent behavior (RPC atomicity, import collision modes) is not
+  covered by a dedicated real-database integration harness.
 - **Mitigation:** Service-level integration tests with mocked repository layer
-  cover the four highest-risk flows.
+  cover core conflict/auth/lifecycle flows and operator REST execution/quotas.
 - **Post-launch fix:** Supabase branching for DB integration test harness.
 
 ---
@@ -255,7 +258,7 @@ Folder hierarchy restored via topological sort before note/object creation.
 | Distributed rate limiting (Vercel KV / Upstash) | High — before public launch |
 | Nonce-based CSP (remove `unsafe-inline`) | Medium |
 | DB integration test harness (Supabase branching) | Medium |
-| E2E tests (Playwright) | Medium |
+| Expand E2E coverage depth (Playwright) | Medium |
 | Schedule export artifact cleanup (pg_cron) | Low |
 | Hard maximum token lifetime enforcement | Low |
 

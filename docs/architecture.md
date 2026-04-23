@@ -451,9 +451,9 @@ src/server/
 │   ├── generated_note_service.ts       Direct authorized note creation (generate_in_allowed_folders)
 │   ├── diff_utils.ts                   computeDiffSummary, computeRollbackDiff (deterministic, no AI)
 │   └── version_history_service.ts      listVersionsForNote, getVersionForNote, rollbackNoteToVersion
-├── api/                                (future) Route handler layer
-├── policies/                           (future) Authorization checks
-└── mcp/                                MCP server (stdio, 12 tools, proxies canonical API)
+├── api/                                API-route utilities (response envelopes, auth guard helpers)
+├── policies/                           Central trust-policy decisions (connection write permissions)
+└── mcp/                                Legacy stdio MCP server (12 tools, proxies canonical API)
     ├── index.ts                        Entrypoint — StdioServerTransport
     ├── server.ts                       McpServer factory
     ├── config.ts                       Env validation
@@ -661,18 +661,23 @@ src/components/product/
 └── folder_policy_toggle.tsx   Folder accepts_generated_notes toggle (compact + full)
 ```
 
-## MCP server
+## MCP surfaces
 
 See [docs/mcp_v1.md](mcp_v1.md) for the full MCP architecture.
 
-- Stateless stdio MCP server
-- 12 tools: 9 read + 3 write (proposals + generated notes)
-- Proxies all calls to the running Next.js app over HTTP — no direct DB access
-- Auth via connection bearer token (`csk_v1_...`) — same as the external API
+- **Legacy stdio server** (`src/server/mcp/`, run via `pnpm mcp`)
+  - Local process transport (stdio), no listening port
+  - Auth via workspace connection secret (`csk_v1_...`)
+  - Proxies canonical `/api/v1/**` routes; no direct DB access
+  - Preserved for local/embedded agent clients
+- **Primary connector-facing HTTP MCP endpoint** (`/api/mcp`)
+  - JSON-RPC over HTTP with OAuth 2.1 bearer access tokens
+  - Source of truth for third-party connector integrations
+  - Includes branch-aware MCP tools beyond the original stdio v1 toolpair
 
 ```
-pnpm mcp       # run with tsx (dev)
-pnpm build:mcp # compile to dist/mcp/ (prod)
+pnpm mcp       # run legacy stdio server with tsx (dev)
+pnpm build:mcp # compile legacy stdio server to dist/mcp/ (prod)
 ```
 
 ## Lifecycle control layer

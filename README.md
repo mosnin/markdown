@@ -78,15 +78,17 @@ Open `http://localhost:3000` and sign in via magic link.
 | `pnpm test:watch` | Test watch mode |
 | `pnpm test:coverage` | Tests with coverage report |
 | `pnpm ci` | Full local CI: typecheck + lint + test + build |
-| `pnpm mcp` | Run MCP server (requires `.env.mcp.local`) |
+| `pnpm mcp` | Run legacy stdio MCP server (requires `.env.mcp.local`) |
 | `pnpm build:mcp` | Build compiled MCP server to `dist/mcp/` |
 
 ---
 
 ## MCP server
 
-Context Store ships a standalone MCP server for AI agent integrations
-(Claude, Cursor, etc.).
+Context Store ships two MCP integration surfaces:
+
+- **Legacy stdio server** (`pnpm mcp`) using `csk_v1_` connection secrets
+- **Primary OAuth HTTP MCP endpoint** at `/api/mcp` (OAuth 2.1 + PKCE)
 
 ```bash
 # Configure MCP environment
@@ -98,7 +100,7 @@ set -a; source .env.mcp.local; set +a
 pnpm mcp
 ```
 
-See `docs/deployment_v1.md` for production MCP configuration.
+See `docs/mcp_v1.md` for MCP auth/tooling details and `docs/deployment_v1.md` for deployment guidance.
 
 ---
 
@@ -112,6 +114,7 @@ See `docs/deployment_v1.md` for production MCP configuration.
 | `docs/security_notes_v1.md` | Security model and known risks |
 | `docs/testing_strategy_v1.md` | Test strategy and coverage |
 | `docs/canonical_api_v1.md` | External API reference |
+| `docs/mcp_v1.md` | MCP auth flows (OAuth HTTP + legacy stdio), tool surface, connector setup |
 | `docs/connections_v1.md` | External connection auth model |
 | `docs/import_export_v1.md` | Import/export portability contract |
 | `docs/context_bundle_v1.md` | Context bundle assembly |

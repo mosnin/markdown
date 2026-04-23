@@ -1,20 +1,24 @@
 # src/server/policies
 
-Authorization layer. Policies enforce access rules before services execute mutations.
+Authorization and policy guidance for Context Store.
 
-## Planned contents
+## Current state
 
-- `workspace_policy.ts` — can user read/write/admin this workspace?
-- `box_policy.ts` — can user access this box?
-- `note_policy.ts` — can user read/write/delete this note?
-- `bundle_policy.ts` — can user export or share this bundle?
+Policy enforcement is implemented across:
+
+- Auth helpers and role guards in `src/server/auth/*`
+  - e.g. `require_authenticated_user.ts`, `require_role.ts`,
+    `get_request_context.ts`, `mcp_auth_adapter.ts`
+- Service-level trust/permission checks
+  - e.g. `object_trust_policy_service.ts`, `oauth_scope_service.ts`
+- Database-level RLS and constraints (see `supabase/migrations/*`)
+
+This folder currently contains only this README; policy code lives in auth and
+service modules listed above.
 
 ## Conventions
 
-- Policy functions take `(userId, resource)` and return `boolean` or throw `Unauthorized`
-- Policies are called by services, never by route handlers directly
-- Keep policy logic thin — map to RLS rules in Supabase where possible
-
-## Not yet implemented
-
-Deferred to the auth and RBAC prompt.
+- Enforce identity first (who is calling), then capability/role (what they may do).
+- Keep authorization checks close to mutation boundaries.
+- Keep a defense-in-depth model: route/action guard + service checks + RLS.
+- Prefer explicit, auditable checks over implicit behavior.

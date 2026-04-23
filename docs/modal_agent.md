@@ -48,16 +48,41 @@ Boundaries:
 - `WORKSPACE_OPERATOR_SHARED_SECRET` — shared with Modal secret
 - Off in all environments by default; enable per-deployment.
 
-## Tools (v1)
+## Tool surface (current)
 
-| Tool            | Purpose                                         | Endpoint                            | Guardrails                     |
-|-----------------|-------------------------------------------------|-------------------------------------|--------------------------------|
-| `hybrid_search` | Semantic + keyword + graph search               | `POST /api/agent/tools/search`      | workspace-scoped via envelope  |
-| `draft_note`    | Create a note on the run's draft branch         | `POST /api/agent/tools/draft_note`  | branch-scoped via envelope     |
+The Workspace Operator now has a broader toolbelt than the original v1
+`hybrid_search` + `draft_note` pair.
 
-Deferred to later phases: `read_note`, `edit_note`, `link_notes`,
-`apply_template`, `web_fetch`, `execute_code` (Modal sandbox),
-`restructure`, `query_external` (Slack/Gmail/Linear), `schedule_self`.
+### Plan mode (read-only)
+
+- `hybrid_search`
+- `list_notes_in_box`
+- `read_note`
+- `web_search`
+- `web_fetch`
+
+### Execute/full mode (write-capable)
+
+Includes plan-mode tools plus:
+
+- `draft_note`
+- `edit_note`
+- `rename_note`
+- `move_note`
+- `archive_note`
+- `link_notes`
+- `apply_template`
+- `execute_code` (Modal sandbox execution + audit callback)
+- `propose_box_structure`
+- `read_memories`
+- `write_memory`
+- `read_pending_steers`
+- optional sub-agent delegation tools (`delegate_to_research`,
+  `delegate_to_drafting`, `delegate_to_code`) when explicitly allowlisted
+
+Notes:
+- Final per-run availability is filtered by the persona/tool allowlist.
+- Write-tool execution can be gated behind human approval (`requires_approval`).
 
 ## Guardrails
 

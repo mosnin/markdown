@@ -1,20 +1,29 @@
 # src/server/api
 
-Route handlers and API layer for Context Store.
+API entrypoints for Context Store.
 
-## Planned contents
+This folder is intentionally light because route handlers live under
+`src/app/api/**/route.ts` (Next.js App Router convention). The API layer is
+implemented and in active use.
 
-- `route.ts` files co-located with `src/app/api/**` routes
-- Thin handlers that validate input, call services, and return responses
-- No business logic — delegate to `../services`
+## What is implemented now
+
+- Route handlers under `src/app/api/**` for:
+  - MCP (`/api/mcp`) and OAuth (`/api/oauth/*`)
+  - Canonical API (`/api/v1/**`)
+  - Workspace Operator and agent tool callbacks (`/api/operator/*`, `/api/agent/*`)
+  - Internal jobs/webhooks (`/api/internal/*`, `/api/inngest`)
+- Shared API response helpers in `src/lib/api/response.ts`
+- Route-level auth resolution (cookie session, OAuth bearer, API key, or shared-secret envelope depending on surface)
 
 ## Conventions
 
-- Use Next.js Route Handlers (`export async function GET/POST/...`)
-- Validate request bodies with zod schemas
-- Return consistent `{ data, error }` shapes
-- Authentication middleware applied at the route level
+- Keep route handlers thin: parse/validate input, resolve auth, delegate to services.
+- Keep business rules in `src/server/services/*`.
+- Keep direct DB access in `src/server/repositories/*`.
+- Prefer returning explicit error codes using `apiOk` / `apiError` helpers.
 
-## Not yet implemented
+## Notes
 
-Auth, database, and endpoints are all deferred to later prompts.
+Historical planning notes in older docs may still refer to this layer as
+"deferred"; that is no longer true.

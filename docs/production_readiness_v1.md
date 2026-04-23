@@ -25,7 +25,8 @@ insertions.
 **Phase 4 (hardening) completed 2026-04-11.** Rate limiting wired into API write
 routes, object proposals supported in canonical API, input guards added to
 lifecycle server actions, error message sanitization improved, 4 new unit test
-modules added. Tests: 209/209.
+modules added. Historical hardening snapshot: 209/209 tests passing at that
+time; see `docs/testing_strategy_v1.md` for the current evolving test matrix.
 
 ---
 
@@ -79,12 +80,12 @@ modules added. Tests: 209/209.
 | Import vocabulary tests | ✅ | Canonical relationship types and read hints |
 | Rate limiter tests | ✅ | Window logic, per-key isolation, expiry |
 | Markdown sanitization tests | ✅ | XSS vectors, safe content preservation |
-| Integration tests (service-level) | ✅ | 4 modules: conflict detection, generated note auth, stable ID, lifecycle protection |
+| Integration tests (service-level) | ✅ | Expanded beyond initial 4 modules; includes operator REST full-flow and quota/rate-limit ordering integration coverage in addition to core conflict/auth/lifecycle checks |
 | Rollback safety unit tests | ✅ | Ownership, version identity, immutability invariants |
 | Note update safety unit tests | ✅ | Content verbatim, diff from prior state, RPC error propagation |
 | Context bundle assembly unit tests | ✅ | Ownership, exclusion rules, deduplication, ranking, linked limit |
 | DB integration tests | ⏳ Deferred | Needs test Supabase instance — post-launch |
-| E2E tests | ⏳ Deferred | No Playwright setup in V1 |
+| E2E tests | ✅ | Playwright is now configured (`playwright.config.ts`) with `pnpm test:e2e` targeting `./e2e` |
 
 ### Observability
 
@@ -121,7 +122,7 @@ modules added. Tests: 209/209.
 | MCP env documented | ✅ | In `.env.example` and `docs/deployment_v1.md` |
 | Build passes with placeholder envs | ✅ | Verified by CI config |
 | Security headers in production | ✅ | Configured in `next.config.ts` |
-| Database migrations ready | ✅ | 12 SQL files in `supabase/migrations/` |
+| Database migrations ready | ✅ | Migrations are actively maintained in `supabase/migrations/` (post-V1 sequence) |
 
 ### CI and developer workflow
 
@@ -204,14 +205,12 @@ documented mitigation path.
 - **Mitigation in V1**: 90-day default enforced at both creation points.
 - **Post-launch consideration**: Enforce hard maximum token lifetime in V2.
 
-### No DB-level integration or E2E tests
+### No DB-level integration tests
 
 - **Risk**: DB-dependent behavior (version history, RPC atomicity, import
-  collision modes) not covered by automated tests.
+  collision modes) still lacks a dedicated real-database integration harness.
 - **Severity**: Medium for ongoing development.
-- **Mitigation in V1**: Service-level integration tests (mocked DB) cover the
-  four highest-risk flows: proposal conflicts, generated note auth, stable ID
-  resolution, lifecycle guide protection.
+- **Mitigation in V1**: Service-level integration tests (mocked DB) cover core conflict/auth/lifecycle flows and operator REST execution/quotas, reducing risk while DB-harness work remains.
 - **Post-launch fix**: Set up DB integration test harness with Supabase branching.
 
 ---

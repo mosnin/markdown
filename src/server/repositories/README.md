@@ -1,23 +1,36 @@
 # src/server/repositories
 
-Data access layer. Repositories wrap Supabase queries and return typed domain objects.
+Data-access layer for Context Store.
 
-## Planned contents
+Repositories wrap Supabase queries and return typed domain shapes. This layer is
+implemented and contains the majority of table-level read/write contracts.
 
-- `workspace_repository.ts`
-- `box_repository.ts`
-- `note_repository.ts`
-- `folder_repository.ts`
-- `bundle_repository.ts`
-- `user_repository.ts`
+## What is implemented now
+
+Representative repositories include:
+
+- Core objects: `note_repository.ts`, `file_repository.ts`, `skill_repository.ts`,
+  `agent_repository.ts`, `workspace_object_repository.ts`
+- Structure and links: `box_repository.ts`, `folder_repository.ts`,
+  `note_link_repository.ts`, `object_link_repository.ts`,
+  `box_object_attachment_repository.ts`
+- Versioning and rollback: `note_version_repository.ts`,
+  `object_version_repository.ts`, `workflow_run_repository.ts`
+- Identity/access/integration: `workspace_repository.ts`,
+  `workspace_membership_repository.ts`, `connection_repository.ts`
+- Intelligence/ops: `entity_repository.ts`, `entity_edge_repository.ts`,
+  `entity_mention_repository.ts`, `kg_backfill_job_repository.ts`,
+  `audit_event_repository.ts`
 
 ## Conventions
 
-- One repository per aggregate root
-- Repositories accept typed inputs and return typed domain objects
-- No business logic — pure data access
-- Use the Supabase server client from `@/lib/supabase/server`
+- Keep repositories focused on persistence concerns.
+- Do not encode product policy/business workflows here.
+- Return typed rows/models expected by services.
+- Use explicit filters for workspace/ownership scoping; do not rely on implicit context.
 
-## Not yet implemented
+## Notes
 
-Deferred to the database schema and Supabase integration prompt.
+Some repository modules include branch-aware read overlays and lifecycle helpers;
+that behavior should remain data-contract focused, with higher-order policy in
+services.

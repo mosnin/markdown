@@ -1,21 +1,24 @@
 # src/server/resolvers
 
-Server action resolvers. These are the Next.js Server Actions that the UI calls directly.
+Historical location for server-action resolver modules.
 
-## Planned contents
+## Current state
 
-- `note_resolvers.ts` — createNote, updateNote, deleteNote
-- `box_resolvers.ts` — createBox, renameBox, archiveBox
-- `workspace_resolvers.ts` — createWorkspace, updateWorkspace
-- `bundle_resolvers.ts` — assembleBundle, exportBundle
+In the current codebase, most server actions are colocated with route segments
+under `src/app/**/actions.ts` rather than centralized in this folder.
+
+Examples:
+
+- `src/app/app/notes/actions.ts`
+- `src/app/app/workspace_operator/actions.ts`
+- `src/app/app/branches/actions.ts`
+- `src/app/app/settings/**/actions.ts`
+
+This folder is kept for architectural continuity and potential shared resolver
+utilities, but the primary action surface is route-colocated.
 
 ## Conventions
 
-- Resolvers are `"use server"` functions
-- They validate input, check auth, and delegate to services
-- They return typed results or throw user-facing errors
-- They should not contain business logic
-
-## Not yet implemented
-
-Deferred to the server actions prompt.
+- Server actions should be thin orchestrators.
+- Delegate business logic to `src/server/services/*`.
+- Use shared auth context/role guards and return typed action results.

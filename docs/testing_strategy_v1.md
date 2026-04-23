@@ -358,7 +358,7 @@ The following are not covered in V1 and are explicitly deferred:
 | Import collision modes end-to-end | Complex DB state; needs DB integration test harness |
 | Canonical API route integration tests | Needs full Next.js test harness or real DB |
 | MCP adapter tool input validation | Covered by TypeScript types + canonical API tests |
-| E2E browser tests | No Playwright/Cypress setup in V1; post-launch |
+| E2E browser tests | Playwright is now configured (`playwright.config.ts`) with `pnpm test:e2e`; coverage expansion remains an ongoing task |
 
 ### How to add DB integration tests in a future pass
 
