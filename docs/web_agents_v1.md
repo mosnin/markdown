@@ -214,6 +214,93 @@ Citations render as small link badges inline in agent responses (UI layer).
 | `BROWSERBASE_PROJECT_ID` | For browse_session | Browserbase project |
 | `WEB_TOOL_DEFAULT_BUDGET_CENTS` | No (default 500) | Global default when `workspaces.web_tool_budget_cents` is null |
 
+## Sub-agents
+
+Skills can be promoted to sub-agents — fully autonomous child agents that the orchestrator (Pog) can invoke mid-run.
+
+### Skill configuration
+
+The `skills` table gains three columns (migration `20260425000001_subagents.sql`):
+
+| Column | Type | Default | Description |
+|---|---|---|---|
+| `is_subagent` | bool | false | When true, skill is invokable as a sub-agent |
+| `subagent_tools` | text[] | null | Tool name whitelist; null = all tools; `[]` = no tools (reasoning-only) |
+| `subagent_max_turns` | int | null | Hard turn cap (1–100); null inherits system default (20) |
+
+`list_skills_plugins` only returns skills with `is_subagent = true`.
+
+### `subagent_invocations` table
+
+Every sub-agent call creates one row:
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | uuid PK | |
+| `workspace_id` | uuid FK | |
+| `parent_operator_run_id` | uuid FK | nullable — the orchestrator run that dispatched this |
+| `skill_id` | uuid FK | the sub-agent skill being invoked |
+| `task` | text | natural-language task passed to the sub-agent |
+| `status` | text | queued / running / completed / failed / cancelled |
+| `summary` | text | sub-agent's final answer / output |
+| `error` | text | null on success |
+| `tool_calls_count` | int | |
+| `input_tokens` / `output_tokens` | int | |
+| `modal_run_id` | text | Modal run that executed the sub-agent |
+| `depth` | int (1–3) | nesting depth; max 3 to prevent runaway recursion |
+
+### Tool endpoints
+
+| Endpoint | Purpose |
+|---|---|
+| `POST /api/agent/tools/invoke_subagent` | Dispatch a sub-agent; returns `{ invocation_id }` |
+| `POST /api/agent/tools/await_subagent` | Poll until completion; returns `{ status, summary, error }` |
+| `POST /api/agent/tools/subagent_complete` | Called by the child agent to signal completion |
+
+### Recursion limit
+
+Maximum nesting depth is 3. The `depth` column is checked before dispatch; attempts beyond depth 3 return `403 Forbidden` with a "max sub-agent depth reached" message.
+
+---
+
+## Complete tool endpoint reference
+
+All endpoints under `/api/agent/tools/` accept POST with a JSON body and a `Bearer <token>` from the workspace Connection credential.
+
+| Endpoint | Key request fields | Key response fields |
+|---|---|---|
+| `deep_search` | `query`, `num_results`, `search_type`, `include_domains`, `start_published_date` | `results[]{url,title,text,score,highlights}` |
+| `browse_session_start` | `goal` | `session_id`, `live_url` |
+| `browse_session_step` | `session_id`, `action`, `url/selector/value` | `extracted_text`, `screenshot_url` |
+| `browse_session_end` | `session_id` | `status` |
+| `web_search` | `query`, `num_results` | `results[]{url,title,text}` |
+| `web_fetch` | `url` | `text`, `final_url` |
+| `search` | `query`, `box_id?`, `limit?` | `results[]{note_id,title,excerpt,score}` |
+| `read_note` | `note_id` | `title`, `markdown_content` |
+| `draft_note` | `title`, `box_id`, `folder_id?`, `content?` | `note_id` |
+| `edit_note` | `note_id`, `patch` | `ok` |
+| `rename_note` | `note_id`, `title` | `ok` |
+| `move_note` | `note_id`, `folder_id?`, `box_id?` | `ok` |
+| `archive_note` | `note_id` | `ok` |
+| `link_notes` | `source_note_id`, `target_note_id`, `label?` | `link_id` |
+| `list_notes_in_box` | `box_id`, `limit?` | `notes[]{id,title,slug}` |
+| `invoke_subagent` | `skill_id`, `task` | `invocation_id` |
+| `await_subagent` | `invocation_id` | `status`, `summary`, `error` |
+| `subagent_complete` | `invocation_id`, `summary` | `ok` |
+| `memories` | `action` (read/write/delete), `key`, `value?` | `value` or `ok` |
+| `run_memory` | `query` | `memories[]{key,value}` |
+| `persona` | — | `name`, `system_prompt`, `model` |
+| `workspace_context` | — | `workspace{id,name}`, `boxes[]`, `recent_notes[]` |
+| `list_skills_plugins` | — | `skills[]{id,name,description}` |
+| `apply_template` | `note_id`, `template_id` | `ok` |
+| `propose_box_structure` | `proposal` | `proposal_id` |
+| `execute_code` | `language`, `code` | `stdout`, `stderr`, `exit_code` |
+| `inline_command_complete` | `command_id`, `result` | `ok` |
+| `progress` | `run_id`, `message`, `percent?` | `ok` |
+| `trace` | `run_id`, `event_type`, `data` | `ok` |
+
+---
+
 ## What this does NOT ship
 
 - **Screenshot storage** — Browserbase provides screenshot URLs; we cache them transiently but don't durably store to Supabase Storage. Deferred.
