@@ -1,925 +1,377 @@
 # Architecture
 
-This document describes the intended module layout for Context Store and the reasoning behind each boundary.
+Poggle is a Next.js 16.2.3 / React 19.2.4 application backed by Supabase (Postgres + Auth + Storage + Realtime). It runs in two deployment targets: a Vercel-hosted web application and a Modal Python operator harness (external to this repo). Background work is coordinated by Inngest 3.27.0.
+
+This document describes the layered module structure, runtime topology, core data model, and the major subsystems.
 
 ---
 
-## V2 state
-
-After the v2 sprint Context Store is branch-aware end-to-end: every
-content-bearing table overlays on a `branch_id`, promote is atomic and
-undoable, and the MCP surface runs on OAuth 2.1 + PKCE instead of
-pasted `csk_v1_` tokens. For the rollup of what landed, the focused
-docs, and the "where do I start" map, see
-[docs/v2_overview.md](v2_overview.md).
-
----
-
-## Guiding principles
-
-1. **Server by default.** All data fetching happens on the server. Client components exist only for interactivity (menus, toggles, controlled inputs).
-2. **Thin routes, thick services.** Route handlers and server actions validate inputs and delegate immediately. Business logic lives in services.
-3. **No shared state across the server boundary.** Services do not share state with the client. Client state is UI state only.
-4. **Clear layering.** `api → resolvers → services → repositories → database`. Each layer calls down, never up.
-5. **Single source of truth for auth.** All server-side auth state comes from `getRequestContext()`. Do not call Supabase auth methods directly in product code.
-
----
-
-## Source tree
+## Runtime topology
 
 ```
-middleware.ts                   Session proxy — refreshes Supabase JWT on every request
+Browser
+  └── Next.js (Vercel / self-hosted)
+        ├── App Router pages  (React Server Components + Client Components)
+        ├── Server Actions     ("use server", cookie-scoped Supabase client)
+        ├── API route handlers (Next.js Route Handlers, Bearer-token auth)
+        └── Inngest endpoint   (/api/inngest — durable function runner)
 
+Supabase
+  ├── Postgres (RLS-enforced, 91 migrations as of 2026-04-28)
+  ├── Auth     (sessions, JWT, workspace bootstrap on first sign-in)
+  ├── Storage  ("note-images" bucket, public CDN)
+  └── Realtime (Yjs CRDT sync channel per note)
+
+Modal (external)
+  └── Workspace operator harness (Python, long-running agent execution)
+        └── calls back via POST /api/operator/runs
+
+Inngest (cloud queue)
+  └── /api/inngest receives events and runs durable TypeScript functions
+```
+
+---
+
+## Layered architecture
+
+```
 src/
-├── app/                        Next.js App Router
-│   ├── layout.tsx              Root layout (ThemeProvider, TooltipProvider)
-│   ├── page.tsx                Landing / entry page
-│   ├── sign_in/
-│   │   ├── page.tsx            Sign in page (server, redirects if authenticated)
-│   │   ├── sign_in_form.tsx    Sign in form (client, useActionState)
-│   │   └── actions.ts          signInWithEmail server action
-│   ├── auth/
-│   │   └── callback/
-│   │       └── route.ts        Magic link callback — exchanges code for session
-│   └── app/                    Authenticated product shell
-│       ├── layout.tsx          Auth gate (requireAuthenticatedUser) + AppShell
-│       ├── actions.ts          signOut server action
-│       ├── page.tsx            Home / recent activity
-│       ├── workspaces/
-│       │   └── page.tsx        Workspace list
-│       ├── boxes/
-│       │   └── [box_id]/
-│       │       └── page.tsx    Box content view
-│       ├── notes/
-│       │   └── [note_id]/
-│       │       └── page.tsx    Note detail view
-│       └── settings/
-│           └── page.tsx        User settings
-│
-├── components/
-│   ├── ui/                     shadcn/ui primitives (do not modify directly)
-│   └── product/                Context Store product components
-│       ├── app_shell.tsx       Root layout shell (sidebar + main + right panel)
-│       ├── app_sidebar.tsx     Left navigation rail
-│       ├── app_header.tsx      Top command bar
-│       ├── page_header.tsx     Per-page title/action bar
-│       ├── theme_provider.tsx  next-themes wrapper (client)
-│       ├── theme_toggle.tsx    Light/dark toggle button (client)
-│       ├── user_menu.tsx       User email + sign out dropdown (client)
-│       ├── empty_state.tsx     Empty list/view placeholder
-│       ├── panel_section.tsx   Labeled section for panels and cards
-│       ├── tree_stub.tsx       Hierarchical tree for box navigation
-│       ├── note_stub.tsx       Note card for list views
-│       └── metadata_panel_stub.tsx  Right-panel metadata view
-│
+├── app/                      Next.js App Router
+│   ├── app/                  Authenticated product pages (RSC + actions)
+│   └── api/                  Route handlers
+├── server/
+│   ├── auth/                 requireAuthenticatedUser(), getRequestContext()
+│   ├── domain/               Pure types + constants (no I/O)
+│   │   ├── types/            One interface per DB table
+│   │   ├── constants/        Enums / literal union constants
+│   │   ├── schemas/          Zod validation schemas
+│   │   └── workflow_templates.ts  Built-in workflow template registry
+│   ├── repositories/         Thin DB accessors (Supabase queries, no biz logic)
+│   └── services/             Business logic (compose repositories + external calls)
 ├── lib/
-│   ├── utils.ts                cn() class merger
-│   ├── supabase/
-│   │   ├── browser.ts          Browser Supabase client (Client Components)
-│   │   ├── server.ts           Server Supabase client (Server Components, Actions)
-│   │   └── proxy.ts            Session refresh logic (used by middleware)
-│   ├── types.ts                (future) Shared domain types
-│   ├── constants.ts            (future) App-wide constants
-│   └── errors.ts               (future) Typed error classes
-│
-└── server/
-    ├── auth/
-    │   ├── get_request_context.ts      Current user + auth status (canonical)
-    │   └── require_authenticated_user.ts  Auth guard with redirect
-    ├── api/                    Route handler layer (Next.js Route Handlers)
-    ├── services/               Business logic layer
-    ├── repositories/           Data access layer (Supabase queries)
-    ├── policies/               Authorization checks
-    ├── resolvers/              Server Actions
-    └── mcp/                    MCP server implementation
+│   ├── supabase/             Client factories (browser, server, admin)
+│   ├── inngest/              Typed client + all function definitions
+│   ├── crdt/                 Yjs provider, awareness, hook
+│   ├── api/                  Shared route handler helpers (rate_limit, response)
+│   ├── embedding/            Embedding utility
+│   └── hooks/                Shared React hooks
+└── components/               UI components (shadcn/ui base + product-specific)
 ```
 
----
+### Layer rules
 
-## Auth layer
-
-See [docs/auth.md](auth.md) for the detailed auth architecture.
-
-The short version:
-
-- **`middleware.ts`** refreshes the Supabase JWT on every non-static request. It does not enforce routes.
-- **`src/server/auth/get_request_context.ts`** is the single entry point for server-side auth state. All product code uses this.
-- **`src/server/auth/require_authenticated_user.ts`** is the route guard. Called at the top of protected layouts.
-- **`/app/layout.tsx`** calls `requireAuthenticatedUser()`, protecting the entire `/app` tree.
+| Layer | May import | Must NOT import |
+|---|---|---|
+| `domain/types` | Nothing | Everything else |
+| `repositories` | `domain/`, `lib/supabase` | `services/`, `components/` |
+| `services` | `repositories/`, `domain/`, `lib/` | `app/`, `components/` |
+| `app/` server actions | `services/`, `repositories/`, `server/auth/` | Browser-only APIs |
+| `app/` client components | `lib/hooks/`, `components/` | `server/`, `lib/supabase/server` |
 
 ---
 
-## Request context
+## Authentication and authorization
 
-`getRequestContext()` returns the canonical per-request context:
+Every protected page and server action begins with:
 
 ```ts
-const ctx = await getRequestContext();
-// ctx.user            — Supabase User | null
-// ctx.isAuthenticated — boolean
-// ctx.workspace       — WorkspaceContext | null (non-null when authenticated)
-// Future: ctx.permissions
+const ctx = await requireAuthenticatedUser();
+// ctx.user     — Supabase Auth user (non-null)
+// ctx.workspace — WorkspaceContext with caller's role
 ```
 
-For authenticated requests, `getRequestContext()` also resolves the user's workspace via `getOrCreateDefaultWorkspace()` — bootstrapping a default workspace on first access if none exists. All downstream code can safely assume `ctx.workspace` is non-null whenever `ctx.isAuthenticated` is true.
+`requireAuthenticatedUser()` (`src/server/auth/require_authenticated_user.ts`) calls `getRequestContext()`, which reads the Supabase cookie session and resolves the workspace via workspace_memberships. It redirects to `/sign_in` if unauthenticated.
 
-Extend `RequestContext` in `get_request_context.ts` when further context is needed. Everything downstream gains access automatically.
+### Row Level Security
 
----
+All workspace-scoped tables enforce RLS through `workspace_memberships`. The per-user cookie Supabase client (created by `src/lib/supabase/server.ts`) is used for all product reads/writes; RLS applies automatically.
 
-## Domain model
-
-Context Store has a strict information hierarchy. Do not flatten these into generic objects.
-
-| Entity | Description |
-|---|---|
-| **Workspace** | Top-level organizational unit. In V1, each user owns exactly one workspace. |
-| **Box** | A focused collection within a workspace. Analogous to a project, topic, or domain. |
-| **Folder** | Optional grouping within a box. Purely organizational — no semantic meaning beyond structure. |
-| **Note** | The primary content unit. Markdown. Has a title, body, tags, and metadata. |
-| **Guide note** | A note with `kind = 'guide'`. The canonical assignment is `boxes.guide_note_id`. |
-| **Context bundle** | A note with `kind = 'bundle'` — curated context assembled for export or AI consumption. |
-| **Connection** | An authorized external agent (MCP client, API) with scoped box access. |
-| **Write proposal** | A connection's proposed note change pending human review. |
-
-For the full schema, column definitions, RLS policies, and design decisions see [docs/data_model.md](data_model.md).
+The admin client (`src/lib/supabase/admin.ts`, `SUPABASE_SERVICE_ROLE_KEY`) bypasses RLS. It is used only in:
+- Inngest background functions (no user session context)
+- Operator API route handlers authenticating a Bearer token
+- Deployment scripts
 
 ---
 
-## Object model expansion (v2)
+## Core data model
 
-This section describes the additive expansion of the domain model from notes-only to four object types. All existing architecture is unchanged.
-
-### Updated hierarchy
+The primary workspace-scoped objects are: Box → Note → NoteVersion. Everything else links to one of those anchors.
 
 ```
 Workspace
-  └── Box
-        ├── Folder (optional)
-        │     └── Note | File | Skill | Agent
-        └── Note | File | Skill | Agent (root-level)
+  ├── workspace_memberships  (owner / admin / member / viewer roles)
+  ├── Box                    (top-level container, can have a guide_note_id)
+  │   ├── Note               (markdown_content + Yjs CRDT, kind: note/guide/bundle)
+  │   │   ├── NoteVersion    (immutable version history)
+  │   │   ├── NoteLink       (explicit note→note relationships)
+  │   │   └── entity_mentions (extracted knowledge-graph refs)
+  │   └── Folder             (hierarchical grouping within a box)
+  ├── Entity / EntityEdge    (knowledge graph nodes + typed edges)
+  ├── Insight                (atomic insights extracted from notes)
+  ├── KgBackfillJob          (async KG backfill tracking)
+  ├── Agent                  (autonomous agent configuration)
+  ├── AgentTrigger           (cron or note-event trigger for an agent)
+  ├── AgentTriggerRun        (execution record for a trigger firing)
+  ├── Skill                  (reusable agent skill / plugin)
+  ├── Workflow               (DAG workflow definition)
+  ├── WorkflowRun            (execution record)
+  ├── Connection             (OAuth or token credential store)
+  ├── WriteProposal          (pending AI-proposed change, requires approval)
+  ├── SubagentInvocation     (child agent dispatch record)
+  ├── WebToolUsage           (web tool call record)
+  └── WorkspaceObject        (polymorphic object registry for links + branches)
 ```
 
-Notes remain the primary human document type. Files, Skills, and Agents are new first-class content types. All four participate in the shared `workspace_objects` structural registry.
-
-### New tables
-
-| Table | Purpose |
-|---|---|
-| `workspace_objects` | Flat registry of all content objects (note, file, skill, agent, folder) — enables uniform tree, search, and graph operations |
-| `files` | Non-markdown artifact objects with a `canonical_format` |
-| `skills` | Reusable functional building blocks, workspace-level or box-local |
-| `agents` | Structured orchestrators with explicit `agent_type`, `model_hint`, `system_prompt` fields |
-| `object_versions` | Shared immutable version history for files, skills, and agents (mirrors `note_versions`) |
-| `object_links` | Heterogeneous semantic relationships between any two content objects — same 10-value vocabulary as `note_links` |
-| `box_object_attachments` | Join table for attaching workspace-level reusable skills/agents into boxes by reference |
-
-### New services
-
-| Service | Responsibility |
-|---|---|
-| `file_service.ts` | File CRUD, version management, canonical format enforcement |
-| `skill_service.ts` | Skill CRUD, reusability management, version management |
-| `agent_service.ts` | Agent CRUD, reusability management, structured field management |
-| `object_link_service.ts` | Cross-type `object_links` CRUD with same-workspace validation |
-| `object_registry_service.ts` | Keep `workspace_objects` in sync with type-specific tables on every mutation |
-
-### New constant module
-
-`src/server/domain/constants/object_constants.ts` — `OBJECT_TYPE`, `SOURCE_FORMAT`, `AGENT_TYPE`, `OBJECT_STATUS`, and `OBJECT_CHANGE_ORIGIN` typed string-enum constants.
-
-### New type modules
-
-| Module | Exports |
-|---|---|
-| `src/server/domain/types/workspace_object.ts` | `WorkspaceObject` |
-| `src/server/domain/types/file.ts` | `File` |
-| `src/server/domain/types/skill.ts` | `Skill` |
-| `src/server/domain/types/agent.ts` | `Agent` |
-| `src/server/domain/types/object_version.ts` | `ObjectVersion` |
-| `src/server/domain/types/object_link.ts` | `ObjectLink` |
-| `src/server/domain/types/box_object_attachment.ts` | `BoxObjectAttachment` |
-
-For the full object model design — taxonomy, canonical format semantics, reusable reference model, trust rules, versioning, and migration safety — see [docs/object_model_expansion_v1.md](object_model_expansion_v1.md).
+Domain types live under `src/server/domain/types/`. Every interface maps 1-to-1 with a Postgres table.
 
 ---
 
-## First-class object type surfaces (v3+)
+## Supabase client factories
 
-Each object type now has a complete product surface:
-
-| Type | Route | Editor | Right pane | Center tabs |
-|---|---|---|---|---|
-| Note | `/app/notes/[id]` | Document + Markdown | Info/Links/Bundle/History | — |
-| File | `/app/files/[id]` | Code textarea | Info/Links/History | — |
-| Skill | `/app/skills/[id]` | Code textarea (read-only page) | — | — |
-| Agent | `/app/agents/[id]` | Code textarea (Source tab) | Info/Links/History | Overview/Source/Exports/Children/Skills/Relationships |
-
-Agent routes handle all three identity contexts from a single stable URL:
-- Workspace-level reusable agent: breadcrumb via `Workspace → Agents → Name`
-- Box-local agent: breadcrumb via `Workspace → Box → Name`
-
-Server actions for each type live at `src/app/app/{type}s/actions.ts`.
-
-See type-specific documentation:
-- Files: [docs/files_object_and_editor_v1.md](files_object_and_editor_v1.md)
-- Agents: [docs/agents_object_and_editor_v1.md](agents_object_and_editor_v1.md)
-- Reusable attach/reference model: [docs/reusable_attach_and_reference_model_v1.md](reusable_attach_and_reference_model_v1.md)
+| Export | File | Auth mechanism | When to use |
+|---|---|---|---|
+| `createBrowserClient()` | `lib/supabase/browser.ts` | Cookie / localStorage | Client components |
+| `createClient()` | `lib/supabase/server.ts` | Cookie (server) | Server actions, RSC pages |
+| `createAdminClient()` | `lib/supabase/admin.ts` | Service role key | Inngest fns, operator routes, scripts |
+| `createProxyClient()` | `lib/supabase/proxy.ts` | Bearer token | Operator harness proxying user ops |
 
 ---
 
-## Current implementation status (April 2026)
+## App pages (`src/app/app/`)
 
-1. **Tree implementation** — **Complete.**
-   - `TreeSidebar` uses `react-arborist` with custom node renderer for all five object types.
-   - Built-in drag-drop reparenting via react-dnd, virtualized rendering, keyboard navigation.
-   - Inline rename: double-click a node to edit; `onRename` dispatches to type-specific server actions.
-   - `BoxContentsTree` (tree tab) also uses react-arborist (read-only mode).
-   - MCP + OAuth secure connector surface: see
-     [docs/mcp_oauth_and_secure_connector_architecture_v1.md](mcp_oauth_and_secure_connector_architecture_v1.md).
-     OAuth 2.1 + PKCE authorization server (`oauth_clients`,
-     `oauth_authorization_codes`, `oauth_access_tokens`,
-     `oauth_refresh_tokens`, `oauth_consents`) plus an HTTP MCP
-     transport at `/api/mcp` that requires a Bearer access token.
-     Scopes map to workspace role; revoking a consent in Settings →
-     Connected apps invalidates every live token.
-   - Rollback and restoration: see [docs/rollback_architecture_v1.md](rollback_architecture_v1.md)
-     for the conceptual model and
-     [docs/rollback_schema_and_restore_engine_v1.md](rollback_schema_and_restore_engine_v1.md)
-     for the concrete engine — change-set metadata surface
-     (`summarizeRestoreCandidate`, `compareVersionToCurrent`,
-     `compareChangeSetToCurrent`), file/skill/agent rollback
-     wrappers (`restoreObjectVersion`), lifecycle change-set helper
-     (`withLifecycleChangeSet`), attach/detach structural events, and
-     subtree `path_cascade` events recorded per descendant.
-   - Branch-aware writes: see
-     [docs/branch_aware_writes_v1.md](branch_aware_writes_v1.md)
-     for per-object contracts,
-     [docs/package_branch_state_for_skills_and_agents_v1.md](package_branch_state_for_skills_and_agents_v1.md)
-     for Skill / Agent package drafting, and
-     [docs/branch_local_structural_creation_v1.md](branch_local_structural_creation_v1.md)
-     for branch-local file creation + Agent → Skill reference
-     branching via `branch_id` columns on `files` and `object_links`. Active-branch cookie +
-     `RequestContext.activeBranchId` resolution. Branch writes for
-     every content-bearing object (`updateNoteOnBranch`,
-     `updateFileContentOnBranch`, `updateSkillContentOnBranch`,
-     `updateAgentContentOnBranch`). Branch reads:
-     `getNoteForWorkspace`, `getFileForWorkspace`,
-     `getSkillForWorkspace`, `getAgentForWorkspace` all accept an
-     optional `branchId`. Skills + Agents also carry a
-     `branch_package_metadata` overlay (description / tags /
-     summary + agent-specific fields) plus derived membership so
-     child-file edits are attributed to the parent package.
-     `promoteBranch` advances every head plus applies metadata
-     overlays under one `origin: 'branch_promotion'` change set,
-     restoreable end-to-end. `/app/branches/[id]` renders package-
-     grouped diffs.
-     `change_sets` + `change_set_items` group every mutation;
-     `structural_events` capture tree-shape changes; `draft_branches` +
-     `branch_heads` land the foundation for exploratory editing;
-     `restore_records` audit every restore. Imports, proposal approvals,
-     and tree moves all open and commit change sets, so each is
-     undoable as one operation via `restoreFromChangeSet`.
-   - Multi-user membership: see [docs/auth_and_permissions.md](auth_and_permissions.md)
-     and [docs/workspace_selector_search_and_membership_v1.md](workspace_selector_search_and_membership_v1.md).
-     `workspace_memberships` carries viewer/member/admin roles;
-     `WorkspaceContext.role` is the canonical signal at the
-     request-context seam. RLS reads through any membership; writes are
-     gated at the server-action layer via `require_role.ts`.
-   - Workspace-wide search: `src/server/services/workspace_search_service.ts`
-     covers notes, files, skills, agents, folders, and boxes via a unified
-     `WorkspaceSearchHit` shape. Rendered by `/app/search`.
-   - Ordering contract: `src/server/domain/tree_ordering.ts` is the single
-     source of truth shared by the client render (`buildArboristTree`) and
-     the server move action (`moveTreeNodeAction`). Folders sort before
-     leaves, then by `sort_order` (bigint, `Date.now()`-scaled), ties
-     broken by object id. Drops re-spread sibling `sort_order` with
-     `(i+1) * 1000` gaps so legal inserts between neighbours remain cheap.
-     See [docs/real_structural_drag_and_drop_fix_v1.md](real_structural_drag_and_drop_fix_v1.md).
+All pages live under the authenticated layout at `src/app/app/layout.tsx`. React Server Components fetch data directly; client interactivity is delegated to `"use client"` leaf components.
 
-2. **Graph surface** — **Complete.**
-   - Graph uses `@xyflow/react` with `@dagrejs/dagre` for automatic hierarchical layout.
-   - All five object types rendered as nodes. Both `note_links` and `object_links` shown as edges.
-   - Interactive: pan, zoom, node dragging, click-to-select with detail panel. Read-only.
-
-3. **Realtime precision** — **Mostly complete.**
-   - `WorkspaceLiveRefresh` provides scoped push-based updates per page (workspace/library/box/folder/object scopes).
-   - Tree sidebar has its own per-box realtime subscription with debounced refetch.
-   - Box page, folder page, library pages, and workspaces page all have scoped `WorkspaceLiveRefresh`.
-   - Active editors are protected from destabilizing refreshes via `protectWhileEditing`.
-   - Remaining: per-tab precision within the box page (all tabs re-render together).
-
-4. **Folder workspace parity** — **Complete.**
-   - Folder pages have full breadcrumb navigation, lifecycle menu, AI policy toggle, rename,
-     create actions, content grid for all child types, right context panel, and export.
-
-5. **Library choices**
-   - Tree: `react-arborist` v3 (react-dnd + react-window)
-   - Graph: `@xyflow/react` v12 + `@dagrejs/dagre` v3
-   - UI: shadcn v4 (Base UI, not Radix) + Tailwind CSS v4
-   - Design tokens: oklch color system via CSS variables
-
-For the active checklist, see [docs/remaining_scope_tracker.md](remaining_scope_tracker.md).
-
----
-
-## Expanded trust model (Phase 3)
-
-Phase 3 extended the trust, permissions, versioning, lifecycle, audit, and machine workflow model from notes to all four object types.
-
-### New services
-
-| Service | Responsibility |
+| Route | Description |
 |---|---|
-| `object_trust_policy_service.ts` | `getObjectTrustPolicy`, `connectionCanDirectlyWrite`, `describeObjectTrustLevel` |
-| `version_history_service.ts` | Extended with `listVersionsForObject`, `rollbackObjectToVersion` for files/skills/agents |
-| `lifecycle_service.ts` | Extended with archive/unarchive/trash/restore for files, skills, agents |
-| `audit_service.ts` | Extended with events for all object types: created, updated, archived, trashed, rollback, attach/detach, proposal_approved |
+| `/app/dashboard` | Overview feed and quick-create actions |
+| `/app/notes` | All notes list |
+| `/app/boxes` | Box browser |
+| `/app/folders` | Folder tree |
+| `/app/files` | File attachments |
+| `/app/graph` | Knowledge graph visual explorer |
+| `/app/entities` | Entity browser (KG nodes) |
+| `/app/insights` | Atomic insights feed |
+| `/app/search` | Full-text + semantic search |
+| `/app/agents` | Agent configuration and runs |
+| `/app/sub_agents` | Sub-agent dispatch history |
+| `/app/web_sessions` | Browsing session history |
+| `/app/skills` | Skill library |
+| `/app/workflows` | Workflow list + canvas editor |
+| `/app/workspace_operator` | Operator runs and configuration |
+| `/app/conversation` | Conversational AI interface |
+| `/app/connections` | OAuth / API credential manager |
+| `/app/audit` | Audit event log |
+| `/app/activity` | Workspace activity feed |
+| `/app/analytics` | Usage analytics charts |
+| `/app/usage` | Usage dashboard (token / run breakdown) |
+| `/app/history` | Version history browser |
+| `/app/import_export` | Import / export workspace data |
+| `/app/proposals` | Write-proposal review queue |
+| `/app/settings` | Workspace and user settings |
+| `/app/branches` | Branch management |
+| `/app/daily_note` | Daily note shortcut |
+| `/app/workspaces` | Workspace switcher |
 
-### New server actions
+---
 
-| File | Actions |
+## API routes (`src/app/api/`)
+
+### Agent tool endpoints (`/api/agent/tools/`)
+
+The operator harness calls these from Modal via Bearer token:
+
+| Endpoint | Purpose |
 |---|---|
-| `src/app/app/files/lifecycle_actions.ts` | `archiveFileAction`, `trashFileAction`, `restoreFileAction`, `rollbackFileAction` |
-| `src/app/app/skills/lifecycle_actions.ts` | Same pattern for skills |
-| `src/app/app/agents/lifecycle_actions.ts` | Same pattern for agents |
+| `apply_template` | Apply a note template to an existing note |
+| `archive_note` | Archive a note |
+| `await_subagent` | Poll a dispatched sub-agent run for completion |
+| `browse_session_end` | Terminate a Browserbase session |
+| `browse_session_start` | Start a new Browserbase browsing session |
+| `browse_session_step` | Execute a step within a browsing session |
+| `deep_search` | Exa-backed deep semantic search |
+| `draft_note` | Create a new draft note |
+| `edit_note` | Apply a markdown patch to a note |
+| `execute_code` | Run code in a sandboxed executor |
+| `inline_command_complete` | Mark an inline AI command as complete |
+| `invoke_subagent` | Dispatch a child agent |
+| `link_notes` | Create an explicit note-to-note link |
+| `list_notes_in_box` | List notes in a given box |
+| `list_skills_plugins` | List available skill plugins |
+| `memories` | Read / write agent memory entries |
+| `move_note` | Move a note to a different folder or box |
+| `persona` | Read agent persona configuration |
+| `progress` | Report run progress back to the client |
+| `propose_box_structure` | Propose box reorganization |
+| `read_note` | Read a note's markdown content |
+| `rename_note` | Rename a note |
+| `run_memory` | Execute a memory query |
+| `search` | Workspace search (FTS + semantic) |
+| `subagent_complete` | Signal sub-agent completion |
+| `trace` | Write a structured trace event |
+| `web_fetch` | Fetch a URL (SSRF-guarded) |
+| `web_search` | Brave/Exa web search |
+| `workspace_context` | Return workspace metadata for the agent |
 
-### New trust UI components (Phase 3)
+### Other API routes
 
-| Component | Purpose |
+| Route | Purpose |
 |---|---|
-| `shared_object_trust_badge.tsx` | `SharedObjectTrustBadge`, `ProposalOnlyBadge` |
-| `object_trust_header.tsx` | `ObjectTrustHeader` — combined trust summary |
-| `object_lifecycle_panel.tsx` | `ObjectLifecyclePanel` — archive/trash/restore UI |
-| `heterogeneous_version_timeline.tsx` | `HeterogeneousVersionTimeline` — version list with rollback |
-| `object_history_panel.tsx` | `ObjectHistoryPanel` — collapsible wrapper |
-| `proposal_target_summary.tsx` | `ProposalTargetSummary` — proposal card header |
-| `shared_reference_impact_notice.tsx` | `SharedReferenceImpactNotice`, `ReusableObjectDegradedBadge` |
-| `connection_permission_hint.tsx` | `ConnectionPermissionHint` |
-| `machine_provenance_panel.tsx` | `MachineProvenancePanel` — generated/imported provenance |
-| `heterogeneous_proposal_card.tsx` | `HeterogeneousProposalCard` — proposal review for all object types |
-| `skill_trust_panels.tsx` | `SkillHistoryPanel`, `SkillLifecycleControls` — client wrappers |
-| `agent_trust_panels.tsx` | `AgentHistoryPanel`, `AgentLifecycleControls` — client wrappers |
-
-For the full expanded trust model see [docs/expanded_object_trust_model_v1.md](expanded_object_trust_model_v1.md).
-
----
-
-## Data flow
-
-```
-Browser request
-  └── middleware.ts            (session refresh only)
-  └── Next.js Route / Server Component
-        └── getRequestContext() / requireAuthenticatedUser()
-        └── Service
-              ├── Policy check (can this user do this?)
-              └── Repository (Supabase query)
-                    └── Supabase (Postgres + RLS)
-
-Client action (button, form)
-  └── Server Action (resolvers/ or co-located actions.ts)
-        └── Service
-              ├── Policy check
-              └── Repository
-```
+| `POST /api/auth/...` | Supabase Auth callbacks |
+| `POST /api/inngest` | Inngest event endpoint |
+| `POST /api/operator/runs` | Operator harness run callbacks |
+| `GET /api/health` | Health check (used by deploy_check.ts) |
+| `POST /api/voice/transcribe` | Whisper transcription (10/min/user) |
+| `POST /api/agent/operator` | Operator run creation |
+| `GET/POST /api/agent/memories` | Agent memory CRUD |
+| `GET/POST /api/agent/personas` | Agent persona CRUD |
+| `GET /api/mcp/...` | MCP protocol endpoint |
+| `GET /api/oauth/...` | OAuth server endpoints |
+| `POST /api/billing/...` | Billing webhooks |
+| `GET/POST /api/v1/...` | Public REST API (notes, boxes, search, etc.) |
+| `GET /api/internal/...` | Internal admin endpoints |
 
 ---
 
-## Component conventions
+## Inngest background functions
 
-- **Server components by default.** No `"use client"` unless the component uses hooks, browser APIs, or event handlers.
-- **Product components live in `src/components/product/`**, named in `snake_case` to distinguish from shadcn primitives.
-- **shadcn primitives live in `src/components/ui/`** and are not modified directly. Override through composition.
-- **No barrel files.** Import directly from the module file, not from an index re-export.
-- **shadcn v4 uses Base UI, not Radix.** No `asChild` prop. Use `render={<element />}` for polymorphism.
+Inngest provides durable, retryable background execution. All functions are registered at `src/lib/inngest/functions/index.ts`.
+
+| Function file | Trigger | Description |
+|---|---|---|
+| `run_agent_execution.ts` | `agent_trigger.manual` | Runs a configured agent for a manual trigger |
+| `execute_note_trigger.ts` | `note.created`, `note.updated` | Fires note-event agent triggers |
+| `execute_manual_trigger.ts` | `agent_trigger.manual` | Executes a manual agent trigger |
+| `execute_scheduled_triggers.ts` | Cron | Polls `agent_triggers` table for due cron triggers |
+| `execute_workflow.ts` | `workflow.run` | Executes a workflow DAG (interprets node graph) |
+| `clear_stuck_trigger_runs.ts` | Cron | Marks timed-out trigger runs as failed |
+
+### Typed event registry (`src/lib/inngest/events.ts`)
+
+| Event name | Data payload |
+|---|---|
+| `note.created` | `workspaceId`, `noteId`, `boxId`, `userId` |
+| `note.updated` | `workspaceId`, `noteId`, `boxId`, `userId`, `isFirstSave` |
+| `agent_trigger.manual` | `triggerId`, `workspaceId`, `userId` |
+| `workflow.run` | `workflowId`, `workspaceId`, `userId`, `input`, `runId` |
 
 ---
 
-## Server layer
+## CRDT collaborative editing
+
+Notes use Yjs (`^13.6.20`) for real-time collaborative editing via Supabase Realtime as the sync transport.
+
+| File | Role |
+|---|---|
+| `src/lib/crdt/supabase_yjs_provider.ts` | Supabase Realtime ↔ Yjs sync provider |
+| `src/lib/crdt/use_note_yjs_doc.ts` | React hook: creates/syncs the Y.Doc for a note |
+| `src/lib/crdt/yjs_awareness.ts` | Cursor awareness (who is editing) |
+
+The editor is CodeMirror 6 (`@codemirror/state ^6.6.0`) with `y-codemirror.next` binding the Yjs text type to the CodeMirror document.
+
+---
+
+## Workflow engine
+
+Workflows are user-defined DAGs executed by the `execute_workflow` Inngest function.
+
+- **Definition**: stored as JSON in `workflow_nodes` + `workflow_edges` tables.
+- **Canvas**: `@xyflow/react ^12.10.2` renders the drag-and-drop graph editor.
+- **Node types**: `start`, `ai_task`, `condition`, `loop`, `subagent`, `webhook`, and custom tool nodes.
+- **Triggers**: manual run, cron schedule (stored in `agent_triggers`, polled by Inngest), or API call.
+- **Templates**: 5 built-in templates in `src/server/domain/workflow_templates.ts` — available via the "New from template" flow.
+- **Server actions**: `src/app/app/workflows/actions.ts` — create, save, run, schedule, get, list.
+
+See `docs/workflows_v1.md` for the full reference.
+
+---
+
+## Knowledge graph
+
+Entities and their typed edges are extracted from notes by background jobs.
+
+- **Entities** (`public.entities`): named concepts/people/places linked to source notes via `entity_mentions`.
+- **EntityEdges**: typed directional relationships between entities.
+- **Insights** (`public.insights`): atomic facts extracted from note content.
+- **KgBackfillJob**: tracks async re-processing of notes for KG extraction.
+- **GraphRAG**: `src/server/services/graph_rag_service.ts` retrieves context by combining vector similarity with graph traversal.
+
+See `docs/knowledge_graph_v1.md` for the full reference.
+
+---
+
+## Web agents
+
+The workspace operator harness (Modal, Python) runs long-horizon agents that call back into `/api/agent/tools/*` endpoints using a Bearer token tied to a `Connection` row.
+
+- **Browsing**: Browserbase managed Chrome sessions (`BROWSERBASE_API_KEY`, `BROWSERBASE_PROJECT_ID`).
+- **Search**: Exa deep-search API (`EXA_API_KEY`).
+- **Sub-agents**: hierarchical dispatch via `invoke_subagent` / `await_subagent` tool endpoints.
+- **Memory**: persistent key-value memory per agent via the `memories` endpoint.
+- **Rate limiting**: all tool endpoints enforce per-workspace rate limits via `src/lib/api/rate_limit.ts`.
+
+See `docs/web_agents_v1.md` for the full reference.
+
+---
+
+## Branches
+
+Poggle supports draft branches: a parallel overlay of workspace content that can be promoted (merged) or discarded.
+
+- Every content table has an optional `branch_id` column. Null = trunk.
+- `src/server/services/branch_service.ts` and related `*_branch_service.ts` files handle creation, diff, rebase, promotion, rollback, and conflict detection.
+- Branch-local structural objects (notes, folders, boxes created on a branch) are created by `createNoteOnBranch` and cleared on promote / hard-deleted on discard.
+- Branch promotion is atomic via Postgres RPC (`lifecycle_rpc.sql`).
+
+---
+
+## External services and required credentials
+
+| Service | Env var(s) | Used by |
+|---|---|---|
+| Supabase | `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` | All layers |
+| OpenAI | `OPENAI_API_KEY` | Voice transcription, AI completions |
+| Embedding API | `EMBEDDING_API_KEY` | `embedding_service.ts`, image description |
+| Inngest | `INNGEST_SIGNING_KEY`, `INNGEST_EVENT_KEY` | Background functions |
+| Modal | `MODAL_BASE_URL` | Operator harness health check (optional) |
+| Exa | `EXA_API_KEY` | `exa_search_service.ts`, deep_search tool |
+| Browserbase | `BROWSERBASE_API_KEY`, `BROWSERBASE_PROJECT_ID` | `browserbase_service.ts`, browse_session_* |
+| Creem (billing) | `CREEM_API_KEY` | `src/lib/creem.ts` |
+
+A full list with descriptions is in `.env.example` at the repo root.
+
+---
+
+## Security controls
+
+| Control | Implementation |
+|---|---|
+| Auth guard | `requireAuthenticatedUser()` on every server action and protected page |
+| RLS | `workspace_memberships` enforced by Supabase on the cookie client |
+| Admin client scope | Only Inngest functions, operator routes, scripts |
+| SSRF prevention | `assertSafeUrl()` + `BLOCKED_HOSTNAMES` blocklist in `web_fetch` tool |
+| MIME whitelist | `image/jpeg`, `image/png`, `image/webp`, `image/gif` only for uploads |
+| Rate limiting | `src/lib/api/rate_limit.ts` — per-user / per-workspace limits on all AI endpoints |
+| Write-role gate | `20260412000005_rls_write_role_gate.sql` — viewer role blocked from writes |
+
+See `SECURITY.md` for the full threat model.
+
+---
+
+## Repo layout summary
 
 ```
-src/server/
-├── auth/
-│   ├── get_request_context.ts          Canonical per-request context (user + workspace)
-│   └── require_authenticated_user.ts   Auth guard; redirects to /sign_in if unauthenticated
-├── domain/
-│   ├── constants/                      Typed string-enum constants (status values, kinds, etc.)
-│   │   ├── content_status.ts           WORKSPACE_STATUS, BOX_STATUS, FOLDER_STATUS, NOTE_STATUS
-│   │   ├── note_constants.ts           NOTE_KIND, NOTE_ORIGIN_TYPE, RELATIONSHIP_TYPE
-│   │   ├── connection_constants.ts     CONNECTION_TYPE, CONNECTION_STATUS, PERMISSION_MODE, TOKEN_STATUS
-│   │   └── audit_constants.ts          ACTOR_TYPE, CHANGE_ORIGIN, PROPOSAL_TYPE, PROPOSAL_STATUS
-│   ├── types/                          TypeScript interfaces matching DB table shapes
-│   │   ├── workspace.ts                Workspace, WorkspaceContext
-│   │   ├── box.ts                      Box
-│   │   ├── folder.ts                   Folder
-│   │   ├── note.ts                     Note
-│   │   ├── note_version.ts             NoteVersion
-│   │   ├── note_link.ts                NoteLink
-│   │   ├── connection.ts               Connection, ConnectionToken, ConnectionBoxScope
-│   │   ├── write_proposal.ts           WriteProposal
-│   │   ├── audit_event.ts              AuditEvent
-│   │   └── context_bundle.ts           ContextBundle (shared read model for API/MCP)
-│   └── schemas/                        Zod v4 schemas for repository inputs
-│       ├── workspace_schemas.ts        CreateWorkspaceInput, UpdateWorkspaceInput
-│       ├── box_schemas.ts              CreateBoxInput, UpdateBoxInput
-│       └── note_schemas.ts             CreateNoteInput, UpdateNoteInput
-├── repositories/                       Data access layer (Supabase queries only, no business logic)
-│   ├── workspace_repository.ts
-│   ├── box_repository.ts
-│   ├── folder_repository.ts
-│   ├── note_repository.ts
-│   ├── note_version_repository.ts
-│   ├── note_link_repository.ts
-│   ├── audit_event_repository.ts
-│   ├── connection_repository.ts
-│   └── write_proposal_repository.ts
-├── services/                           Business logic layer
-│   ├── workspace_bootstrap/
-│   │   └── get_or_create_default_workspace.ts
-│   ├── audit_service.ts                Audit event helpers (append-only, fire-and-forget)
-│   ├── box_service.ts                  Box CRUD, slug generation, ownership checks
-│   ├── folder_service.ts               Folder CRUD, path_cache derivation and cascade
-│   ├── note_service.ts                 Note create/update via atomic RPC functions
-│   ├── guide_service.ts                Guide note assign/clear (boxes.guide_note_id)
-│   ├── link_service.ts                 Note link CRUD with same-box validation
-│   ├── search_service.ts               Box-scoped FTS via search_notes RPC
-│   ├── overview_service.ts             Box hierarchy + link graph (bounded)
-│   ├── system_guide_service.ts         Static structured product rules for API/MCP
-│   ├── context_bundle_service.ts       Deterministic context bundle assembly
-│   ├── write_proposal_service.ts       Create, approve, reject, preview, conflict detection
-│   ├── generated_note_service.ts       Direct authorized note creation (generate_in_allowed_folders)
-│   ├── diff_utils.ts                   computeDiffSummary, computeRollbackDiff (deterministic, no AI)
-│   └── version_history_service.ts      listVersionsForNote, getVersionForNote, rollbackNoteToVersion
-├── api/                                (future) Route handler layer
-├── policies/                           (future) Authorization checks
-└── mcp/                                MCP server (stdio, 12 tools, proxies canonical API)
-    ├── index.ts                        Entrypoint — StdioServerTransport
-    ├── server.ts                       McpServer factory
-    ├── config.ts                       Env validation
-    ├── errors.ts                       ApiError + error mapper
-    ├── client/
-    │   └── canonical_api_client.ts     HTTP client for /api/v1 routes
-    └── tools/
-        ├── register_tools.ts           Central tool registration
-        ├── system_guide.ts             get_system_guide
-        ├── boxes.ts                    list_boxes, get_box_guide, get_box_overview
-        ├── notes.ts                    list_folder_contents, get_note, get_linked_notes, search_notes
-        ├── bundles.ts                  get_context_bundle
-        └── write_proposals.ts          create_write_proposal, list_write_proposals, create_generated_note
+/
+├── src/
+│   ├── app/            Next.js routes (pages + API)
+│   ├── server/         Auth, domain, repositories, services
+│   ├── lib/            Utility libraries (supabase clients, inngest, crdt, etc.)
+│   └── components/     React UI components
+├── supabase/
+│   └── migrations/     91 ordered SQL migrations (applied via supabase db push)
+├── scripts/            Deployment helper scripts
+├── agent/              Modal operator harness (Python, separate deploy)
+├── docs/               Per-subsystem documentation
+├── CONTRIBUTING.md     Contributor guide
+├── SECURITY.md         Security policy and threat model
+└── .env.example        All required environment variables
 ```
-
-## Atomicity: note versioning
-
-Note creation and editing are the only operations that require strict atomicity.
-Both go through Postgres RPC functions defined in migration `20260409000003`:
-
-- `create_note_with_initial_version(...)` — inserts note + version_1 + updates `current_version_id` in one transaction
-- `update_note_and_create_version(...)` — inserts a new version + updates note content and `current_version_id` in one transaction
-
-`note_service.ts` calls these via `supabase.rpc()`. Application-layer retry is not used — the function either succeeds atomically or throws.
-
-## Page layout pattern
-
-Pages that need a right panel (box, note) use an inline flex layout rather than
-AppShell's `rightPanel` prop:
-
-```tsx
-<div className="flex h-full overflow-hidden">
-  <div className="flex-1 flex-col overflow-hidden">…main…</div>
-  <aside className="hidden lg:flex lg:w-72 lg:border-l">…panel…</aside>
-</div>
-```
-
-The AppShell in the layout provides only the sidebar. Pages own their own panel space.
-
-## Retrieval layer
-
-See [docs/retrieval_layer_v1.md](retrieval_layer_v1.md) for the full retrieval architecture:
-
-- Explicit note links (directional, same-box, typed)
-- Keyword search (Postgres FTS, weighted fields, deterministic ranking)
-- System guide (static product rules, reusable by API/MCP)
-- Box guide (structured interpretation surface per box)
-- Box overview (hierarchy + link graph, bounded)
-
-## Context bundle
-
-See [docs/context_bundle_v1.md](context_bundle_v1.md) for the bundle architecture:
-
-- Bounded, deterministic retrieval package centered on one note
-- Typed shared output (`ContextBundle`) usable by human UI, API, and MCP
-- Assembly pipeline with explicit ownership checks
-- Ancestor summary resolution via folder walk
-- Configurable options: guide, ancestor summary, linked limit
-
-## Shared markdown rendering
-
-All markdown rendering goes through `src/lib/markdown.ts` → `renderMarkdown(content)`.
-The `MarkdownPreview` component (`src/components/product/markdown_preview.tsx`) is the
-shared client component. Sanitization can be added in one place here when needed.
-
-## Portability layer
-
-See [docs/import_export_v1.md](import_export_v1.md) for Notes/Folders/Boxes/Bundles.
-See [docs/contextual_import_export_v1.md](contextual_import_export_v1.md) for Files/Skills/Agents (schema v1.1).
-
-- Manifest schema v1.0 → Notes, Folders, Links, Bundles
-- Manifest schema v1.1 → adds Files (`object_files`), Skills (`skills`), Agents (`agents`), cross-type links (`object_links`)
-- Export modes: `canonical_source` (single raw file) | `packaged` (zip + manifest) — for Skills and Agents
-- Workspace-level import: `importWorkspaceLevelPackageAction` — no box required for reusable skill/agent packages
-- `is_reusable` is always preserved on import — never silently converted
-- Delivery via `deliverExportPackage` (zip) or `deliverRawContent` (raw file) in `artifact_delivery_service.ts`
-- `ImportSummaryReport` — typed per-object action log including files/skills/agents
-
-```
-src/server/services/
-├── export_service.ts          Note/folder/box/bundle/file/skill/agent assembly → zip or raw
-├── import_service.ts          Parse + validate + apply with collision handling (all object types)
-└── artifact_delivery_service.ts  Package/raw content → Storage → signed URL
-
-src/server/domain/types/
-└── import_export.ts           ExportManifest (v1.0+v1.1), ImportSummaryReport, CollisionMode, ExportMode
-
-src/app/app/import_export/
-└── actions.ts                 Export/import server actions (all object types)
-
-src/components/product/
-├── export_menu.tsx            NoteExportMenu, BoxExportMenu (client)
-├── import_dialog.tsx          ImportDialog, ImportTriggerButton, FolderImportButton (client)
-└── note_import_dialog.tsx     NoteImportDialog, NoteImportButton — note-level import
-
-src/app/app/notes/
-└── actions.ts                 importIntoNoteAction, NoteImportMode — note-level import
-```
-
-**Contextual import** (see [contextual_import_flows_v1.md](contextual_import_flows_v1.md)):
-Import is available at box, folder, and note level. Box/folder paths use `importPackageAction` with all four collision modes. Note-level import uses `importIntoNoteAction` with explicit `replace` / `append` modes; creates a new version with `change_origin = "import"`.
-
-## External trust boundary (connections + canonical API)
-
-See [docs/connections_v1.md](connections_v1.md) and [docs/canonical_api_v1.md](canonical_api_v1.md).
-
-- Bearer token auth separate from human session auth — `get_connection_context.ts`
-- Admin Supabase client (service role) for token lookup only — `src/lib/supabase/admin.ts`
-- 16 canonical API endpoints under `src/app/api/v1/`
-- Connection management UI in Settings → Connections
-
-```
-src/lib/supabase/
-└── admin.ts                   Admin client factory (service role, bypasses RLS)
-
-src/lib/api/
-└── response.ts                apiOk(), apiError(), E_UNAUTHORIZED, E_FORBIDDEN, etc.
-
-src/server/auth/
-└── get_connection_context.ts  Bearer token → ConnectionRequestContext
-
-src/server/services/
-└── connection_service.ts      createConnection, rotateConnectionToken, revokeConnection, listConnectionsWithScopes
-
-src/app/api/v1/
-├── system_guide/route.ts
-├── boxes/route.ts
-├── boxes/[box_id]/
-│   ├── box_guide/route.ts
-│   ├── box_overview/route.ts
-│   └── folder_contents/route.ts
-├── notes/[note_id]/
-│   ├── route.ts
-│   ├── linked_notes/route.ts
-│   └── versions/route.ts
-├── search_notes/route.ts
-├── context_bundles/route.ts
-├── export_note/route.ts
-├── export_folder/route.ts
-├── export_box/route.ts
-├── export_context_bundle/route.ts
-├── write_proposals/route.ts
-└── generated_notes/route.ts
-
-src/app/app/settings/
-└── connections_actions.ts     Server actions for UI
-
-src/components/product/
-└── connections_panel.tsx      ConnectionsPanel (create, list, rotate, revoke)
-```
-
-## Version history layer
-
-See [docs/version_history_v1.md](version_history_v1.md) for the full version history architecture.
-
-- **Immutable chain**: every note write appends a new `note_versions` row — no row is ever mutated
-- **change_origin**: `human_edit`, `import`, `generated`, `proposal_approved`, `rollback`
-- **diff_summary**: deterministic jsonb (title/body/summary/tags changed + byte delta) computed in TypeScript
-- **Rollback**: human-only; creates a fresh version from the selected snapshot; history is preserved
-- **Canonical API**: `GET /api/v1/notes/[id]/versions` for connection-authenticated reads; rollback not exposed
-
-```
-supabase/migrations/20260409000006_version_history_rpc.sql
-
-src/server/services/
-├── diff_utils.ts              computeDiffSummary, computeRollbackDiff
-└── version_history_service.ts listVersionsForNote, getVersionForNote, rollbackNoteToVersion
-
-src/app/api/v1/notes/[note_id]/
-└── versions/route.ts          GET — paginated version list (connection-authenticated)
-
-src/app/app/notes/[note_id]/
-└── actions.ts                 rollbackNoteAction (human only, server action)
-
-src/components/product/
-└── note_history_panel.tsx     Version list + detail + rollback confirm (History tab)
-```
-
-## Machine write layer
-
-See [docs/machine_write_v1.md](machine_write_v1.md) for the full machine write architecture.
-
-- **Write proposals**: external connections propose changes (create/update/append/replace); humans review at `/app/proposals`
-- **Generated notes**: `generate_in_allowed_folders` connections write directly to pre-authorized folders — no review
-- **Optimistic locking**: `target_version_id` captured at proposal creation; conflicts detected atomically at approval time
-- **Atomic SQL functions**: `approve_write_proposal_update`, `approve_write_proposal_create`, `create_generated_note_with_version`
-
-```
-supabase/migrations/20260409000005_machine_write_rpc.sql
-
-src/server/services/
-├── write_proposal_service.ts  Create, approve, reject, preview, conflict check
-└── generated_note_service.ts  Direct authorized note creation
-
-src/app/api/v1/
-├── write_proposals/route.ts   POST (create), GET (list)
-└── generated_notes/route.ts   POST (create)
-
-src/app/app/proposals/
-├── page.tsx                   Human review surface
-└── actions.ts                 approveProposalAction, rejectProposalAction, setFolderGeneratedPolicyAction
-
-src/components/product/
-├── proposals_panel.tsx        Proposal cards with approve/reject + status filter
-└── folder_policy_toggle.tsx   Folder accepts_generated_notes toggle (compact + full)
-```
-
-## MCP server
-
-See [docs/mcp_v1.md](mcp_v1.md) for the full MCP architecture.
-
-- Stateless stdio MCP server
-- 12 tools: 9 read + 3 write (proposals + generated notes)
-- Proxies all calls to the running Next.js app over HTTP — no direct DB access
-- Auth via connection bearer token (`csk_v1_...`) — same as the external API
-
-```
-pnpm mcp       # run with tsx (dev)
-pnpm build:mcp # compile to dist/mcp/ (prod)
-```
-
-## Lifecycle control layer
-
-See [docs/lifecycle_controls_v1.md](lifecycle_controls_v1.md) for the full lifecycle architecture.
-
-- **Human-only**: no lifecycle mutations exposed via API or MCP
-- **States**: `active ↔ archived` (reversible hide), `active → trashed → active` (restore)
-- **Subtree operations**: folder archive/trash/restore via atomic recursive-CTE SQL RPCs
-- **Guide note protection**: note/folder operations blocked if content is the box's current guide note
-- **Audit**: every lifecycle mutation fires an append-only audit event
-- **Audit log UI**: `/app/audit` — read-only browser with actor/object-type filtering
-
-```
-supabase/migrations/20260409000007_lifecycle_rpc.sql
-
-src/server/services/
-├── lifecycle_service.ts       archiveNote/unarchiveNote/trashNote/restoreNote + folder + box variants
-└── audit_view_service.ts      listWorkspaceAuditEvents, AUDIT_OBJECT_TYPES, AUDIT_EVENT_GROUPS
-
-src/server/repositories/
-├── note_repository.ts         listArchivedNotesByBox, listTrashedNotesByBox (added)
-└── folder_repository.ts       listArchivedFoldersByBox, listTrashedFoldersByBox (added)
-
-src/app/app/notes/[note_id]/
-└── actions.ts                 archiveNoteAction, unarchiveNoteAction, trashNoteAction, restoreNoteAction
-
-src/app/app/boxes/[box_id]/
-└── actions.ts                 archiveFolderAction, unarchiveFolderAction, trashFolderAction, restoreFolderAction, archiveBoxAction, unarchiveBoxAction
-
-src/app/app/audit/
-├── page.tsx                   /app/audit route — audit event browser
-└── actions.ts                 fetchAuditEventsAction
-
-src/components/product/
-├── note_lifecycle_menu.tsx    Note archive/trash/restore dropdown
-├── folder_lifecycle_menu.tsx  Folder subtree archive/trash/restore dropdown
-├── box_lifecycle_menu.tsx     Box archive/unarchive dropdown
-└── audit_panel.tsx            Audit event list with filter + expand
-```
-
-## Relationship contract correction
-
-See [docs/relationship_contract_correction_v1.md](relationship_contract_correction_v1.md).
-
-- **Canonical vocabulary**: 10 relationship types replacing the original 5 (`related`, `depends_on`, `parent_of`, `child_of`, `reference_for`, `extends`, `example_of`, `sibling_of`, `supersedes`, `derived_from`)
-- **Data migration**: `references` → `reference_for`, `contradicts` → `related` (deterministic, in migration `20260409000008`)
-- **`relationship_note`**: first-class nullable text column on `note_links` — searchable, exported, imported
-- **Search**: `search_notes` RPC updated to include `relationship_note` match via EXISTS subquery (no schema denormalization)
-- **Context bundles**: `BundleLinkedNote` and `BundleRelationshipEdge` include `relationship_note`; importance ordering updated to 10-value map
-- **Export/import**: `ManifestLink.relationship_note` now carries actual value (was always `null`)
-- **Human UI**: `CreateLinkDialog` adds optional note textarea; `LinkedNotesSection` displays note inline
-
-```
-supabase/migrations/20260409000008_relationship_contract_correction.sql
-
-src/server/domain/constants/note_constants.ts   RELATIONSHIP_TYPE (10 values)
-src/server/domain/types/note_link.ts            NoteLink.relationship_note added
-src/server/domain/types/context_bundle.ts       BundleLinkedNote, BundleRelationshipEdge updated
-src/server/repositories/note_link_repository.ts CreateNoteLinkInput.relationship_note added
-src/server/services/link_service.ts             createLink, updateLink accept relationship_note
-src/server/services/context_bundle_service.ts   RELATIONSHIP_IMPORTANCE updated; relationship_note in edges
-src/server/services/overview_service.ts         OverviewEdge.relationshipNote added
-src/server/services/export_service.ts           toManifestLink uses actual relationship_note
-src/server/services/import_service.ts           createNoteLink preserves relationship_note
-src/app/api/v1/notes/[note_id]/linked_notes/route.ts  relationship_note in response
-src/app/app/links/actions.ts                    createLinkAction/updateLinkAction accept relationship_note
-src/components/product/create_link_dialog.tsx   10-value picker + optional note textarea
-src/components/product/linked_notes_section.tsx 10-value labels; display relationship_note
-```
-
-## Product maturity layer
-
-See [docs/onboarding_and_templates_v1.md](onboarding_and_templates_v1.md) and
-[docs/accessibility_notes_v1.md](accessibility_notes_v1.md).
-
-- **Templates**: structured box and note starting points; application calls normal service functions
-- **Onboarding**: first-run callout on home page when workspace has no boxes; teaches the product mental model
-- **Mobile nav**: `MobileSidebar` sheet-based drawer; `AppShell` renders mobile top bar on `< md` screens
-- **Accessibility**: skip link, landmark semantics, `aria-current`, icon button labels, `role="alert"` on errors
-- **Empty states**: improved copy across guide note picker, tree view, workspaces, linked notes, home page
-
-```
-src/lib/templates/
-└── index.ts                   BOX_TEMPLATES, NOTE_TEMPLATES, getBoxTemplate, getNoteTemplate
-
-src/app/app/boxes/actions.ts
-├── createNoteAction            Extended: accepts optional markdownContent
-└── applyBoxTemplateAction      Orchestrates template: folders + notes + guide assignment
-
-src/components/product/
-├── app_shell.tsx               Updated: skip link, <main> landmark, mobile top bar + MobileSidebar
-├── app_sidebar.tsx             Updated: aria-current, nav/ul/li, aria-label on icon links
-├── mobile_sidebar.tsx          New: Sheet-based left drawer with full nav hierarchy
-├── onboarding_callout.tsx      New: First-run mental model callout (home page, no boxes)
-├── create_box_dialog.tsx       Updated: template picker (BOX_TEMPLATES)
-└── create_note_dialog.tsx      Updated: starter template picker (NOTE_TEMPLATES)
-```
-
-## Workspace layout layer
-
-See [docs/workspace_layout_correction_v1.md](workspace_layout_correction_v1.md) for the
-full workspace layout architecture.
-
-- **Three-pane model**: `[sidebar 240px] | [center flex-1] | [right pane 288px]`; right pane hidden < lg; shell stays thin, pages own panel space
-- **`TreeSidebar`**: client component, lazy-loads box tree via `getBoxTreeAction` on first expand, auto-expands current box from pathname
-- **`AppSidebar` + `MobileSidebar`**: both use `TreeSidebar`; mobile uses Sheet drawer
-- **Note editor**: two modes (Document / Markdown); Document mode is an editable proportional-font textarea for natural writing (default); Markdown mode is an editable monospace textarea labeled as the exact AI-facing source — both modes edit the same content string, no conversion
-- **Autosave**: 1500ms debounce via `useEffect` + `useRef`; calls `saveNoteAction` (same as manual save); every autosave creates an immutable version via `update_note_and_create_version` RPC; see [docs/note_dual_view_and_autosave_v1.md](note_dual_view_and_autosave_v1.md)
-- **`AutosaveStatus`**: five states — idle/unsaved/saving/saved/error; "unsaved" shows dim dot while timer runs; error shows Retry button and does not auto-dismiss
-- **`SemanticLinksPanel`**: replaces `LinkedNotesSection` in right pane; "Context relationships" framing (not backlinks)
-- **`GraphPanel`** + **`BoxGraphView`**: `GraphPanel` is a thin server component (stats + truncation warning); `BoxGraphView` is the interactive client component; hierarchy shown as spatial folder containers, semantic links as directed edge rows — two visually distinct edge types; guide note highlighted in amber; node selection reveals detail and highlights connected nodes; folder scope filter + hierarchy/links toggles; no D3 or force layout; see [docs/graph_view_v1.md](graph_view_v1.md)
-- **Context intelligence surfaces**: see [docs/context_intelligence_surface_v1.md](context_intelligence_surface_v1.md) — right pane system, guide note front door, semantic link framing, retrieval signals, box guide as machine interpretation layer, precision search, context bundle presentation, machine workflow visibility
-- **Workspace home (cockpit)**: status tiles + recent notes + boxes grid + connections + proposals
-- **Box page**: guide status always above the fold; "Overview" tab renamed to "Graph" using `GraphPanel`
-- **Note page**: center pane = breadcrumb + NoteEditor; right pane = Info/Links/Bundle/History tabs
-
-```
-src/app/app/page.tsx               Workspace cockpit (DashboardSection + DashboardCard)
-src/app/app/boxes/[box_id]/page.tsx  Box operating surface (guide header, Graph tab)
-src/app/app/notes/[note_id]/page.tsx  Note workspace (NoteEditor + NoteContextPanel)
-src/app/app/boxes/actions.ts         Added: getBoxTreeAction (lazy tree data for sidebar)
-
-src/components/product/
-├── tree_sidebar.tsx               New: expandable box/folder/note tree (client)
-├── autosave_status.tsx            New: autosave state indicator
-├── note_editor.tsx                Rewritten: three modes + autosave
-├── semantic_links_panel.tsx       New: context relationships panel
-├── graph_panel.tsx                Updated: server wrapper (stats + truncation), delegates to BoxGraphView
-├── box_graph_view.tsx             New: interactive client graph (hierarchy canvas + edge list + node detail)
-├── dashboard_section.tsx          New: cockpit section wrapper
-├── dashboard_card.tsx             New: cockpit card (link or static)
-├── app_sidebar.tsx                Updated: uses TreeSidebar, 240px width
-└── mobile_sidebar.tsx             Updated: uses TreeSidebar
-```
-
-## Starter and portability surface layer
-
-See [docs/starter_and_portability_surface_v1.md](starter_and_portability_surface_v1.md)
-for the full starter and portability architecture.
-
-- **Onboarding**: `OnboardingCallout` shown when no boxes; teaches 6 concepts (Box, Folder, Note, Guide note, Explicit links, Context bundle); footer has Create Box CTA (with template mention) + import hint
-- **Quick start**: `QuickStartPanel` shown when boxes exist but no notes yet; 3 instructional entries: import, template, guide note — all link to first box page
-- **Templates**: Box template (Project context) available in `CreateBoxDialog`; note templates (Prompt, Agent, System, Guide note) in `CreateNoteDialog`; code-defined, no builder
-- **Import**: Available at three levels — box (header button), folder (hover icon in Tree tab), note (top-bar button). Box/folder paths use `ImportDialog` with 4 collision modes. Note path uses `NoteImportDialog` with replace/append modes. See [contextual_import_flows_v1.md](contextual_import_flows_v1.md).
-- **Export**: `NoteExportMenu` on note page; `BoxExportMenu` on box page; all descriptions include "signed link valid 1 hour"; guide note mention in bundle description
-- **Empty states**: `EmptyState` component used consistently; box Notes tab, Tree tab, Search tab, audit, proposals, connections all have appropriate empty state copy
-
-```
-src/components/product/
-├── onboarding_callout.tsx      Updated: 6 concepts (added Explicit links), import hint in footer
-├── quick_start_panel.tsx       New: sparse workspace starter panel (server component)
-├── import_dialog.tsx           Stable: modal with collision modes, summary panel
-├── export_menu.tsx             Updated: improved what's-included descriptions for all 4 export types
-└── box_contents_tree.tsx       Updated: improved empty tree message mentions Import
-```
-
-## Trust workspace surface layer
-
-See [docs/trust_workspace_surface_v1.md](trust_workspace_surface_v1.md) for the full
-trust surface architecture: proposal review, version history, audit browsing,
-connections, and generated note provenance.
-
-- **Proposal review** (`ProposalsPanel`): type-aware content preview — append proposals show the new portion separately (not the merged result); replace proposals get destructive border + warning; conflicted proposals show stale notice
-- **Version history** (`NoteHistoryPanel`): actor type always shown as "Human" / "Connection" / "System" — not raw values; rollback confirm copy clarifies it creates a new version
-- **Audit panel** (`AuditPanel`): human-readable event type labels (not raw dot-separated strings); actor filter uses `"connection"` not `"agent"` (which is not a valid ActorType); Bot icon for connection/system actors
-- **Connections** (`ConnectionsPanel`): status badge shown when non-active (paused/revoked); usage count visible in expanded detail; permission mode descriptions explain write semantics
-- **Generated note** (`GeneratedNoteBanner`): two-step promotion confirm; all signals disappear on promotion; origin_type preserved for provenance
-
-```
-src/components/product/
-├── proposals_panel.tsx        Updated: type icons, type-aware ProposalContentPreview, replace card border
-├── note_history_panel.tsx     Updated: ACTOR_LABEL map for version detail
-├── audit_panel.tsx            Updated: EVENT_LABEL map, actor type fix (connection not agent), human labels
-├── connections_panel.tsx      Updated: STATUS_CONFIG, status badge, usage_count in detail
-└── generated_note_banner.tsx  Stable: promotion is already deliberate + two-step
-```
-
-## V1 parity pass
-
-See [docs/v1_parity_report.md](v1_parity_report.md).
-
-Targeted corrections applied after a systematic review against the original acceptance criteria:
-
-- **Import guide note restoration**: `applyManifest` in `import_service.ts` now restores `boxes.guide_note_id` from the manifest's `is_guide_note` field after all notes are created. `guide_note.assigned` audit event fired on success.
-- **Bundle read audit**: `POST /api/v1/context_bundles` now fires `bundle.read` audit event with `actor_type='connection'` after successful assembly. `auditBundleReadByConnection()` added to audit_service.
-- **Note read response completeness**: `GET /api/v1/notes/[note_id]` now includes `origin_type`, `is_generated`, and `generated_by_connection_id` as specified in the generated note parity contract.
-- **Template service extraction**: Box template orchestration moved from `applyBoxTemplateAction` to `template_service.ts`.
-
-Stable ID resolution verified: all external API note lookups use UUID identity, not path. `path_cache` and `slug` are derived convenience fields only.
-
-Relationship explanation parity verified: `relationship_note` is propagated through linked notes API, box overview, context bundles, export manifests, import restore, and the human UI.
-
-Generated folder permission parity verified: four-layer check (permission_mode, box scope, folder policy, workspace ownership) confirmed in both route and service layers.
-
-## Box creation performance
-
-See [docs/box_creation_performance_fix_v1.md](box_creation_performance_fix_v1.md).
-
-**Critical path rule**: box creation should only block on the DB insert + audit.
-Template application is explicitly off the critical path — it runs as a background
-client-side effect (`BoxTemplateSetup`) after navigation so the user lands in the
-new box immediately.
-
-**Revalidation after box creation** (`createBoxAction`):
-- `revalidatePath('/app')` invalidates the home dashboard page and the
-  `_N_T_/app/layout` tag, forcing `listBoxesByWorkspace()` to re-run so the
-  sidebar shows the new box on the next navigation.
-- `revalidatePath('/app/workspaces')` invalidates the workspace box list page.
-- New box pages do not need explicit revalidation (fresh route).
-
-**Guard pattern for background setup**:
-Server components render the `BoxTemplateSetup` client component only when the
-box is empty (`notes.length === 0 && folders.length === 0`). This prevents
-accidental re-application to boxes with existing content (bookmarked URLs,
-shared links, etc.).
-
-## Document editing and real-time sync
-
-See [docs/document_editing_and_realtime_fix_v1.md](document_editing_and_realtime_fix_v1.md).
-
-**Document mode editing**: Document mode is now an editable textarea with proportional
-font. Users write naturally without markdown syntax. Switching to Markdown mode shows the
-same content string in monospace with a label indicating it is the exact AI-facing source.
-No conversion happens between modes; both edit the same `content` state.
-
-**Supabase Realtime**: `TreeSidebar` subscribes to `postgres_changes` on `notes`,
-`folders`, and `boxes` tables filtered by `workspace_id`. On notes/folders change, the
-affected box's tree is re-fetched with a 300ms debounce (coalesces bursts like template
-application). On boxes change, `router.refresh()` triggers a server re-render so the box
-list updates. The subscription is scoped to the workspace and only refreshes trees that
-are already loaded (collapsed boxes are not pre-fetched).
-
-**Immediate QuickCreate sync**: After creating a note or folder via `BoxQuickCreateMenu`,
-the tree is refreshed immediately via `fetchTree(boxId)` — before waiting for the realtime
-event — so the new item appears in the sidebar within milliseconds of navigation.
-
-```
-src/components/product/
-├── note_editor.tsx          Updated: document mode = editable textarea (proportional font)
-├── tree_sidebar.tsx         Updated: Supabase Realtime subscription + onTreeRefresh callback
-├── app_sidebar.tsx          Updated: workspaceId prop → TreeSidebar
-└── mobile_sidebar.tsx       Updated: workspaceId prop → TreeSidebar
-
-src/app/app/layout.tsx       Updated: passes workspaceId to AppSidebar + MobileSidebar
-```
-
-## Future prompts will add
-
-- `src/server/policies/` — authorization checks
