@@ -174,13 +174,87 @@ New workspaces populate the graph over days as users save notes. Existing worksp
 ### Cost model
 Per note save, one call to `gpt-4o-mini` with ~8k tokens input and ~2k tokens output. At current pricing that is ~$0.002 per save. The 30-second autosave debounce and workspace opt-out keep this bounded. Backfill of 1000 existing notes costs ~$2.
 
+---
+
+## Atomic insights
+
+A parallel extraction pipeline that captures propositional claims — distinct from named entities which capture who/what.
+
+### What is an insight
+
+An insight is a single verifiable claim lifted from a note. Categories:
+
+| Category | Meaning | Example |
+|---|---|---|
+| `fact` | Objective observation | "pgvector is Postgres-native" |
+| `decision` | A choice that was made | "We chose Postgres over Mongo" |
+| `insight` | Synthesized understanding | "The bottleneck is I/O not CPU" |
+| `question` | Open investigation | "Does HNSW handle 1M vectors well?" |
+| `action` | Intended work | "Migrate auth to WebAuthn by Q4" |
+
+### `insights` table
+
+Migration: `20260423000004_atomic_insights.sql`
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | uuid PK | |
+| `workspace_id` | uuid FK | cascade delete |
+| `note_id` | uuid FK | cascade delete |
+| `claim` | text | the extracted claim, ~1–2 sentences |
+| `category` | text | fact / decision / insight / question / action |
+| `confidence` | real (0–1) | model confidence, clamped at write time |
+| `source_excerpt` | text | supporting passage from the note |
+| `created_at` / `updated_at` | timestamptz | |
+
+RLS: all workspace members can read and write (same workspace_memberships check as entities).
+
+### Extraction
+
+Insights are extracted alongside entities in `knowledge_graph_service.ts`. The same LLM call that extracts entities also populates an `insights` array in the JSON response schema. On save:
+
+1. Old insights for the note are deleted.
+2. New insights are inserted with confidence from the model response.
+3. If extraction returns no insights (short note, extraction disabled), the note is left with zero insights — not an error.
+
+### UI: `/app/insights`
+
+The insights page shows a feed of all insights in the workspace, filterable by category. Each row shows: the claim, its category badge, source note link, and confidence. Click the note link to open the note.
+
+---
+
+## KG backfill jobs
+
+New workspaces accumulate the knowledge graph incrementally as notes are saved. Workspaces migrated in from older versions need a one-time backfill run to process existing notes.
+
+### `kg_backfill_jobs` table
+
+Migration: `20260423000003_kg_backfill_jobs.sql`
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | uuid PK | |
+| `workspace_id` | uuid FK | |
+| `triggered_by` | uuid FK auth.users | |
+| `status` | text | pending / running / completed / failed / cancelled |
+| `total_notes` | int | total notes to process |
+| `processed_notes` | int | notes processed so far |
+| `failed_notes` | int | notes that failed extraction |
+| `started_at` / `completed_at` | timestamptz | |
+| `error` | text | null on success |
+
+### Running a backfill
+
+`POST /api/internal/kg/backfill` (workspace-admin scoped): creates a `kg_backfill_jobs` row and processes all notes in batches of 20, calling the same extraction pipeline as on-save. The job row is updated incrementally so the settings UI can show a progress bar.
+
+A workspace can have only one active backfill job at a time (enforced at the service layer, not DB). Starting a new job when one is `running` returns `409 Conflict`.
+
+---
+
 ## Extension points
 
-The sub-phases in `/docs/knowledge_graph_roadmap.md` plug into the spots below:
+Future work:
 
-- **1E (Pog integration)** — `startConversationTurnAction` prompt assembly.
-- **1F (Backfill)** — new API route + job-tracking table + settings UI button.
-- **1G (Editor panel)** — server-rendered `listMentionsByNote()` → client `NoteEntitiesPanel`.
-- **1H (Merge/alias)** — new `mergeEntities(sourceId, targetId)` service + UI on entity detail page.
-- **1I (Force-directed viz)** — `/app/graph` gains a "Visual" tab wired to `react-force-graph-2d`.
-- **1J (Atomic insights)** — parallel extraction pipeline writing to `insights` + `insight_mentions` tables; graph retains entities, insights retain claims.
+- **Merge/alias** — `mergeEntities(sourceId, targetId)` service + UI on entity detail page for deduplicating variants ("GPT-4" vs "gpt4").
+- **Insight deduplication** — cross-note semantic dedup of structurally similar claims using the embedding column.
+- **Insight querying in GraphRAG** — surface relevant insights in the `formatGraphRagContext` block alongside entity context.
