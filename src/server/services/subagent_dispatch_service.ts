@@ -13,6 +13,7 @@
  * wait synchronously — the orchestrator polls via await_subagent.
  */
 import { AGENT_HEADERS } from "@/app/api/agent/_lib/auth";
+import { logger } from "@/lib/logger";
 
 export interface SubagentDispatchInput {
   invocationId: string;
@@ -95,13 +96,13 @@ export async function dispatchSubagentRun(
     });
 
     if (!response.ok) {
-      const text = await response.text().catch(() => "");
+      const text = await response.text().catch((err) => { logger.warn({ err }, "failed to read subagent dispatch error response body"); return ""; });
       throw new Error(
         `Subagent dispatch returned ${response.status}: ${text.slice(0, 500)}`
       );
     }
 
-    const payload = (await response.json().catch(() => ({}))) as {
+    const payload = (await response.json().catch((err) => { logger.warn({ err }, "failed to parse subagent dispatch response JSON"); return {}; })) as {
       modal_run_id?: string;
     };
 

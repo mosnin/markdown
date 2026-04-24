@@ -1,5 +1,6 @@
 import { type SupabaseClient } from "@supabase/supabase-js";
 
+import { logger } from "@/lib/logger";
 import {
   getWorkspacePlan,
   type WorkspacePlan,
@@ -71,7 +72,7 @@ export async function checkOperatorQuota(
 ): Promise<OperatorQuota> {
   const { userId, workspaceId } = args;
 
-  const tier = await getWorkspacePlan(supabase, workspaceId).catch(() => "free" as WorkspacePlan);
+  const tier = await getWorkspacePlan(supabase, workspaceId).catch((err) => { logger.warn({ err }, "getWorkspacePlan failed; defaulting to free tier"); return "free" as WorkspacePlan; });
   const resetsAt = firstOfNextMonthUTC();
 
   // Admin override flag — short-circuit everything else.
@@ -101,10 +102,7 @@ export async function checkOperatorQuota(
     }
   } catch (err) {
     // Fail open — quota is a guardrail, not a paywall.
-    console.warn(
-      "[workspace_operator_quota] usage lookup failed; allowing run",
-      err
-    );
+    logger.warn({ err }, "workspace_operator_quota: usage lookup failed; allowing run");
     return {
       tier,
       limit,
@@ -147,10 +145,7 @@ async function loadQuotaOverride(
       // Table or column missing — migration hasn't landed. Treat as "no override".
       return false;
     }
-    console.warn(
-      "[workspace_operator_quota] override lookup failed",
-      err
-    );
+    logger.warn({ err }, "workspace_operator_quota: override lookup failed");
     return false;
   }
 }
