@@ -1,5 +1,6 @@
 import { randomBytes, createHash } from "node:crypto";
 import { type SupabaseClient } from "@supabase/supabase-js";
+import { logger } from "@/lib/logger";
 import {
   type Connection,
   type ConnectionToken,
@@ -236,10 +237,7 @@ export async function revokeConnection(
       connectionId,
       "Connection revoked"
     );
-    console.log(
-      `[connection_service] Cancelled ${cancelled} pending proposals on revoke`,
-      { connection_id: connectionId }
-    );
+    logger.info({ connection_id: connectionId, cancelled }, "[connection_service] Cancelled pending proposals on revoke");
     // TODO: emit a `proposals.cancelled_on_revoke` audit event with
     // metadata { connection_id, count: cancelled }. The audit helpers
     // in audit_service are all typed per-event — there is no generic
@@ -248,10 +246,7 @@ export async function revokeConnection(
     // helper in a follow-up and call it here.
   } catch (err) {
     // Don't fail the revoke if cleanup fails — just log.
-    console.error(
-      "[connection_service] Failed to cancel proposals on revoke",
-      { connection_id: connectionId, err }
-    );
+    logger.error({ connection_id: connectionId, err }, "[connection_service] Failed to cancel proposals on revoke");
   }
 }
 

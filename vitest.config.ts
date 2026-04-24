@@ -11,6 +11,11 @@ export default defineConfig({
       reporter: ["text", "lcov"],
       include: ["src/lib/**", "src/server/**"],
       exclude: ["src/server/mcp/**", "**/*.d.ts"],
+      thresholds: {
+        lines: 70,
+        functions: 70,
+        branches: 60,
+      },
     },
   },
   resolve: {

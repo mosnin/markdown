@@ -182,10 +182,7 @@ export async function sendDigestBatch(
       // it contains user-controlled metadata (note titles, etc.) that
       // could include PII. See sanitizeMetadataTitle for the email-body
       // scrubbing path.
-      console.log("[email_digest] sending digest", {
-        user_id: userId,
-        event_count: summaries.length,
-      });
+      logger.info({ user_id: userId, event_count: summaries.length }, "[email_digest] sending digest");
 
       await sendDigestEmail(apiKey, email, cadence, summaries);
       sent++;
@@ -468,9 +465,7 @@ async function sendDigestEmail(
     // Aggregate-only error log. Never include the `summaries` array —
     // it can carry user-controlled PII. The response body is already
     // length-capped by the thrown error message.
-    console.error("[email_digest] send failed", {
-      status: res.status,
-    });
+    logger.error({ status: res.status }, "[email_digest] send failed");
     throw new Error(
       `resend responded ${res.status}: ${body.slice(0, 300)}`
     );
