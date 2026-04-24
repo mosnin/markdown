@@ -11,7 +11,7 @@ import { AppBreadcrumbs } from "@/components/product/app_breadcrumbs";
 import { OperatorPanelTrigger } from "@/components/product/operator_panel_trigger";
 import { ActivityBell } from "@/components/product/activity_bell";
 import { LegalStickyFooter } from "@/components/legal/legal_modal";
-import { CommandPaletteProvider } from "@/components/product/command_palette_provider";
+import { CommandPaletteProviderLoader } from "@/components/product/command_palette_provider_loader";
 import { ToastProvider } from "@/components/product/toast_provider";
 
 /**
@@ -146,7 +146,7 @@ export default async function AppLayout({
       </div>
 
       {/* Global Cmd/Ctrl+K command palette — renders a portal dialog */}
-      <CommandPaletteProvider />
+      <CommandPaletteProviderLoader />
     </div>
     </ToastProvider>
   );
