@@ -27,12 +27,6 @@ import { Button } from "@/components/ui/button";
 import { FeatureCard } from "@/components/ui/grid-feature-cards";
 import { GridCard } from "@/components/ui/grid-card";
 
-// ─── Static generation ───────────────────────────────────────────────────────
-// Features page is public content — pre-render at build time and revalidate
-// every hour via ISR so copy changes propagate quickly.
-export const dynamic = "force-static";
-export const revalidate = 3600;
-
 export const metadata: Metadata = {
   title: "Features — Poggle",
   description:

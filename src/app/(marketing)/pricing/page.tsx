@@ -5,12 +5,6 @@ import { PageHeroSection } from "@/components/marketing/hero";
 import * as PricingCard from "@/components/ui/pricing-card";
 import { Button } from "@/components/ui/button";
 
-// ─── Static generation ───────────────────────────────────────────────────────
-// Pricing page is public content — pre-render at build time and revalidate
-// every hour via ISR so pricing changes propagate quickly.
-export const dynamic = "force-static";
-export const revalidate = 3600;
-
 export const metadata: Metadata = {
   title: "Pricing — Poggle",
   description:
