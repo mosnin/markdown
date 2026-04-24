@@ -53,30 +53,49 @@ async function cascadePathCache(
   // overrides path, owned by another worktree).
   const allFolders = await listFoldersByBox(supabase, boxId);
 
-  for (const folder of allFolders) {
-    if (folder.path_cache.startsWith(oldPrefix + "/")) {
-      const newPath =
-        newPrefix + folder.path_cache.slice(oldPrefix.length);
-      await repoUpdate(supabase, folder.id, { path_cache: newPath });
+  // Collect all descendant folders that need updating.
+  const descendantFolders = allFolders.filter((f) =>
+    f.path_cache.startsWith(oldPrefix + "/")
+  );
 
-      // Fetch notes in this descendant folder and update their path_cache
-      const { data: notes } = await supabase
-        .from("notes")
-        .select("id, slug")
-        .eq("folder_id", folder.id)
-        .neq("status", "trashed");
+  if (descendantFolders.length === 0) return;
 
-      if (notes) {
-        for (const note of notes) {
-          await supabase
-            .from("notes")
-            .update({ path_cache: `${newPath}/${note.slug}` })
-            .eq("id", note.id);
-        }
-      }
-    }
+  // Build a map from folder.id → newPath for descendants.
+  const folderNewPathById = new Map<string, string>();
+  for (const folder of descendantFolders) {
+    folderNewPathById.set(
+      folder.id,
+      newPrefix + folder.path_cache.slice(oldPrefix.length)
+    );
   }
 
+  // Bulk-update all descendant folder path_caches in one upsert.
+  const folderUpsertRows = descendantFolders.map((f) => ({
+    id: f.id,
+    path_cache: folderNewPathById.get(f.id)!,
+  }));
+  await supabase
+    .from("folders")
+    .upsert(folderUpsertRows, { onConflict: "id" });
+
+  // Fetch all notes in descendant folders in a single query.
+  const descendantFolderIds = descendantFolders.map((f) => f.id);
+  const { data: notes } = await supabase
+    .from("notes")
+    .select("id, slug, folder_id")
+    .in("folder_id", descendantFolderIds)
+    .neq("status", "trashed");
+
+  if (!notes || notes.length === 0) return;
+
+  // Bulk-update all note path_caches in one upsert.
+  const noteUpsertRows = notes.map((note) => ({
+    id: note.id,
+    path_cache: `${folderNewPathById.get(note.folder_id)!}/${note.slug}`,
+  }));
+  await supabase
+    .from("notes")
+    .upsert(noteUpsertRows, { onConflict: "id" });
 }
 
 // ─── Public API ───────────────────────────────────────────────────────────────
@@ -223,20 +242,21 @@ export async function renameFolder(
   });
   if (!updated) throw new Error("Failed to rename folder");
 
-  // Update notes directly inside this folder
+  // Bulk-update notes directly inside this folder in one upsert.
   const { data: directNotes } = await supabase
     .from("notes")
     .select("id, slug")
     .eq("folder_id", folderId)
     .neq("status", "trashed");
 
-  if (directNotes) {
-    for (const note of directNotes) {
-      await supabase
-        .from("notes")
-        .update({ path_cache: `${newPathCache}/${note.slug}` })
-        .eq("id", note.id);
-    }
+  if (directNotes && directNotes.length > 0) {
+    const noteUpsertRows = directNotes.map((note) => ({
+      id: note.id,
+      path_cache: `${newPathCache}/${note.slug}`,
+    }));
+    await supabase
+      .from("notes")
+      .upsert(noteUpsertRows, { onConflict: "id" });
   }
 
   // Cascade to descendant folders and their notes (only when folder has box context)
