@@ -1,3 +1,4 @@
+import { connection } from "next/server";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowRight, Check, Minus, CheckCircle2, Users, Briefcase, Building2 } from "lucide-react";
@@ -150,7 +151,8 @@ function Cell({ value }: { value: boolean | string }) {
   return <span className="text-sm text-foreground">{value}</span>;
 }
 
-export default function PricingPage() {
+export default async function PricingPage() {
+  await connection();
   return (
     <div className="min-h-screen bg-background">
       {/* Hero */}

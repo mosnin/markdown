@@ -1,3 +1,4 @@
+import { connection } from "next/server";
 import Link from "next/link";
 import { Check, CheckCircle2, Users, Briefcase, Building2 } from "lucide-react";
 import { HeroSection } from "@/components/marketing/hero";
@@ -219,7 +220,8 @@ function Bullet({ title, children }: { title: string; children: string }) {
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
-export default function HomePage() {
+export default async function HomePage() {
+  await connection();
   return (
     <div className="min-h-screen bg-background">
 

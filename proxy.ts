@@ -3,46 +3,34 @@ import { refreshSession } from "@/lib/supabase/proxy";
 
 // ─── Nonce-based Content Security Policy ─────────────────────────────────────
 //
-// Next.js 16 automatically extracts the nonce from the CSP header and applies
-// it to all framework scripts, page bundles, and inline scripts/styles it
-// generates. The middleware generates a fresh nonce per request and threads it
-// through via the `x-nonce` request header and the `Content-Security-Policy`
-// response header.
+// Next.js 16 reads the nonce from the Content-Security-Policy REQUEST header
+// (set below via requestHeaders) and automatically injects it into all
+// framework-generated script tags, enabling strict nonce-based CSP on every
+// dynamically-rendered page.
 //
-// Directive rationale (unchanged items carry over from the original static CSP):
+// Pages MUST be dynamically rendered for nonces to work — static pages are
+// built at build time when no request exists, so no nonce can be injected.
+// Marketing pages guarantee this via `await connection()` in their component.
+//
+// Directive rationale:
 //
 // script-src 'nonce-...' 'strict-dynamic'
-//   Replaces 'unsafe-inline'. The nonce authorises Next.js-injected inline
-//   scripts; 'strict-dynamic' lets those scripts load further sub-resources
-//   (e.g. code-split chunks). In development 'unsafe-eval' is added because
-//   React uses eval for enhanced server-error debugging.
+//   The nonce authorises Next.js-injected inline scripts; 'strict-dynamic'
+//   propagates trust to dynamically loaded sub-resources (code-split chunks).
+//   'unsafe-eval' is added in development because React uses eval for enhanced
+//   server-error debugging.
 //
 // style-src 'unsafe-inline'
-//   Tailwind CSS v4 and next-themes inject inline styles. Required for correct
-//   rendering of the design token system and theme switching.
+//   Tailwind CSS v4 and next-themes inject inline styles at runtime.
 //
 // img-src data: https:
-//   Markdown content may include data: URI inline images and external https
-//   images.
+//   Markdown content may embed data: URIs; external images are https only.
 //
-// connect-src https://*.supabase.co wss://*.supabase.co https://*.ingest.sentry.io
-//   Supabase SSR auth, data queries, Storage signed URL downloads, Realtime
-//   WebSocket connections, and Sentry error ingestion.
+// connect-src https://*.supabase.co wss://*.supabase.co
+//   Supabase REST, Realtime WebSocket, Storage, and auth.
 //
-// font-src 'self'
-//   Geist is bundled via the geist npm package.
-//
-// frame-src 'none'
-//   No iframes rendered.
-//
-// object-src 'none'
-//   No plugin content used.
-//
-// base-uri 'self'
-//   Prevent <base> tag injection attacks.
-//
-// form-action 'self'
-//   All form submissions go to the same origin.
+// frame-src / object-src 'none'
+//   No iframes or plugin content used anywhere in the app.
 
 function buildCsp(nonce: string): string {
   const isDev = process.env.NODE_ENV === "development";
@@ -64,18 +52,20 @@ function buildCsp(nonce: string): string {
 }
 
 /**
- * Next.js 16 middleware — nonce-based CSP + Supabase session refresh.
+ * Next.js 16 proxy — nonce-based CSP + Supabase session refresh.
  *
+ * Renamed from middleware.ts (middleware is deprecated in Next.js 16).
  * Runs on every non-static request. For each request it:
  * 1. Generates a cryptographically random nonce for Content Security Policy.
  * 2. Sets the nonce as the `x-nonce` request header so Next.js can extract it.
- * 3. Delegates to `refreshSession` for Supabase auth cookie refresh.
- * 4. Sets the CSP response header with the nonce.
+ * 3. Sets the CSP in the request headers so Next.js applies the nonce to scripts.
+ * 4. Delegates to `refreshSession` for Supabase auth cookie refresh.
+ * 5. Sets the CSP response header so browsers enforce the policy.
  *
  * Authorization is NOT enforced here — it lives in server components via
  * `requireAuthenticatedUser()`.
  */
-export default async function middleware(
+export default async function proxy(
   request: NextRequest,
 ): Promise<NextResponse> {
   const nonce = Buffer.from(crypto.randomUUID()).toString("base64");

@@ -1,3 +1,4 @@
+import { connection } from "next/server";
 import type { Metadata } from "next";
 import Link from "next/link";
 import {
@@ -184,7 +185,8 @@ function CategorySection({
   );
 }
 
-export default function FeaturesPage() {
+export default async function FeaturesPage() {
+  await connection();
   return (
     <div className="min-h-screen bg-background">
       {/* Hero */}
