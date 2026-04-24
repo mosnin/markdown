@@ -1,5 +1,6 @@
 import { type SupabaseClient } from "@supabase/supabase-js";
 import { createHash } from "node:crypto";
+import { logger } from "@/lib/logger";
 
 /**
  * Embedding service — vector-based semantic search for notes.
@@ -100,7 +101,7 @@ export async function generateEmbedding(
       console.error(
         "[embedding_service] embedding API error:",
         response.status,
-        await response.text().catch(() => "")
+        await response.text().catch((err) => { logger.warn({ err }, "failed to read embedding API error response body"); return ""; })
       );
       return null;
     }

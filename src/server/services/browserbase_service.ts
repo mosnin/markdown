@@ -1,5 +1,6 @@
 import Browserbase from "@browserbasehq/sdk";
 import { chromium } from "playwright-core";
+import { logger } from "@/lib/logger";
 
 /**
  * Browserbase wrapper for the `browse_session_*` agent tools.
@@ -137,7 +138,7 @@ export async function runBrowserbaseStep(
   } finally {
     // Always close — keeps CDP sockets tidy; the Browserbase session itself
     // persists independently until REQUEST_RELEASE.
-    await browser.close().catch(() => {});
+    await browser.close().catch((err) => { logger.error({ err }, "browser.close() failed after Browserbase session"); });
   }
 }
 
@@ -177,7 +178,7 @@ export async function endBrowserbaseSession(sessionId: string): Promise<void> {
     }
   );
   if (!res.ok) {
-    const detail = await res.text().catch(() => "");
+    const detail = await res.text().catch((err) => { logger.warn({ err }, "failed to read Browserbase release error response body"); return ""; });
     throw new Error(
       `Browserbase release failed: ${res.status} ${detail.slice(0, 200)}`
     );

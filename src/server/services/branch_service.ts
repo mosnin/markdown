@@ -1363,7 +1363,7 @@ export async function promoteBranch(
       supabase,
       cs.id,
       err instanceof Error ? err.message : "promote failed"
-    ).catch(() => {});
+    ).catch((err) => { logger.error({ err }, "abortChangeSet failed during branch promotion error handler"); });
     await supabase
       .from("draft_branches")
       .update({ status: "open" })

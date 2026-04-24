@@ -185,7 +185,7 @@ async function sendInvitationEmail(
     });
 
     if (!res.ok) {
-      const bodyText = await res.text().catch(() => "");
+      const bodyText = await res.text().catch((err) => { logger.warn({ err }, "failed to read workspace invitation send error response body"); return ""; });
       logger.error(
         {
           status: res.status,

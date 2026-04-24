@@ -7,6 +7,7 @@ import {
   type ChangeSetItemOperation,
   type ChangeSetItemObjectType,
 } from "./change_set_service";
+import { logger } from "@/lib/logger";
 
 /**
  * Helper that wraps a lifecycle transition in a change set so the
@@ -81,7 +82,7 @@ export async function withLifecycleChangeSet<T>(
       supabase,
       cs.id,
       err instanceof Error ? err.message : "lifecycle failed"
-    ).catch(() => {});
+    ).catch((abortErr) => { logger.error({ err: abortErr }, "abortChangeSet failed during lifecycle error handler"); });
     throw err;
   }
 }

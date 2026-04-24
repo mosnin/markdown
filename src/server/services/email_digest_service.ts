@@ -461,7 +461,7 @@ async function sendDigestEmail(
   });
 
   if (!res.ok) {
-    const body = await res.text().catch(() => "");
+    const body = await res.text().catch((err) => { logger.warn({ err }, "failed to read email digest send error response body"); return ""; });
     // Aggregate-only error log. Never include the `summaries` array —
     // it can carry user-controlled PII. The response body is already
     // length-capped by the thrown error message.

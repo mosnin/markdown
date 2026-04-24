@@ -11,6 +11,7 @@
  * Failures are logged and skipped — extraction is opportunistic, not critical.
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { logger } from "@/lib/logger";
 import {
   createEntity,
   findEntityByName,
@@ -208,7 +209,7 @@ async function callExtractionModel(
       console.error(
         "[knowledge_graph_service] extraction failed:",
         resp.status,
-        await resp.text().catch(() => "")
+        await resp.text().catch((err) => { logger.warn({ err }, "failed to read knowledge graph extraction error response body"); return ""; })
       );
       return null;
     }

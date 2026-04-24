@@ -465,7 +465,7 @@ async function sendOperatorRunEmail(
   });
 
   if (!res.ok) {
-    const body = await res.text().catch(() => "");
+    const body = await res.text().catch((err) => { logger.warn({ err }, "failed to read operator notification send error response body"); return ""; });
     throw new Error(`resend responded ${res.status}: ${body.slice(0, 300)}`);
   }
 }

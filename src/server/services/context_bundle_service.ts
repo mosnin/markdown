@@ -857,7 +857,7 @@ export async function assembleContextBundle(
   // Only cache when we have a user-scoped key — anonymous / no-user
   // requests are not cached to avoid cross-user leakage.
   if (cacheKey) {
-    setCachedBundle(cacheKey, bundle, 300).catch(() => {});
+    setCachedBundle(cacheKey, bundle, 300).catch((err) => { logger.error({ err }, "setCachedBundle failed for context bundle"); });
   }
 
   return bundle;

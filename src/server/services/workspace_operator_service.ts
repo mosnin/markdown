@@ -133,7 +133,7 @@ export async function dispatchOperatorRun(
     });
 
     if (!response.ok) {
-      const text = await response.text().catch(() => "");
+      const text = await response.text().catch((err) => { logger.warn({ err }, "failed to read Workspace Operator error response body"); return ""; });
       throw new Error(
         `Workspace Operator endpoint returned ${response.status}: ${text.slice(0, 500)}`
       );
@@ -216,7 +216,7 @@ export async function dispatchOperatorPlan(
     });
 
     if (!response.ok) {
-      const text = await response.text().catch(() => "");
+      const text = await response.text().catch((err) => { logger.warn({ err }, "failed to read Operator plan error response body"); return ""; });
       throw new Error(
         `Operator plan endpoint returned ${response.status}: ${text.slice(0, 500)}`
       );
@@ -293,7 +293,7 @@ export async function dispatchOperatorExecute(
     });
 
     if (!response.ok) {
-      const text = await response.text().catch(() => "");
+      const text = await response.text().catch((err) => { logger.warn({ err }, "failed to read Operator execute error response body"); return ""; });
       throw new Error(
         `Operator execute endpoint returned ${response.status}: ${text.slice(0, 500)}`
       );
