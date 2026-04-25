@@ -59,7 +59,7 @@ vi.mock("@/server/services/workspace_operator_quota_service", async () => {
   };
 });
 
-import { OperatorPanel } from "@/components/product/operator_panel";
+import { OperatorPanel } from "@/components/product/operator/operator_panel";
 import { loadOperatorQuotaAction } from "@/app/app/workspace_operator/quota_actions";
 import {
   checkOperatorQuota,

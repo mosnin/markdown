@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 import { requireAuthenticatedUser } from "@/server/auth/require_authenticated_user";
 import { createClient } from "@/lib/supabase/server";
 import { getWorkflowById } from "@/server/repositories/workflow_repository";
-import { WorkflowCanvas } from "@/components/product/workflow_canvas";
+import { WorkflowCanvas } from "@/components/product/workflows/workflow_canvas";
 
 interface EditPageProps {
   params: Promise<{ workflow_id: string }>;

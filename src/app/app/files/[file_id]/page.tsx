@@ -13,17 +13,17 @@ import { listObjectVersions } from "@/server/repositories/object_version_reposit
 import { listNotesByBox } from "@/server/repositories/note_repository";
 import { listFilesByBox } from "@/server/repositories/file_repository";
 import { OBJECT_TYPE } from "@/server/domain/constants/object_constants";
-import { FileEditor } from "@/components/product/file_editor";
-import { FileContextPanel } from "@/components/product/file_context_panel";
-import { FileLanguageBadge } from "@/components/product/file_language_badge";
-import { FileLifecycleMenu } from "@/components/product/file_lifecycle_menu";
-import { FileImportButton } from "@/components/product/file_import_button";
+import { FileEditor } from "@/components/product/files/file_editor";
+import { FileContextPanel } from "@/components/product/files/file_context_panel";
+import { FileLanguageBadge } from "@/components/product/files/file_language_badge";
+import { FileLifecycleMenu } from "@/components/product/files/file_lifecycle_menu";
+import { FileImportButton } from "@/components/product/files/file_import_button";
 import { Badge } from "@/components/ui/badge";
 import { type SourceFormat } from "@/server/domain/constants/object_constants";
-import { type ResolvedObjectLink, type LinkTarget } from "@/components/product/file_object_links_panel";
+import { type ResolvedObjectLink, type LinkTarget } from "@/components/product/files/file_object_links_panel";
 import { type ObjectLink } from "@/server/domain/types/object_link";
 import { cn } from "@/lib/utils";
-import { WorkspaceLiveRefresh } from "@/components/product/workspace_live_refresh";
+import { WorkspaceLiveRefresh } from "@/components/product/workspace/workspace_live_refresh";
 import { ActiveBranchBannerServer } from "@/components/product/active_branch_banner_server";
 
 // ─── Parent context types ─────────────────────────────────────────────────────

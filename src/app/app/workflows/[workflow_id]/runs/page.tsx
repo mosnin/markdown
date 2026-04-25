@@ -6,7 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getWorkflowById } from "@/server/repositories/workflow_repository";
 import { listWorkflowRunsForWorkflow } from "@/server/repositories/workflow_run_repository";
 import { PageHeader } from "@/components/product/page_header";
-import { WorkflowRunRow } from "@/components/product/workflow_run_row";
+import { WorkflowRunRow } from "@/components/product/workflows/workflow_run_row";
 
 interface RunsPageProps {
   params: Promise<{ workflow_id: string }>;

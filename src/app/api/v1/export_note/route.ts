@@ -17,6 +17,7 @@ import {
   E_RATE_LIMITED,
 } from "@/lib/api/response";
 import { importExportLimit } from "@/lib/api/rate_limit";
+import { withApiHandler } from "@/server/api/with_api_handler";
 
 /**
  * POST /api/v1/export_note
@@ -25,7 +26,7 @@ import { importExportLimit } from "@/lib/api/rate_limit";
  *
  * Auth: OAuth access token with `context:read` scope.
  */
-export async function POST(request: NextRequest) {
+export const POST = withApiHandler(async (request: NextRequest) => {
   const ctx = await resolveMcpRequestAuth(request);
   if (!ctx) return E_UNAUTHORIZED();
   if (!requireScope(ctx, "context:read")) {
@@ -74,4 +75,4 @@ export async function POST(request: NextRequest) {
   } catch {
     return E_INTERNAL();
   }
-}
+});

@@ -5,8 +5,8 @@ import { requireAuthenticatedUser } from "@/server/auth/require_authenticated_us
 import { createClient } from "@/lib/supabase/server";
 import { getOperatorRun } from "@/server/services/workspace_operator_runs_service";
 import { listRunArtifacts } from "@/server/services/operator_artifacts_service";
-import { OperatorRunDetail } from "@/components/product/operator_run_detail";
-import { OperatorRunDiff } from "@/components/product/operator_run_diff";
+import { OperatorRunDetail } from "@/components/product/operator/operator_run_detail";
+import { OperatorRunDiff } from "@/components/product/operator/operator_run_diff";
 
 /**
  * Run detail view: header, plan, result, artifact diff, actions.

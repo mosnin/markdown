@@ -13,6 +13,7 @@ import {
   E_BAD_REQUEST,
   E_INSUFFICIENT_SCOPE,
 } from "@/lib/api/response";
+import { withApiHandler } from "@/server/api/with_api_handler";
 
 /**
  * GET /api/v1/notes/[note_id]/versions
@@ -25,10 +26,10 @@ import {
  * Note: rollback is intentionally not available through this API. It is a
  * human-only operation in V1.
  */
-export async function GET(
+export const GET = withApiHandler(async (
   request: NextRequest,
   { params }: { params: Promise<{ note_id: string }> }
-) {
+) => {
   const ctx = await resolveMcpRequestAuth(request);
   if (!ctx) return E_UNAUTHORIZED();
   if (!requireScope(ctx, "context:read")) {
@@ -70,4 +71,4 @@ export async function GET(
     limit,
     page,
   });
-}
+});

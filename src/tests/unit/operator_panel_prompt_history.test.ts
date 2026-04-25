@@ -71,7 +71,7 @@ import {
   savePromptHistory,
   PROMPT_HISTORY_MAX,
   PROMPT_HISTORY_KEY_PREFIX,
-} from "@/components/product/operator_panel";
+} from "@/components/product/operator/operator_panel";
 
 // ---------------------------------------------------------------------------
 // Layer 1 — pure helpers

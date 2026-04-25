@@ -12,6 +12,7 @@ import {
   listPersonasForWorkspace,
   type CreatePersonaInput,
 } from "@/server/services/agent_personas_service";
+import { withApiHandler } from "@/server/api/with_api_handler";
 
 /**
  * GET /api/agent/personas?workspace_id=...
@@ -34,7 +35,7 @@ const UUID_RE =
 
 const SLUG_RE = /^[a-z0-9_-]{2,40}$/;
 
-export async function GET(request: NextRequest) {
+export const GET = withApiHandler(async (request: NextRequest) => {
   const supabase = await createClient();
   const {
     data: { user },
@@ -62,7 +63,7 @@ export async function GET(request: NextRequest) {
     });
     return E_INTERNAL("Failed to list agent personas.");
   }
-}
+});
 
 interface CreatePersonaBody {
   workspace_id?: unknown;
@@ -78,7 +79,7 @@ interface CreatePersonaBody {
   must_cite_per_claim?: unknown;
 }
 
-export async function POST(request: NextRequest) {
+export const POST = withApiHandler(async (request: NextRequest) => {
   const supabase = await createClient();
   const {
     data: { user },
@@ -193,4 +194,4 @@ export async function POST(request: NextRequest) {
     });
     return E_INTERNAL("Failed to create agent persona.");
   }
-}
+});

@@ -26,7 +26,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
-import { MobileSidebarFooter } from "@/components/product/mobile_sidebar_footer";
+import { MobileSidebarFooter } from "@/components/product/shell/mobile_sidebar_footer";
 import { Separator } from "@/components/ui/separator";
 
 const accountNav = [

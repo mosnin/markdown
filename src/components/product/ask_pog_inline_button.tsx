@@ -3,7 +3,7 @@
 import { Sparkles } from "lucide-react";
 
 import { cn } from "@/lib/utils";
-import { OPEN_OPERATOR_EVENT } from "@/components/product/operator_panel_trigger";
+import { OPEN_OPERATOR_EVENT } from "@/components/product/operator/operator_panel_trigger";
 
 interface AskPogInlineButtonProps {
   /** Visible label on the button. Keep short (e.g. "Ask Pog about this box"). */

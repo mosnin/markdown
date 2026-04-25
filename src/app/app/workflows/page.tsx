@@ -4,8 +4,8 @@ import { requireAuthenticatedUser } from "@/server/auth/require_authenticated_us
 import { createClient } from "@/lib/supabase/server";
 import { listWorkflowsByWorkspace } from "@/server/repositories/workflow_repository";
 import { PageHeader } from "@/components/product/page_header";
-import { WorkflowRow } from "@/components/product/workflow_row";
-import { CreateWorkflowButton } from "@/components/product/create_workflow_button";
+import { WorkflowRow } from "@/components/product/workflows/workflow_row";
+import { CreateWorkflowButton } from "@/components/product/create/create_workflow_button";
 
 export default async function WorkflowsPage() {
   const ctx = await requireAuthenticatedUser();

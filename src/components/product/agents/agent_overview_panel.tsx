@@ -10,10 +10,10 @@ import {
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { AgentTypeBadge } from "@/components/product/agent_type_badge";
-import { AgentReferenceBadge } from "@/components/product/agent_reference_badge";
+import { AgentTypeBadge } from "@/components/product/agents/agent_type_badge";
+import { AgentReferenceBadge } from "@/components/product/agents/agent_reference_badge";
 import { type Agent } from "@/server/domain/types/agent";
-import { type ResolvedAgentLink } from "@/components/product/agent_object_links_panel";
+import { type ResolvedAgentLink } from "@/components/product/agents/agent_object_links_panel";
 import { cn } from "@/lib/utils";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────

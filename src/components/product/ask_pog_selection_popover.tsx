@@ -3,7 +3,7 @@
 import { Sparkles } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { OPEN_OPERATOR_EVENT } from "@/components/product/operator_panel_trigger";
+import { OPEN_OPERATOR_EVENT } from "@/components/product/operator/operator_panel_trigger";
 import { startConversationTurnAction } from "@/app/app/conversation/actions";
 
 interface AskPogSelectionPopoverProps {

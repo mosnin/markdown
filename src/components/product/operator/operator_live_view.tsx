@@ -18,7 +18,7 @@ import { ApprovalQueue } from "@/components/product/approval_queue";
 import { EnhancedEventStream } from "@/components/product/enhanced_event_stream";
 import { LiveTokenCounter } from "@/components/product/live_token_counter";
 import { SteerInput } from "@/components/product/steer_input";
-import { OperatorActivityPanel } from "@/components/product/operator_activity_panel";
+import { OperatorActivityPanel } from "@/components/product/operator/operator_activity_panel";
 
 // ---------------------------------------------------------------------------
 // Props

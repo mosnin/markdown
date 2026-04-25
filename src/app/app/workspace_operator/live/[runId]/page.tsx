@@ -4,7 +4,7 @@ import { requireAuthenticatedUser } from "@/server/auth/require_authenticated_us
 import { createClient } from "@/lib/supabase/server";
 import { getOperatorRun } from "@/server/services/workspace_operator_runs_service";
 import { getRunPlan } from "@/server/services/run_plans_service";
-import { OperatorLiveView } from "@/components/product/operator_live_view";
+import { OperatorLiveView } from "@/components/product/operator/operator_live_view";
 
 /**
  * Live Workspace Operator view — a full-page, Claude Code-style three-column

@@ -19,7 +19,7 @@ import { describe, it, expect } from "vitest";
 import {
   OperatorRunDiff,
   OperatorRunDiffView,
-} from "@/components/product/operator_run_diff";
+} from "@/components/product/operator/operator_run_diff";
 
 interface ReactNodeLike {
   type?: unknown;

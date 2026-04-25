@@ -5,7 +5,7 @@ import { Sparkles } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { GlobalSearch } from "@/components/product/global_search";
-import { OperatorPanel } from "@/components/product/operator_panel";
+import { OperatorPanel } from "@/components/product/operator/operator_panel";
 
 interface BoxRef {
   id: string;

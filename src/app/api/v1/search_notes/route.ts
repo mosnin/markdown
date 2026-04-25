@@ -13,6 +13,7 @@ import {
   E_INTERNAL,
   E_INSUFFICIENT_SCOPE,
 } from "@/lib/api/response";
+import { withApiHandler } from "@/server/api/with_api_handler";
 
 const MAX_LIMIT = 50;
 const DEFAULT_LIMIT = 20;
@@ -24,7 +25,7 @@ const DEFAULT_LIMIT = 20;
  *
  * Auth: OAuth access token with `context:search` scope.
  */
-export async function POST(request: NextRequest) {
+export const POST = withApiHandler(async (request: NextRequest) => {
   const ctx = await resolveMcpRequestAuth(request);
   if (!ctx) return E_UNAUTHORIZED();
   if (!requireScope(ctx, "context:search")) {
@@ -84,4 +85,4 @@ export async function POST(request: NextRequest) {
   } catch {
     return E_INTERNAL();
   }
-}
+});

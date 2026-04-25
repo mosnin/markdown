@@ -6,7 +6,7 @@ import { Bot, ChevronUp, Send } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
-import { WorkspaceConversation } from "@/components/product/workspace_conversation";
+import { WorkspaceConversation } from "@/components/product/workspace/workspace_conversation";
 import { startConversationTurnAction } from "@/app/app/conversation/actions";
 
 // ---------------------------------------------------------------------------

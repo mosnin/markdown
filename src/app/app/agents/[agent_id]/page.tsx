@@ -23,30 +23,30 @@ import { listReusableSkills } from "@/server/services/skill_service";
 import { listFoldersByBox } from "@/server/repositories/folder_repository";
 import { OBJECT_TYPE } from "@/server/domain/constants/object_constants";
 import { type ObjectLink } from "@/server/domain/types/object_link";
-import { AgentSourceEditor } from "@/components/product/agent_source_editor";
-import { AgentOverviewPanel } from "@/components/product/agent_overview_panel";
-import { AgentExportsPanel } from "@/components/product/agent_exports_panel";
-import { AgentChildrenPanel } from "@/components/product/agent_children_panel";
-import { AgentSkillsPanel } from "@/components/product/agent_skills_panel";
-import { AgentTriggersPanel } from "@/components/product/agent_triggers_panel";
-import { AgentContextPanel } from "@/components/product/agent_context_panel";
-import { AgentObjectLinksPanel } from "@/components/product/agent_object_links_panel";
-import { AgentLifecycleMenu } from "@/components/product/agent_lifecycle_menu";
+import { AgentSourceEditor } from "@/components/product/agents/agent_source_editor";
+import { AgentOverviewPanel } from "@/components/product/agents/agent_overview_panel";
+import { AgentExportsPanel } from "@/components/product/agents/agent_exports_panel";
+import { AgentChildrenPanel } from "@/components/product/agents/agent_children_panel";
+import { AgentSkillsPanel } from "@/components/product/agents/agent_skills_panel";
+import { AgentTriggersPanel } from "@/components/product/agents/agent_triggers_panel";
+import { AgentContextPanel } from "@/components/product/agents/agent_context_panel";
+import { AgentObjectLinksPanel } from "@/components/product/agents/agent_object_links_panel";
+import { AgentLifecycleMenu } from "@/components/product/agents/agent_lifecycle_menu";
 import { ReferenceContextBanner } from "@/components/product/reference_context_banner";
 import { ObjectTrustHeader } from "@/components/product/object_trust_header";
 import { MachineProvenancePanel } from "@/components/product/machine_provenance_panel";
-import { AgentHistoryPanel, AgentLifecycleControls } from "@/components/product/agent_trust_panels";
+import { AgentHistoryPanel, AgentLifecycleControls } from "@/components/product/agents/agent_trust_panels";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { AgentTypeBadge } from "@/components/product/agent_type_badge";
-import { AgentReferenceBadge } from "@/components/product/agent_reference_badge";
-import { WorkspaceLiveRefresh } from "@/components/product/workspace_live_refresh";
+import { AgentTypeBadge } from "@/components/product/agents/agent_type_badge";
+import { AgentReferenceBadge } from "@/components/product/agents/agent_reference_badge";
+import { WorkspaceLiveRefresh } from "@/components/product/workspace/workspace_live_refresh";
 import { ActiveBranchBannerServer } from "@/components/product/active_branch_banner_server";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import {
   type ResolvedAgentLink,
   type AgentLinkTarget,
-} from "@/components/product/agent_object_links_panel";
+} from "@/components/product/agents/agent_object_links_panel";
 import { type ObjectType } from "@/server/domain/constants/object_constants";
 import { cn } from "@/lib/utils";
 

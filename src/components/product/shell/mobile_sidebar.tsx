@@ -22,7 +22,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
-import { MobileSidebarFooter } from "@/components/product/mobile_sidebar_footer";
+import { MobileSidebarFooter } from "@/components/product/shell/mobile_sidebar_footer";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { TreeSidebar } from "@/components/product/tree_sidebar";

@@ -13,6 +13,7 @@ import {
 } from "@/server/services/operator_api_keys_service";
 import { getOperatorRun } from "@/server/services/workspace_operator_runs_service";
 import { isWorkspaceOperatorEnabled } from "@/lib/env";
+import { withApiHandler } from "@/server/api/with_api_handler";
 
 /**
  * GET /api/operator/runs/[id]
@@ -30,10 +31,10 @@ import { isWorkspaceOperatorEnabled } from "@/lib/env";
 export const runtime = "nodejs";
 
 interface RouteParams {
-  params: Promise<{ id: string }>;
+  params: Promise<Record<string, string>>;
 }
 
-export async function GET(request: NextRequest, { params }: RouteParams) {
+export const GET = withApiHandler(async (request: NextRequest, { params }: RouteParams) => {
   if (!isWorkspaceOperatorEnabled()) {
     return apiError(
       "operator_disabled",
@@ -89,4 +90,4 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     created_at: run.created_at,
     updated_at: run.updated_at,
   });
-}
+});

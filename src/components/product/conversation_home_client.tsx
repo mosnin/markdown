@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { LayoutDashboard, X } from "lucide-react";
 import type { WorkspaceOperatorRunRow } from "@/server/services/workspace_operator_runs_service";
-import { WorkspaceConversation } from "@/components/product/workspace_conversation";
+import { WorkspaceConversation } from "@/components/product/workspace/workspace_conversation";
 import { ConversationComposer } from "@/components/product/conversation_composer";
 import { OnboardingCallout } from "@/components/product/onboarding_callout";
 import { BulkImportPanel } from "@/components/product/bulk_import_panel";

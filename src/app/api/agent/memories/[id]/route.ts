@@ -13,6 +13,7 @@ import {
   updateMemory,
   type UpdateMemoryPatch,
 } from "@/server/services/agent_memories_service";
+import { withApiHandler } from "@/server/api/with_api_handler";
 
 /**
  * PUT /api/agent/memories/[id]
@@ -31,7 +32,7 @@ const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 interface RouteParams {
-  params: Promise<{ id: string }>;
+  params: Promise<Record<string, string>>;
 }
 
 interface UpdateMemoryBody {
@@ -40,7 +41,7 @@ interface UpdateMemoryBody {
   relevance?: unknown;
 }
 
-export async function PUT(request: NextRequest, { params }: RouteParams) {
+export const PUT = withApiHandler(async (request: NextRequest, { params }: RouteParams) => {
   const supabase = await createClient();
   const {
     data: { user },
@@ -106,9 +107,9 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     });
     return E_INTERNAL("Failed to update agent memory.");
   }
-}
+});
 
-export async function DELETE(_request: NextRequest, { params }: RouteParams) {
+export const DELETE = withApiHandler(async (_request: NextRequest, { params }: RouteParams) => {
   const supabase = await createClient();
   const {
     data: { user },
@@ -132,4 +133,4 @@ export async function DELETE(_request: NextRequest, { params }: RouteParams) {
     });
     return E_INTERNAL("Failed to delete agent memory.");
   }
-}
+});

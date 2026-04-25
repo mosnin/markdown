@@ -24,6 +24,7 @@ import {
 } from "@/lib/api/response";
 import { PERMISSION_MODE } from "@/server/domain/constants/connection_constants";
 import { apiWriteLimit } from "@/lib/api/rate_limit";
+import { withApiHandler } from "@/server/api/with_api_handler";
 
 /**
  * POST /api/v1/generated_notes
@@ -38,7 +39,7 @@ import { apiWriteLimit } from "@/lib/api/rate_limit";
  * Branch targeting: OAuth-backed writes target main only; a
  * `branch_id` in the body is rejected with 400.
  */
-export async function POST(request: NextRequest) {
+export const POST = withApiHandler(async (request: NextRequest) => {
   const ctx = await resolveMcpRequestAuth(request);
   if (!ctx) return E_UNAUTHORIZED();
   if (!requireScope(ctx, "context:generate")) {
@@ -204,4 +205,4 @@ export async function POST(request: NextRequest) {
     console.error("[generated_notes] Unexpected error:", err);
     return E_INTERNAL();
   }
-}
+});

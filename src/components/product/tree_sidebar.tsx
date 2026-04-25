@@ -28,8 +28,8 @@ import { cn } from "@/lib/utils";
 import { compareSiblings } from "@/server/domain/tree_ordering";
 import { Spinner } from "@/components/ui/spinner";
 import { createClient } from "@/lib/supabase/browser";
-import { FileCreateDialog } from "@/components/product/file_create_dialog";
-import { AgentCreateDialog } from "@/components/product/agent_create_dialog";
+import { FileCreateDialog } from "@/components/product/files/file_create_dialog";
+import { AgentCreateDialog } from "@/components/product/agents/agent_create_dialog";
 import { AttachReusableDialog } from "@/components/product/attach_reusable_dialog";
 import {
   getBoxTreeAction,

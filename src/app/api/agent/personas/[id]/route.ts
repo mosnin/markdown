@@ -14,6 +14,7 @@ import {
   updatePersona,
   type UpdatePersonaPatch,
 } from "@/server/services/agent_personas_service";
+import { withApiHandler } from "@/server/api/with_api_handler";
 
 /**
  * PUT /api/agent/personas/[id]
@@ -32,7 +33,7 @@ const UUID_RE =
 const SLUG_RE = /^[a-z0-9_-]{2,40}$/;
 
 interface RouteParams {
-  params: Promise<{ id: string }>;
+  params: Promise<Record<string, string>>;
 }
 
 interface UpdatePersonaBody {
@@ -58,7 +59,7 @@ function isNotFoundError(err: unknown): boolean {
   return /persona not found/i.test(err.message);
 }
 
-export async function PUT(request: NextRequest, { params }: RouteParams) {
+export const PUT = withApiHandler(async (request: NextRequest, { params }: RouteParams) => {
   const supabase = await createClient();
   const {
     data: { user },
@@ -177,9 +178,9 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     });
     return E_INTERNAL("Failed to update agent persona.");
   }
-}
+});
 
-export async function DELETE(_request: NextRequest, { params }: RouteParams) {
+export const DELETE = withApiHandler(async (_request: NextRequest, { params }: RouteParams) => {
   const supabase = await createClient();
   const {
     data: { user },
@@ -213,4 +214,4 @@ export async function DELETE(_request: NextRequest, { params }: RouteParams) {
     });
     return E_INTERNAL("Failed to delete agent persona.");
   }
-}
+});

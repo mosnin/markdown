@@ -1,6 +1,6 @@
 import { AlertTriangle, Bot, File, FileText, Folder, Share2, Zap } from "lucide-react";
 import { type BoxOverview } from "@/server/services/overview_service";
-import { BoxGraphView } from "./box_graph_view";
+import { BoxGraphView } from "./boxes/box_graph_view";
 
 // ─── Graph panel ──────────────────────────────────────────────────────────────
 

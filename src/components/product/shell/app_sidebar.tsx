@@ -36,7 +36,7 @@ import {
 import { ThemeToggle } from "@/components/product/theme_toggle";
 import { UserMenu } from "@/components/product/user_menu";
 import { TreeSidebar } from "@/components/product/tree_sidebar";
-import { WorkspaceSwitcher } from "@/components/product/workspace_switcher";
+import { WorkspaceSwitcher } from "@/components/product/workspace/workspace_switcher";
 
 // ─── Nav items ────────────────────────────────────────────────────────────────
 

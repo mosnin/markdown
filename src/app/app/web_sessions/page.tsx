@@ -3,8 +3,8 @@ import { requireAuthenticatedUser } from "@/server/auth/require_authenticated_us
 import { createClient } from "@/lib/supabase/server";
 import { listSessionsByWorkspace } from "@/server/repositories/browsing_session_repository";
 import { PageHeader } from "@/components/product/page_header";
-import { WebSessionRow } from "@/components/product/web_session_row";
-import { WebBudgetCard } from "@/components/product/web_budget_card";
+import { WebSessionRow } from "@/components/product/shell/web_session_row";
+import { WebBudgetCard } from "@/components/product/shell/web_budget_card";
 
 export default async function WebSessionsPage() {
   const ctx = await requireAuthenticatedUser();

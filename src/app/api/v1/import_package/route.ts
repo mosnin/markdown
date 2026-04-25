@@ -13,6 +13,7 @@ import {
   E_RATE_LIMITED,
 } from "@/lib/api/response";
 import { importExportLimit } from "@/lib/api/rate_limit";
+import { withApiHandler } from "@/server/api/with_api_handler";
 
 const MAX_UPLOAD_BYTES = 25 * 1024 * 1024; // 25 MB
 
@@ -91,7 +92,7 @@ const MAX_UPLOAD_BYTES = 25 * 1024 * 1024; // 25 MB
  * package size > 25 MB produce a 400 with a clear message.
  * Object count > 1,000 produces a 400.
  */
-export async function POST(request: NextRequest) {
+export const POST = withApiHandler(async (request: NextRequest) => {
   // Human session auth only — connections are not supported for import in V1.
   const ctx = await getRequestContext();
   if (!ctx.isAuthenticated || !ctx.user || !ctx.workspace) {
@@ -182,4 +183,4 @@ export async function POST(request: NextRequest) {
     // bounds exceeded) are surfaced as 400 Bad Request with the original message.
     return E_BAD_REQUEST(message);
   }
-}
+});

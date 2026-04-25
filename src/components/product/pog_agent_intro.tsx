@@ -11,7 +11,7 @@ import {
 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
-import { OPEN_OPERATOR_EVENT } from "@/components/product/operator_panel_trigger";
+import { OPEN_OPERATOR_EVENT } from "@/components/product/operator/operator_panel_trigger";
 
 /**
  * Intro card that explains what Pog Agent is and how to use it, shown

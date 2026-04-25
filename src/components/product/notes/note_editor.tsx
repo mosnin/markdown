@@ -16,15 +16,15 @@ import {
 import { formatAbsoluteDate } from "@/lib/format_date";
 import { useNotePresence } from "@/lib/hooks/use_note_presence";
 import { useConcurrentEditWarning } from "@/lib/hooks/use_concurrent_edit_warning";
-import { NotePresenceAvatars } from "@/components/product/note_presence_avatars";
-import { NoteHistoryDialog } from "@/components/product/note_history_dialog";
+import { NotePresenceAvatars } from "@/components/product/notes/note_presence_avatars";
+import { NoteHistoryDialog } from "@/components/product/notes/note_history_dialog";
 import { useNoteEmbedding } from "@/hooks/use_note_embedding";
 import { CrdtPresenceBar } from "@/components/product/crdt_presence_bar";
 import { useYjsCursorBroadcast } from "@/lib/crdt/yjs_awareness";
 
 const NoteCrdtEditor = dynamic(
   () =>
-    import("@/components/product/note_crdt_editor").then(
+    import("@/components/product/notes/note_crdt_editor").then(
       (m) => m.NoteCrdtEditor
     ),
   { ssr: false }

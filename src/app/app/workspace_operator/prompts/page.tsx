@@ -3,7 +3,7 @@ import { Separator } from "@/components/ui/separator";
 import { requireAuthenticatedUser } from "@/server/auth/require_authenticated_user";
 import { createClient } from "@/lib/supabase/server";
 import { listOperatorPrompts } from "@/server/services/operator_prompts_service";
-import { OperatorPromptsManager } from "@/components/product/operator_prompts_manager";
+import { OperatorPromptsManager } from "@/components/product/operator/operator_prompts_manager";
 
 /**
  * Saved Operator prompts management page.

@@ -2,8 +2,8 @@
 
 import { usePathname } from "next/navigation";
 import { type Box as BoxType } from "@/server/domain/types/box";
-import { MobileSidebar } from "@/components/product/mobile_sidebar";
-import { MobileSettingsSidebar } from "@/components/product/mobile_settings_sidebar";
+import { MobileSidebar } from "@/components/product/shell/mobile_sidebar";
+import { MobileSettingsSidebar } from "@/components/product/shell/mobile_settings_sidebar";
 
 interface MobileShellSidebarProps {
   userEmail?: string;

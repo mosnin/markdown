@@ -13,12 +13,12 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { FileLanguageBadge } from "@/components/product/file_language_badge";
+import { FileLanguageBadge } from "@/components/product/files/file_language_badge";
 import {
   FileObjectLinksPanel,
   type ResolvedObjectLink,
   type LinkTarget,
-} from "@/components/product/file_object_links_panel";
+} from "@/components/product/files/file_object_links_panel";
 import { type File as FileObject } from "@/server/domain/types/file";
 import { type ObjectVersion } from "@/server/domain/types/object_version";
 import { type SourceFormat } from "@/server/domain/constants/object_constants";

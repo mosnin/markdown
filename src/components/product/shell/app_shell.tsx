@@ -1,7 +1,7 @@
 import { type ReactNode } from "react";
 import { type Box } from "@/server/domain/types/box";
-import { AppSidebar } from "@/components/product/app_sidebar";
-import { MobileSidebar } from "@/components/product/mobile_sidebar";
+import { AppSidebar } from "@/components/product/shell/app_sidebar";
+import { MobileSidebar } from "@/components/product/shell/mobile_sidebar";
 import { ErrorBoundary } from "@/components/ui/error_boundary";
 
 interface AppShellProps {

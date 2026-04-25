@@ -2,8 +2,8 @@ import { Separator } from "@/components/ui/separator";
 import { requireAuthenticatedUser } from "@/server/auth/require_authenticated_user";
 import { createClient } from "@/lib/supabase/server";
 import { listOperatorRuns } from "@/server/services/workspace_operator_runs_service";
-import { OperatorHistoryTable } from "@/components/product/operator_history_table";
-import { OperatorNewRunButton } from "@/components/product/operator_new_run_button";
+import { OperatorHistoryTable } from "@/components/product/operator/operator_history_table";
+import { OperatorNewRunButton } from "@/components/product/operator/operator_new_run_button";
 import { PogAgentIntro } from "@/components/product/pog_agent_intro";
 import {
   expandStatusFilter,

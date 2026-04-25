@@ -11,6 +11,7 @@ import {
   E_RATE_LIMITED,
 } from "@/lib/api/response";
 import { importExportLimit } from "@/lib/api/rate_limit";
+import { withApiHandler } from "@/server/api/with_api_handler";
 
 /**
  * GET /api/v1/workspace_export
@@ -21,7 +22,7 @@ import { importExportLimit } from "@/lib/api/rate_limit";
  * Returns a WorkspaceExport JSON body with Content-Disposition header
  * for browser download.
  */
-export async function GET(_request: NextRequest) {
+export const GET = withApiHandler(async (_request: NextRequest) => {
   const ctx = await getRequestContext();
   if (!ctx.isAuthenticated || !ctx.user || !ctx.workspace) {
     return E_UNAUTHORIZED("Unauthorized — valid session required");
@@ -53,4 +54,4 @@ export async function GET(_request: NextRequest) {
     const message = err instanceof Error ? err.message : "Export failed";
     return E_INTERNAL(message);
   }
-}
+});

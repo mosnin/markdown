@@ -2,7 +2,7 @@
 
 import { usePathname } from "next/navigation";
 import { type Box as BoxType } from "@/server/domain/types/box";
-import { AppSidebar } from "@/components/product/app_sidebar";
+import { AppSidebar } from "@/components/product/shell/app_sidebar";
 import { SettingsSidebar } from "@/components/product/settings_sidebar";
 
 interface AppShellSidebarProps {

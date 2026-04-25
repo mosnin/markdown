@@ -1,5 +1,5 @@
 import { BookOpen, Box, FileText, Layers, Link2, Search, Upload } from "lucide-react";
-import { CreateBoxDialog } from "@/components/product/create_box_dialog";
+import { CreateBoxDialog } from "@/components/product/create/create_box_dialog";
 
 /**
  * First-run onboarding callout.

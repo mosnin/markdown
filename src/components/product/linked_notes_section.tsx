@@ -7,7 +7,7 @@ import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { type NoteLink } from "@/server/domain/types/note_link";
 import { type Note } from "@/server/domain/types/note";
-import { CreateLinkDialog } from "@/components/product/create_link_dialog";
+import { CreateLinkDialog } from "@/components/product/create/create_link_dialog";
 import { deleteLinkAction } from "@/app/app/links/actions";
 
 const REL_LABEL: Record<string, string> = {

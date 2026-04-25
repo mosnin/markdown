@@ -85,6 +85,8 @@ function makeRequest(body: unknown, headers: Record<string, string> = {}): Reque
   });
 }
 
+const DUMMY_CTX = { params: Promise.resolve({}) } as never;
+
 function asAdmin(opts: {
   branch?: { id: string; workspace_id: string; status: string } | null;
   box?: { id: string; workspace_id: string } | null;
@@ -130,12 +132,12 @@ afterEach(() => {
 describe("POST /api/operator/runs — auth", () => {
   it("503 when the operator is not enabled", async () => {
     (isWorkspaceOperatorEnabled as unknown as ReturnType<typeof vi.fn>).mockReturnValue(false);
-    const res = await POST(makeRequest({ prompt: "x", mode: "full", boxId: "b" }) as never);
+    const res = await POST(makeRequest({ prompt: "x", mode: "full", boxId: "b" }) as never, DUMMY_CTX);
     expect(res.status).toBe(503);
   });
 
   it("401 when the Authorization header is missing", async () => {
-    const res = await POST(makeRequest({ prompt: "x", mode: "full", boxId: "b" }) as never);
+    const res = await POST(makeRequest({ prompt: "x", mode: "full", boxId: "b" }) as never, DUMMY_CTX);
     expect(res.status).toBe(401);
   });
 
@@ -145,7 +147,8 @@ describe("POST /api/operator/runs — auth", () => {
       makeRequest(
         { prompt: "x", mode: "full", boxId: "b" },
         { Authorization: "Bearer wopr_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" }
-      ) as never
+      ) as never,
+      DUMMY_CTX
     );
     expect(res.status).toBe(401);
   });
@@ -161,7 +164,8 @@ describe("POST /api/operator/runs — input validation", () => {
       makeRequest(
         { mode: "full", boxId: "b" },
         { Authorization: "Bearer wopr_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" }
-      ) as never
+      ) as never,
+      DUMMY_CTX
     );
     expect(res.status).toBe(400);
   });
@@ -171,7 +175,8 @@ describe("POST /api/operator/runs — input validation", () => {
       makeRequest(
         { prompt: "x", mode: "explode", boxId: "b" },
         { Authorization: "Bearer wopr_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" }
-      ) as never
+      ) as never,
+      DUMMY_CTX
     );
     expect(res.status).toBe(400);
   });
@@ -181,7 +186,8 @@ describe("POST /api/operator/runs — input validation", () => {
       makeRequest(
         { prompt: "x", mode: "full" },
         { Authorization: "Bearer wopr_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" }
-      ) as never
+      ) as never,
+      DUMMY_CTX
     );
     expect(res.status).toBe(400);
   });
@@ -216,7 +222,8 @@ describe("POST /api/operator/runs — quota gate", () => {
           branchId: "br-1",
         },
         { Authorization: "Bearer wopr_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" }
-      ) as never
+      ) as never,
+      DUMMY_CTX
     );
     expect(res.status).toBe(429);
     const json = (await res.json()) as { error_code: string };
@@ -277,7 +284,8 @@ describe("POST /api/operator/runs — happy path", () => {
           branchId: "br-1",
         },
         { Authorization: "Bearer wopr_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" }
-      ) as never
+      ) as never,
+      DUMMY_CTX
     );
     expect(res.status).toBe(200);
     const json = (await res.json()) as { data: { run_id: string; status: string } };

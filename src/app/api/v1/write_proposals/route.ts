@@ -28,6 +28,7 @@ import {
 import { PERMISSION_MODE } from "@/server/domain/constants/connection_constants";
 import { type ProposalStatus } from "@/server/domain/constants/audit_constants";
 import { apiWriteLimit } from "@/lib/api/rate_limit";
+import { withApiHandler } from "@/server/api/with_api_handler";
 
 // ── Proposal type sets ────────────────────────────────────────────────────────
 const NOTE_PROPOSAL_TYPES = new Set([
@@ -76,7 +77,7 @@ const MAX_TAG_LENGTH = 100;
  * connection/token via the in-process limiter.
  */
 
-export async function POST(request: NextRequest) {
+export const POST = withApiHandler(async (request: NextRequest) => {
   const ctx = await resolveMcpRequestAuth(request);
   if (!ctx) return E_UNAUTHORIZED();
   if (!requireScope(ctx, "context:propose")) {
@@ -262,7 +263,7 @@ export async function POST(request: NextRequest) {
     console.error("[write_proposals] Unexpected error:", err);
     return E_INTERNAL();
   }
-}
+});
 
 /**
  * GET /api/v1/write_proposals
@@ -271,7 +272,7 @@ export async function POST(request: NextRequest) {
  *
  * Auth: OAuth access token with `context:propose` scope.
  */
-export async function GET(request: NextRequest) {
+export const GET = withApiHandler(async (request: NextRequest) => {
   const ctx = await resolveMcpRequestAuth(request);
   if (!ctx) return E_UNAUTHORIZED();
   if (!requireScope(ctx, "context:propose")) {
@@ -315,4 +316,4 @@ export async function GET(request: NextRequest) {
   } catch {
     return E_INTERNAL();
   }
-}
+});

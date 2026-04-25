@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { type ResolvedAgentLink } from "@/components/product/agent_object_links_panel";
+import { type ResolvedAgentLink } from "@/components/product/agents/agent_object_links_panel";
 import { cn } from "@/lib/utils";
 import { attachSkillToAgentAction } from "@/app/app/agents/actions";
 import { Button } from "@/components/ui/button";

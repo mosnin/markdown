@@ -31,7 +31,7 @@ import {
 import type { Theme, NotificationPreferences } from "./actions";
 import { DeleteAccountButton } from "./delete_account_button";
 import { KgBackfillButton } from "@/components/product/kg_backfill_button";
-import { WebBudgetCard } from "@/components/product/web_budget_card";
+import { WebBudgetCard } from "@/components/product/shell/web_budget_card";
 import { MembersSection } from "./members_section";
 import { canAdmin } from "@/server/auth/require_role";
 import { ConnectedAppsSection } from "./connected_apps_section";

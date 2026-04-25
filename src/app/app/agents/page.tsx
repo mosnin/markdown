@@ -4,12 +4,12 @@ import { createClient } from "@/lib/supabase/server";
 import { listReusableAgents } from "@/server/repositories/agent_repository";
 import { listBoxesByWorkspace } from "@/server/repositories/box_repository";
 import Link from "next/link";
-import { AgentCreateDialog } from "@/components/product/agent_create_dialog";
-import { AgentImportTrigger } from "@/components/product/agent_import_dialog";
-import { AgentFromTemplateDialog } from "@/components/product/agent_from_template_dialog";
-import { WorkspaceLiveRefresh } from "@/components/product/workspace_live_refresh";
+import { AgentCreateDialog } from "@/components/product/agents/agent_create_dialog";
+import { AgentImportTrigger } from "@/components/product/agents/agent_import_dialog";
+import { AgentFromTemplateDialog } from "@/components/product/agents/agent_from_template_dialog";
+import { WorkspaceLiveRefresh } from "@/components/product/workspace/workspace_live_refresh";
 import { ActiveBranchBannerServer } from "@/components/product/active_branch_banner_server";
-import { AgentsListClient } from "@/components/product/agents_list_client";
+import { AgentsListClient } from "@/components/product/agents/agents_list_client";
 
 // ─── Empty state ──────────────────────────────────────────────────────────────
 

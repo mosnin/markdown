@@ -13,13 +13,13 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { AgentTypeBadge } from "@/components/product/agent_type_badge";
-import { AgentReferenceBadge } from "@/components/product/agent_reference_badge";
+import { AgentTypeBadge } from "@/components/product/agents/agent_type_badge";
+import { AgentReferenceBadge } from "@/components/product/agents/agent_reference_badge";
 import {
   AgentObjectLinksPanel,
   type ResolvedAgentLink,
   type AgentLinkTarget,
-} from "@/components/product/agent_object_links_panel";
+} from "@/components/product/agents/agent_object_links_panel";
 import { type Agent } from "@/server/domain/types/agent";
 import { type ObjectVersion } from "@/server/domain/types/object_version";
 import { cn } from "@/lib/utils";

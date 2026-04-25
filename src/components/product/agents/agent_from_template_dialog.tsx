@@ -6,7 +6,7 @@ import { Layers, Bot, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { AGENT_TEMPLATES, type AgentTemplate } from "@/lib/templates/agent_templates";
 import { createReusableAgentAction } from "@/app/app/agents/actions";
-import { AgentTypeBadge } from "@/components/product/agent_type_badge";
+import { AgentTypeBadge } from "@/components/product/agents/agent_type_badge";
 
 export function AgentFromTemplateDialog() {
   const [open, setOpen] = useState(false);

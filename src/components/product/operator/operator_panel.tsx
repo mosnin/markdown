@@ -40,7 +40,7 @@ import {
 } from "@/components/ui/dialog";
 
 import { useOperatorProgress } from "@/lib/hooks/use_operator_run";
-import { OperatorActivityPanel } from "@/components/product/operator_activity_panel";
+import { OperatorActivityPanel } from "@/components/product/operator/operator_activity_panel";
 import {
   requestOperatorPlanAction,
   approveAndExecuteAction,

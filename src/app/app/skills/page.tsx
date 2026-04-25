@@ -3,11 +3,11 @@ import { requireAuthenticatedUser } from "@/server/auth/require_authenticated_us
 import { createClient } from "@/lib/supabase/server";
 import { listReusableSkills } from "@/server/repositories/skill_repository";
 import { listBoxesByWorkspace } from "@/server/repositories/box_repository";
-import { SkillImportTrigger } from "@/components/product/skill_import_dialog";
-import { SkillCreateDialog } from "@/components/product/skill_create_dialog";
-import { WorkspaceLiveRefresh } from "@/components/product/workspace_live_refresh";
+import { SkillImportTrigger } from "@/components/product/skills/skill_import_dialog";
+import { SkillCreateDialog } from "@/components/product/skills/skill_create_dialog";
+import { WorkspaceLiveRefresh } from "@/components/product/workspace/workspace_live_refresh";
 import { ActiveBranchBannerServer } from "@/components/product/active_branch_banner_server";
-import { SkillsListClient } from "@/components/product/skills_list_client";
+import { SkillsListClient } from "@/components/product/skills/skills_list_client";
 
 // ─── Empty state ──────────────────────────────────────────────────────────────
 

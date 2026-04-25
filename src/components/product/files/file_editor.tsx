@@ -10,7 +10,7 @@ import {
   AutosaveStatus,
   type AutosaveState,
 } from "@/components/product/autosave_status";
-import { FileLanguageBadge } from "@/components/product/file_language_badge";
+import { FileLanguageBadge } from "@/components/product/files/file_language_badge";
 import { SourceEditor } from "@/components/product/source_editor";
 
 /**

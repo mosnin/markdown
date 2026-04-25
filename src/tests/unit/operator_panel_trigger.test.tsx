@@ -27,8 +27,8 @@ import { describe, it, expect } from "vitest";
 // Operator" item, and asserts the Sheet opens.
 // ---------------------------------------------------------------------------
 
-import { OperatorPanelTrigger } from "@/components/product/operator_panel_trigger";
-import { OperatorPanel } from "@/components/product/operator_panel";
+import { OperatorPanelTrigger } from "@/components/product/operator/operator_panel_trigger";
+import { OperatorPanel } from "@/components/product/operator/operator_panel";
 import { GlobalSearch } from "@/components/product/global_search";
 
 // ─── Module surface ──────────────────────────────────────────────────────────

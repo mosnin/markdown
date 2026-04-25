@@ -9,8 +9,8 @@ import {
 } from "@/server/domain/errors";
 import { logger } from "@/lib/logger";
 
-type RouteContext = { params: Promise<Record<string, string>> };
-type RouteHandler = (req: NextRequest, ctx: RouteContext) => Promise<Response>;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type RouteHandler = (req: NextRequest, ctx?: any) => Promise<Response>;
 
 /**
  * Wraps a Next.js route handler with uniform error handling.

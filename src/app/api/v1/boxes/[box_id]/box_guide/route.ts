@@ -11,6 +11,7 @@ import {
   E_NOT_FOUND,
   E_INSUFFICIENT_SCOPE,
 } from "@/lib/api/response";
+import { withApiHandler } from "@/server/api/with_api_handler";
 
 /**
  * GET /api/v1/boxes/[box_id]/box_guide
@@ -20,10 +21,10 @@ import {
  *
  * Auth: OAuth access token with `context:read` scope.
  */
-export async function GET(
+export const GET = withApiHandler(async (
   request: NextRequest,
-  { params }: { params: Promise<{ box_id: string }> }
-) {
+  { params }: { params: Promise<Record<string, string>> }
+) => {
   const ctx = await resolveMcpRequestAuth(request);
   if (!ctx) return E_UNAUTHORIZED();
   if (!requireScope(ctx, "context:read")) {
@@ -69,4 +70,4 @@ export async function GET(
       created_at: guideNote.created_at,
     },
   });
-}
+});

@@ -2,7 +2,7 @@ import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { requireAuthenticatedUser } from "@/server/auth/require_authenticated_user";
 import { PageHeader } from "@/components/product/page_header";
-import { WorkflowTemplateCard } from "@/components/product/workflow_template_card";
+import { WorkflowTemplateCard } from "@/components/product/workflows/workflow_template_card";
 import { WORKFLOW_TEMPLATES } from "@/server/domain/workflow_templates";
 
 export default async function WorkflowTemplatesPage() {

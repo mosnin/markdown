@@ -17,6 +17,7 @@ import {
   updateOperatorRun,
 } from "@/server/services/workspace_operator_runs_service";
 import { isWorkspaceOperatorEnabled } from "@/lib/env";
+import { withApiHandler } from "@/server/api/with_api_handler";
 
 /**
  * POST /api/operator/runs/[id]/cancel
@@ -44,12 +45,12 @@ import { isWorkspaceOperatorEnabled } from "@/lib/env";
 export const runtime = "nodejs";
 
 interface RouteParams {
-  params: Promise<{ id: string }>;
+  params: Promise<Record<string, string>>;
 }
 
 const TERMINAL_STATUSES = new Set(["completed", "failed", "cancelled"]);
 
-export async function POST(request: NextRequest, { params }: RouteParams) {
+export const POST = withApiHandler(async (request: NextRequest, { params }: RouteParams) => {
   if (!isWorkspaceOperatorEnabled()) {
     return apiError(
       "operator_disabled",
@@ -131,4 +132,4 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     });
     return E_INTERNAL("Failed to cancel run.");
   }
-}
+});

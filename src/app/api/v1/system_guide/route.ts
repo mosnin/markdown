@@ -2,6 +2,7 @@ import { type NextRequest } from "next/server";
 import { resolveMcpRequestAuth, requireScope } from "@/server/auth/mcp_auth_adapter";
 import { getSystemGuide } from "@/server/services/system_guide_service";
 import { apiOk, E_UNAUTHORIZED, E_INSUFFICIENT_SCOPE } from "@/lib/api/response";
+import { withApiHandler } from "@/server/api/with_api_handler";
 
 /**
  * GET /api/v1/system_guide
@@ -14,7 +15,7 @@ import { apiOk, E_UNAUTHORIZED, E_INSUFFICIENT_SCOPE } from "@/lib/api/response"
  * tokens are accepted when the env flag is on and short-circuit the
  * scope gate.
  */
-export async function GET(request: NextRequest) {
+export const GET = withApiHandler(async (request: NextRequest) => {
   const ctx = await resolveMcpRequestAuth(request);
   if (!ctx) return E_UNAUTHORIZED();
   if (!requireScope(ctx, "context:read")) {
@@ -30,4 +31,4 @@ export async function GET(request: NextRequest) {
     "public, s-maxage=3600, stale-while-revalidate=86400",
   );
   return res;
-}
+});

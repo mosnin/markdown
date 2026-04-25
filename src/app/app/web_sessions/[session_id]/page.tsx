@@ -8,7 +8,7 @@ import {
   listStepsBySession,
 } from "@/server/repositories/browsing_session_repository";
 import { PageHeader } from "@/components/product/page_header";
-import { WebSessionSteps } from "@/components/product/web_session_steps";
+import { WebSessionSteps } from "@/components/product/shell/web_session_steps";
 
 interface SessionDetailPageProps {
   params: Promise<{ session_id: string }>;

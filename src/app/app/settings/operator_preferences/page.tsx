@@ -3,8 +3,8 @@ import { requireAuthenticatedUser } from "@/server/auth/require_authenticated_us
 import { createClient } from "@/lib/supabase/server";
 import { getNotificationPrefs } from "@/server/services/operator_notifications_service";
 import { listApiKeysForUser } from "@/server/services/operator_api_keys_service";
-import { OperatorNotificationPrefsCard } from "@/components/product/operator_notification_prefs";
-import { OperatorApiKeysManager } from "@/components/product/operator_api_keys_manager";
+import { OperatorNotificationPrefsCard } from "@/components/product/operator/operator_notification_prefs";
+import { OperatorApiKeysManager } from "@/components/product/operator/operator_api_keys_manager";
 
 /**
  * Operator preferences settings page.

@@ -11,10 +11,10 @@ import { listConnectionsByWorkspace } from "@/server/repositories/connection_rep
 import { listPendingProposals } from "@/server/repositories/write_proposal_repository";
 import { listOperatorRuns } from "@/server/services/workspace_operator_runs_service";
 import { listAuditEventsByWorkspace } from "@/server/repositories/audit_event_repository";
-import { NoteStub } from "@/components/product/note_stub";
+import { NoteStub } from "@/components/product/notes/note_stub";
 import { DashboardSection } from "@/components/product/dashboard_section";
 import { DashboardCard } from "@/components/product/dashboard_card";
-import { CreateBoxDialog } from "@/components/product/create_box_dialog";
+import { CreateBoxDialog } from "@/components/product/create/create_box_dialog";
 import { OnboardingCallout } from "@/components/product/onboarding_callout";
 import { QuickStartPanel } from "@/components/product/quick_start_panel";
 import { OnboardingMilestoneBar } from "@/components/product/onboarding_milestone_bar";

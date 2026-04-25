@@ -1,6 +1,6 @@
 "use client";
 
-import { OPEN_OPERATOR_EVENT } from "@/components/product/operator_panel_trigger";
+import { OPEN_OPERATOR_EVENT } from "@/components/product/operator/operator_panel_trigger";
 
 export function OperatorNewRunButton() {
   return (

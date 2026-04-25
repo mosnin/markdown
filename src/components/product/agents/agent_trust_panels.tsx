@@ -1,7 +1,7 @@
 "use client";
 
-import { ObjectHistoryPanel } from "./object_history_panel";
-import { ObjectLifecyclePanel } from "./object_lifecycle_panel";
+import { ObjectHistoryPanel } from "../object_history_panel";
+import { ObjectLifecyclePanel } from "../object_lifecycle_panel";
 import {
   rollbackAgentAction,
   archiveAgentAction,

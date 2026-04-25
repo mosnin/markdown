@@ -66,7 +66,7 @@ vi.mock("@/lib/hooks/use_operator_run", () => ({
   useOperatorProgress: vi.fn(() => ({ events: [], reset: vi.fn() })),
 }));
 
-import { actionErrorToString } from "@/components/product/operator_panel";
+import { actionErrorToString } from "@/components/product/operator/operator_panel";
 
 describe("actionErrorToString", () => {
   it("returns the fallback when error is null", () => {

@@ -3,7 +3,7 @@
 import { useEffect, useRef, useCallback, useState } from "react";
 import { RotateCcw } from "lucide-react";
 import { AutosaveStatus } from "@/components/product/autosave_status";
-import { AgentTypeBadge } from "@/components/product/agent_type_badge";
+import { AgentTypeBadge } from "@/components/product/agents/agent_type_badge";
 import { saveAgentAction } from "@/app/app/agents/actions";
 import { type Agent } from "@/server/domain/types/agent";
 import { SourceEditor } from "@/components/product/source_editor";

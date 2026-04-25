@@ -32,6 +32,7 @@ import {
   DEFAULT_OPERATOR_MODEL,
   type OperatorModel,
 } from "@/app/app/workspace_operator/types";
+import { withApiHandler } from "@/server/api/with_api_handler";
 
 /**
  * POST /api/operator/runs
@@ -160,7 +161,7 @@ function parseBody(raw: DispatchBody): { ok: true; input: DispatchInput } | { ok
   };
 }
 
-export async function POST(request: NextRequest) {
+export const POST = withApiHandler(async (request: NextRequest) => {
   if (!isWorkspaceOperatorEnabled()) {
     return apiError(
       "operator_disabled",
@@ -403,7 +404,7 @@ export async function POST(request: NextRequest) {
     });
     return E_INTERNAL("Operator dispatch failed.");
   }
-}
+});
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 

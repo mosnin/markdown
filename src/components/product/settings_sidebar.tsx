@@ -26,7 +26,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { ThemeToggle } from "@/components/product/theme_toggle";
 import { UserMenu } from "@/components/product/user_menu";
-import { WorkspaceSwitcher } from "@/components/product/workspace_switcher";
+import { WorkspaceSwitcher } from "@/components/product/workspace/workspace_switcher";
 
 /**
  * Account-section nav — rendered as in-page anchors on the main

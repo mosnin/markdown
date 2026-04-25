@@ -8,6 +8,7 @@ import {
   E_UNAUTHORIZED,
   E_INSUFFICIENT_SCOPE,
 } from "@/lib/api/response";
+import { withApiHandler } from "@/server/api/with_api_handler";
 
 /**
  * GET /api/v1/boxes
@@ -17,7 +18,7 @@ import {
  *
  * Auth: OAuth access token with `context:read` scope.
  */
-export async function GET(request: NextRequest) {
+export const GET = withApiHandler(async (request: NextRequest) => {
   const ctx = await resolveMcpRequestAuth(request);
   if (!ctx) return E_UNAUTHORIZED();
   if (!requireScope(ctx, "context:read")) {
@@ -59,4 +60,4 @@ export async function GET(request: NextRequest) {
     .sort((a, b) => a.name.localeCompare(b.name));
 
   return apiOk(boxes);
-}
+});

@@ -18,8 +18,8 @@ import {
   createOperatorApiKeyAction,
   revokeOperatorApiKeyAction,
 } from "@/app/app/workspace_operator/api_keys_actions";
-import { OperatorNotificationPrefsCard } from "@/components/product/operator_notification_prefs";
-import { OperatorApiKeysManager } from "@/components/product/operator_api_keys_manager";
+import { OperatorNotificationPrefsCard } from "@/components/product/operator/operator_notification_prefs";
+import { OperatorApiKeysManager } from "@/components/product/operator/operator_api_keys_manager";
 
 describe("operator_preferences page module surface", () => {
   it("default-exports the page as a function", () => {

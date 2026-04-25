@@ -5,7 +5,7 @@ import Link from "next/link";
 import { Bot, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { AttachToBoxTrigger } from "@/components/product/attach_to_box_trigger";
-import { AgentTypeBadge } from "@/components/product/agent_type_badge";
+import { AgentTypeBadge } from "@/components/product/agents/agent_type_badge";
 
 type Agent = {
   id: string;
