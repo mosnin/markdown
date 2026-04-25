@@ -311,6 +311,8 @@ function makeParams(id: string) {
   return { params: Promise.resolve({ id }) };
 }
 
+const DUMMY_CTX = { params: Promise.resolve({}) } as never;
+
 // ─── Suite setup ────────────────────────────────────────────────────────────
 
 beforeEach(() => {
@@ -377,7 +379,8 @@ describe("POST /api/operator/runs — full mode golden path", () => {
       postRequest(
         { prompt: "Summarise Q1 wins", mode: "full", boxId: BOX_A, branchId: BRANCH_A },
         { Authorization: VALID_BEARER }
-      ) as never
+      ) as never,
+      DUMMY_CTX
     );
 
     expect(res.status).toBe(200);
@@ -426,7 +429,8 @@ describe("POST /api/operator/runs — plan mode", () => {
       postRequest(
         { prompt: "Plan Q1 wins", mode: "plan", boxId: BOX_A, branchId: BRANCH_A },
         { Authorization: VALID_BEARER }
-      ) as never
+      ) as never,
+      DUMMY_CTX
     );
 
     expect(res.status).toBe(202);
@@ -464,7 +468,8 @@ describe("POST /api/operator/runs — execute mode", () => {
       postRequest(
         { prompt: "Execute the approved plan", mode: "execute", boxId: BOX_A, branchId: BRANCH_A },
         { Authorization: VALID_BEARER }
-      ) as never
+      ) as never,
+      DUMMY_CTX
     );
 
     expect(res.status).toBe(200);
@@ -491,7 +496,8 @@ describe("POST /api/operator/runs — cross-workspace branchId", () => {
       postRequest(
         { prompt: "x", mode: "full", boxId: BOX_A, branchId: BRANCH_B },
         { Authorization: VALID_BEARER }
-      ) as never
+      ) as never,
+      DUMMY_CTX
     );
 
     expect(res.status).toBe(400);

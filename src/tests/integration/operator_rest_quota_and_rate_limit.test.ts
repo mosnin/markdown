@@ -246,6 +246,8 @@ function postRequest(body: unknown, headers: Record<string, string> = {}): Reque
   });
 }
 
+const DUMMY_CTX = { params: Promise.resolve({}) } as never;
+
 /**
  * Seed `count` rate-limit event rows for `apiKeyId`, all with the exact
  * same `now()` timestamp the route will see at request time. The real
@@ -348,7 +350,8 @@ describe("POST /api/operator/runs — quota gate", () => {
       postRequest(
         { prompt: "go", mode: "full", boxId: BOX_FREE, branchId: BRANCH_FREE },
         { Authorization: VALID_BEARER }
-      ) as never
+      ) as never,
+      DUMMY_CTX
     );
 
     expect(res.status).toBe(429);
@@ -370,7 +373,8 @@ describe("POST /api/operator/runs — quota gate", () => {
       postRequest(
         { prompt: "go", mode: "full", boxId: BOX_PRO, branchId: BRANCH_PRO },
         { Authorization: VALID_BEARER }
-      ) as never
+      ) as never,
+      DUMMY_CTX
     );
 
     expect(res.status).toBe(200);
@@ -391,7 +395,8 @@ describe("POST /api/operator/runs — rate limit gate", () => {
       postRequest(
         { prompt: "go", mode: "full", boxId: BOX_PRO, branchId: BRANCH_PRO },
         { Authorization: VALID_BEARER }
-      ) as never
+      ) as never,
+      DUMMY_CTX
     );
 
     expect(res.status).toBe(429);
@@ -423,7 +428,8 @@ describe("POST /api/operator/runs — rate limit gate", () => {
       postRequest(
         { prompt: "go", mode: "full", boxId: BOX_PRO, branchId: BRANCH_PRO },
         { Authorization: VALID_BEARER }
-      ) as never
+      ) as never,
+      DUMMY_CTX
     );
 
     expect(res.status).toBe(429);
@@ -449,7 +455,8 @@ describe("POST /api/operator/runs — rate limit runs BEFORE quota", () => {
       postRequest(
         { prompt: "go", mode: "full", boxId: BOX_FREE, branchId: BRANCH_FREE },
         { Authorization: VALID_BEARER }
-      ) as never
+      ) as never,
+      DUMMY_CTX
     );
 
     expect(res.status).toBe(429);
