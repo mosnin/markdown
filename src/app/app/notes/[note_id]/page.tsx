@@ -40,10 +40,11 @@ import { NoteLifecycleMenu } from "@/components/product/notes/note_lifecycle_men
 import { SaveAsTemplateButton } from "@/components/product/save_as_template_button";
 import { NoteCommentsPanel } from "@/components/product/notes/note_comments_panel";
 import { NoteEntitiesPanel } from "@/components/product/notes/note_entities_panel";
+import { NoteBacklinksPanel } from "@/components/product/notes/note_backlinks_panel";
+import { CopyFrontmatterButton } from "@/components/product/notes/copy_frontmatter_button";
 import type { EntityChipType } from "@/components/product/entity_chip";
 import { ShareNoteButton } from "@/components/product/share_note_button";
 import { GeneratedNoteBanner } from "@/components/product/generated_note_banner";
-import { RetrievalHintBadge } from "@/components/product/retrieval_hint_badge";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -51,6 +52,10 @@ import { cn } from "@/lib/utils";
 import { WorkspaceLiveRefresh } from "@/components/product/workspace/workspace_live_refresh";
 import { ActiveBranchBannerServer } from "@/components/product/active_branch_banner_server";
 import { formatRelativeDate } from "@/lib/format_date";
+import { NoteAiReadinessBadge } from "@/components/product/notes/note_ai_readiness_badge";
+import { RetrievalPrioritySlider, ReadHintSelector } from "@/components/product/notes/note_retrieval_editor";
+import { NoteMetadataChecklist } from "@/components/product/notes/note_metadata_checklist";
+import { NoteBundleExportButton } from "@/components/product/notes/note_bundle_export_button";
 
 // ─── Breadcrumb ───────────────────────────────────────────────────────────────
 
@@ -126,7 +131,7 @@ function InfoLabel({ children }: { children: React.ReactNode }) {
 
 // ─── Right panel — Note context ───────────────────────────────────────────────
 
-const VALID_TABS = ["info", "links", "bundle", "history", "comments"] as const;
+const VALID_TABS = ["info", "links", "backlinks", "bundle", "history", "comments"] as const;
 type NoteContextTab = (typeof VALID_TABS)[number];
 
 function NoteContextPanel({
@@ -146,6 +151,7 @@ function NoteContextPanel({
   currentUserId,
   noteEntities,
   defaultTab = "info",
+  markdownContent,
   nowIso,
 }: {
   note: NonNullable<Awaited<ReturnType<typeof getNoteById>>>;
@@ -167,6 +173,8 @@ function NoteContextPanel({
   currentUserId: string;
   noteEntities: React.ComponentProps<typeof NoteEntitiesPanel>["entities"];
   defaultTab?: NoteContextTab;
+  /** Raw markdown content of the current note — passed through to NoteBacklinksPanel. */
+  markdownContent: string;
   /**
    * Wall-clock "now" frozen at the top of the server render so
    * `formatRelativeDate` produces identical output during server
@@ -216,6 +224,14 @@ function NoteContextPanel({
               {linkCount > 0 && (
                 <span className="ml-1 rounded-full bg-muted px-1 text-[10px] text-muted-foreground">
                   {linkCount}
+                </span>
+              )}
+            </TabsTrigger>
+            <TabsTrigger value="backlinks" className="relative pb-2.5 text-xs">
+              Backlinks
+              {links.incoming.length > 0 && (
+                <span className="ml-1 rounded-full bg-muted px-1 text-[10px] text-muted-foreground">
+                  {links.incoming.length}
                 </span>
               )}
             </TabsTrigger>
@@ -281,6 +297,13 @@ function NoteContextPanel({
                     {kindLabel[note.kind] ?? note.kind}
                   </Badge>
                 ) : null}
+                <NoteAiReadinessBadge
+                  summary={note.summary}
+                  tags={note.tags}
+                  linkCount={linkCount}
+                  readHint={note.read_hint}
+                  retrievalPriority={note.retrieval_priority}
+                />
               </div>
               <p className="line-clamp-3 text-sm font-medium text-foreground">
                 {note.title}
@@ -297,22 +320,31 @@ function NoteContextPanel({
               </InfoSection>
             )}
 
-            {/* Retrieval signals */}
-            {hasRetrieval && (
-              <InfoSection>
-                <InfoLabel>Retrieval</InfoLabel>
-                <RetrievalHintBadge
-                  readHint={note.read_hint}
-                  retrievalPriority={note.retrieval_priority}
+            {/* Retrieval signals — interactive editors */}
+            <InfoSection>
+              <InfoLabel>Retrieval</InfoLabel>
+              <div className="flex flex-col gap-4">
+                <RetrievalPrioritySlider
+                  noteId={note.id}
+                  initialPriority={note.retrieval_priority}
                 />
-                <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground/60">
-                  {note.retrieval_priority > 0 &&
-                    "Priority affects context bundle inclusion order. "}
-                  {note.read_hint &&
-                    "Read hint guides AI and human readers on how to use this note."}
-                </p>
-              </InfoSection>
-            )}
+                <ReadHintSelector
+                  noteId={note.id}
+                  initialReadHint={note.read_hint}
+                />
+              </div>
+            </InfoSection>
+
+            {/* AI Context Checklist */}
+            <InfoSection>
+              <NoteMetadataChecklist
+                summary={note.summary}
+                tags={note.tags}
+                linkCount={linkCount}
+                readHint={note.read_hint}
+                retrievalPriority={note.retrieval_priority}
+              />
+            </InfoSection>
 
             {/* Tags */}
             {note.tags.length > 0 && (
@@ -444,13 +476,41 @@ function NoteContextPanel({
             <div className="border-t border-border px-4 py-3">
               <LinkSuggestionsPanel noteId={note.id} />
             </div>
+            {links.outgoing.length > 0 && (
+              <div className="border-t border-border px-4 py-3">
+                <CopyFrontmatterButton
+                  outgoing={links.outgoing}
+                  allBoxNotes={allBoxNotes}
+                />
+              </div>
+            )}
+          </ScrollArea>
+        </TabsContent>
+
+        {/* ── Backlinks tab ── */}
+        <TabsContent value="backlinks" className="flex-1 overflow-hidden">
+          <ScrollArea className="h-full">
+            <div className="px-4 py-3">
+              <NoteBacklinksPanel
+                noteId={note.id}
+                workspaceId=""
+                incoming={links.incoming}
+                allBoxNotes={allBoxNotes}
+                markdownContent={markdownContent}
+              />
+            </div>
           </ScrollArea>
         </TabsContent>
 
         {/* ── Bundle tab ── */}
         <TabsContent value="bundle" className="flex-1 overflow-hidden">
           <ScrollArea className="h-full">
-            <div className="px-4 py-3">
+            <div className="px-4 py-3 space-y-3">
+              <NoteBundleExportButton
+                noteId={note.id}
+                noteTitle={note.title}
+                noteSlug={note.slug}
+              />
               <ContextBundleViewer
                 initialBundle={initialBundle}
                 noteId={note.id}
@@ -739,6 +799,7 @@ export default async function NotePage({
           currentUserId={ctx.user!.id}
           noteEntities={noteEntities}
           defaultTab={defaultTab}
+          markdownContent={note.markdown_content}
           nowIso={nowIso}
         />
       </aside>

@@ -1,3 +1,5 @@
+export * from "./copy_frontmatter_button";
+export * from "./note_backlinks_panel";
 export * from "./note_comments_panel";
 export * from "./note_crdt_editor";
 export * from "./note_editor";
