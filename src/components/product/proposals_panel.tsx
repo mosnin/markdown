@@ -300,13 +300,26 @@ function ProposalCard({
   return (
     <Card
       className={cn(
-        "border transition-colors",
+        "border transition-colors relative",
         isConflicted && "border-destructive/40 bg-destructive/5",
-        isPendingProposal && isReplace && !isConflicted && "border-destructive/30"
+        isPendingProposal && isReplace && !isConflicted && "border-destructive/30",
+        isSelected && "ring-2 ring-violet-500/40 border-violet-500/30"
       )}
     >
       <CardHeader className="pb-2">
-        <div className="flex flex-col gap-1.5">
+        {/* Checkbox for batch selection — only on pending proposals */}
+        {isPendingProposal && onToggleSelect && (
+          <div className="absolute top-3 left-3">
+            <input
+              type="checkbox"
+              checked={isSelected ?? false}
+              onChange={() => onToggleSelect(proposal.id)}
+              aria-label={`Select proposal for ${proposal.proposed_title ?? current_note?.title ?? "this note"}`}
+              className="h-4 w-4 rounded border-border accent-violet-500 cursor-pointer"
+            />
+          </div>
+        )}
+        <div className={cn("flex flex-col gap-1.5", isPendingProposal && onToggleSelect && "pl-7")}>
           <div className="flex flex-wrap items-center gap-2">
             {isPendingProposal && onToggleSelect && (
               <input
@@ -331,7 +344,7 @@ function ProposalCard({
           )}
         </div>
 
-        <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
+        <div className={cn("flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground", isPendingProposal && onToggleSelect && "pl-7")}>
           {connection && (
             <span className="flex items-center gap-1">
               <Zap className="h-3 w-3" />
@@ -346,9 +359,9 @@ function ProposalCard({
       </CardHeader>
 
       <CardContent className="space-y-3 pt-0">
-        {/* Rationale — shown above the diff as agent's reasoning */}
+        {/* Agent's Reasoning callout — shown first so reviewers read why before seeing what */}
         {proposal.rationale && (
-          <div className="rounded-lg border border-blue-500/20 bg-blue-500/5 p-3">
+          <div className="mb-4 rounded-lg border border-blue-500/20 bg-blue-500/5 p-3">
             <p className="text-xs font-semibold uppercase tracking-wide text-blue-500 dark:text-blue-400 mb-1">
               Agent&apos;s Reasoning
             </p>
@@ -522,8 +535,9 @@ export function ProposalsPanel({ initialProposals }: ProposalsPanelProps) {
   async function handleBatchApprove() {
     setBatchLoading(true);
     setBatchMessage(null);
+    const ids = Array.from(selectedIds);
     let successCount = 0;
-    for (const id of selectedIds) {
+    for (const id of ids) {
       const result = await approveProposalAction(id);
       if (result.success) {
         const data = result.data as { outcome: string };
@@ -531,24 +545,27 @@ export function ProposalsPanel({ initialProposals }: ProposalsPanelProps) {
         successCount++;
       }
     }
+    setSelectedIds(new Set());
     setBatchLoading(false);
-    setBatchMessage(`Approved ${successCount} of ${selectedIds.size}`);
+    setBatchMessage(`${successCount} of ${ids.length} approved`);
     setTimeout(() => setBatchMessage(null), 3000);
   }
 
   async function handleBatchReject() {
     setBatchLoading(true);
     setBatchMessage(null);
+    const ids = Array.from(selectedIds);
     let successCount = 0;
-    for (const id of selectedIds) {
+    for (const id of ids) {
       const result = await rejectProposalAction(id);
       if (result.success) {
         handleUpdate(id, "rejected");
         successCount++;
       }
     }
+    setSelectedIds(new Set());
     setBatchLoading(false);
-    setBatchMessage(`Rejected ${successCount} of ${selectedIds.size}`);
+    setBatchMessage(`${successCount} of ${ids.length} rejected`);
     setTimeout(() => setBatchMessage(null), 3000);
   }
 
@@ -564,7 +581,7 @@ export function ProposalsPanel({ initialProposals }: ProposalsPanelProps) {
   const selectedCount = selectedIds.size;
 
   return (
-    <div className="relative space-y-4">
+    <div className="relative space-y-4 pb-20">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -656,7 +673,7 @@ export function ProposalsPanel({ initialProposals }: ProposalsPanelProps) {
         </div>
       )}
 
-      {/* Batch action bar — sticky, shown when ≥1 pending proposal is selected */}
+      {/* Sticky batch action bar — shown when any proposal is selected */}
       {selectedCount > 0 && (
         <div
           className={cn(
@@ -667,33 +684,43 @@ export function ProposalsPanel({ initialProposals }: ProposalsPanelProps) {
           role="toolbar"
           aria-label="Batch actions"
         >
-          <span className="text-sm font-medium">
+          <span className="text-sm font-medium text-foreground">
             {selectedCount} selected
           </span>
-          <Button
-            size="sm"
-            onClick={() => void handleBatchApprove()}
-            disabled={batchLoading}
-            className="gap-1.5"
-          >
-            <Check className="h-3.5 w-3.5" />
-            Approve All
-          </Button>
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => void handleBatchReject()}
-            disabled={batchLoading}
-            className="gap-1.5"
-          >
-            <X className="h-3.5 w-3.5" />
-            Reject All
-          </Button>
+
           <button
             type="button"
-            onClick={() => setSelectedIds(new Set())}
             disabled={batchLoading}
-            className="ml-auto text-xs text-muted-foreground hover:text-foreground"
+            onClick={() => void handleBatchApprove()}
+            className={cn(
+              "flex items-center gap-1.5 rounded-md border border-emerald-500/40",
+              "bg-emerald-500/10 px-3 py-1.5 text-xs font-medium text-emerald-600 dark:text-emerald-400",
+              "hover:bg-emerald-500/20 transition-colors disabled:opacity-50"
+            )}
+          >
+            <Check className="h-3.5 w-3.5" aria-hidden="true" />
+            Approve All
+          </button>
+
+          <button
+            type="button"
+            disabled={batchLoading}
+            onClick={() => void handleBatchReject()}
+            className={cn(
+              "flex items-center gap-1.5 rounded-md border border-border/60",
+              "bg-muted/30 px-3 py-1.5 text-xs font-medium text-muted-foreground",
+              "hover:bg-muted/60 hover:text-foreground transition-colors disabled:opacity-50"
+            )}
+          >
+            <X className="h-3.5 w-3.5" aria-hidden="true" />
+            Reject All
+          </button>
+
+          <button
+            type="button"
+            disabled={batchLoading}
+            onClick={() => setSelectedIds(new Set())}
+            className="ml-auto text-xs text-muted-foreground hover:text-foreground transition-colors"
           >
             Clear
           </button>

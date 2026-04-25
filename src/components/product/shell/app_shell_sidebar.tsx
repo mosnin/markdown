@@ -58,5 +58,5 @@ export function AppShellSidebar(props: AppShellSidebarProps) {
     );
   }
 
-  return <AppSidebar {...props} />;
+  return <AppSidebar {...props} pendingProposalsCount={props.pendingProposalsCount} />;
 }

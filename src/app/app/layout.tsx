@@ -51,6 +51,7 @@ export default async function AppLayout({
       limit: 100,
     }),
   ]);
+  const pendingProposalsCount = pendingProposals.length;
 
   const userEmail = ctx.user?.email ?? "";
   const workspaceName = ctx.workspace.name;
@@ -59,8 +60,6 @@ export default async function AppLayout({
     name: w.name,
     slug: w.slug,
   }));
-
-  const pendingProposalsCount = pendingProposals.length;
 
   // Strip heavy markdown before handing notes to client components. The
   // sidebar only needs identity + label + ordering key.
