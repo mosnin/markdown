@@ -5,6 +5,10 @@ import {
   type UpdateBoxInput,
 } from "@/server/domain/schemas/box_schemas";
 import { BOX_STATUS } from "@/server/domain/constants/content_status";
+import { logger } from "@/lib/logger";
+
+const BOX_COLS =
+  "id, workspace_id, guide_note_id, name, slug, description, status, branch_id, agent_instructions, is_public, created_at, updated_at";
 
 /**
  * Box repository.
@@ -21,11 +25,14 @@ export async function getBoxById(
 ): Promise<Box | null> {
   const { data, error } = await supabase
     .from("boxes")
-    .select("*")
+    .select(BOX_COLS)
     .eq("id", id)
     .single();
 
-  if (error || !data) return null;
+  if (error || !data) {
+    logger.warn({ id, error }, "[box_repository] getBoxById failed");
+    return null;
+  }
   return data as Box;
 }
 
@@ -36,13 +43,16 @@ export async function getBoxBySlug(
 ): Promise<Box | null> {
   const { data, error } = await supabase
     .from("boxes")
-    .select("*")
+    .select(BOX_COLS)
     .eq("workspace_id", workspace_id)
     .eq("slug", slug)
     .neq("status", BOX_STATUS.TRASHED)
     .single();
 
-  if (error || !data) return null;
+  if (error || !data) {
+    logger.warn({ workspace_id, slug, error }, "[box_repository] getBoxBySlug failed");
+    return null;
+  }
   return data as Box;
 }
 
@@ -53,7 +63,7 @@ export async function listBoxesByWorkspace(
 ): Promise<Box[]> {
   let query = supabase
     .from("boxes")
-    .select("*")
+    .select(BOX_COLS)
     .eq("workspace_id", workspace_id)
     .neq("status", BOX_STATUS.TRASHED);
 
@@ -62,7 +72,10 @@ export async function listBoxesByWorkspace(
   }
 
   const { data, error } = await query.order("name", { ascending: true });
-  if (error || !data) return [];
+  if (error || !data) {
+    logger.warn({ workspace_id, error }, "[box_repository] listBoxesByWorkspace failed");
+    return [];
+  }
   return data as Box[];
 }
 
@@ -73,7 +86,7 @@ export async function createBox(
   const { data, error } = await supabase
     .from("boxes")
     .insert(input)
-    .select()
+    .select(BOX_COLS)
     .single();
 
   if (error || !data) throw new Error(error?.message ?? "Failed to create box");
@@ -89,10 +102,10 @@ export async function updateBox(
     .from("boxes")
     .update(input)
     .eq("id", id)
-    .select()
+    .select(BOX_COLS)
     .single();
 
-  if (error || !data) return null;
+  if (error || !data) throw new Error(error?.message ?? "Failed to update box");
   return data as Box;
 }
 
@@ -102,13 +115,16 @@ export async function listPublicBoxesByWorkspace(
 ): Promise<Box[]> {
   const { data, error } = await supabase
     .from("boxes")
-    .select("*")
+    .select(BOX_COLS)
     .eq("workspace_id", workspaceId)
     .eq("is_public", true)
     .eq("status", "active")
     .order("name");
-  if (error) throw error;
-  return (data ?? []) as Box[];
+  if (error || !data) {
+    logger.warn({ workspaceId, error }, "[box_repository] listPublicBoxesByWorkspace failed");
+    return [];
+  }
+  return data as Box[];
 }
 
 export async function getWorkspaceBySlug(
@@ -121,6 +137,9 @@ export async function getWorkspaceBySlug(
     .eq("slug", slug)
     .single();
 
-  if (error || !data) return null;
+  if (error || !data) {
+    logger.warn({ slug, error }, "[box_repository] getWorkspaceBySlug failed");
+    return null;
+  }
   return data as { id: string; name: string; slug: string };
 }

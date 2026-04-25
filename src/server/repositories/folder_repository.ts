@@ -6,6 +6,10 @@ import {
   applyOverrideToFolder,
   type FolderBranchOverride,
 } from "@/server/services/folder_branch_service";
+import { logger } from "@/lib/logger";
+
+const FOLDER_COLS =
+  "id, workspace_id, box_id, parent_folder_id, parent_skill_id, parent_agent_id, name, slug, path_cache, description, accepts_generated_notes, status, branch_id, created_at, updated_at";
 
 export interface CreateFolderInput {
   workspace_id: string;
@@ -43,11 +47,14 @@ export async function getFolderById(
 ): Promise<Folder | null> {
   const { data, error } = await supabase
     .from("folders")
-    .select("*")
+    .select(FOLDER_COLS)
     .eq("id", id)
     .single();
 
-  if (error || !data) return null;
+  if (error || !data) {
+    logger.warn({ id, error }, "[folder_repository] getFolderById failed");
+    return null;
+  }
   const folder = data as Folder;
   if (branchId && folder.branch_id === null) {
     // Apply per-branch overlay. A main-routed folder edited on an
@@ -74,7 +81,7 @@ export async function listFoldersByBox(
 ): Promise<Folder[]> {
   let query = supabase
     .from("folders")
-    .select("*")
+    .select(FOLDER_COLS)
     .eq("box_id", box_id)
     .neq("status", FOLDER_STATUS.TRASHED);
 
@@ -91,7 +98,10 @@ export async function listFoldersByBox(
   }
 
   const { data, error } = await query.order("path_cache", { ascending: true });
-  if (error || !data) return [];
+  if (error || !data) {
+    logger.warn({ box_id, error }, "[folder_repository] listFoldersByBox failed");
+    return [];
+  }
   const folders = data as Folder[];
 
   if (!branchId) return folders;
@@ -130,7 +140,7 @@ export async function listFoldersByParent(
 ): Promise<Folder[]> {
   let query = supabase
     .from("folders")
-    .select("*")
+    .select(FOLDER_COLS)
     .eq("parent_folder_id", parent_folder_id)
     .neq("status", FOLDER_STATUS.TRASHED);
 
@@ -142,7 +152,10 @@ export async function listFoldersByParent(
 
   const { data, error } = await query.order("name", { ascending: true });
 
-  if (error || !data) return [];
+  if (error || !data) {
+    logger.warn({ parent_folder_id, error }, "[folder_repository] listFoldersByParent failed");
+    return [];
+  }
   return data as Folder[];
 }
 
@@ -170,7 +183,7 @@ export async function listAllFoldersByBox(
 ): Promise<Folder[]> {
   let query = supabase
     .from("folders")
-    .select("*")
+    .select(FOLDER_COLS)
     .eq("box_id", box_id)
     .neq("status", FOLDER_STATUS.TRASHED);
 
@@ -188,7 +201,10 @@ export async function listAllFoldersByBox(
     .order("path_cache", { ascending: true })
     .limit(1000);
 
-  if (error || !data) return [];
+  if (error || !data) {
+    logger.warn({ box_id, error }, "[folder_repository] listAllFoldersByBox failed");
+    return [];
+  }
   return data as Folder[];
 }
 
@@ -201,10 +217,13 @@ export async function getFoldersByIds(
 
   const { data, error } = await supabase
     .from("folders")
-    .select("*")
+    .select(FOLDER_COLS)
     .in("id", ids);
 
-  if (error || !data) return [];
+  if (error || !data) {
+    logger.warn({ ids, error }, "[folder_repository] getFoldersByIds failed");
+    return [];
+  }
   return data as Folder[];
 }
 
@@ -215,7 +234,7 @@ export async function createFolder(
   const { data, error } = await supabase
     .from("folders")
     .insert(input)
-    .select()
+    .select(FOLDER_COLS)
     .single();
 
   if (error || !data) throw new Error(error?.message ?? "Failed to create folder");
@@ -231,10 +250,10 @@ export async function updateFolder(
     .from("folders")
     .update(input)
     .eq("id", id)
-    .select()
+    .select(FOLDER_COLS)
     .single();
 
-  if (error || !data) return null;
+  if (error || !data) throw new Error(error?.message ?? "Failed to update folder");
   return data as Folder;
 }
 
@@ -291,7 +310,7 @@ async function listLifecycleFoldersByBox(
 ): Promise<Folder[]> {
   let canonicalQuery = supabase
     .from("folders")
-    .select("*")
+    .select(FOLDER_COLS)
     .eq("box_id", box_id)
     .eq("status", canonicalStatus);
 
@@ -307,7 +326,10 @@ async function listLifecycleFoldersByBox(
     "path_cache",
     { ascending: true }
   );
-  if (error || !canonicalData) return [];
+  if (error || !canonicalData) {
+    logger.warn({ box_id, canonicalStatus, error }, "[folder_repository] listLifecycleFoldersByBox failed");
+    return [];
+  }
   let rows = canonicalData as Folder[];
 
   if (!branchId) return rows;
@@ -332,7 +354,7 @@ async function listLifecycleFoldersByBox(
   if (matchingIds.length > 0) {
     const { data: overlayData } = await supabase
       .from("folders")
-      .select("*")
+      .select(FOLDER_COLS)
       .eq("box_id", box_id)
       .is("branch_id", null)
       .in("id", matchingIds);

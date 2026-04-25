@@ -5,6 +5,7 @@ import {
   type UpdateNoteInput,
 } from "@/server/domain/schemas/note_schemas";
 import { NOTE_STATUS } from "@/server/domain/constants/content_status";
+import { logger } from "@/lib/logger";
 
 /**
  * Note repository.
@@ -17,17 +18,26 @@ import { NOTE_STATUS } from "@/server/domain/constants/content_status";
  * - No is_guide_note column exists — guide assignment is in boxes.guide_note_id.
  */
 
+// Heavy: used only when the full note body is needed (editor, export)
+const NOTE_FULL_COLS = "id, box_id, folder_id, current_version_id, title, slug, path_cache, markdown_content, content_bytes, summary, tags, read_hint, retrieval_priority, kind, status, origin_type, is_generated, generated_by_connection_id, branch_id, created_at, updated_at";
+
+// Light: used for lists, sidebars, search results — no markdown body
+const NOTE_LIST_COLS = "id, box_id, folder_id, current_version_id, title, slug, path_cache, content_bytes, tags, read_hint, retrieval_priority, kind, status, origin_type, is_generated, generated_by_connection_id, branch_id, created_at, updated_at";
+
 export async function getNoteById(
   supabase: SupabaseClient,
   id: string
 ): Promise<Note | null> {
   const { data, error } = await supabase
     .from("notes")
-    .select("*")
+    .select(NOTE_FULL_COLS)
     .eq("id", id)
     .single();
 
-  if (error || !data) return null;
+  if (error || !data) {
+    if (error) logger.error({ err: error, id }, "getNoteById failed");
+    return null;
+  }
   return data as Note;
 }
 
@@ -38,13 +48,16 @@ export async function getNoteByPath(
 ): Promise<Note | null> {
   const { data, error } = await supabase
     .from("notes")
-    .select("*")
+    .select(NOTE_FULL_COLS)
     .eq("box_id", box_id)
     .eq("path_cache", path_cache)
     .neq("status", NOTE_STATUS.TRASHED)
     .single();
 
-  if (error || !data) return null;
+  if (error || !data) {
+    if (error) logger.error({ err: error, box_id, path_cache }, "getNoteByPath failed");
+    return null;
+  }
   return data as Note;
 }
 
@@ -73,7 +86,7 @@ export async function listNotesByBox(
 ): Promise<Note[]> {
   let query = supabase
     .from("notes")
-    .select("*")
+    .select(NOTE_LIST_COLS)
     .eq("box_id", box_id)
     .neq("status", NOTE_STATUS.TRASHED);
 
@@ -103,7 +116,10 @@ export async function listNotesByBox(
     .order("title", { ascending: true })
     .range(offset, offset + limit - 1);
 
-  if (error || !data) return [];
+  if (error || !data) {
+    if (error) logger.error({ err: error, box_id }, "listNotesByBox failed");
+    return [];
+  }
 
   // Pending-op overlay: if the active branch has a `trash` pending
   // op for any of these notes, hide them. This is the read-side of
@@ -145,7 +161,7 @@ export async function updateNote(
     .select()
     .single();
 
-  if (error || !data) return null;
+  if (error || !data) throw new Error(error?.message ?? "Failed to update note");
   return data as Note;
 }
 
@@ -228,7 +244,7 @@ async function listLifecycleNotesByBox(
   // Canonical + branch-local rows with this status.
   let canonicalQuery = supabase
     .from("notes")
-    .select("*")
+    .select(NOTE_LIST_COLS)
     .eq("box_id", box_id)
     .eq("status", canonicalStatus);
 
@@ -244,7 +260,10 @@ async function listLifecycleNotesByBox(
     "updated_at",
     { ascending: false }
   );
-  if (error || !canonicalData) return [];
+  if (error || !canonicalData) {
+    if (error) logger.error({ err: error, box_id, canonicalStatus }, "listLifecycleNotesByBox failed");
+    return [];
+  }
   let rows = canonicalData as Note[];
 
   if (!branchId) return rows;
@@ -273,7 +292,7 @@ async function listLifecycleNotesByBox(
   if (matchingIds.length > 0) {
     const { data: overlayData } = await supabase
       .from("notes")
-      .select("*")
+      .select(NOTE_LIST_COLS)
       .eq("box_id", box_id)
       .is("branch_id", null)
       .in("id", matchingIds);
@@ -310,7 +329,7 @@ export async function listAllNotesByBox(
 ): Promise<Note[]> {
   let query = supabase
     .from("notes")
-    .select("*")
+    .select(NOTE_FULL_COLS)
     .eq("box_id", box_id)
     .neq("status", NOTE_STATUS.TRASHED);
 
@@ -328,7 +347,10 @@ export async function listAllNotesByBox(
     .order("path_cache", { ascending: true })
     .limit(1000);
 
-  if (error || !data) return [];
+  if (error || !data) {
+    if (error) logger.error({ err: error, box_id }, "listAllNotesByBox failed");
+    return [];
+  }
   return data as Note[];
 }
 
@@ -341,10 +363,13 @@ export async function getNotesByIds(
 
   const { data, error } = await supabase
     .from("notes")
-    .select("*")
+    .select(NOTE_FULL_COLS)
     .in("id", ids);
 
-  if (error || !data) return [];
+  if (error || !data) {
+    if (error) logger.error({ err: error }, "getNotesByIds failed");
+    return [];
+  }
   return data as Note[];
 }
 
@@ -370,12 +395,15 @@ export async function listRecentNotesByWorkspace(
   const limit = opts.limit ?? 5;
   const { data, error } = await supabase
     .from("notes")
-    .select("*, boxes!inner(workspace_id)")
+    .select(`${NOTE_LIST_COLS}, boxes!inner(workspace_id)`)
     .eq("boxes.workspace_id", workspaceId)
     .eq("status", NOTE_STATUS.ACTIVE)
     .is("branch_id", opts.branchId ?? null)
     .order("updated_at", { ascending: false })
     .limit(limit);
-  if (error) throw error;
+  if (error) {
+    logger.error({ err: error, workspaceId }, "listRecentNotesByWorkspace failed");
+    return [];
+  }
   return (data ?? []) as Note[];
 }
