@@ -12,6 +12,7 @@
  */
 import { type SupabaseClient } from "@supabase/supabase-js";
 import { type Skill } from "@/server/domain/types/skill";
+import { RepositoryError } from "@/server/domain/errors";
 import {
   type CreateSkillInput,
   type UpdateSkillInput,
@@ -134,7 +135,7 @@ export async function createSkill(
     .select()
     .single();
 
-  if (error || !data) throw new Error(error?.message ?? "Failed to create skill");
+  if (error || !data) throw new RepositoryError("createSkill", error);
   return data as Skill;
 }
 

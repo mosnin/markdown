@@ -5,6 +5,7 @@ import {
   type ProposalStatus,
   PROPOSAL_STATUS,
 } from "@/server/domain/constants/audit_constants";
+import { RepositoryError } from "@/server/domain/errors";
 
 /**
  * Write proposal repository.
@@ -217,7 +218,7 @@ export async function createWriteProposal(
     .select()
     .single();
 
-  if (error || !data) throw new Error(error?.message ?? "Failed to create write proposal");
+  if (error || !data) throw new RepositoryError("createWriteProposal", error);
   return data as WriteProposal;
 }
 

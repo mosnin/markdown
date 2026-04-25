@@ -10,6 +10,7 @@
  */
 import { type SupabaseClient } from "@supabase/supabase-js";
 import { type File } from "@/server/domain/types/file";
+import { RepositoryError } from "@/server/domain/errors";
 import {
   type CreateFileInput,
   type UpdateFileInput,
@@ -192,7 +193,7 @@ export async function createFile(
     .select()
     .single();
 
-  if (error || !data) throw new Error(error?.message ?? "Failed to create file");
+  if (error || !data) throw new RepositoryError("createFile", error);
   return data as File;
 }
 

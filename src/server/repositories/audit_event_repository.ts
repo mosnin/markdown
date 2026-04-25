@@ -1,6 +1,7 @@
 import { type SupabaseClient } from "@supabase/supabase-js";
 import { type AuditEvent } from "@/server/domain/types/audit_event";
 import { type ActorType } from "@/server/domain/constants/audit_constants";
+import { RepositoryError } from "@/server/domain/errors";
 
 /**
  * Audit event repository.
@@ -32,7 +33,7 @@ export async function createAuditEvent(
     .select()
     .single();
 
-  if (error || !data) throw new Error(error?.message ?? "Failed to create audit event");
+  if (error || !data) throw new RepositoryError("createAuditEvent", error);
   return data as AuditEvent;
 }
 

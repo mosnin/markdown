@@ -1,6 +1,7 @@
 import { type SupabaseClient } from "@supabase/supabase-js";
 import { type NoteLink } from "@/server/domain/types/note_link";
 import { type RelationshipType } from "@/server/domain/constants/note_constants";
+import { RepositoryError } from "@/server/domain/errors";
 
 /**
  * Note link repository.
@@ -100,7 +101,7 @@ export async function createNoteLink(
     .select()
     .single();
 
-  if (error || !data) throw new Error(error?.message ?? "Failed to create note link");
+  if (error || !data) throw new RepositoryError("createNoteLink", error);
   return data as NoteLink;
 }
 

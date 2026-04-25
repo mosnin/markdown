@@ -5,6 +5,7 @@ import {
   type UpdateWorkspaceInput,
 } from "@/server/domain/schemas/workspace_schemas";
 import { WORKSPACE_STATUS } from "@/server/domain/constants/content_status";
+import { RepositoryError } from "@/server/domain/errors";
 
 /**
  * Workspace repository.
@@ -72,7 +73,7 @@ export async function createWorkspace(
     .select()
     .single();
 
-  if (error || !data) throw new Error(error?.message ?? "Failed to create workspace");
+  if (error || !data) throw new RepositoryError("createWorkspace", error);
   return data as Workspace;
 }
 

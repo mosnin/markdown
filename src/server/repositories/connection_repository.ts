@@ -4,6 +4,7 @@ import {
   type ConnectionToken,
   type ConnectionBoxScope,
 } from "@/server/domain/types/connection";
+import { RepositoryError } from "@/server/domain/errors";
 import {
   type ConnectionType,
   type ConnectionStatus,
@@ -107,7 +108,7 @@ export async function createConnection(
     .select()
     .single();
 
-  if (error || !data) throw new Error(error?.message ?? "Failed to create connection");
+  if (error || !data) throw new RepositoryError("createConnection", error);
   return data as Connection;
 }
 
@@ -168,7 +169,7 @@ export async function createConnectionToken(
     .select()
     .single();
 
-  if (error || !data) throw new Error(error?.message ?? "Failed to create connection token");
+  if (error || !data) throw new RepositoryError("createConnectionToken", error);
   return data as ConnectionToken;
 }
 
@@ -215,7 +216,7 @@ export async function addBoxScope(
     .select()
     .single();
 
-  if (error || !data) throw new Error(error?.message ?? "Failed to add box scope");
+  if (error || !data) throw new RepositoryError("addBoxScope", error);
   return data as ConnectionBoxScope;
 }
 

@@ -12,6 +12,7 @@
  */
 import { type SupabaseClient } from "@supabase/supabase-js";
 import { type BoxObjectAttachment } from "@/server/domain/types/box_object_attachment";
+import { RepositoryError } from "@/server/domain/errors";
 
 /** Input shape for creating a new box object attachment. */
 export interface CreateBoxObjectAttachmentInput {
@@ -121,7 +122,7 @@ export async function createAttachment(
     .select()
     .single();
 
-  if (error || !data) throw new Error(error?.message ?? "Failed to create box object attachment");
+  if (error || !data) throw new RepositoryError("createAttachment", error);
   return data as BoxObjectAttachment;
 }
 

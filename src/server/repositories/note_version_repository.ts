@@ -1,6 +1,7 @@
 import { type SupabaseClient } from "@supabase/supabase-js";
 import { type NoteVersion } from "@/server/domain/types/note_version";
 import { type ActorType, type ChangeOrigin } from "@/server/domain/constants/audit_constants";
+import { RepositoryError } from "@/server/domain/errors";
 
 /**
  * Note version repository.
@@ -103,6 +104,6 @@ export async function createNoteVersion(
     .select()
     .single();
 
-  if (error || !data) throw new Error(error?.message ?? "Failed to create note version");
+  if (error || !data) throw new RepositoryError("createNoteVersion", error);
   return data as NoteVersion;
 }

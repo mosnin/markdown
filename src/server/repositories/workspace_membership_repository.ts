@@ -1,5 +1,6 @@
 import { type SupabaseClient } from "@supabase/supabase-js";
 import { type Workspace } from "@/server/domain/types/workspace";
+import { RepositoryError } from "@/server/domain/errors";
 
 /**
  * Workspace membership repository.
@@ -141,7 +142,7 @@ export async function upsertMembership(
     .select()
     .single();
   if (error || !data) {
-    throw new Error(error?.message ?? "Failed to upsert membership");
+    throw new RepositoryError("upsertMembership", error);
   }
   return data as WorkspaceMembership;
 }
@@ -157,5 +158,5 @@ export async function removeMembership(
     .delete()
     .eq("workspace_id", workspace_id)
     .eq("user_id", user_id);
-  if (error) throw new Error(error.message);
+  if (error) throw new RepositoryError("removeMembership", error);
 }

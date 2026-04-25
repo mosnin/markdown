@@ -7,6 +7,7 @@ import type {
   WorkflowNode,
   WorkflowStatus,
 } from "@/server/domain/types/workflow";
+import { RepositoryError } from "@/server/domain/errors";
 
 export interface CreateWorkflowInput {
   workspace_id: string;
@@ -179,13 +180,13 @@ export async function replaceWorkflowGraph(
       const sourceId = keyToId.get(e.source_node_key);
       const targetId = keyToId.get(e.target_node_key);
       if (!sourceId) {
-        throw new Error(
-          `Edge references unknown source node_key "${e.source_node_key}"`
+        throw new RepositoryError(
+          `replaceWorkflowGraph: unknown source node_key "${e.source_node_key}"`
         );
       }
       if (!targetId) {
-        throw new Error(
-          `Edge references unknown target node_key "${e.target_node_key}"`
+        throw new RepositoryError(
+          `replaceWorkflowGraph: unknown target node_key "${e.target_node_key}"`
         );
       }
       return {

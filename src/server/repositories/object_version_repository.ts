@@ -13,6 +13,7 @@
 import { type SupabaseClient } from "@supabase/supabase-js";
 import { type ObjectVersion } from "@/server/domain/types/object_version";
 import { type ActorType, type ChangeOrigin } from "@/server/domain/constants/audit_constants";
+import { RepositoryError } from "@/server/domain/errors";
 
 /** Input shape for creating a new object version snapshot. */
 export interface CreateObjectVersionInput {
@@ -149,6 +150,6 @@ export async function createObjectVersion(
     .select()
     .single();
 
-  if (error || !data) throw new Error(error?.message ?? "Failed to create object version");
+  if (error || !data) throw new RepositoryError("createObjectVersion", error);
   return data as ObjectVersion;
 }

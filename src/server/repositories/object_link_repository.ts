@@ -13,6 +13,7 @@
 import { type SupabaseClient } from "@supabase/supabase-js";
 import { type ObjectLink } from "@/server/domain/types/object_link";
 import { type RelationshipType } from "@/server/domain/constants/note_constants";
+import { RepositoryError } from "@/server/domain/errors";
 import {
   LINKABLE_OBJECT_TYPES,
   type ObjectType,
@@ -145,7 +146,7 @@ export async function createObjectLink(
     .select()
     .single();
 
-  if (error || !data) throw new Error(error?.message ?? "Failed to create object link");
+  if (error || !data) throw new RepositoryError("createObjectLink", error);
   return data as ObjectLink;
 }
 

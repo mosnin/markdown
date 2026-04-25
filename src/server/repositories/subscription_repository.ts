@@ -3,6 +3,7 @@ import {
   type WorkspaceSubscription,
   type UpsertSubscriptionInput,
 } from "@/server/domain/types/subscription";
+import { RepositoryError } from "@/server/domain/errors";
 
 /**
  * Subscription repository.
@@ -74,9 +75,7 @@ export async function upsertSubscription(
     .single();
 
   if (error || !data) {
-    throw new Error(
-      error?.message ?? "Failed to upsert workspace subscription"
-    );
+    throw new RepositoryError("upsertSubscription", error);
   }
 
   return data as WorkspaceSubscription;

@@ -17,6 +17,7 @@ import {
   type ObjectType,
   type ObjectStatus,
 } from "@/server/domain/constants/object_constants";
+import { RepositoryError } from "@/server/domain/errors";
 
 export interface RegisterWorkspaceObjectInput {
   workspace_id: string;
@@ -185,7 +186,7 @@ export async function registerWorkspaceObject(
     .select()
     .single();
 
-  if (error || !data) throw new Error(error?.message ?? "Failed to register workspace object");
+  if (error || !data) throw new RepositoryError("registerWorkspaceObject", error);
   return data as WorkspaceObject;
 }
 
@@ -205,7 +206,7 @@ export async function updateWorkspaceObjectStatus(
     .eq("object_type", object_type)
     .eq("object_id", object_id);
 
-  if (error) throw new Error(error.message);
+  if (error) throw new RepositoryError("updateWorkspaceObjectStatus", error);
 }
 
 /**
@@ -224,7 +225,7 @@ export async function updateWorkspaceObjectDisplayName(
     .eq("object_type", object_type)
     .eq("object_id", object_id);
 
-  if (error) throw new Error(error.message);
+  if (error) throw new RepositoryError("updateWorkspaceObjectDisplayName", error);
 }
 
 /**
@@ -243,5 +244,5 @@ export async function deleteWorkspaceObject(
     .eq("object_type", object_type)
     .eq("object_id", object_id);
 
-  if (error) throw new Error(error.message);
+  if (error) throw new RepositoryError("deleteWorkspaceObject", error);
 }
