@@ -253,9 +253,13 @@ function ProposalContentPreview({
 function ProposalCard({
   item,
   onUpdate,
+  isSelected,
+  onToggleSelect,
 }: {
   item: ProposalWithContext;
   onUpdate: (id: string, newStatus: string) => void;
+  isSelected?: boolean;
+  onToggleSelect?: (id: string) => void;
 }) {
   const { proposal, connection, current_note, preview_content } = item;
   const [reviewNote, setReviewNote] = useState("");
@@ -304,6 +308,15 @@ function ProposalCard({
       <CardHeader className="pb-2">
         <div className="flex flex-col gap-1.5">
           <div className="flex flex-wrap items-center gap-2">
+            {isPendingProposal && onToggleSelect && (
+              <input
+                type="checkbox"
+                checked={!!isSelected}
+                onChange={() => onToggleSelect(proposal.id)}
+                aria-label={`Select proposal: ${proposal.proposed_title ?? proposal.id}`}
+                className="h-3.5 w-3.5 shrink-0 cursor-pointer rounded border-border accent-primary"
+              />
+            )}
             <TypeBadge type={proposal.proposal_type} />
             <StatusBadge status={proposal.status} />
           </div>
@@ -333,11 +346,13 @@ function ProposalCard({
       </CardHeader>
 
       <CardContent className="space-y-3 pt-0">
-        {/* Rationale */}
+        {/* Rationale — shown above the diff as agent's reasoning */}
         {proposal.rationale && (
-          <div className="rounded-md bg-muted/40 px-3 py-2">
-            <p className="text-xs font-medium text-muted-foreground mb-0.5">Rationale</p>
-            <p className="text-sm leading-relaxed">{proposal.rationale}</p>
+          <div className="rounded-lg border border-blue-500/20 bg-blue-500/5 p-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-blue-500 dark:text-blue-400 mb-1">
+              Agent&apos;s Reasoning
+            </p>
+            <p className="text-sm leading-relaxed text-foreground">{proposal.rationale}</p>
           </div>
         )}
 
@@ -469,6 +484,9 @@ export function ProposalsPanel({ initialProposals }: ProposalsPanelProps) {
   const [proposals, setProposals] =
     useState<ProposalWithContext[]>(initialProposals);
   const [statusFilter, setStatusFilter] = useState<string>("pending");
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [batchLoading, setBatchLoading] = useState(false);
+  const [batchMessage, setBatchMessage] = useState<string | null>(null);
 
   function handleUpdate(id: string, newStatus: string) {
     setProposals((prev) =>
@@ -481,6 +499,57 @@ export function ProposalsPanel({ initialProposals }: ProposalsPanelProps) {
           : item
       )
     );
+    // Remove from selection once resolved
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      next.delete(id);
+      return next;
+    });
+  }
+
+  function handleToggleSelect(id: string) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  }
+
+  async function handleBatchApprove() {
+    setBatchLoading(true);
+    setBatchMessage(null);
+    let successCount = 0;
+    for (const id of selectedIds) {
+      const result = await approveProposalAction(id);
+      if (result.success) {
+        const data = result.data as { outcome: string };
+        handleUpdate(id, data.outcome === "approved" ? "approved" : "conflicted");
+        successCount++;
+      }
+    }
+    setBatchLoading(false);
+    setBatchMessage(`Approved ${successCount} of ${selectedIds.size}`);
+    setTimeout(() => setBatchMessage(null), 3000);
+  }
+
+  async function handleBatchReject() {
+    setBatchLoading(true);
+    setBatchMessage(null);
+    let successCount = 0;
+    for (const id of selectedIds) {
+      const result = await rejectProposalAction(id);
+      if (result.success) {
+        handleUpdate(id, "rejected");
+        successCount++;
+      }
+    }
+    setBatchLoading(false);
+    setBatchMessage(`Rejected ${successCount} of ${selectedIds.size}`);
+    setTimeout(() => setBatchMessage(null), 3000);
   }
 
   const filtered =
@@ -492,8 +561,10 @@ export function ProposalsPanel({ initialProposals }: ProposalsPanelProps) {
     (item) => item.proposal.status === "pending"
   ).length;
 
+  const selectedCount = selectedIds.size;
+
   return (
-    <div className="space-y-4">
+    <div className="relative space-y-4">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -577,8 +648,60 @@ export function ProposalsPanel({ initialProposals }: ProposalsPanelProps) {
                 key={item.proposal.id}
                 item={item}
                 onUpdate={handleUpdate}
+                isSelected={selectedIds.has(item.proposal.id)}
+                onToggleSelect={handleToggleSelect}
               />
             )
+          )}
+        </div>
+      )}
+
+      {/* Batch action bar — sticky, shown when ≥1 pending proposal is selected */}
+      {selectedCount > 0 && (
+        <div
+          className={cn(
+            "fixed bottom-6 left-1/2 z-50 -translate-x-1/2",
+            "flex min-w-[280px] items-center gap-3 rounded-xl border border-border",
+            "bg-background/95 px-4 py-3 shadow-lg backdrop-blur"
+          )}
+          role="toolbar"
+          aria-label="Batch actions"
+        >
+          <span className="text-sm font-medium">
+            {selectedCount} selected
+          </span>
+          <Button
+            size="sm"
+            onClick={() => void handleBatchApprove()}
+            disabled={batchLoading}
+            className="gap-1.5"
+          >
+            <Check className="h-3.5 w-3.5" />
+            Approve All
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => void handleBatchReject()}
+            disabled={batchLoading}
+            className="gap-1.5"
+          >
+            <X className="h-3.5 w-3.5" />
+            Reject All
+          </Button>
+          <button
+            type="button"
+            onClick={() => setSelectedIds(new Set())}
+            disabled={batchLoading}
+            className="ml-auto text-xs text-muted-foreground hover:text-foreground"
+          >
+            Clear
+          </button>
+          {batchLoading && (
+            <span className="text-xs text-muted-foreground">Processing…</span>
+          )}
+          {batchMessage && !batchLoading && (
+            <span className="text-xs text-green-600 dark:text-green-400">{batchMessage}</span>
           )}
         </div>
       )}

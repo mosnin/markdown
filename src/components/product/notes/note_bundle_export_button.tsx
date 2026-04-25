@@ -93,9 +93,10 @@ function formatBundleAsMarkdown(bundle: ContextBundle, noteTitle: string): strin
 
   // Primary note
   lines.push("---");
-  lines.push(`## [PRIMARY] ${bundle.primary_note.title}`);
+  lines.push(`## [PRIMARY] ${bundle.target_note.title}`);
+  lines.push(`Path: ${bundle.target_note.path_cache}`);
   lines.push("");
-  lines.push(bundle.primary_note.markdown_content ?? "");
+  if (bundle.target_note.summary) lines.push(bundle.target_note.summary);
   lines.push("");
 
   // Guide note
@@ -103,7 +104,7 @@ function formatBundleAsMarkdown(bundle: ContextBundle, noteTitle: string): strin
     lines.push("---");
     lines.push(`## [GUIDE] ${bundle.guide_note.title}`);
     lines.push("");
-    lines.push(bundle.guide_note.markdown_content ?? "");
+    if (bundle.guide_note.summary) lines.push(bundle.guide_note.summary);
     lines.push("");
   }
 
@@ -112,16 +113,16 @@ function formatBundleAsMarkdown(bundle: ContextBundle, noteTitle: string): strin
     lines.push("---");
     lines.push(`## [ANCESTOR SUMMARY] ${bundle.ancestor_summary_note.title}`);
     lines.push("");
-    lines.push(bundle.ancestor_summary_note.markdown_content ?? "");
+    if (bundle.ancestor_summary_note.summary) lines.push(bundle.ancestor_summary_note.summary);
     lines.push("");
   }
 
   // Linked notes
   for (const linked of bundle.linked_notes) {
     lines.push("---");
-    lines.push(`## [LINKED] ${linked.title}`);
+    lines.push(`## [LINKED] ${linked.title} (${linked.relationship_type})`);
     lines.push("");
-    lines.push(linked.markdown_content ?? "");
+    if (linked.summary) lines.push(linked.summary);
     lines.push("");
   }
 

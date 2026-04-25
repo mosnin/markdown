@@ -43,7 +43,10 @@ import { NoteEntitiesPanel } from "@/components/product/notes/note_entities_pane
 import type { EntityChipType } from "@/components/product/entity_chip";
 import { ShareNoteButton } from "@/components/product/share_note_button";
 import { GeneratedNoteBanner } from "@/components/product/generated_note_banner";
-import { RetrievalHintBadge } from "@/components/product/retrieval_hint_badge";
+import { NoteAiReadinessBadge } from "@/components/product/notes/note_ai_readiness_badge";
+import { NoteMetadataChecklist } from "@/components/product/notes/note_metadata_checklist";
+import { NoteBundleExportButton } from "@/components/product/notes/note_bundle_export_button";
+import { RetrievalPrioritySlider, ReadHintSelector } from "@/components/product/notes/note_retrieval_editor";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -190,9 +193,6 @@ function NoteContextPanel({
     restored: "Restored",
   };
 
-  const hasRetrieval =
-    !!note.read_hint || note.retrieval_priority > 0;
-
   const linkCount = links.outgoing.length + links.incoming.length;
 
   return (
@@ -281,6 +281,13 @@ function NoteContextPanel({
                     {kindLabel[note.kind] ?? note.kind}
                   </Badge>
                 ) : null}
+                <NoteAiReadinessBadge
+                  summary={note.summary}
+                  tags={note.tags}
+                  linkCount={linkCount}
+                  readHint={note.read_hint}
+                  retrievalPriority={note.retrieval_priority}
+                />
               </div>
               <p className="line-clamp-3 text-sm font-medium text-foreground">
                 {note.title}
@@ -297,22 +304,33 @@ function NoteContextPanel({
               </InfoSection>
             )}
 
-            {/* Retrieval signals */}
-            {hasRetrieval && (
-              <InfoSection>
-                <InfoLabel>Retrieval</InfoLabel>
-                <RetrievalHintBadge
-                  readHint={note.read_hint}
-                  retrievalPriority={note.retrieval_priority}
-                />
-                <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground/60">
-                  {note.retrieval_priority > 0 &&
-                    "Priority affects context bundle inclusion order. "}
-                  {note.read_hint &&
-                    "Read hint guides AI and human readers on how to use this note."}
-                </p>
-              </InfoSection>
-            )}
+            {/* Retrieval signals — interactive editors */}
+            <InfoSection>
+              <InfoLabel>Retrieval priority</InfoLabel>
+              <RetrievalPrioritySlider
+                noteId={note.id}
+                initialPriority={note.retrieval_priority}
+              />
+            </InfoSection>
+
+            <InfoSection>
+              <InfoLabel>Read hint</InfoLabel>
+              <ReadHintSelector
+                noteId={note.id}
+                initialReadHint={note.read_hint}
+              />
+            </InfoSection>
+
+            {/* AI metadata checklist */}
+            <InfoSection>
+              <NoteMetadataChecklist
+                summary={note.summary}
+                tags={note.tags}
+                linkCount={linkCount}
+                readHint={note.read_hint}
+                retrievalPriority={note.retrieval_priority}
+              />
+            </InfoSection>
 
             {/* Tags */}
             {note.tags.length > 0 && (
@@ -450,7 +468,12 @@ function NoteContextPanel({
         {/* ── Bundle tab ── */}
         <TabsContent value="bundle" className="flex-1 overflow-hidden">
           <ScrollArea className="h-full">
-            <div className="px-4 py-3">
+            <div className="px-4 py-3 space-y-4">
+              <NoteBundleExportButton
+                noteId={note.id}
+                noteTitle={note.title}
+                noteSlug={note.slug}
+              />
               <ContextBundleViewer
                 initialBundle={initialBundle}
                 noteId={note.id}
