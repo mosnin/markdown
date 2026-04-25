@@ -28,11 +28,14 @@ import {
 } from "@/server/services/cached_reads";
 import { auditBundleRead } from "@/server/services/audit_service";
 import { listVersionsForNote } from "@/server/services/version_history_service";
+import { listPendingProposalsForNote } from "@/server/repositories/write_proposal_repository";
 import { NoteEditor } from "@/components/product/notes/note_editor";
 import { SemanticLinksPanel } from "@/components/product/semantic_links_panel";
 import { LinkSuggestionsPanel } from "@/components/product/link_suggestions_panel";
 import { ContextBundleViewer } from "@/components/product/context_bundle_viewer";
 import { NoteHistoryPanel } from "@/components/product/notes/note_history_panel";
+import { NoteAiCopilotTab, type PendingProposalRef } from "@/components/product/notes/note_ai_copilot_tab";
+import { type AiTimelineEntry } from "@/components/product/notes/note_ai_timeline";
 import { NoteExportMenu } from "@/components/product/export_menu";
 import { AskPogInlineButton } from "@/components/product/ask_pog_inline_button";
 import { NoteImportButton } from "@/components/product/notes/note_import_dialog";
@@ -152,6 +155,8 @@ function NoteContextPanel({
   noteEntities,
   defaultTab = "info",
   markdownContent,
+  aiTimelineEntries,
+  pendingProposals,
   nowIso,
 }: {
   note: NonNullable<Awaited<ReturnType<typeof getNoteById>>>;
@@ -175,6 +180,8 @@ function NoteContextPanel({
   defaultTab?: NoteContextTab;
   /** Raw markdown content of the current note — passed through to NoteBacklinksPanel. */
   markdownContent: string;
+  aiTimelineEntries: AiTimelineEntry[];
+  pendingProposals: PendingProposalRef[];
   /**
    * Wall-clock "now" frozen at the top of the server render so
    * `formatRelativeDate` produces identical output during server
@@ -237,6 +244,14 @@ function NoteContextPanel({
             </TabsTrigger>
             <TabsTrigger value="history" className="pb-2.5 text-xs">
               History
+            </TabsTrigger>
+            <TabsTrigger value="ai" className="relative pb-2.5 text-xs">
+              AI
+              {pendingProposals.length > 0 && (
+                <span className="ml-1 rounded-full bg-primary px-1 text-[10px] text-primary-foreground">
+                  {pendingProposals.length}
+                </span>
+              )}
             </TabsTrigger>
             <TabsTrigger value="comments" className="relative pb-2.5 text-xs">
               Comments
@@ -524,6 +539,18 @@ function NoteContextPanel({
           />
         </TabsContent>
 
+        {/* ── AI copilot tab ── */}
+        <TabsContent value="ai" className="flex-1 overflow-hidden">
+          <ScrollArea className="h-full">
+            <NoteAiCopilotTab
+              noteId={note.id}
+              noteTitle={note.title}
+              aiTimelineEntries={aiTimelineEntries}
+              pendingProposals={pendingProposals}
+            />
+          </ScrollArea>
+        </TabsContent>
+
         {/* ── Comments tab ── */}
         <TabsContent value="comments" className="flex-1 overflow-hidden">
           <NoteCommentsPanel
@@ -568,7 +595,7 @@ export default async function NotePage({
   const box = await getCachedBoxById(supabase, note.box_id);
   if (!box || box.workspace_id !== ctx.workspace.id) notFound();
 
-  const [folder, allBoxNotes, links, historyResult, generatingConnection, commentThreads, unresolvedCommentCount, mentions] =
+  const [folder, allBoxNotes, links, historyResult, generatingConnection, commentThreads, unresolvedCommentCount, mentions, notePendingProposals] =
     await Promise.all([
       note.folder_id
         ? getFolderById(supabase, note.folder_id)
@@ -586,6 +613,7 @@ export default async function NotePage({
       listNoteComments(supabase, note_id),
       countUnresolvedComments(supabase, note_id),
       listMentionsByNote(supabase, note_id),
+      listPendingProposalsForNote(supabase, ctx.workspace.id, note_id),
     ]);
 
   // Resolve entities referenced by this note's mentions. An entity can be
@@ -638,6 +666,17 @@ export default async function NotePage({
   // Derive a short display name for presence avatars — same logic as
   // the branch detail page: strip the domain from the email, or fall
   // back to a truncated user ID.
+  const aiTimelineEntries: AiTimelineEntry[] = historyResult.versions.filter(
+    (v) => v.change_origin === "generated" || v.change_origin === "proposal_approved"
+  );
+
+  const pendingProposals: PendingProposalRef[] = notePendingProposals.map((p) => ({
+    id: p.id,
+    type: p.proposal_type,
+    connectionName: null,
+    createdAt: p.created_at,
+  }));
+
   const userEmail = ctx.user.email ?? null;
   const currentUserDisplayName =
     userEmail && userEmail.includes("@")
@@ -796,6 +835,8 @@ export default async function NotePage({
           noteEntities={noteEntities}
           defaultTab={defaultTab}
           markdownContent={note.markdown_content}
+          aiTimelineEntries={aiTimelineEntries}
+          pendingProposals={pendingProposals}
           nowIso={nowIso}
         />
       </aside>
