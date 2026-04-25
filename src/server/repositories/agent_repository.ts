@@ -20,6 +20,20 @@ import {
 import { OBJECT_STATUS } from "@/server/domain/constants/object_constants";
 
 /**
+ * Full column set — used for agent editor / detail pages.
+ * Includes system_prompt and source_content which can be large.
+ */
+const AGENT_FULL_COLS =
+  "id, workspace_id, box_id, folder_id, name, slug, path_cache, source_content, content_bytes, canonical_format, agent_type, model_hint, system_prompt, description, summary, tags, is_reusable, status, current_version_id, origin_type, created_at, updated_at";
+
+/**
+ * List column set — used for pickers, sidebars, and index pages.
+ * Omits system_prompt and source_content to keep payloads small.
+ */
+const AGENT_LIST_COLS =
+  "id, workspace_id, box_id, folder_id, name, slug, path_cache, content_bytes, canonical_format, agent_type, model_hint, description, summary, tags, is_reusable, status, current_version_id, origin_type, created_at, updated_at";
+
+/**
  * Fetch a single agent by its primary key.
  * Returns null if not found or on error.
  */
@@ -29,7 +43,7 @@ export async function getAgentById(
 ): Promise<Agent | null> {
   const { data, error } = await supabase
     .from("agents")
-    .select("*")
+    .select(AGENT_FULL_COLS)
     .eq("id", id)
     .single();
 
@@ -62,7 +76,7 @@ export async function listAgentsByBox(
 ): Promise<Agent[]> {
   let query = supabase
     .from("agents")
-    .select("*")
+    .select(AGENT_LIST_COLS)
     .eq("box_id", box_id)
     .neq("status", OBJECT_STATUS.TRASHED);
 
@@ -110,7 +124,7 @@ export async function listReusableAgents(
 ): Promise<Agent[]> {
   const { data, error } = await supabase
     .from("agents")
-    .select("*")
+    .select(AGENT_LIST_COLS)
     .eq("workspace_id", workspace_id)
     .eq("is_reusable", true)
     .neq("status", OBJECT_STATUS.TRASHED)
@@ -132,7 +146,7 @@ export async function createAgent(
   const { data, error } = await supabase
     .from("agents")
     .insert(input)
-    .select()
+    .select(AGENT_FULL_COLS)
     .single();
 
   if (error || !data) throw new Error(error?.message ?? "Failed to create agent");
@@ -153,7 +167,7 @@ export async function updateAgent(
     .from("agents")
     .update(input)
     .eq("id", id)
-    .select()
+    .select(AGENT_FULL_COLS)
     .single();
 
   if (error || !data) return null;
@@ -173,7 +187,7 @@ export async function getAgentsByIds(
 
   const { data, error } = await supabase
     .from("agents")
-    .select("*")
+    .select(AGENT_FULL_COLS)
     .in("id", ids);
 
   if (error || !data) return [];
