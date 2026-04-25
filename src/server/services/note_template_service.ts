@@ -39,10 +39,54 @@ export interface UpdateTemplatePatch {
 // ─── Built-in variable interpolation ──────────────────────────────────────────
 
 /**
+ * Apply template variables to markdown content.
+ *
+ * Built-in variables (all overridable by the `context` object):
+ *   - `{{date}}`     — today's ISO date (YYYY-MM-DD)
+ *   - `{{time}}`     — current local time (HH:MM, 24-hour)
+ *   - `{{datetime}}` — ISO datetime string
+ *   - `{{title}}`    — the note's title
+ *   - `{{box_name}}` — name of the target box
+ *   - `{{user}}`     — user display name if available
+ *
+ * Unknown placeholders are left as-is so the user can fill them in.
+ */
+export function applyTemplateVariables(
+  content: string,
+  context: {
+    title?: string;
+    date?: string;
+    boxName?: string;
+    userName?: string;
+  } = {}
+): string {
+  const now = new Date();
+  const isoDate = now.toISOString().slice(0, 10);
+  const isoTime = now.toTimeString().slice(0, 5); // HH:MM
+  const isoDatetime = now.toISOString();
+
+  const builtIns: Record<string, string> = {
+    date: context.date ?? isoDate,
+    time: isoTime,
+    datetime: isoDatetime,
+    title: context.title ?? "",
+    box_name: context.boxName ?? "",
+    user: context.userName ?? "",
+  };
+
+  return content.replace(/\{\{(\w+)\}\}/g, (match, key: string) => {
+    return key in builtIns ? builtIns[key] : match;
+  });
+}
+
+/**
  * Replace `{{var}}` placeholders in template content with provided values.
  *
  * Built-in variables:
  *   - `{{date}}`     — today's ISO date (YYYY-MM-DD)
+ *   - `{{time}}`     — current local time (HH:MM)
+ *   - `{{datetime}}` — ISO datetime string
+ *   - `{{title}}`    — note title (from variables.title)
  *   - `{{user}}`     — current user display name / id
  *   - `{{box_name}}` — name of the target box
  *
@@ -53,8 +97,12 @@ export function applyTemplate(
   templateContent: string,
   variables: Record<string, string> = {}
 ): string {
+  const now = new Date();
   const builtIns: Record<string, string> = {
-    date: new Date().toISOString().slice(0, 10),
+    date: now.toISOString().slice(0, 10),
+    time: now.toTimeString().slice(0, 5),
+    datetime: now.toISOString(),
+    title: variables.title ?? "",
     user: variables.user ?? "",
     box_name: variables.box_name ?? "",
   };
