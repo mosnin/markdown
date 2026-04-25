@@ -6,6 +6,7 @@ import {
   ReactFlow,
   Background,
   Controls,
+  MiniMap,
   useNodesState,
   useEdgesState,
   type Node,
@@ -24,7 +25,9 @@ import {
   FileText,
   Folder,
   Package,
+  Search,
   Share2,
+  Users,
   Zap,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -54,6 +57,20 @@ const REL_LABEL: Record<string, string> = {
 function relLabel(type: string): string {
   return REL_LABEL[type] ?? type.replace(/_/g, " ");
 }
+
+// Semantic edge colors per relationship type
+const RELATIONSHIP_COLORS: Record<string, string> = {
+  related:       "#8b5cf6", // violet
+  depends_on:    "#ef4444", // red — dependency is critical
+  parent_of:     "#3b82f6", // blue
+  child_of:      "#60a5fa", // light blue
+  reference_for: "#10b981", // emerald
+  extends:       "#6366f1", // indigo
+  example_of:    "#f59e0b", // amber
+  sibling_of:    "#94a3b8", // slate
+  supersedes:    "#f43f5e", // rose
+  derived_from:  "#a78bfa", // purple
+};
 
 // ─── Node data types ──────────────────────────────────────────────────────────
 
@@ -321,7 +338,7 @@ function buildFlowData(
     style: {
       stroke: e.edgeKind === "object_link"
         ? "var(--color-info)"
-        : "var(--color-violet-400)",
+        : (RELATIONSHIP_COLORS[e.relationshipType] ?? "#8b5cf6"),
       strokeWidth: 1.5,
     },
     data: {
@@ -347,6 +364,8 @@ function BoxGraphViewInner({ overview }: { overview: BoxOverview }) {
   const { nodes: overviewNodes } = overview;
   const [scopeFolderId, setScopeFolderId] = useState<string | null>(null);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [showOrphansOnly, setShowOrphansOnly] = useState(false);
 
   const { nodes: initialNodes, edges: initialEdges } = useMemo(
     () => buildFlowData(overview, scopeFolderId),
@@ -364,6 +383,55 @@ function BoxGraphViewInner({ overview }: { overview: BoxOverview }) {
     setEdges(initialEdges);
     setTimeout(() => reactFlow.fitView({ padding: 0.15, duration: 200 }), 50);
   }, [prevScopeRef]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Node IDs connected by at least one semantic edge
+  const connectedIds = useMemo(() => {
+    const s = new Set<string>();
+    for (const e of initialEdges) {
+      if ((e.data as GraphEdgeData | undefined)?.edgeKind !== "hierarchy") {
+        s.add(e.source);
+        s.add(e.target);
+      }
+    }
+    return s;
+  }, [initialEdges]);
+
+  // Apply search highlight + orphan filter on top of layout nodes
+  const displayNodes = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    return initialNodes
+      .filter((n) => {
+        if (showOrphansOnly && connectedIds.has(n.id)) return false;
+        return true;
+      })
+      .map((n) => {
+        if (!q) return n;
+        const matches = (n.data.label as string).toLowerCase().includes(q);
+        return {
+          ...n,
+          style: {
+            ...n.style,
+            opacity: matches ? 1 : 0.15,
+            outline: matches ? "2px solid #8b5cf6" : undefined,
+            outlineOffset: matches ? "2px" : undefined,
+          },
+        };
+      });
+  }, [initialNodes, searchQuery, showOrphansOnly, connectedIds]);
+
+  const displayEdges = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q && !showOrphansOnly) return initialEdges;
+    const visibleIds = new Set(displayNodes.map((n) => n.id));
+    return initialEdges
+      .filter((e) => visibleIds.has(e.source) && visibleIds.has(e.target))
+      .map((e) => {
+        if (!q) return e;
+        const srcMatch = displayNodes.find((n) => n.id === e.source)?.style?.opacity === 1;
+        const tgtMatch = displayNodes.find((n) => n.id === e.target)?.style?.opacity === 1;
+        return { ...e, style: { ...e.style, opacity: srcMatch || tgtMatch ? 1 : 0.1 } };
+      });
+  }, [initialEdges, searchQuery, showOrphansOnly, displayNodes]);
 
   const handleNodeClick = useCallback((_: React.MouseEvent, node: Node) => {
     setSelectedNodeId((prev) => (prev === node.id ? null : node.id));
@@ -404,6 +472,38 @@ function BoxGraphViewInner({ overview }: { overview: BoxOverview }) {
     <div className="flex flex-col gap-4">
       {/* Controls bar */}
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+        {/* Search */}
+        <div className="relative flex items-center">
+          <Search className="pointer-events-none absolute left-2 h-3 w-3 text-muted-foreground/60" aria-hidden="true" />
+          <input
+            type="search"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Highlight nodes…"
+            aria-label="Search and highlight nodes"
+            className={cn(
+              "h-7 rounded-md border border-input bg-background pl-6 pr-2 text-xs text-foreground w-36",
+              "focus:outline-none focus:ring-2 focus:ring-ring placeholder:text-muted-foreground/50"
+            )}
+          />
+        </div>
+
+        {/* Orphan toggle */}
+        <button
+          type="button"
+          onClick={() => setShowOrphansOnly((v) => !v)}
+          aria-pressed={showOrphansOnly}
+          className={cn(
+            "flex h-7 items-center gap-1.5 rounded-md border px-2 text-xs transition-fast",
+            showOrphansOnly
+              ? "border-violet-400/70 bg-violet-50 text-violet-700 dark:border-violet-500/60 dark:bg-violet-950/50 dark:text-violet-300"
+              : "border-input bg-background text-muted-foreground hover:border-border-strong"
+          )}
+        >
+          <Users className="h-3 w-3" aria-hidden="true" />
+          Orphans only
+        </button>
+
         {folderOptions.length > 0 && (
           <div className="flex items-center gap-1.5">
             <span className="text-xs text-muted-foreground">Scope:</span>
@@ -453,8 +553,8 @@ function BoxGraphViewInner({ overview }: { overview: BoxOverview }) {
       {/* Graph canvas */}
       <div className="h-[500px] w-full rounded-lg border border-border bg-background overflow-hidden">
         <ReactFlow
-          nodes={nodes}
-          edges={edges}
+          nodes={displayNodes}
+          edges={displayEdges}
           onNodesChange={onNodesChange}
           onEdgesChange={onEdgesChange}
           onNodeClick={handleNodeClick}
@@ -475,6 +575,12 @@ function BoxGraphViewInner({ overview }: { overview: BoxOverview }) {
         >
           <Background gap={16} size={1} />
           <Controls showInteractive={false} />
+          <MiniMap
+            nodeStrokeWidth={2}
+            zoomable
+            pannable
+            className="!bg-background/80 !border !border-border !rounded-md"
+          />
         </ReactFlow>
       </div>
 
