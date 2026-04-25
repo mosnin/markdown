@@ -18,6 +18,7 @@
  * shared-secret verification used on that side.
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { logger } from "@/lib/logger";
 import { isWorkspaceOperatorEnabled } from "@/lib/env";
 import { AGENT_HEADERS } from "@/app/api/agent/_lib/auth";
 import {

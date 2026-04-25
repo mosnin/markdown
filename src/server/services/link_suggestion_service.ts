@@ -6,7 +6,7 @@ import {
   checkRateLimit,
   type RateLimitOptions,
 } from "@/server/services/rate_limit_service";
-import { log } from "@/lib/logger";
+import { logger, log } from "@/lib/logger";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -101,7 +101,7 @@ Example: [{"target_note_id": "uuid", "suggested_relationship": "related", "confi
   });
 
   if (!response.ok) {
-    const body = await response.text().catch((err) => { log.warn({ err }, "failed to read Claude API error response body"); return ""; });
+    const body = await response.text().catch((err) => { logger.warn({ err }, "failed to read Claude API error response body"); return ""; });
     log.error("claude_api_error", {
       status: response.status,
       body: body.slice(0, 200),

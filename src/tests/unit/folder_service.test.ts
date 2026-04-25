@@ -19,9 +19,8 @@ import type { Folder } from "@/server/domain/types/folder";
 
 // ─── In-memory Supabase fake ──────────────────────────────────────────────────
 
-interface FakeRow {
-  [key: string]: unknown;
-}
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type FakeRow = Record<string, any>;
 
 type Tables = {
   folders: FakeRow[];

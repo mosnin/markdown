@@ -406,5 +406,5 @@ export async function listRecentNotesByWorkspace(
     logger.error({ err: error, workspaceId }, "listRecentNotesByWorkspace failed");
     return [];
   }
-  return (data ?? []) as Note[];
+  return (data ?? []) as unknown as Note[];
 }
