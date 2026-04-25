@@ -1,4 +1,4 @@
-import { marked } from "marked";
+import { marked, type Tokens } from "marked";
 import sanitizeHtml from "sanitize-html";
 
 /**
@@ -27,9 +27,13 @@ marked.setOptions({ async: false });
 // ─── Callout block renderer ───────────────────────────────────────────────────
 
 /**
- * Callout type configuration for GitHub-style `> [!TYPE]` blockquotes.
+ * Callout type configuration.
  *
- * Supported types: warning, tip, info, priority
+ * Supports GitHub-style `> [!TYPE]` blockquote callouts:
+ *   > [!warning]
+ *   > [!tip]
+ *   > [!info]
+ *   > [!priority]
  */
 const CALLOUT_CONFIG: Record<
   string,
@@ -67,8 +71,6 @@ const CALLOUT_CONFIG: Record<
 marked.use({
   renderer: {
     blockquote(token) {
-      // `token.tokens` is the array of block tokens inside the blockquote.
-      // Check whether the first child is a paragraph whose text starts with [!type].
       const firstToken = Array.isArray(token.tokens) ? token.tokens[0] : null;
       if (firstToken && firstToken.type === "paragraph") {
         const paragraphText =
@@ -82,34 +84,24 @@ marked.use({
           const type = typeMatch[1].toLowerCase();
           const cfg = CALLOUT_CONFIG[type];
           if (cfg) {
-            const label =
-              type.charAt(0).toUpperCase() + type.slice(1);
-            // Build a modified token tree without the [!type] marker line.
+            const label = type.charAt(0).toUpperCase() + type.slice(1);
             const bodyText = paragraphText
               .replace(/^\[!(warning|tip|info|priority)\]\n?/i, "")
               .trim();
-
-            // Render the body: if there's remaining text in the first
-            // paragraph, plus any subsequent tokens.
             const bodyTokens = token.tokens.slice(1);
             let bodyHtml = "";
             if (bodyText) {
-              // Re-parse just the body text as inline markdown.
               bodyHtml += `<p>${marked.parseInline(bodyText) as string}</p>`;
             }
             for (const t of bodyTokens) {
-              // Use marked's parser to render each remaining child token.
               bodyHtml += marked.parse(
-                // Reconstruct raw text from the token's raw field.
                 "raw" in t && typeof t.raw === "string" ? t.raw : ""
               ) as string;
             }
-
             return `<div class="${cfg.classes}"><p class="${cfg.labelClasses}">${cfg.icon} ${label}</p>${bodyHtml}</div>`;
           }
         }
       }
-      // Fall back to the default blockquote rendering.
       return false;
     },
   },

@@ -240,6 +240,17 @@ function noteIcon(kind: string) {
   return FileText;
 }
 
+// ─── Count descendant notes (for collapsed folder badge) ─────────────────────
+
+function countDescendantNotes(nodes: TreeNodeData[]): number {
+  let count = 0;
+  for (const n of nodes) {
+    if (n.nodeType === "note") count++;
+    if (n.children) count += countDescendantNotes(n.children);
+  }
+  return count;
+}
+
 // ─── Custom node renderer for react-arborist ─────────────────────────────────
 
 function TreeNode({
@@ -252,6 +263,7 @@ function TreeNode({
   const pathname = usePathname();
   const router = useRouter();
   const [isPendingDetach, startDetach] = useTransition();
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
 
   // Determine active state
   const isActive = (() => {
