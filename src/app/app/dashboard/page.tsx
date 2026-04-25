@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { BookOpen, Box, FileText, Inbox, Network } from "lucide-react";
@@ -120,9 +121,11 @@ export default async function AppHomePage() {
         <div className="mx-auto max-w-3xl space-y-8 px-6 py-6">
 
           {/* Onboarding milestone bar — hidden once all done */}
-          {!allMilestonesDone && (
-            <OnboardingMilestoneBar milestones={milestones} />
-          )}
+          <Suspense fallback={<div className="animate-pulse h-10 rounded-lg bg-muted/20" />}>
+            {!allMilestonesDone && (
+              <OnboardingMilestoneBar milestones={milestones} />
+            )}
+          </Suspense>
 
           {/* First-run: no boxes */}
           {!hasBoxes && <OnboardingCallout />}
@@ -134,157 +137,167 @@ export default async function AppHomePage() {
 
           {/* Status row — only when there's content */}
           {hasBoxes && (
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-              <StatusTile
-                icon={Box}
-                label="Boxes"
-                value={boxes.length}
-                href="/app/workspaces"
-              />
-              <StatusTile
-                icon={FileText}
-                label="Notes"
-                value={allNotes.length === 10 ? "10+" : allNotes.length}
-                href="/app/search"
-              />
-              <StatusTile
-                icon={Network}
-                label="Connections"
-                value={activeConnections.length}
-                href="/app/settings"
-                subdued={activeConnections.length === 0}
-              />
-              <StatusTile
-                icon={Inbox}
-                label="Pending proposals"
-                value={pendingCount}
-                href={pendingCount > 0 ? "/app/proposals" : undefined}
-                highlight={pendingCount > 0}
-              />
-            </div>
+            <Suspense fallback={<div className="animate-pulse h-32 rounded-lg bg-muted/20" />}>
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                <StatusTile
+                  icon={Box}
+                  label="Boxes"
+                  value={boxes.length}
+                  href="/app/workspaces"
+                />
+                <StatusTile
+                  icon={FileText}
+                  label="Notes"
+                  value={allNotes.length === 10 ? "10+" : allNotes.length}
+                  href="/app/search"
+                />
+                <StatusTile
+                  icon={Network}
+                  label="Connections"
+                  value={activeConnections.length}
+                  href="/app/settings"
+                  subdued={activeConnections.length === 0}
+                />
+                <StatusTile
+                  icon={Inbox}
+                  label="Pending proposals"
+                  value={pendingCount}
+                  href={pendingCount > 0 ? "/app/proposals" : undefined}
+                  highlight={pendingCount > 0}
+                />
+              </div>
+            </Suspense>
           )}
 
           {/* Recent notes */}
-          {allNotes.length > 0 && (
-            <DashboardSection title="Recent notes">
-              <ul className="flex flex-col gap-2 list-none">
-                {allNotes.map((note) => (
-                  <li key={note.id}>
-                    <Link href={`/app/notes/${note.id}`} className="block">
-                      <NoteStub
-                        title={note.title}
-                        kind={note.kind as "note" | "guide" | "bundle"}
-                        excerpt={note.summary ?? undefined}
-                        updatedAt={formatRelativeDateShort(note.updated_at, nowIso)}
-                        tags={note.tags.slice(0, 3)}
-                      />
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            </DashboardSection>
-          )}
+          <Suspense fallback={<div className="animate-pulse h-32 rounded-lg bg-muted/20" />}>
+            {allNotes.length > 0 && (
+              <DashboardSection title="Recent notes">
+                <ul className="flex flex-col gap-2 list-none">
+                  {allNotes.map((note) => (
+                    <li key={note.id}>
+                      <Link href={`/app/notes/${note.id}`} className="block">
+                        <NoteStub
+                          title={note.title}
+                          kind={note.kind as "note" | "guide" | "bundle"}
+                          excerpt={note.summary ?? undefined}
+                          updatedAt={formatRelativeDateShort(note.updated_at, nowIso)}
+                          tags={note.tags.slice(0, 3)}
+                        />
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              </DashboardSection>
+            )}
+          </Suspense>
 
           {/* Boxes — shown when there are boxes but no notes yet, or always as secondary */}
-          {hasBoxes && (
-            <DashboardSection
-              title="Boxes"
-              description="Your knowledge containers"
-              action={<CreateBoxDialog />}
-            >
-              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                {boxes.map((box) => (
-                  <DashboardCard key={box.id} href={`/app/boxes/${box.id}`}>
-                    <div className="flex items-start gap-3">
-                      <Box
-                        className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground"
-                        aria-hidden="true"
-                      />
-                      <div className="min-w-0 flex-1">
-                        <p className="font-medium text-foreground truncate">
-                          {box.name}
-                        </p>
-                        {box.description && (
-                          <p className="mt-0.5 truncate text-xs text-muted-foreground">
-                            {box.description}
+          <Suspense fallback={<div className="animate-pulse h-32 rounded-lg bg-muted/20" />}>
+            {hasBoxes && (
+              <DashboardSection
+                title="Boxes"
+                description="Your knowledge containers"
+                action={<CreateBoxDialog />}
+              >
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                  {boxes.map((box) => (
+                    <DashboardCard key={box.id} href={`/app/boxes/${box.id}`}>
+                      <div className="flex items-start gap-3">
+                        <Box
+                          className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground"
+                          aria-hidden="true"
+                        />
+                        <div className="min-w-0 flex-1">
+                          <p className="font-medium text-foreground truncate">
+                            {box.name}
                           </p>
-                        )}
-                        {box.guide_note_id && (
-                          <div className="mt-1.5 flex items-center gap-1 text-[10px] text-muted-foreground/70">
-                            <BookOpen className="h-3 w-3" aria-hidden="true" />
-                            <span>Guide note assigned</span>
-                          </div>
-                        )}
+                          {box.description && (
+                            <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                              {box.description}
+                            </p>
+                          )}
+                          {box.guide_note_id && (
+                            <div className="mt-1.5 flex items-center gap-1 text-[10px] text-muted-foreground/70">
+                              <BookOpen className="h-3 w-3" aria-hidden="true" />
+                              <span>Guide note assigned</span>
+                            </div>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  </DashboardCard>
-                ))}
-              </div>
-            </DashboardSection>
-          )}
+                    </DashboardCard>
+                  ))}
+                </div>
+              </DashboardSection>
+            )}
+          </Suspense>
 
           {/* Connections summary */}
-          {activeConnections.length > 0 && (
-            <DashboardSection
-              title="Active connections"
-              description="External agents and integrations with access to this workspace"
-              action={
-                <Link
-                  href="/app/settings"
-                  className="text-xs text-muted-foreground hover:text-foreground transition-fast"
-                >
-                  Manage →
-                </Link>
-              }
-            >
-              <div className="flex flex-col gap-1.5">
-                {activeConnections.slice(0, 4).map((conn) => (
-                  <div
-                    key={conn.id}
-                    className="flex items-center gap-3 rounded-md border border-border bg-card px-3 py-2"
+          <Suspense fallback={<div className="animate-pulse h-32 rounded-lg bg-muted/20" />}>
+            {activeConnections.length > 0 && (
+              <DashboardSection
+                title="Active connections"
+                description="External agents and integrations with access to this workspace"
+                action={
+                  <Link
+                    href="/app/settings"
+                    className="text-xs text-muted-foreground hover:text-foreground transition-fast"
                   >
-                    <Network className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm text-foreground/80">
-                        {conn.name}
-                      </p>
+                    Manage →
+                  </Link>
+                }
+              >
+                <div className="flex flex-col gap-1.5">
+                  {activeConnections.slice(0, 4).map((conn) => (
+                    <div
+                      key={conn.id}
+                      className="flex items-center gap-3 rounded-md border border-border bg-card px-3 py-2"
+                    >
+                      <Network className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm text-foreground/80">
+                          {conn.name}
+                        </p>
+                      </div>
+                      <Badge variant="outline" className="shrink-0 text-[10px] font-normal capitalize">
+                        {conn.permission_mode.replace(/_/g, " ")}
+                      </Badge>
                     </div>
-                    <Badge variant="outline" className="shrink-0 text-[10px] font-normal capitalize">
-                      {conn.permission_mode.replace(/_/g, " ")}
-                    </Badge>
-                  </div>
-                ))}
-                {activeConnections.length > 4 && (
-                  <p className="px-1 text-xs text-muted-foreground">
-                    +{activeConnections.length - 4} more
-                  </p>
-                )}
-              </div>
-            </DashboardSection>
-          )}
+                  ))}
+                  {activeConnections.length > 4 && (
+                    <p className="px-1 text-xs text-muted-foreground">
+                      +{activeConnections.length - 4} more
+                    </p>
+                  )}
+                </div>
+              </DashboardSection>
+            )}
+          </Suspense>
 
           {/* Pending proposals callout */}
-          {pendingCount > 0 && (
-            <DashboardSection title="Pending review">
-              <Link
-                href="/app/proposals"
-                className="flex items-center gap-3 rounded-lg border border-border bg-card px-4 py-3 text-sm transition-fast hover:border-ring/50 hover:shadow-sm"
-              >
-                <Inbox className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-                <div className="flex-1">
-                  <p className="font-medium text-foreground">
-                    {pendingCount} write proposal{pendingCount !== 1 ? "s" : ""} awaiting review
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    AI-generated changes need your approval before they apply.
-                  </p>
-                </div>
-                <Badge variant="secondary" className="shrink-0 text-[10px] font-normal">
-                  Review →
-                </Badge>
-              </Link>
-            </DashboardSection>
-          )}
+          <Suspense fallback={<div className="animate-pulse h-16 rounded-lg bg-muted/20" />}>
+            {pendingCount > 0 && (
+              <DashboardSection title="Pending review">
+                <Link
+                  href="/app/proposals"
+                  className="flex items-center gap-3 rounded-lg border border-border bg-card px-4 py-3 text-sm transition-fast hover:border-ring/50 hover:shadow-sm"
+                >
+                  <Inbox className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+                  <div className="flex-1">
+                    <p className="font-medium text-foreground">
+                      {pendingCount} write proposal{pendingCount !== 1 ? "s" : ""} awaiting review
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      AI-generated changes need your approval before they apply.
+                    </p>
+                  </div>
+                  <Badge variant="secondary" className="shrink-0 text-[10px] font-normal">
+                    Review →
+                  </Badge>
+                </Link>
+              </DashboardSection>
+            )}
+          </Suspense>
 
         </div>
       </ScrollArea>

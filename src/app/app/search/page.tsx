@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { requireAuthenticatedUser } from "@/server/auth/require_authenticated_user";
 import { PageHeader } from "@/components/product/page_header";
 import { WorkspaceSearchClient } from "./search_client";
@@ -29,7 +30,9 @@ export default async function SearchPage() {
       />
       <div className="flex-1 overflow-auto">
         <div className="mx-auto max-w-3xl px-4 py-6 md:px-6">
-          <WorkspaceSearchClient />
+          <Suspense fallback={<div className="animate-pulse h-32 rounded-lg bg-muted/20" />}>
+            <WorkspaceSearchClient />
+          </Suspense>
         </div>
       </div>
       <LocalIndexBootstrap />
