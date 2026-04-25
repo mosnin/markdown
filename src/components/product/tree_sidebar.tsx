@@ -8,6 +8,8 @@ import {
   Bot,
   ChevronDown,
   ChevronRight,
+  ChevronsDownUp,
+  ChevronsUpDown,
   File,
   FileText,
   FolderPlus,
@@ -23,7 +25,7 @@ import {
   PackageIcon,
   PackageOpenIcon,
 } from "hugeicons-react";
-import { Tree, type NodeRendererProps, type NodeApi } from "react-arborist";
+import { Tree, type NodeRendererProps, type NodeApi, type TreeApi } from "react-arborist";
 import { cn } from "@/lib/utils";
 import { compareSiblings } from "@/server/domain/tree_ordering";
 import { Spinner } from "@/components/ui/spinner";
@@ -235,6 +237,44 @@ function noteIcon(kind: string) {
   return FileText;
 }
 
+// ─── Count descendant notes (for collapsed folder badge) ─────────────────────
+
+function countDescendantNotes(nodes: TreeNodeData[]): number {
+  let count = 0;
+  for (const n of nodes) {
+    if (n.nodeType === "note") count++;
+    if (n.children) count += countDescendantNotes(n.children);
+  }
+  return count;
+}
+
+// ─── Box color utilities (localStorage-backed) ────────────────────────────────
+
+function getBoxColor(boxId: string): string | null {
+  if (typeof window === "undefined") return null;
+  return window.localStorage.getItem(`box_color_${boxId}`);
+}
+
+function setBoxColor(boxId: string, color: string | null): void {
+  if (typeof window === "undefined") return;
+  if (color === null) {
+    window.localStorage.removeItem(`box_color_${boxId}`);
+  } else {
+    window.localStorage.setItem(`box_color_${boxId}`, color);
+  }
+}
+
+const BOX_PRESET_COLORS = [
+  "#ef4444", // red
+  "#f97316", // orange
+  "#eab308", // yellow
+  "#22c55e", // green
+  "#14b8a6", // teal
+  "#3b82f6", // blue
+  "#a855f7", // purple
+  "#ec4899", // pink
+];
+
 // ─── Custom node renderer for react-arborist ─────────────────────────────────
 
 function TreeNode({
@@ -246,6 +286,7 @@ function TreeNode({
   const data = node.data;
   const pathname = usePathname();
   const [isPendingDetach, startDetach] = useTransition();
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
 
   // Determine active state
   const isActive = (() => {
@@ -397,6 +438,13 @@ function TreeNode({
           {ext && (
             <span className="shrink-0 text-[10px] text-muted-foreground/40">{ext}</span>
           )}
+          {/* Folder note count badge when collapsed */}
+          {data.nodeType === "folder" && !node.isOpen && data.children && data.children.length > 0 && (() => {
+            const count = countDescendantNotes(data.children);
+            return count > 0 ? (
+              <span className="text-xs text-muted-foreground/60 ml-1">({count})</span>
+            ) : null;
+          })()}
         </Link>
       )}
 

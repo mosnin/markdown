@@ -1,4 +1,4 @@
-import { marked } from "marked";
+import { marked, type Tokens } from "marked";
 import sanitizeHtml from "sanitize-html";
 
 /**
@@ -23,6 +23,71 @@ import sanitizeHtml from "sanitize-html";
 
 // Configure marked globally once. async: false ensures parse() returns string.
 marked.setOptions({ async: false });
+
+// ─── Callout block renderer ───────────────────────────────────────────────────
+
+/**
+ * Callout type configuration.
+ *
+ * Supports GitHub-style `> [!TYPE]` blockquote callouts:
+ *   > [!warning]
+ *   > [!tip]
+ *   > [!info]
+ *   > [!priority]
+ */
+const CALLOUT_CONFIG: Record<
+  string,
+  { icon: string; classes: string; labelClasses: string }
+> = {
+  warning: {
+    icon: "⚠️",
+    classes:
+      "callout callout-warning border-l-4 border-amber-400 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-500 rounded-r-md px-4 py-3 my-3",
+    labelClasses: "font-semibold text-amber-700 dark:text-amber-400",
+  },
+  tip: {
+    icon: "💡",
+    classes:
+      "callout callout-tip border-l-4 border-green-400 bg-green-50 dark:bg-green-950/30 dark:border-green-500 rounded-r-md px-4 py-3 my-3",
+    labelClasses: "font-semibold text-green-700 dark:text-green-400",
+  },
+  info: {
+    icon: "ℹ️",
+    classes:
+      "callout callout-info border-l-4 border-blue-400 bg-blue-50 dark:bg-blue-950/30 dark:border-blue-500 rounded-r-md px-4 py-3 my-3",
+    labelClasses: "font-semibold text-blue-700 dark:text-blue-400",
+  },
+  priority: {
+    icon: "⭐",
+    classes:
+      "callout callout-priority border-l-4 border-violet-400 bg-violet-50 dark:bg-violet-950/30 dark:border-violet-500 rounded-r-md px-4 py-3 my-3",
+    labelClasses: "font-semibold text-violet-700 dark:text-violet-400",
+  },
+};
+
+// Custom blockquote renderer that detects `[!type]` on the first line.
+const calloutRenderer = new marked.Renderer();
+calloutRenderer.blockquote = ({ text }: Tokens.Blockquote): string => {
+  // `text` from marked is the inner markdown content (already parsed as HTML
+  // when using the default pipeline). We need to check the raw tokens instead.
+  // Detect pattern: text starts with `<p>[!type]` after inner rendering.
+  const typeMatch = text.match(/^\s*<p>\s*\[!(warning|tip|info|priority)\]/i);
+  if (typeMatch) {
+    const type = typeMatch[1].toLowerCase();
+    const cfg = CALLOUT_CONFIG[type];
+    if (cfg) {
+      const label = type.charAt(0).toUpperCase() + type.slice(1);
+      // Strip the [!type] marker from the first paragraph.
+      const body = text
+        .replace(/^\s*<p>\s*\[!(warning|tip|info|priority)\]\s*/i, "<p>")
+        .trim();
+      return `<div class="${cfg.classes}"><p class="${cfg.labelClasses}">${cfg.icon} ${label}</p>${body}</div>`;
+    }
+  }
+  return `<blockquote>${text}</blockquote>`;
+};
+
+marked.use({ renderer: calloutRenderer });
 
 /**
  * Allowed HTML elements produced by standard markdown parsers.
@@ -51,6 +116,8 @@ const ALLOWED_ATTRS: sanitizeHtml.IOptions["allowedAttributes"] = {
   pre: ["class"],
   span: ["class"],
   div: ["class"],
+  p: ["class"],
+  blockquote: ["class"],
   "*": ["id"],               // allow id for heading anchors
 };
 

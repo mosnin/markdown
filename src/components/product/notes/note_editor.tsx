@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
-import { AlertTriangle, Code2, Eye, History } from "lucide-react";
+import { AlertTriangle, Code2, Eye, History, List } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
@@ -21,6 +21,7 @@ import { NoteHistoryDialog } from "@/components/product/notes/note_history_dialo
 import { useNoteEmbedding } from "@/hooks/use_note_embedding";
 import { CrdtPresenceBar } from "@/components/product/crdt_presence_bar";
 import { useYjsCursorBroadcast } from "@/lib/crdt/yjs_awareness";
+import { NoteTocPanel } from "@/components/product/notes/note_toc_panel";
 
 const NoteCrdtEditor = dynamic(
   () =>
@@ -79,6 +80,7 @@ export function NoteEditor({ note, initialMode = "document", currentUser, worksp
   const [tagsInput, setTagsInput] = useState(note.tags.join(", "));
   const [readHint, setReadHint] = useState(note.read_hint ?? "");
   const [mode, setMode] = useState<NoteViewMode>(initialMode);
+  const [tocOpen, setTocOpen] = useState(false);
 
   const [autosaveState, setAutosaveState] = useState<AutosaveState>("idle");
   const [savedAt, setSavedAt] = useState<Date | null>(null);
@@ -339,6 +341,21 @@ export function NoteEditor({ note, initialMode = "document", currentUser, worksp
         <div className="flex items-center gap-2">
           <button
             type="button"
+            onClick={() => setTocOpen((v) => !v)}
+            title="Outline (Table of Contents)"
+            aria-pressed={tocOpen}
+            className={cn(
+              "inline-flex items-center gap-1 rounded-md border border-border bg-background px-2 py-1 text-xs transition-colors",
+              tocOpen
+                ? "border-border bg-accent text-foreground"
+                : "text-muted-foreground hover:bg-muted hover:text-foreground"
+            )}
+          >
+            <List className="h-3.5 w-3.5" aria-hidden="true" />
+            Outline
+          </button>
+          <button
+            type="button"
             onClick={() => setHistoryOpen(true)}
             title="Version history"
             className="inline-flex items-center gap-1 rounded-md border border-border bg-background px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
@@ -499,6 +516,13 @@ export function NoteEditor({ note, initialMode = "document", currentUser, worksp
               </div>
             </div>
           </details>
+        </div>
+      )}
+
+      {/* ── Table of Contents (Outline) panel ──────────────────────────── */}
+      {tocOpen && (
+        <div className="border-t border-border">
+          <NoteTocPanel markdownContent={content} />
         </div>
       )}
 
