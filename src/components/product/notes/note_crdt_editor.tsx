@@ -10,6 +10,8 @@ import { useTheme } from "next-themes";
 import { useNoteYjsDoc } from "@/lib/crdt/use_note_yjs_doc";
 import {
   SlashCommandMenu,
+  CALLOUT_INSERT_TEXT,
+  type CalloutInsertId,
   type SkillCommandOption,
 } from "@/components/product/slash_command_menu";
 import {
@@ -200,12 +202,25 @@ export function NoteCrdtEditor({
       selection:
         | { kind: "builtin"; id: BuiltInCommandId }
         | { kind: "skill"; id: string }
+        | { kind: "insert"; id: CalloutInsertId }
     ) => {
       const view = cmRef.current?.view;
       if (!view || !slashMenu) return;
 
       const triggerPos = slashMenu.triggerPos;
       const caretPos = view.state.selection.main.head;
+
+      // ── Insert kind: replace the slash trigger with static text ──────────
+      if (selection.kind === "insert") {
+        const text = CALLOUT_INSERT_TEXT[selection.id];
+        setSlashMenu(null);
+        view.dispatch({
+          changes: { from: triggerPos, to: caretPos, insert: text },
+          selection: { anchor: triggerPos + text.length },
+        });
+        return;
+      }
+
       const triggerText = view.state.doc.sliceString(triggerPos, caretPos);
       const commandId =
         selection.kind === "builtin" ? selection.id : `skill:${selection.id}`;

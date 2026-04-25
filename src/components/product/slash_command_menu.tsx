@@ -2,12 +2,16 @@
 
 import { useEffect, useMemo, useState } from "react";
 import {
+  AlertTriangle,
   FileText,
+  Info,
   Languages,
+  Lightbulb,
   Link2,
   List,
   PenLine,
   Sparkles,
+  Star,
   Workflow,
   type LucideIcon,
 } from "lucide-react";
@@ -25,6 +29,58 @@ const BUILT_IN_ICONS: Record<BuiltInCommandId, LucideIcon> = {
   outline: List,
   rewrite: Sparkles,
 };
+
+// ─── Insert commands (callouts) ───────────────────────────────────────────────
+
+export type CalloutInsertId =
+  | "callout-warning"
+  | "callout-tip"
+  | "callout-info"
+  | "callout-priority";
+
+export const CALLOUT_INSERT_TEXT: Record<CalloutInsertId, string> = {
+  "callout-warning": "> [!warning]\n> \n",
+  "callout-tip": "> [!tip]\n> \n",
+  "callout-info": "> [!info]\n> \n",
+  "callout-priority": "> [!priority]\n> \n",
+};
+
+const CALLOUT_INSERT_COMMANDS: Array<{
+  id: CalloutInsertId;
+  label: string;
+  description: string;
+  hint: string;
+  icon: LucideIcon;
+}> = [
+  {
+    id: "callout-warning",
+    label: "Warning callout",
+    description: "Insert a ⚠️ warning block",
+    hint: "amber callout",
+    icon: AlertTriangle,
+  },
+  {
+    id: "callout-tip",
+    label: "Tip callout",
+    description: "Insert a 💡 tip block",
+    hint: "green callout",
+    icon: Lightbulb,
+  },
+  {
+    id: "callout-info",
+    label: "Info callout",
+    description: "Insert a ℹ️ info block",
+    hint: "blue callout",
+    icon: Info,
+  },
+  {
+    id: "callout-priority",
+    label: "Priority callout",
+    description: "Insert a ⭐ priority block (high AI retrieval weight)",
+    hint: "violet callout",
+    icon: Star,
+  },
+];
 
 export interface SkillCommandOption {
   id: string; // skill uuid
@@ -44,6 +100,7 @@ export interface SlashCommandMenuProps {
     selection:
       | { kind: "builtin"; id: BuiltInCommandId }
       | { kind: "skill"; id: string }
+      | { kind: "insert"; id: CalloutInsertId }
   ) => void;
   onDismiss: () => void;
 }
@@ -69,6 +126,15 @@ export function SlashCommandMenu({
       label: cmd.label,
       hint: cmd.hint,
       description: cmd.description,
+      icon: BUILT_IN_ICONS[cmd.id as BuiltInCommandId] as LucideIcon,
+    }));
+    const callouts = CALLOUT_INSERT_COMMANDS.map((cmd) => ({
+      kind: "insert" as const,
+      id: cmd.id,
+      label: cmd.label,
+      hint: cmd.hint,
+      description: cmd.description,
+      icon: cmd.icon,
     }));
     const skills = skillCommands.map((s) => ({
       kind: "skill" as const,
@@ -76,8 +142,9 @@ export function SlashCommandMenu({
       label: s.name,
       hint: "Workspace skill",
       description: s.description ?? "",
+      icon: Workflow as LucideIcon,
     }));
-    const all = [...builtIn, ...skills];
+    const all = [...callouts, ...builtIn, ...skills];
     if (!query.trim()) return all;
     const q = query.toLowerCase();
     return all.filter(
@@ -111,11 +178,13 @@ export function SlashCommandMenu({
         e.preventDefault();
         const item = items[highlight];
         if (item) {
-          onSelect(
-            item.kind === "builtin"
-              ? { kind: "builtin", id: item.id as BuiltInCommandId }
-              : { kind: "skill", id: item.id }
-          );
+          if (item.kind === "builtin") {
+            onSelect({ kind: "builtin", id: item.id as BuiltInCommandId });
+          } else if (item.kind === "insert") {
+            onSelect({ kind: "insert", id: item.id as CalloutInsertId });
+          } else {
+            onSelect({ kind: "skill", id: item.id });
+          }
         }
       } else if (e.key === "Escape") {
         e.preventDefault();
@@ -156,10 +225,7 @@ export function SlashCommandMenu({
     >
       <ul className="max-h-72 list-none overflow-y-auto py-1">
         {items.map((item, idx) => {
-          const Icon =
-            item.kind === "builtin"
-              ? BUILT_IN_ICONS[item.id as BuiltInCommandId]
-              : Workflow;
+          const Icon = item.icon ?? Workflow;
           const isActive = idx === highlight;
           return (
             <li key={`${item.kind}:${item.id}`}>
@@ -167,13 +233,15 @@ export function SlashCommandMenu({
                 type="button"
                 role="menuitem"
                 onMouseEnter={() => setHighlight(idx)}
-                onClick={() =>
-                  onSelect(
-                    item.kind === "builtin"
-                      ? { kind: "builtin", id: item.id as BuiltInCommandId }
-                      : { kind: "skill", id: item.id }
-                  )
-                }
+                onClick={() => {
+                  if (item.kind === "builtin") {
+                    onSelect({ kind: "builtin", id: item.id as BuiltInCommandId });
+                  } else if (item.kind === "insert") {
+                    onSelect({ kind: "insert", id: item.id as CalloutInsertId });
+                  } else {
+                    onSelect({ kind: "skill", id: item.id });
+                  }
+                }}
                 className={cn(
                   "flex w-full items-center gap-2.5 px-3 py-2 text-left",
                   "transition-colors",
@@ -193,7 +261,11 @@ export function SlashCommandMenu({
                   </p>
                 </div>
                 <span className="shrink-0 text-[10px] uppercase tracking-wider text-muted-foreground/60">
-                  {item.kind === "skill" ? "skill" : item.hint}
+                  {item.kind === "skill"
+                    ? "skill"
+                    : item.kind === "insert"
+                    ? "insert"
+                    : item.hint}
                 </span>
               </button>
             </li>

@@ -19,6 +19,7 @@ import {
   updateTemplateAction,
   deleteTemplateAction,
 } from "@/app/app/boxes/template_actions";
+import { BUILT_IN_TEMPLATES } from "@/lib/templates/built_in_templates";
 
 interface TemplateItem {
   id: string;
@@ -341,25 +342,76 @@ function DeleteTemplateButton({
   );
 }
 
+// ─── Built-in template card (read-only) ─────────────────────────────────────
+
+function BuiltInTemplateCard({
+  template,
+}: {
+  template: (typeof BUILT_IN_TEMPLATES)[number];
+}) {
+  return (
+    <div className="flex items-start justify-between gap-3 rounded-lg border border-border/60 bg-muted/20 p-4">
+      <div className="flex min-w-0 flex-1 flex-col gap-1">
+        <div className="flex items-center gap-2">
+          <FileText
+            className="h-4 w-4 shrink-0 text-muted-foreground/50"
+            aria-hidden="true"
+          />
+          <span className="text-sm font-medium text-foreground truncate">
+            {template.name}
+          </span>
+          <Badge
+            variant="secondary"
+            className="text-[10px] font-normal text-muted-foreground"
+          >
+            Built-in
+          </Badge>
+        </div>
+        {template.description && (
+          <p className="pl-6 text-xs text-muted-foreground line-clamp-2">
+            {template.description}
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ─── Template list ───────────────────────────────────────────────────────────
 
 export function TemplateListClient({
   boxId,
   initialTemplates,
 }: TemplateListClientProps) {
+  const totalUserTemplates = initialTemplates.length;
+
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between">
         <h2 className="text-sm font-medium text-foreground">
-          {initialTemplates.length > 0
-            ? `${initialTemplates.length} template${initialTemplates.length !== 1 ? "s" : ""}`
+          {totalUserTemplates > 0
+            ? `${totalUserTemplates} custom template${totalUserTemplates !== 1 ? "s" : ""}`
             : ""}
         </h2>
         <CreateTemplateDialog boxId={boxId} />
       </div>
 
+      {/* Built-in templates — always shown first */}
+      <div className="flex flex-col gap-2">
+        <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+          Built-in
+        </p>
+        {BUILT_IN_TEMPLATES.map((t) => (
+          <BuiltInTemplateCard key={t.id} template={t} />
+        ))}
+      </div>
+
+      {/* User-created templates */}
       {initialTemplates.length > 0 && (
         <div className="flex flex-col gap-2">
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+            Custom
+          </p>
           {initialTemplates.map((template) => (
             <div
               key={template.id}
