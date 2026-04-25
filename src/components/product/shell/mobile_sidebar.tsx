@@ -50,6 +50,7 @@ interface MobileSidebarProps {
   workspaceId?: string;
   boxes?: BoxType[];
   workspaces?: Array<{ id: string; name: string; slug: string }>;
+  pendingProposalsCount?: number;
 }
 
 export function MobileSidebar({
@@ -58,6 +59,7 @@ export function MobileSidebar({
   workspaceId,
   boxes = [],
   workspaces = [],
+  pendingProposalsCount = 0,
 }: MobileSidebarProps) {
   const [open, setOpen] = useState(false);
   const pathname = usePathname();
@@ -163,6 +165,11 @@ export function MobileSidebar({
                     >
                       <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
                       {item.label}
+                      {item.href === "/app/proposals" && pendingProposalsCount > 0 && (
+                        <span className="ml-auto flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-medium text-primary-foreground">
+                          {pendingProposalsCount}
+                        </span>
+                      )}
                     </Link>
                   </li>
                 );

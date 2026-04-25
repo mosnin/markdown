@@ -549,13 +549,6 @@ export function NoteEditor({ note, initialMode = "document", currentUser, worksp
         </div>
       )}
 
-      {/* ── Table of Contents (Outline) panel ──────────────────────────── */}
-      {tocOpen && (
-        <div className="border-t border-border">
-          <NoteTocPanel markdownContent={content} />
-        </div>
-      )}
-
       {/* ── Related notes (on-device local search) ──────────────────────── */}
       <EditorRelatedPanel
         noteId={note.id}

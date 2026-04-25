@@ -42,8 +42,6 @@ interface UnlinkedMention {
 interface NoteBacklinksPanelProps {
   /** The note being viewed. */
   noteId: string;
-  /** Used to navigate to source notes. */
-  workspaceId: string;
   /** Incoming links from the server. */
   incoming: NoteLink[];
   /** All notes in the box — used to resolve titles and detect unlinked mentions. */

@@ -490,7 +490,6 @@ function NoteContextPanel({
             <div className="px-4 py-3">
               <NoteBacklinksPanel
                 noteId={note.id}
-                workspaceId=""
                 incoming={links.incoming}
                 allBoxNotes={allBoxNotes}
                 markdownContent={markdownContent}

@@ -11,6 +11,7 @@ interface MobileShellSidebarProps {
   workspaceId?: string;
   boxes?: BoxType[];
   workspaces?: Array<{ id: string; name: string; slug: string }>;
+  pendingProposalsCount?: number;
 }
 
 /**

@@ -106,6 +106,7 @@ export default async function AppLayout({
               workspaceId={ctx.workspace.id}
               boxes={boxes}
               workspaces={workspaces}
+              pendingProposalsCount={pendingProposalsCount}
             />
             <span className="text-sm font-semibold tracking-tight truncate">
               {workspaceName ?? "Context Store"}
