@@ -7,6 +7,7 @@ import {
   type FolderBranchOverride,
 } from "@/server/services/folder_branch_service";
 import { logger } from "@/lib/logger";
+import { NotFoundError, ConflictError, RepositoryError } from "@/server/domain/errors";
 
 const FOLDER_COLS =
   "id, workspace_id, box_id, parent_folder_id, parent_skill_id, parent_agent_id, name, slug, path_cache, description, accepts_generated_notes, status, branch_id, created_at, updated_at";
@@ -237,7 +238,7 @@ export async function createFolder(
     .select(FOLDER_COLS)
     .single();
 
-  if (error || !data) throw new Error(error?.message ?? "Failed to create folder");
+  if (error || !data) throw new RepositoryError("createFolder", error);
   return data as Folder;
 }
 
@@ -253,7 +254,7 @@ export async function updateFolder(
     .select(FOLDER_COLS)
     .single();
 
-  if (error || !data) throw new Error(error?.message ?? "Failed to update folder");
+  if (error || !data) throw new RepositoryError("updateFolder", error);
   return data as Folder;
 }
 

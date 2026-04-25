@@ -6,6 +6,7 @@ import {
 } from "@/server/domain/schemas/box_schemas";
 import { BOX_STATUS } from "@/server/domain/constants/content_status";
 import { logger } from "@/lib/logger";
+import { NotFoundError, ConflictError, RepositoryError } from "@/server/domain/errors";
 
 const BOX_COLS =
   "id, workspace_id, guide_note_id, name, slug, description, status, branch_id, agent_instructions, is_public, created_at, updated_at";
@@ -89,7 +90,7 @@ export async function createBox(
     .select(BOX_COLS)
     .single();
 
-  if (error || !data) throw new Error(error?.message ?? "Failed to create box");
+  if (error || !data) throw new RepositoryError("createBox", error);
   return data as Box;
 }
 
@@ -105,7 +106,7 @@ export async function updateBox(
     .select(BOX_COLS)
     .single();
 
-  if (error || !data) throw new Error(error?.message ?? "Failed to update box");
+  if (error || !data) throw new RepositoryError("updateBox", error);
   return data as Box;
 }
 

@@ -18,6 +18,7 @@ import {
   type UpdateAgentInput,
 } from "@/server/domain/schemas/agent_schemas";
 import { OBJECT_STATUS } from "@/server/domain/constants/object_constants";
+import { NotFoundError, ConflictError, RepositoryError } from "@/server/domain/errors";
 
 /**
  * Full column set — used for agent editor / detail pages.
@@ -149,7 +150,7 @@ export async function createAgent(
     .select(AGENT_FULL_COLS)
     .single();
 
-  if (error || !data) throw new Error(error?.message ?? "Failed to create agent");
+  if (error || !data) throw new RepositoryError("createAgent", error);
   return data as Agent;
 }
 

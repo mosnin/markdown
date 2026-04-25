@@ -6,6 +6,7 @@ import {
 } from "@/server/domain/schemas/note_schemas";
 import { NOTE_STATUS } from "@/server/domain/constants/content_status";
 import { logger } from "@/lib/logger";
+import { NotFoundError, ConflictError, RepositoryError } from "@/server/domain/errors";
 
 /**
  * Note repository.
@@ -145,7 +146,7 @@ export async function createNote(
     .select()
     .single();
 
-  if (error || !data) throw new Error(error?.message ?? "Failed to create note");
+  if (error || !data) throw new RepositoryError("createNote", error);
   return data as Note;
 }
 
@@ -161,7 +162,7 @@ export async function updateNote(
     .select()
     .single();
 
-  if (error || !data) throw new Error(error?.message ?? "Failed to update note");
+  if (error || !data) throw new RepositoryError("updateNote", error);
   return data as Note;
 }
 
