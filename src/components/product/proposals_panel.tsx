@@ -333,11 +333,13 @@ function ProposalCard({
       </CardHeader>
 
       <CardContent className="space-y-3 pt-0">
-        {/* Rationale */}
+        {/* Agent's Reasoning callout — shown first so reviewers read why before seeing what */}
         {proposal.rationale && (
-          <div className="rounded-md bg-muted/40 px-3 py-2">
-            <p className="text-xs font-medium text-muted-foreground mb-0.5">Rationale</p>
-            <p className="text-sm leading-relaxed">{proposal.rationale}</p>
+          <div className="mb-4 rounded-lg border border-blue-500/20 bg-blue-500/5 p-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-blue-400 mb-1">
+              Agent&apos;s Reasoning
+            </p>
+            <p className="text-sm text-foreground">{proposal.rationale}</p>
           </div>
         )}
 
