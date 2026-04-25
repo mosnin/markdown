@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { listBoxesByWorkspace } from "@/server/repositories/box_repository";
 import { listRecentNotesByWorkspace } from "@/server/repositories/note_repository";
 import { listWorkspacesByOwner } from "@/server/repositories/workspace_repository";
+import { listWriteProposalsByWorkspace } from "@/server/repositories/write_proposal_repository";
 import { AppShellSidebar } from "@/components/product/shell/app_shell_sidebar";
 import { MobileShellSidebar } from "@/components/product/shell/mobile_shell_sidebar";
 import { ThemeToggle } from "@/components/product/theme_toggle";
@@ -38,12 +39,16 @@ export default async function AppLayout({
 }) {
   const ctx = await requireAuthenticatedUser();
   const supabase = await createClient();
-  const [boxes, ownedWorkspaces, recentNotes] = await Promise.all([
+  const [boxes, ownedWorkspaces, recentNotes, pendingProposals] = await Promise.all([
     listBoxesByWorkspace(supabase, ctx.workspace.id),
     listWorkspacesByOwner(supabase, ctx.user.id),
     listRecentNotesByWorkspace(supabase, ctx.workspace.id, {
       limit: 5,
       branchId: ctx.activeBranchId,
+    }),
+    listWriteProposalsByWorkspace(supabase, ctx.workspace.id, {
+      status: "pending",
+      limit: 100,
     }),
   ]);
 
@@ -54,6 +59,8 @@ export default async function AppLayout({
     name: w.name,
     slug: w.slug,
   }));
+
+  const pendingProposalsCount = pendingProposals.length;
 
   // Strip heavy markdown before handing notes to client components. The
   // sidebar only needs identity + label + ordering key.
@@ -84,6 +91,7 @@ export default async function AppLayout({
           boxes={boxes}
           workspaces={workspaces}
           recentNotes={recentNotesMini}
+          pendingProposalsCount={pendingProposalsCount}
         />
       </div>
 

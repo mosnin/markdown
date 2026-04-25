@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
-import { AlertTriangle, Code2, Eye, History } from "lucide-react";
+import { AlertTriangle, Code2, Eye, History, List } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
@@ -21,6 +21,14 @@ import { NoteHistoryDialog } from "@/components/product/notes/note_history_dialo
 import { useNoteEmbedding } from "@/hooks/use_note_embedding";
 import { CrdtPresenceBar } from "@/components/product/crdt_presence_bar";
 import { useYjsCursorBroadcast } from "@/lib/crdt/yjs_awareness";
+
+const NoteTocPanel = dynamic(
+  () =>
+    import("@/components/product/notes/note_toc_panel").then(
+      (m) => m.NoteTocPanel
+    ),
+  { ssr: false }
+);
 
 const NoteCrdtEditor = dynamic(
   () =>
@@ -79,6 +87,7 @@ export function NoteEditor({ note, initialMode = "document", currentUser, worksp
   const [tagsInput, setTagsInput] = useState(note.tags.join(", "));
   const [readHint, setReadHint] = useState(note.read_hint ?? "");
   const [mode, setMode] = useState<NoteViewMode>(initialMode);
+  const [tocOpen, setTocOpen] = useState(false);
 
   const [autosaveState, setAutosaveState] = useState<AutosaveState>("idle");
   const [savedAt, setSavedAt] = useState<Date | null>(null);
@@ -333,6 +342,20 @@ export function NoteEditor({ note, initialMode = "document", currentUser, worksp
             label="Markdown"
             onClick={() => setMode("markdown")}
           />
+          <button
+            type="button"
+            aria-pressed={tocOpen}
+            onClick={() => setTocOpen((v) => !v)}
+            className={cn(
+              "flex h-8 items-center gap-1.5 rounded-md px-2.5 text-xs transition-fast",
+              tocOpen
+                ? "bg-accent font-medium text-foreground"
+                : "text-muted-foreground hover:bg-accent/60 hover:text-foreground"
+            )}
+          >
+            <List className="h-3.5 w-3.5" aria-hidden="true" />
+            Outline
+          </button>
         </div>
 
         {/* Presence + Save state + retry */}
@@ -412,6 +435,16 @@ export function NoteEditor({ note, initialMode = "document", currentUser, worksp
           >
             Dismiss
           </Button>
+        </div>
+      )}
+
+      {/* ── Table of contents panel ───────────────────────────────────────── */}
+      {tocOpen && (
+        <div className="border-b border-border bg-muted/20">
+          <p className="px-4 pt-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+            Outline
+          </p>
+          <NoteTocPanel markdownContent={content} />
         </div>
       )}
 

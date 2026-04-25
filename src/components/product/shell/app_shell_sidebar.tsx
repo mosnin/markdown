@@ -22,6 +22,8 @@ interface AppShellSidebarProps {
     box_id: string;
     updated_at: string;
   }>;
+  /** Count of pending write proposals — forwarded to AppSidebar for the badge. */
+  pendingProposalsCount?: number;
 }
 
 /**

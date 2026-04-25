@@ -123,6 +123,56 @@ function NavItem({
   );
 }
 
+// ─── Nav item with badge ──────────────────────────────────────────────────────
+
+function NavItemWithBadge({
+  href,
+  icon: Icon,
+  label,
+  isActive,
+  badge,
+}: {
+  href: string;
+  icon: React.ElementType;
+  label: string;
+  isActive: boolean;
+  badge: number;
+}) {
+  return (
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <Link
+            href={href}
+            aria-current={isActive ? "page" : undefined}
+            className={cn(
+              "flex items-center gap-2.5 rounded-md px-2.5 py-2 text-sm transition-fast",
+              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+              isActive
+                ? "bg-accent text-foreground font-medium"
+                : "text-foreground/60 hover:text-foreground hover:bg-accent/60"
+            )}
+          />
+        }
+      >
+        <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
+        <span className="truncate">{label}</span>
+        {badge > 0 && (
+          <span
+            className="ml-auto flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-warning/80 px-1 text-[9px] font-bold text-warning-foreground"
+            aria-label={`${badge} pending`}
+          >
+            {badge > 99 ? "99+" : badge}
+          </span>
+        )}
+      </TooltipTrigger>
+      <TooltipContent side="right" sideOffset={8} className="text-xs">
+        {label} {badge > 0 ? `(${badge} pending)` : ""}
+      </TooltipContent>
+    </Tooltip>
+  );
+}
+
 // ─── Sidebar ──────────────────────────────────────────────────────────────────
 
 interface AppSidebarProps {
@@ -144,6 +194,8 @@ interface AppSidebarProps {
     box_id: string;
     updated_at: string;
   }>;
+  /** Count of pending write proposals — shown as a badge on the Proposals nav item. */
+  pendingProposalsCount?: number;
 }
 
 export function AppSidebar({
@@ -153,6 +205,7 @@ export function AppSidebar({
   boxes = [],
   workspaces = [],
   recentNotes,
+  pendingProposalsCount = 0,
 }: AppSidebarProps) {
   const pathname = usePathname();
   const [advancedOpen, setAdvancedOpen] = useState(false);
@@ -230,14 +283,26 @@ export function AppSidebar({
               <ul className="flex flex-col gap-0.5 list-none">
                 {advancedNav.map((item) => (
                   <li key={item.href}>
-                    <NavItem
-                      href={item.href}
-                      icon={item.icon}
-                      label={item.label}
-                      isActive={
-                        pathname === item.href || pathname.startsWith(item.href + "/")
-                      }
-                    />
+                    {item.href === "/app/proposals" && pendingProposalsCount > 0 ? (
+                      <NavItemWithBadge
+                        href={item.href}
+                        icon={item.icon}
+                        label={item.label}
+                        isActive={
+                          pathname === item.href || pathname.startsWith(item.href + "/")
+                        }
+                        badge={pendingProposalsCount}
+                      />
+                    ) : (
+                      <NavItem
+                        href={item.href}
+                        icon={item.icon}
+                        label={item.label}
+                        isActive={
+                          pathname === item.href || pathname.startsWith(item.href + "/")
+                        }
+                      />
+                    )}
                   </li>
                 ))}
               </ul>
