@@ -24,6 +24,97 @@ import sanitizeHtml from "sanitize-html";
 // Configure marked globally once. async: false ensures parse() returns string.
 marked.setOptions({ async: false });
 
+// ─── Callout block renderer ───────────────────────────────────────────────────
+
+/**
+ * Callout type configuration for GitHub-style `> [!TYPE]` blockquotes.
+ *
+ * Supported types: warning, tip, info, priority
+ */
+const CALLOUT_CONFIG: Record<
+  string,
+  { icon: string; classes: string; labelClasses: string }
+> = {
+  warning: {
+    icon: "⚠️",
+    classes:
+      "callout callout-warning border-l-4 border-amber-400 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-500 rounded-r-md px-4 py-3 my-3",
+    labelClasses: "font-semibold text-amber-700 dark:text-amber-400",
+  },
+  tip: {
+    icon: "💡",
+    classes:
+      "callout callout-tip border-l-4 border-green-400 bg-green-50 dark:bg-green-950/30 dark:border-green-500 rounded-r-md px-4 py-3 my-3",
+    labelClasses: "font-semibold text-green-700 dark:text-green-400",
+  },
+  info: {
+    icon: "ℹ️",
+    classes:
+      "callout callout-info border-l-4 border-blue-400 bg-blue-50 dark:bg-blue-950/30 dark:border-blue-500 rounded-r-md px-4 py-3 my-3",
+    labelClasses: "font-semibold text-blue-700 dark:text-blue-400",
+  },
+  priority: {
+    icon: "⭐",
+    classes:
+      "callout callout-priority border-l-4 border-violet-400 bg-violet-50 dark:bg-violet-950/30 dark:border-violet-500 rounded-r-md px-4 py-3 my-3",
+    labelClasses: "font-semibold text-violet-700 dark:text-violet-400",
+  },
+};
+
+// Extend marked with a custom blockquote renderer using marked.use().
+// In marked v18, renderer methods receive the full token object.
+// The blockquote token has a `tokens` array of child block tokens.
+marked.use({
+  renderer: {
+    blockquote(token) {
+      // `token.tokens` is the array of block tokens inside the blockquote.
+      // Check whether the first child is a paragraph whose text starts with [!type].
+      const firstToken = Array.isArray(token.tokens) ? token.tokens[0] : null;
+      if (firstToken && firstToken.type === "paragraph") {
+        const paragraphText =
+          "text" in firstToken && typeof firstToken.text === "string"
+            ? firstToken.text
+            : "";
+        const typeMatch = paragraphText.match(
+          /^\[!(warning|tip|info|priority)\](?:\n|$)/i
+        );
+        if (typeMatch) {
+          const type = typeMatch[1].toLowerCase();
+          const cfg = CALLOUT_CONFIG[type];
+          if (cfg) {
+            const label =
+              type.charAt(0).toUpperCase() + type.slice(1);
+            // Build a modified token tree without the [!type] marker line.
+            const bodyText = paragraphText
+              .replace(/^\[!(warning|tip|info|priority)\]\n?/i, "")
+              .trim();
+
+            // Render the body: if there's remaining text in the first
+            // paragraph, plus any subsequent tokens.
+            const bodyTokens = token.tokens.slice(1);
+            let bodyHtml = "";
+            if (bodyText) {
+              // Re-parse just the body text as inline markdown.
+              bodyHtml += `<p>${marked.parseInline(bodyText) as string}</p>`;
+            }
+            for (const t of bodyTokens) {
+              // Use marked's parser to render each remaining child token.
+              bodyHtml += marked.parse(
+                // Reconstruct raw text from the token's raw field.
+                "raw" in t && typeof t.raw === "string" ? t.raw : ""
+              ) as string;
+            }
+
+            return `<div class="${cfg.classes}"><p class="${cfg.labelClasses}">${cfg.icon} ${label}</p>${bodyHtml}</div>`;
+          }
+        }
+      }
+      // Fall back to the default blockquote rendering.
+      return false;
+    },
+  },
+});
+
 /**
  * Allowed HTML elements produced by standard markdown parsers.
  * This list is intentionally conservative — no form elements, no media embeds.
@@ -51,6 +142,8 @@ const ALLOWED_ATTRS: sanitizeHtml.IOptions["allowedAttributes"] = {
   pre: ["class"],
   span: ["class"],
   div: ["class"],
+  p: ["class"],
+  blockquote: ["class"],
   "*": ["id"],               // allow id for heading anchors
 };
 

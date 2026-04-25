@@ -8,6 +8,10 @@ import {
   Bot,
   ChevronDown,
   ChevronRight,
+  ChevronsDownUp,
+  ChevronsUpDown,
+  Copy,
+  ExternalLink,
   File,
   FileText,
   FolderPlus,
@@ -23,7 +27,8 @@ import {
   PackageIcon,
   PackageOpenIcon,
 } from "hugeicons-react";
-import { Tree, type NodeRendererProps, type NodeApi } from "react-arborist";
+import { Tree, type NodeRendererProps, type NodeApi, type TreeApi } from "react-arborist";
+import { getBoxColor, setBoxColor, BOX_COLOR_OPTIONS } from "@/lib/box_colors";
 import { cn } from "@/lib/utils";
 import { compareSiblings } from "@/server/domain/tree_ordering";
 import { Spinner } from "@/components/ui/spinner";
@@ -270,8 +275,9 @@ function TreeNode({
     }
   })();
 
-  // Get the box ID from the tree context (stored in tree props)
-  const boxId = (tree.props as { boxId?: string }).boxId;
+  // Get the box ID and onNavigate from the tree context (stored in tree props)
+  const boxId = (tree.props as { boxId?: string; onNavigate?: () => void }).boxId;
+  const onNavigate = (tree.props as { boxId?: string; onNavigate?: () => void }).onNavigate;
 
   // For attached reusable items, append box context
   const finalHref = data.isAttachment && boxId && (data.nodeType === "skill" || data.nodeType === "agent")
@@ -304,6 +310,20 @@ function TreeNode({
       case "agent": return Bot;
     }
   })();
+
+  // Count all descendant notes recursively (for collapsed folder badge)
+  function countDescendantNotes(nodes: TreeNodeData[]): number {
+    let count = 0;
+    for (const n of nodes) {
+      if (n.nodeType === "note") count++;
+      if (n.children) count += countDescendantNotes(n.children);
+    }
+    return count;
+  }
+  const folderNoteCount =
+    data.nodeType === "folder" && !node.isOpen && data.children
+      ? countDescendantNotes(data.children)
+      : 0;
 
   return (
     <div
@@ -397,6 +417,10 @@ function TreeNode({
           {ext && (
             <span className="shrink-0 text-[10px] text-muted-foreground/40">{ext}</span>
           )}
+          {/* Folder note count badge — only shown when collapsed */}
+          {folderNoteCount > 0 && (
+            <span className="ml-auto text-[10px] text-muted-foreground/50">({folderNoteCount})</span>
+          )}
         </Link>
       )}
 
@@ -417,6 +441,47 @@ function TreeNode({
           <Trash2 className="h-3 w-3" aria-hidden="true" />
         </button>
       )}
+
+      {/* Context menu for note items — "Open in new tab" / "Copy link" */}
+      {data.nodeType === "note" && !node.isEditing && (
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            className={cn(
+              "flex h-5 w-5 shrink-0 items-center justify-center rounded",
+              "opacity-0 group-hover/tree-node:opacity-100 transition-opacity duration-150",
+              "text-muted-foreground/50 hover:bg-accent/50 hover:text-foreground",
+              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:opacity-100"
+            )}
+            aria-label="Note options"
+          >
+            <span className="text-[10px] leading-none">···</span>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent side="right" align="start" sideOffset={4}>
+            <DropdownMenuItem asChild>
+              <Link href={finalHref} onClick={onNavigate}>
+                <FileText className="h-3.5 w-3.5" aria-hidden="true" />
+                Open
+              </Link>
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              onClick={() => window.open(finalHref, "_blank")}
+            >
+              <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
+              Open in new tab
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              onClick={() =>
+                navigator.clipboard.writeText(
+                  window.location.origin + finalHref
+                )
+              }
+            >
+              <Copy className="h-3.5 w-3.5" aria-hidden="true" />
+              Copy link
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      )}
     </div>
   );
 }
@@ -427,12 +492,16 @@ function BoxTree({
   data,
   boxId,
   currentNoteId,
+  filterText,
+  treeRef,
   onNavigate,
   onTreeRefresh,
 }: {
   data: BoxTreeData;
   boxId: string;
   currentNoteId?: string;
+  filterText?: string;
+  treeRef?: React.RefCallback<TreeApi<TreeNodeData>>;
   onNavigate?: () => void;
   onTreeRefresh?: () => void;
 }) {
@@ -450,6 +519,35 @@ function BoxTree({
       </p>
     );
   }
+
+  // Filter helper — returns true if a node or any of its descendants match
+  function nodeMatchesFilter(node: TreeNodeData, text: string): boolean {
+    if (node.name.toLowerCase().includes(text.toLowerCase())) return true;
+    if (node.children) {
+      return node.children.some((child) => nodeMatchesFilter(child, text));
+    }
+    return false;
+  }
+
+  // Build a filtered copy of the tree when filterText is non-empty
+  function filterTree(nodes: TreeNodeData[], text: string): TreeNodeData[] {
+    if (!text) return nodes;
+    const result: TreeNodeData[] = [];
+    for (const node of nodes) {
+      if (node.name.toLowerCase().includes(text.toLowerCase())) {
+        result.push(node);
+      } else if (node.children) {
+        const filteredChildren = filterTree(node.children, text);
+        if (filteredChildren.length > 0) {
+          result.push({ ...node, children: filteredChildren });
+        }
+      }
+    }
+    return result;
+  }
+
+  const displayData = filterText ? filterTree(treeData, filterText) : treeData;
+  void nodeMatchesFilter; // used indirectly through filterTree
 
   // Handle drag-and-drop moves via react-arborist.
   //
@@ -552,26 +650,40 @@ function BoxTree({
     }
     return count;
   }
-  const estimatedHeight = Math.max(countVisibleNodes(treeData, initialOpenState) * 28 + 20, 80);
+  // When filtering, all matched nodes are visible; otherwise use initial open state
+  const estimatedHeight = filterText
+    ? Math.max(countAllNodes(displayData) * 28 + 20, 80)
+    : Math.max(countVisibleNodes(treeData, initialOpenState) * 28 + 20, 80);
+
+  function countAllNodes(nodes: TreeNodeData[]): number {
+    let count = nodes.length;
+    for (const n of nodes) {
+      if (n.children) count += countAllNodes(n.children);
+    }
+    return count;
+  }
 
   return (
     <Tree<TreeNodeData>
-      data={treeData}
+      ref={treeRef}
+      data={displayData}
       onMove={handleMove}
       onRename={handleRename}
       disableDrop={disableDrop}
       disableEdit={(d) => !!d.isAttachment}
       disableMultiSelection={true}
-      openByDefault={false}
-      initialOpenState={initialOpenState}
+      openByDefault={!!filterText}
+      initialOpenState={filterText ? undefined : initialOpenState}
       rowHeight={28}
       indent={16}
       width="100%"
       height={estimatedHeight}
       className="arborist-tree"
-      // Pass boxId through props so TreeNode can access it
-      // @ts-expect-error -- custom prop forwarded to TreeNode via tree.props
+      // Pass boxId and onNavigate through props so TreeNode can access them
+      // @ts-expect-error -- custom props forwarded to TreeNode via tree.props
       boxId={boxId}
+      // @ts-expect-error -- custom props forwarded to TreeNode via tree.props
+      onNavigate={onNavigate}
     >
       {TreeNode}
     </Tree>
@@ -764,6 +876,7 @@ function BoxRow({
   isLoading,
   treeData,
   currentNoteId,
+  filterText,
   onToggle,
   onNavigate,
   onTreeRefresh,
@@ -774,10 +887,24 @@ function BoxRow({
   isLoading: boolean;
   treeData: BoxTreeData | undefined;
   currentNoteId?: string;
+  filterText?: string;
   onToggle: () => void;
   onNavigate?: () => void;
   onTreeRefresh?: () => void;
 }) {
+  // Box color (Feature 5)
+  const [color, setColor] = useState<string | null>(() => getBoxColor(box.id));
+  const [colorPickerOpen, setColorPickerOpen] = useState(false);
+
+  // Tree API ref for collapse/expand all (Feature 3)
+  const treeApiRef = useRef<TreeApi<TreeNodeData> | undefined>(undefined);
+
+  function handleColorPick(c: string | null) {
+    setBoxColor(box.id, c);
+    setColor(c);
+    setColorPickerOpen(false);
+  }
+
   return (
     <div>
       {/* Box header row */}
@@ -803,6 +930,51 @@ function BoxRow({
           )}
         </button>
 
+        {/* Color dot — right-click to open picker (Feature 5) */}
+        <DropdownMenu open={colorPickerOpen} onOpenChange={setColorPickerOpen}>
+          <DropdownMenuTrigger asChild>
+            <button
+              type="button"
+              className="shrink-0 flex items-center justify-center focus-visible:outline-none"
+              aria-label="Set box color"
+              title="Set box color"
+            >
+              {color ? (
+                <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: color }} />
+              ) : (
+                <div className="w-2 h-2 rounded-full shrink-0 opacity-0 group-hover:opacity-30 bg-muted-foreground" />
+              )}
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent side="right" align="start" sideOffset={4} className="p-2">
+            <div className="flex flex-wrap gap-1.5 w-[120px] mb-1.5">
+              {BOX_COLOR_OPTIONS.map((c) => (
+                <button
+                  key={c}
+                  type="button"
+                  className={cn(
+                    "w-4 h-4 rounded-full shrink-0 ring-offset-background transition-all",
+                    "hover:scale-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1",
+                    color === c && "ring-2 ring-ring ring-offset-1"
+                  )}
+                  style={{ backgroundColor: c }}
+                  onClick={() => handleColorPick(c)}
+                  title={c}
+                />
+              ))}
+            </div>
+            {color && (
+              <button
+                type="button"
+                className="w-full text-[10px] text-muted-foreground/70 hover:text-foreground transition-colors text-left px-0.5"
+                onClick={() => handleColorPick(null)}
+              >
+                None
+              </button>
+            )}
+          </DropdownMenuContent>
+        </DropdownMenu>
+
         <Link
           href={`/app/boxes/${box.id}`}
           onClick={onNavigate}
@@ -823,6 +995,38 @@ function BoxRow({
           <span className="truncate">{box.name}</span>
         </Link>
 
+        {/* Collapse all / Expand all buttons (Feature 3) — only visible when expanded */}
+        {isExpanded && (
+          <>
+            <button
+              type="button"
+              onClick={() => treeApiRef.current?.closeAll?.()}
+              title="Collapse all"
+              className={cn(
+                "flex h-5 w-5 shrink-0 items-center justify-center rounded",
+                "opacity-0 group-hover:opacity-100 transition-opacity duration-150",
+                "text-muted-foreground hover:bg-accent/50 hover:text-foreground",
+                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:opacity-100"
+              )}
+            >
+              <ChevronsDownUp className="h-3.5 w-3.5" aria-hidden="true" />
+            </button>
+            <button
+              type="button"
+              onClick={() => treeApiRef.current?.openAll?.()}
+              title="Expand all"
+              className={cn(
+                "flex h-5 w-5 shrink-0 items-center justify-center rounded",
+                "opacity-0 group-hover:opacity-100 transition-opacity duration-150",
+                "text-muted-foreground hover:bg-accent/50 hover:text-foreground",
+                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:opacity-100"
+              )}
+            >
+              <ChevronsUpDown className="h-3.5 w-3.5" aria-hidden="true" />
+            </button>
+          </>
+        )}
+
         <BoxQuickCreateMenu box={box} onNavigate={onNavigate} onTreeRefresh={onTreeRefresh} />
       </div>
 
@@ -834,6 +1038,8 @@ function BoxRow({
               data={treeData}
               boxId={box.id}
               currentNoteId={currentNoteId}
+              filterText={filterText}
+              treeRef={(api) => { treeApiRef.current = api ?? undefined; }}
               onNavigate={onNavigate}
               onTreeRefresh={onTreeRefresh}
             />
@@ -861,6 +1067,7 @@ export function TreeSidebar({
   const [expandedBoxIds, setExpandedBoxIds] = useState<Set<string>>(new Set());
   const [treeData, setTreeData] = useState<Map<string, BoxTreeData>>(new Map());
   const [loading, setLoading] = useState<Set<string>>(new Set());
+  const [filterText, setFilterText] = useState("");
 
   const treeDataRef = useRef<Map<string, BoxTreeData>>(new Map());
   const boxIdsRef = useRef<Set<string>>(new Set(boxes.map((b) => b.id)));
@@ -984,23 +1191,34 @@ export function TreeSidebar({
           No boxes yet
         </p>
       ) : (
-        <ul className="flex flex-col gap-0.5 list-none">
-          {boxes.map((box) => (
-            <li key={box.id}>
-              <BoxRow
-                box={box}
-                isExpanded={expandedBoxIds.has(box.id)}
-                isBoxActive={box.id === currentBoxId}
-                isLoading={loading.has(box.id)}
-                treeData={treeData.get(box.id)}
-                currentNoteId={currentNoteId}
-                onToggle={() => toggleBox(box.id)}
-                onNavigate={onNavigate}
-                onTreeRefresh={() => void fetchTree(box.id)}
-              />
-            </li>
-          ))}
-        </ul>
+        <>
+          {/* Filter input (Feature 1) */}
+          <input
+            type="text"
+            value={filterText}
+            onChange={(e) => setFilterText(e.target.value)}
+            placeholder="Filter..."
+            className="w-full rounded-md border border-border/50 bg-muted/30 px-2 py-1 text-xs placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-border mb-1"
+          />
+          <ul className="flex flex-col gap-0.5 list-none">
+            {boxes.map((box) => (
+              <li key={box.id}>
+                <BoxRow
+                  box={box}
+                  isExpanded={expandedBoxIds.has(box.id)}
+                  isBoxActive={box.id === currentBoxId}
+                  isLoading={loading.has(box.id)}
+                  treeData={treeData.get(box.id)}
+                  currentNoteId={currentNoteId}
+                  filterText={filterText}
+                  onToggle={() => toggleBox(box.id)}
+                  onNavigate={onNavigate}
+                  onTreeRefresh={() => void fetchTree(box.id)}
+                />
+              </li>
+            ))}
+          </ul>
+        </>
       )}
     </nav>
   );

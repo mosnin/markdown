@@ -15,6 +15,7 @@ import {
 } from "@/server/services/context_bundle_service";
 import { auditBundleRead } from "@/server/services/audit_service";
 import { extractAndStoreEntities } from "@/server/services/knowledge_graph_service";
+import { updateNote as updateNoteInRepository } from "@/server/repositories/note_repository";
 import { log } from "@/lib/logger";
 import { type ContextBundle } from "@/server/domain/types/context_bundle";
 import { inngest } from "@/lib/inngest/client";
@@ -293,6 +294,53 @@ export async function assembleContextBundleAction(
     return {
       ok: false,
       error: err instanceof Error ? err.message : "Failed to assemble bundle",
+    };
+  }
+}
+
+// ─── Note retrieval metadata action ──────────────────────────────────────────
+
+/**
+ * Update retrieval_priority and/or read_hint for a note without creating
+ * a new content version. Uses the repository's direct update so metadata
+ * changes are cheap and don't bloat version history.
+ */
+export async function updateNoteRetrievalAction(
+  noteId: string,
+  {
+    retrievalPriority,
+    readHint,
+  }: {
+    retrievalPriority?: number;
+    readHint?: string | null;
+  }
+): Promise<ActionResult<void>> {
+  try {
+    const { supabase, workspaceId } = await requireContext();
+    const note = await getNoteForWorkspace(supabase, noteId, workspaceId);
+    if (!note) return { ok: false, error: "Note not found" };
+
+    const updatePayload: Record<string, unknown> = {};
+    if (retrievalPriority !== undefined) {
+      if (retrievalPriority < 0 || retrievalPriority > 10) {
+        return { ok: false, error: "Retrieval priority must be 0–10" };
+      }
+      updatePayload.retrieval_priority = retrievalPriority;
+    }
+    if (readHint !== undefined) {
+      updatePayload.read_hint = readHint ?? null;
+    }
+    if (Object.keys(updatePayload).length === 0) {
+      return { ok: true, data: undefined };
+    }
+
+    await updateNoteInRepository(supabase, noteId, updatePayload);
+    revalidatePath(`/app/notes/${noteId}`);
+    return { ok: true, data: undefined };
+  } catch (err) {
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : "Failed to update note",
     };
   }
 }

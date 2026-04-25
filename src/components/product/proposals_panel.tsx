@@ -253,9 +253,13 @@ function ProposalContentPreview({
 function ProposalCard({
   item,
   onUpdate,
+  isSelected,
+  onToggleSelect,
 }: {
   item: ProposalWithContext;
   onUpdate: (id: string, newStatus: string) => void;
+  isSelected?: boolean;
+  onToggleSelect?: (id: string) => void;
 }) {
   const { proposal, connection, current_note, preview_content } = item;
   const [reviewNote, setReviewNote] = useState("");
@@ -296,13 +300,26 @@ function ProposalCard({
   return (
     <Card
       className={cn(
-        "border transition-colors",
+        "border transition-colors relative",
         isConflicted && "border-destructive/40 bg-destructive/5",
-        isPendingProposal && isReplace && !isConflicted && "border-destructive/30"
+        isPendingProposal && isReplace && !isConflicted && "border-destructive/30",
+        isSelected && "ring-2 ring-violet-500/40 border-violet-500/30"
       )}
     >
       <CardHeader className="pb-2">
-        <div className="flex flex-col gap-1.5">
+        {/* Checkbox for batch selection — only on pending proposals */}
+        {isPendingProposal && onToggleSelect && (
+          <div className="absolute top-3 left-3">
+            <input
+              type="checkbox"
+              checked={isSelected ?? false}
+              onChange={() => onToggleSelect(proposal.id)}
+              aria-label={`Select proposal for ${proposal.proposed_title ?? current_note?.title ?? "this note"}`}
+              className="h-4 w-4 rounded border-border accent-violet-500 cursor-pointer"
+            />
+          </div>
+        )}
+        <div className={cn("flex flex-col gap-1.5", isPendingProposal && onToggleSelect && "pl-7")}>
           <div className="flex flex-wrap items-center gap-2">
             <TypeBadge type={proposal.proposal_type} />
             <StatusBadge status={proposal.status} />
@@ -318,7 +335,7 @@ function ProposalCard({
           )}
         </div>
 
-        <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
+        <div className={cn("flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground", isPendingProposal && onToggleSelect && "pl-7")}>
           {connection && (
             <span className="flex items-center gap-1">
               <Zap className="h-3 w-3" />
@@ -472,6 +489,11 @@ export function ProposalsPanel({ initialProposals }: ProposalsPanelProps) {
     useState<ProposalWithContext[]>(initialProposals);
   const [statusFilter, setStatusFilter] = useState<string>("pending");
 
+  // Batch selection state
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [batchLoading, setBatchLoading] = useState(false);
+  const [batchMessage, setBatchMessage] = useState<string | null>(null);
+
   function handleUpdate(id: string, newStatus: string) {
     setProposals((prev) =>
       prev.map((item) =>
@@ -485,6 +507,55 @@ export function ProposalsPanel({ initialProposals }: ProposalsPanelProps) {
     );
   }
 
+  function handleToggleSelect(id: string) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  }
+
+  async function handleBatchApprove() {
+    setBatchLoading(true);
+    setBatchMessage(null);
+    const ids = Array.from(selectedIds);
+    let successCount = 0;
+    for (const id of ids) {
+      const result = await approveProposalAction(id);
+      if (result.success) {
+        const data = result.data as { outcome: string };
+        handleUpdate(id, data.outcome === "approved" ? "approved" : "conflicted");
+        successCount++;
+      }
+    }
+    setSelectedIds(new Set());
+    setBatchLoading(false);
+    setBatchMessage(`${successCount} of ${ids.length} approved`);
+    setTimeout(() => setBatchMessage(null), 3000);
+  }
+
+  async function handleBatchReject() {
+    setBatchLoading(true);
+    setBatchMessage(null);
+    const ids = Array.from(selectedIds);
+    let successCount = 0;
+    for (const id of ids) {
+      const result = await rejectProposalAction(id);
+      if (result.success) {
+        handleUpdate(id, "rejected");
+        successCount++;
+      }
+    }
+    setSelectedIds(new Set());
+    setBatchLoading(false);
+    setBatchMessage(`${successCount} of ${ids.length} rejected`);
+    setTimeout(() => setBatchMessage(null), 3000);
+  }
+
   const filtered =
     statusFilter === "all"
       ? proposals
@@ -494,8 +565,10 @@ export function ProposalsPanel({ initialProposals }: ProposalsPanelProps) {
     (item) => item.proposal.status === "pending"
   ).length;
 
+  const selectedCount = selectedIds.size;
+
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 pb-20">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -579,8 +652,71 @@ export function ProposalsPanel({ initialProposals }: ProposalsPanelProps) {
                 key={item.proposal.id}
                 item={item}
                 onUpdate={handleUpdate}
+                isSelected={selectedIds.has(item.proposal.id)}
+                onToggleSelect={handleToggleSelect}
               />
             )
+          )}
+        </div>
+      )}
+
+      {/* Sticky batch action bar — shown when any proposal is selected */}
+      {selectedCount > 0 && (
+        <div
+          className={cn(
+            "fixed bottom-6 left-1/2 -translate-x-1/2 z-50",
+            "flex items-center gap-3 rounded-xl border border-border bg-background/95 shadow-lg backdrop-blur px-4 py-3",
+            "min-w-[280px]"
+          )}
+          role="toolbar"
+          aria-label="Batch actions"
+        >
+          <span className="text-sm font-medium text-foreground">
+            {selectedCount} selected
+          </span>
+
+          <button
+            type="button"
+            disabled={batchLoading}
+            onClick={() => void handleBatchApprove()}
+            className={cn(
+              "flex items-center gap-1.5 rounded-md border border-emerald-500/40",
+              "bg-emerald-500/10 px-3 py-1.5 text-xs font-medium text-emerald-600 dark:text-emerald-400",
+              "hover:bg-emerald-500/20 transition-colors disabled:opacity-50"
+            )}
+          >
+            <Check className="h-3.5 w-3.5" aria-hidden="true" />
+            Approve All
+          </button>
+
+          <button
+            type="button"
+            disabled={batchLoading}
+            onClick={() => void handleBatchReject()}
+            className={cn(
+              "flex items-center gap-1.5 rounded-md border border-border/60",
+              "bg-muted/30 px-3 py-1.5 text-xs font-medium text-muted-foreground",
+              "hover:bg-muted/60 hover:text-foreground transition-colors disabled:opacity-50"
+            )}
+          >
+            <X className="h-3.5 w-3.5" aria-hidden="true" />
+            Reject All
+          </button>
+
+          <button
+            type="button"
+            disabled={batchLoading}
+            onClick={() => setSelectedIds(new Set())}
+            className="ml-auto text-xs text-muted-foreground hover:text-foreground transition-colors"
+          >
+            Clear
+          </button>
+
+          {batchLoading && (
+            <span className="text-xs text-muted-foreground">Processing…</span>
+          )}
+          {batchMessage && !batchLoading && (
+            <span className="text-xs text-green-500">{batchMessage}</span>
           )}
         </div>
       )}

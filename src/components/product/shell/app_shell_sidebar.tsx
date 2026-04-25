@@ -22,6 +22,8 @@ interface AppShellSidebarProps {
     box_id: string;
     updated_at: string;
   }>;
+  /** Pending proposals count forwarded to AppSidebar for the badge. */
+  pendingProposalsCount?: number;
 }
 
 /**
@@ -56,5 +58,5 @@ export function AppShellSidebar(props: AppShellSidebarProps) {
     );
   }
 
-  return <AppSidebar {...props} />;
+  return <AppSidebar {...props} pendingProposalsCount={props.pendingProposalsCount} />;
 }
