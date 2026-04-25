@@ -10,6 +10,8 @@ import { useTheme } from "next-themes";
 import { useNoteYjsDoc } from "@/lib/crdt/use_note_yjs_doc";
 import {
   SlashCommandMenu,
+  CALLOUT_INSERT_TEXT,
+  type CalloutInsertId,
   type SkillCommandOption,
 } from "@/components/product/slash_command_menu";
 import {
