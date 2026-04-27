@@ -70,6 +70,8 @@ export interface WorkspaceOperatorRunRow {
   max_input_tokens: number | null;
   /** Optional per-run output-token cap. NULL = unlimited. (Wave 1 F) */
   max_output_tokens: number | null;
+  /** Session this run belongs to. NULL = legacy / unassigned. (Phase 12) */
+  session_id: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -86,6 +88,8 @@ export interface CreateOperatorRunInput {
   maxInputTokens?: number | null;
   /** Optional per-run output-token cap. */
   maxOutputTokens?: number | null;
+  /** Optional session to associate this run with. (Phase 12) */
+  sessionId?: string | null;
 }
 
 export interface UpdateOperatorRunPatch {
@@ -114,6 +118,8 @@ export interface UpdateOperatorRunPatch {
 }
 
 export interface ListOperatorRunsParams {
+  /** Filter to runs belonging to a specific session. (Phase 12) */
+  sessionId?: string;
   /** Filter to a single workspace. Optional — omit to list across the user's workspaces. */
   workspaceId?: string;
   /** Filter to a single actor. Recommended for the "my runs" history view. */
@@ -181,6 +187,8 @@ export async function createOperatorRun(
     insertPayload.max_input_tokens = input.maxInputTokens;
   if (input.maxOutputTokens !== undefined)
     insertPayload.max_output_tokens = input.maxOutputTokens;
+  if (input.sessionId !== undefined)
+    insertPayload.session_id = input.sessionId ?? null;
 
   const { data, error } = await supabase
     .from("workspace_operator_runs")
@@ -269,6 +277,7 @@ export async function listOperatorRuns(
   if (params.workspaceId) query = query.eq("workspace_id", params.workspaceId);
   if (params.userId) query = query.eq("user_id", params.userId);
   if (params.cursor) query = query.lt("created_at", params.cursor);
+  if (params.sessionId) query = query.eq("session_id", params.sessionId);
 
   // Optional filter composition — status, date range, prompt search all
   // AND together with the caller-supplied workspace/user/cursor filters.

@@ -145,6 +145,8 @@ export interface RunWorkspaceOperatorInput {
   maxInputTokens?: number | null;
   /** Optional per-run output-token cap forwarded to the agent. */
   maxOutputTokens?: number | null;
+  /** Session to associate this run with. (Phase 12) */
+  sessionId?: string | null;
 }
 
 /**
@@ -251,6 +253,7 @@ export async function runWorkspaceOperatorAction(
       model,
       maxInputTokens: input.maxInputTokens ?? null,
       maxOutputTokens: input.maxOutputTokens ?? null,
+      sessionId: input.sessionId ?? null,
     });
     const runId = runRow.id;
     const branchName = (input.branchName ?? `agent/${runId.slice(0, 8)}`).slice(0, 200);
@@ -395,6 +398,8 @@ export interface RequestPlanInput {
   maxInputTokens?: number | null;
   /** Optional per-run output-token cap. */
   maxOutputTokens?: number | null;
+  /** Session to associate this run with. (Phase 12) */
+  sessionId?: string | null;
 }
 
 export interface RequestPlanOutput {
@@ -465,6 +470,7 @@ export async function requestOperatorPlanAction(
       model,
       maxInputTokens: input.maxInputTokens ?? null,
       maxOutputTokens: input.maxOutputTokens ?? null,
+      sessionId: input.sessionId ?? null,
     });
     const runId = runRow.id;
     const branchName = (input.branchName ?? `agent/${runId.slice(0, 8)}`).slice(

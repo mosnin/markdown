@@ -13,6 +13,8 @@ import {
   BadgeAlert,
   Save,
   Maximize2,
+  PanelLeftClose,
+  PanelLeft,
 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
@@ -41,6 +43,9 @@ import {
 
 import { useOperatorProgress } from "@/lib/hooks/use_operator_run";
 import { OperatorActivityPanel } from "@/components/product/operator/operator_activity_panel";
+import { OperatorSessionsSidebar } from "@/components/product/operator/operator_sessions_sidebar";
+import { OperatorSessionHistory } from "@/components/product/operator/operator_session_history";
+import type { OperatorSession } from "@/server/services/operator_sessions_service";
 import {
   requestOperatorPlanAction,
   approveAndExecuteAction,
@@ -189,6 +194,11 @@ export function OperatorPanel({
 
   const [isPlanPending, startPlanTransition] = useTransition();
   const [isExecPending, startExecTransition] = useTransition();
+
+  // Session management — Codex-style thread isolation.
+  const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
+  const [sessionHistoryRefreshKey, setSessionHistoryRefreshKey] = useState(0);
+  const [showSessionsSidebar, setShowSessionsSidebar] = useState(true);
 
   // Prompt-history recall state. `historyIndex === -1` means "not recalling"
   // (the textarea contents are user-typed, not a recalled entry). Any other
@@ -393,6 +403,7 @@ export function OperatorPanel({
           prompt: submittedPrompt,
           boxId,
           model: selectedModel,
+          sessionId: activeSessionId,
         });
         if (!res.ok) {
           if (isQuotaError(res.error)) {
@@ -423,6 +434,7 @@ export function OperatorPanel({
         });
         if (res.data.status === "completed") {
           setPhase("completed");
+          setSessionHistoryRefreshKey((k) => k + 1);
         } else {
           setError(res.data.error ?? "Execution failed.");
           setPhase("failed");
@@ -436,6 +448,7 @@ export function OperatorPanel({
         prompt: submittedPrompt,
         boxId,
         model: selectedModel,
+        sessionId: activeSessionId,
       });
 
       if (!res.ok) {
@@ -518,6 +531,7 @@ export function OperatorPanel({
 
       if (res.data.status === "completed") {
         setPhase("completed");
+        setSessionHistoryRefreshKey((k) => k + 1);
       } else {
         setError(res.data.error ?? "Execution failed.");
         setPhase("failed");
@@ -785,7 +799,22 @@ export function OperatorPanel({
 
   function renderIdle() {
     return (
-      <div className="flex flex-1 flex-col gap-4 p-4">
+      <div className="flex flex-1 flex-col gap-4 overflow-y-auto p-4">
+        {/* Session run history — compact view above the form */}
+        {activeSessionId && (
+          <div className="flex flex-col gap-1">
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60">
+              This session
+            </p>
+            <div className="rounded-md border border-border overflow-hidden">
+              <OperatorSessionHistory
+                sessionId={activeSessionId}
+                activeRunId={runId}
+                refreshKey={sessionHistoryRefreshKey}
+              />
+            </div>
+          </div>
+        )}
         {savedPrompts.length > 0 && (
           <div className="flex flex-col gap-1.5">
             <label
@@ -1295,27 +1324,66 @@ export function OperatorPanel({
 
   // -- main render -----------------------------------------------------------
 
+  function handleSelectSession(session: OperatorSession) {
+    setActiveSessionId(session.id);
+    reset();
+  }
+
+  function handleNewSession(session: OperatorSession) {
+    setActiveSessionId(session.id);
+    reset();
+  }
+
   return (
     <>
       <Sheet open={open} onOpenChange={(o) => onOpenChange(o)}>
         <SheetContent
           side="right"
-          className="flex w-full flex-col sm:max-w-[480px]"
+          className="flex w-full flex-col p-0 sm:max-w-[680px]"
           aria-describedby="operator-panel-desc"
         >
-          <SheetHeader>
-            <SheetTitle className="flex items-center gap-2">
-              <Bot className="h-5 w-5" aria-hidden="true" />
+          {/* ── Header ────────────────────────────────────────────────────── */}
+          <SheetHeader className="flex-row items-center gap-2 px-4 py-3 border-b border-border">
+            <button
+              type="button"
+              onClick={() => setShowSessionsSidebar((v) => !v)}
+              className="shrink-0 rounded-md p-1 text-muted-foreground hover:text-foreground hover:bg-accent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              aria-label={showSessionsSidebar ? "Hide sessions" : "Show sessions"}
+              title={showSessionsSidebar ? "Hide sessions" : "Show sessions"}
+            >
+              {showSessionsSidebar ? (
+                <PanelLeftClose className="h-4 w-4" />
+              ) : (
+                <PanelLeft className="h-4 w-4" />
+              )}
+            </button>
+            <SheetTitle className="flex items-center gap-2 text-base">
+              <Bot className="h-4 w-4" aria-hidden="true" />
               Pog Agent
             </SheetTitle>
-            <SheetDescription id="operator-panel-desc">
+            <SheetDescription id="operator-panel-desc" className="sr-only">
               Plan, review, and execute AI-powered workspace operations.
             </SheetDescription>
           </SheetHeader>
 
-          <Separator />
+          {/* ── Two-column layout ─────────────────────────────────────────── */}
+          <div className="flex flex-1 overflow-hidden">
+            {/* Sessions sidebar */}
+            {showSessionsSidebar && (
+              <div className="w-[180px] shrink-0 overflow-hidden">
+                <OperatorSessionsSidebar
+                  activeSessionId={activeSessionId}
+                  onSelectSession={handleSelectSession}
+                  onNewSession={handleNewSession}
+                />
+              </div>
+            )}
 
-          {renderBody()}
+            {/* Main content panel */}
+            <div className="flex flex-1 min-w-0 flex-col overflow-hidden">
+              {renderBody()}
+            </div>
+          </div>
         </SheetContent>
       </Sheet>
 
