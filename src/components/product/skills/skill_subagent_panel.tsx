@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils";
 import { useToast } from "@/components/product/toast_provider";
 import { updateSubagentConfigAction } from "@/app/app/skills/subagent_actions";
 
-// Default tool catalogue that matches the Pog orchestrator's runtime
+// Default tool catalogue that matches the Atlas AI orchestrator's runtime
 // tool registry. Kept here (rather than fetched) so the panel can
 // render synchronously from server-supplied props without a round-
 // trip. Callers may override via `availableTools` when a workspace
@@ -101,7 +101,7 @@ export function SkillSubagentPanel({
         <div className="min-w-0 flex-1">
           <h3 className="text-sm font-semibold text-foreground">Sub-agent</h3>
           <p className="mt-0.5 text-xs text-muted-foreground">
-            Turn this skill into a sub-agent that Pog can call via
+            Turn this skill into a sub-agent that Atlas AI can call via
             invoke_subagent. Sub-agents run in a fresh context window to
             prevent context rot.
           </p>

@@ -45,7 +45,7 @@ export default async function SharedBoxPage({ params }: PageProps) {
       )}
 
       <div className="mt-12 border-t border-border pt-4 text-xs text-muted-foreground">
-        Shared via <Link href="/" className="underline hover:text-foreground">Poggle</Link>
+        Shared via <Link href="/" className="underline hover:text-foreground">Atlas</Link>
       </div>
     </div>
   );

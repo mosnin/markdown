@@ -150,14 +150,14 @@ export function ConversationComposer({
   }
 
   const placeholder = hasHistory
-    ? "Ask Pog…"
-    : "Ask anything — Pog will plan, search, and draft.";
+    ? "Ask AI…"
+    : "Ask anything — Atlas AI will plan, search, and draft.";
 
   if (!operatorEnabled) {
     return (
       <div className="flex items-center gap-2 rounded-lg border border-border bg-muted/30 px-4 py-3 text-xs text-muted-foreground">
         <Bot className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-        <span>AI features are not configured for this workspace. Set <code className="rounded bg-muted px-1 font-mono">WORKSPACE_OPERATOR_ENABLED=true</code> to enable Pog.</span>
+        <span>AI features are not configured for this workspace. Set <code className="rounded bg-muted px-1 font-mono">WORKSPACE_OPERATOR_ENABLED=true</code> to enable Atlas AI.</span>
       </div>
     );
   }

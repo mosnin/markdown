@@ -25,7 +25,7 @@ export interface BoxChatPanelProps {
 
 /**
  * Pinned bottom panel that provides a scoped chat interface for a specific
- * box. When expanded the user can ask Pog questions that are answered using
+ * box. When expanded the user can ask AI questions that are answered using
  * context only from the box's notes. The active run streams back via the
  * existing Supabase realtime channel through WorkspaceConversation.
  */
@@ -67,7 +67,7 @@ export function BoxChatPanel({ workspaceId, boxId, boxName }: BoxChatPanelProps)
       >
         <span className="flex items-center gap-2">
           <Bot className="h-4 w-4" />
-          Ask Pog about {boxName}
+          Ask AI about {boxName}
         </span>
         <ChevronUp
           className={cn("h-4 w-4 transition-transform", open && "rotate-180")}

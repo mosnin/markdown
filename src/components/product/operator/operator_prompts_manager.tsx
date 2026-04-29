@@ -328,7 +328,7 @@ function PromptDialogForm({
           placeholder="What should the Operator do? Use {{variable}} placeholders for reusable slots."
         />
         <span className="text-[11px] text-muted-foreground">
-          Tip: wrap reusable slots in <code>{`{{`}name{`}}`}</code> — Pog will
+          Tip: wrap reusable slots in <code>{`{{`}name{`}}`}</code> — Atlas AI will
           prompt for values each time you pick this template.
         </span>
       </label>

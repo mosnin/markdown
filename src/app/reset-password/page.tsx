@@ -2,7 +2,7 @@ import Link from "next/link";
 import { ResetPasswordForm } from "./reset_password_form";
 
 export const metadata = {
-  title: "Reset password — Poggle",
+  title: "Reset password — Atlas",
 };
 
 /**
@@ -24,7 +24,7 @@ export default function ResetPasswordPage() {
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-violet-600">
               <div className="h-3 w-3 rounded-sm bg-background" />
             </div>
-            <span className="text-sm font-semibold text-foreground">Poggle</span>
+            <span className="text-sm font-semibold text-foreground">Atlas</span>
           </Link>
         </div>
 

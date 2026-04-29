@@ -13,13 +13,13 @@ import type { ReactNode } from "react";
 
 export const LEGAL_LAST_UPDATED = "April 12, 2026";
 export const LEGAL_EFFECTIVE_DATE = "April 12, 2026";
-export const COMPANY_NAME = "Poggle";
-export const COMPANY_LEGAL_NAME = "Poggle";
-export const CONTACT_EMAIL = "legal@poggle.app";
-export const PRIVACY_EMAIL = "privacy@poggle.app";
-export const SUPPORT_EMAIL = "support@poggle.app";
-export const DMCA_EMAIL = "dmca@poggle.app";
-export const ABUSE_EMAIL = "abuse@poggle.app";
+export const COMPANY_NAME = "Atlas";
+export const COMPANY_LEGAL_NAME = "Atlas";
+export const CONTACT_EMAIL = "legal@atlas.app";
+export const PRIVACY_EMAIL = "privacy@atlas.app";
+export const SUPPORT_EMAIL = "support@atlas.app";
+export const DMCA_EMAIL = "dmca@atlas.app";
+export const ABUSE_EMAIL = "abuse@atlas.app";
 
 export function LegalSection({
   heading,

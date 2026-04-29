@@ -50,7 +50,7 @@ export function LegalStickyFooter() {
            * considered.
            */}
           <li className="mr-1 text-muted-foreground/40">
-            &copy; {new Date().getFullYear()} Poggle
+            &copy; {new Date().getFullYear()} Atlas
           </li>
           {LEGAL_DOC_ORDER.map((id) => (
             <li key={id}>

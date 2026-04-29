@@ -112,7 +112,7 @@ export function AgentTriggersPanel({ agentId, boxes, initialTriggers = [] }: Age
         <div>
           <h3 className="text-sm font-semibold text-foreground">Triggers</h3>
           <p className="text-xs text-muted-foreground mt-0.5">
-            Define when this agent runs automatically. Execution is handled by the Pog harness.
+            Define when this agent runs automatically. Execution is handled by the Atlas AI harness.
           </p>
         </div>
         <button

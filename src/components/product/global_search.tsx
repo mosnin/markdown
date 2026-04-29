@@ -226,7 +226,7 @@ export function GlobalSearch({ boxes, onOpenOperator }: GlobalSearchProps) {
           </CommandGroup>
 
           <CommandSeparator />
-          <CommandGroup heading="Pog Agent">
+          <CommandGroup heading="Atlas AI">
             <CommandItem
               onSelect={() => {
                 setOpen(false);
@@ -238,7 +238,7 @@ export function GlobalSearch({ boxes, onOpenOperator }: GlobalSearchProps) {
                 strokeWidth={2}
                 aria-hidden="true"
               />
-              <span>Run Pog Agent</span>
+              <span>Run Atlas AI</span>
               <CommandShortcut>AI</CommandShortcut>
             </CommandItem>
           </CommandGroup>

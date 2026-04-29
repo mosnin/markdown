@@ -289,7 +289,7 @@ export function BulkImportPanel({
         <div className="flex items-center gap-2">
           <Sparkles className="h-4 w-4 text-foreground/70" aria-hidden />
           <h2 className="text-base font-semibold text-foreground">
-            Bring your notes — Pog will organize them
+            Bring your notes — AI will organize them
           </h2>
         </div>
         <p className="text-sm text-muted-foreground">

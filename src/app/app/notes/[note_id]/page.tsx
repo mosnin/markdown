@@ -759,7 +759,7 @@ export default async function NotePage({
               }
             />
             <AskPogInlineButton
-              label="Ask Pog about this note"
+              label="Ask AI about this note"
               prompt={`Looking at the note titled "${note.title}". Summarize the key ideas and suggest follow-up notes, missing links, or open questions worth exploring.`}
             />
             <SaveAsTemplateButton noteId={note_id} noteTitle={note.title} />

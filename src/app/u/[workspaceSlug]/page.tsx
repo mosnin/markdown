@@ -28,7 +28,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
     },
     twitter: {
       card: "summary",
-      title: `${workspace.name} on Pog`,
+      title: `${workspace.name} on Atlas`,
     },
   };
 }
@@ -74,7 +74,7 @@ export default async function UserProfilePage({ params }: PageProps) {
       )}
 
       <div className="mt-12 border-t border-border pt-4 text-xs text-muted-foreground">
-        Powered by <Link href="/" className="underline hover:text-foreground">Poggle</Link>
+        Powered by <Link href="/" className="underline hover:text-foreground">Atlas</Link>
       </div>
     </div>
   );

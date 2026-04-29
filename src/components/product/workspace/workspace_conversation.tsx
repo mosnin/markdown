@@ -118,7 +118,7 @@ interface AssistantBubbleShellProps {
 
 function AssistantBubbleShell({ children }: AssistantBubbleShellProps) {
   return (
-    <div className="flex w-full gap-2" aria-label="Pog message">
+    <div className="flex w-full gap-2" aria-label="Atlas AI message">
       <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-violet-500/15 text-violet-500">
         <Bot className="h-4 w-4" aria-hidden="true" />
       </div>
@@ -253,7 +253,7 @@ function AssistantBubbleBody({
         </Badge>
         <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
           <Spinner size={12} />
-          Pog is thinking…
+          Atlas AI is thinking…
         </span>
       </div>
       {showLiveStream ? (
@@ -399,7 +399,7 @@ export function WorkspaceConversation({
         onScroll={handleScroll}
         className="flex-1 min-h-0 overflow-y-auto"
         role="log"
-        aria-label="Conversation with Pog"
+        aria-label="Conversation with Atlas AI"
         aria-live="polite"
       >
         {isEmpty ? (
@@ -407,7 +407,7 @@ export function WorkspaceConversation({
             <div className="m-auto flex max-w-md flex-col items-center gap-3 text-center text-muted-foreground">
               <Sparkles className="h-8 w-8" aria-hidden="true" />
               <p className="text-sm">
-                Ask Pog about your workspace. Try “Summarize my recent notes,”
+                Ask Atlas AI about your workspace. Try “Summarize my recent notes,”
                 “What did I write about X last week?”, or “Draft a brief on
                 Y.”
               </p>

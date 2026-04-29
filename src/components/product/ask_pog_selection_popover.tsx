@@ -134,7 +134,7 @@ export function AskPogSelectionPopover({
         className="inline-flex w-full items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium text-foreground transition-fast hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
         <Sparkles className="h-3.5 w-3.5 text-foreground/70" aria-hidden="true" />
-        Ask Pog
+        Ask AI
       </button>
       {workspaceId && (
         <div className="flex flex-col gap-0.5 border-t border-border pt-1 mt-1">

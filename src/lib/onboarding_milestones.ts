@@ -31,7 +31,7 @@ export function computeMilestones(data: {
     },
     {
       id: "first_pog_conversation",
-      label: "First Pog conversation",
+      label: "First AI conversation",
       done: data.conversationCount > 0,
     },
     {

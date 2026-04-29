@@ -149,7 +149,7 @@ const CATEGORY_META: Record<
 > = {
   operator: {
     icon: Bot,
-    label: "Pog",
+    label: "Atlas AI",
     tone: "bg-blue-500/10 text-blue-700 dark:text-blue-300",
   },
   subagent: {
