@@ -437,7 +437,7 @@ export default async function BoxPage({
               <CreateNoteDialog boxId={box.id} folders={folders} savedTemplates={savedTemplates.map((t) => ({ id: t.id, name: t.name, description: t.description, markdown_content: t.markdown_content }))} />
               <CreateFolderDialog boxId={box.id} />
               <AskPogInlineButton
-                label="Ask Pog about this box"
+                label="Ask AI about this collection"
                 prompt={`Working in the box "${box.name}". Start by summarizing what's already in this box and what's missing, then draft any follow-up notes I should have.`}
               />
               <ImportTriggerButton

@@ -17,7 +17,7 @@ export default async function WebSessionsPage() {
     <div className="flex h-full flex-col overflow-hidden">
       <PageHeader
         title="Web sessions"
-        description="Browsing and deep-research sessions run by Pog and your agents."
+        description="Browsing and deep-research sessions run by Atlas AI and your agents."
       />
       <div className="flex-1 overflow-auto">
         <div className="mx-auto max-w-3xl space-y-6 px-4 py-6 md:px-6">
@@ -38,7 +38,7 @@ export default async function WebSessionsPage() {
                 No browsing sessions yet
               </p>
               <p className="mx-auto mt-1 max-w-md text-xs text-muted-foreground">
-                When Pog or an agent uses the browser to research something, the
+                When Atlas AI or an agent uses the browser to research something, the
                 session will appear here.
               </p>
             </div>

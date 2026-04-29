@@ -91,7 +91,7 @@ export function ConversationHomeClient({
                   </p>
                   <p className="mt-0.5 text-xs text-muted-foreground">{importToast}</p>
                   <p className="mt-2 text-xs text-violet-700 dark:text-violet-400">
-                    Pog is ready — try asking:{" "}
+                    Atlas AI is ready — try asking:{" "}
                     <span className="italic">&quot;What did you find interesting about my notes?&quot;</span>{" "}
                     or{" "}
                     <span className="italic">&quot;Summarize my workspace.&quot;</span>
@@ -110,7 +110,7 @@ export function ConversationHomeClient({
               {!calloutDismissed && (
                 <div className="rounded-md border border-border bg-muted/20 px-4 py-3">
                   <div className="flex items-center justify-between mb-2">
-                    <p className="text-xs font-medium text-muted-foreground">How Pog works</p>
+                    <p className="text-xs font-medium text-muted-foreground">How Atlas AI works</p>
                     <button
                       onClick={() => setCalloutDismissed(true)}
                       className="text-muted-foreground/50 hover:text-muted-foreground transition-colors"
