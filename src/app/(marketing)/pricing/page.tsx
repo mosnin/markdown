@@ -7,7 +7,7 @@ import * as PricingCard from "@/components/ui/pricing-card";
 import { Button } from "@/components/ui/button";
 
 export const metadata: Metadata = {
-  title: "Pricing — Poggle",
+  title: "Pricing — Atlas",
   description:
     "Start free, upgrade when you're ready. Simple, transparent pricing for individuals and teams.",
 };
@@ -127,7 +127,7 @@ const FAQS = [
   },
   {
     q: "What counts as a note?",
-    a: "Any markdown document you create in Poggle. Attachments, images, and imported files each count as one note.",
+    a: "Any markdown document you create in Atlas. Attachments, images, and imported files each count as one note.",
   },
   {
     q: "Can I cancel anytime?",
@@ -135,7 +135,7 @@ const FAQS = [
   },
   {
     q: "Do you offer student or nonprofit discounts?",
-    a: "Yes — email us at hello@poggle.app with verification and we'll set you up with 50% off Pro.",
+    a: "Yes — email us at hello@atlas.app with verification and we'll set you up with 50% off Pro.",
   },
   {
     q: "What payment methods do you accept?",

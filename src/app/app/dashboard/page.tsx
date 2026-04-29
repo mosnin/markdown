@@ -100,10 +100,10 @@ export default async function AppHomePage() {
       <div className="flex items-center justify-between border-b border-border px-6 py-4">
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-2">
-            <Image src="/logo-symbol-dark.png" alt="Poggle" width={28} height={28} className="rounded dark:hidden" />
-            <Image src="/logo-symbol-light.png" alt="Poggle" width={28} height={28} className="rounded hidden dark:block" />
-            <Image src="/logo-text-black.png" alt="Poggle" width={70} height={24} className="dark:hidden" />
-            <Image src="/logo-text-white.png" alt="Poggle" width={70} height={24} className="hidden dark:block" />
+            <Image src="/logo-symbol-dark.png" alt="Atlas" width={28} height={28} className="rounded dark:hidden" />
+            <Image src="/logo-symbol-light.png" alt="Atlas" width={28} height={28} className="rounded hidden dark:block" />
+            <Image src="/logo-text-black.png" alt="Atlas" width={70} height={24} className="dark:hidden" />
+            <Image src="/logo-text-white.png" alt="Atlas" width={70} height={24} className="hidden dark:block" />
           </div>
           <div className="h-6 w-px bg-border" />
           <div>

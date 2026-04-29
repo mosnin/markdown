@@ -14,7 +14,7 @@ import { PageHeroSection } from "@/components/marketing/hero";
 import { Button } from "@/components/ui/button";
 
 export const metadata: Metadata = {
-  title: "Connections — Poggle",
+  title: "Connections — Atlas",
   description:
     "Connect your knowledge with typed relationships. Every object can link to any other with explicit semantics, visible in an interactive graph.",
 };
@@ -25,7 +25,7 @@ export default function ConnectionsPage() {
       <PageHeroSection
         eyebrow="Connections"
         title="Connect your knowledge with typed relationships."
-        description="Every object in Poggle can link to any other with explicit semantic relationships. See the full picture in the interactive graph."
+        description="Every object in Atlas can link to any other with explicit semantic relationships. See the full picture in the interactive graph."
         ctaPrimary={{ label: "Start connecting", href: "/sign_in" }}
       />
 

@@ -14,7 +14,7 @@ import { PageHeroSection } from "@/components/marketing/hero";
 import { Button } from "@/components/ui/button";
 
 export const metadata: Metadata = {
-  title: "API & MCP — Poggle",
+  title: "API & MCP — Atlas",
   description:
     "Programmatic access for your tools and agents. The REST API is the canonical interface; MCP lets AI agents use it natively.",
 };

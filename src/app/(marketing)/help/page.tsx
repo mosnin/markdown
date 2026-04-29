@@ -7,9 +7,9 @@ import {
 import { PageHeroSection } from "@/components/marketing/hero";
 
 export const metadata: Metadata = {
-  title: "Help Center — Poggle",
+  title: "Help Center — Atlas",
   description:
-    "Get help with Poggle. Guides, common questions, and contact support.",
+    "Get help with Atlas. Guides, common questions, and contact support.",
 };
 
 export default function HelpPage() {
@@ -29,7 +29,7 @@ export default function HelpPage() {
             </div>
             <h3 className="text-sm font-semibold text-foreground">Getting Started</h3>
             <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">
-              Create your first box, write a note, and explore the sidebar tree. Visit our docs at docs.poggle.app for step-by-step guides.
+              Create your first box, write a note, and explore the sidebar tree. Visit our docs at docs.atlas.app for step-by-step guides.
             </p>
           </div>
           <div className="rounded-xl border border-border/50 bg-card p-6">
@@ -49,10 +49,10 @@ export default function HelpPage() {
             <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">
               Need help with something specific? Reach out to us at{" "}
               <a
-                href="mailto:support@poggle.app"
+                href="mailto:support@atlas.app"
                 className="font-medium text-foreground underline underline-offset-4 hover:text-violet-400"
               >
-                support@poggle.app
+                support@atlas.app
               </a>
               . We respond within one business day.
             </p>

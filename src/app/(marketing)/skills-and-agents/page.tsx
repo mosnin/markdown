@@ -14,7 +14,7 @@ import { PageHeroSection } from "@/components/marketing/hero";
 import { Button } from "@/components/ui/button";
 
 export const metadata: Metadata = {
-  title: "Skills & Agents — Poggle",
+  title: "Skills & Agents — Atlas",
   description:
     "Build reusable modules and structured orchestrators. Skills are lighter building blocks, agents are heavier orchestrators — both with real package structure.",
 };

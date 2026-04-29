@@ -5,9 +5,9 @@ import { PageHeroSection } from "@/components/marketing/hero";
 import { Button } from "@/components/ui/button";
 
 export const metadata: Metadata = {
-  title: "Blog — Poggle",
+  title: "Blog — Atlas",
   description:
-    "Articles, guides, and updates from the Poggle team.",
+    "Articles, guides, and updates from the Atlas team.",
 };
 
 export default function BlogPage() {
@@ -16,7 +16,7 @@ export default function BlogPage() {
       <PageHeroSection
         eyebrow="Blog"
         title="Blog"
-        description="Articles, guides, and updates from the Poggle team."
+        description="Articles, guides, and updates from the Atlas team."
       />
 
       <section className="mx-auto w-full max-w-3xl px-6 py-16">

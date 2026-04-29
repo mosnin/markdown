@@ -3,7 +3,7 @@ import { PageHeroSection } from "@/components/marketing/hero";
 import { DMCAContent } from "@/components/legal/dmca_content";
 
 export const metadata: Metadata = {
-  title: "DMCA Policy — Poggle",
+  title: "DMCA Policy — Atlas",
   description:
     "How to submit copyright infringement notices and counter-notices.",
 };

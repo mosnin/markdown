@@ -3,9 +3,9 @@ import { PageHeroSection } from "@/components/marketing/hero";
 import { CookieContent } from "@/components/legal/cookie_content";
 
 export const metadata: Metadata = {
-  title: "Cookie Policy — Poggle",
+  title: "Cookie Policy — Atlas",
   description:
-    "How Poggle uses cookies and similar technologies.",
+    "How Atlas uses cookies and similar technologies.",
 };
 
 export default function CookiePolicyPage() {
