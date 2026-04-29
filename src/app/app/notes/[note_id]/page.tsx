@@ -135,7 +135,7 @@ function InfoLabel({ children }: { children: React.ReactNode }) {
 
 // ─── Right panel — Note context ───────────────────────────────────────────────
 
-const VALID_TABS = ["info", "ai", "more"] as const;
+const VALID_TABS = ["context", "ai", "more"] as const;
 type NoteContextTab = (typeof VALID_TABS)[number];
 
 function NoteContextPanel({
@@ -154,7 +154,7 @@ function NoteContextPanel({
   unresolvedCommentCount,
   currentUserId,
   noteEntities,
-  defaultTab = "info",
+  defaultTab = "context",
   markdownContent,
   aiTimelineEntries,
   pendingProposals,
@@ -221,8 +221,8 @@ function NoteContextPanel({
       <Tabs defaultValue={defaultTab} className="flex flex-1 flex-col overflow-hidden">
         <div className="border-b border-border px-4">
           <TabsList variant="line" className="h-auto pb-0">
-            <TabsTrigger value="info" className="pb-2.5 text-xs">
-              Info
+            <TabsTrigger value="context" className="pb-2.5 text-xs">
+              Context
             </TabsTrigger>
             <TabsTrigger value="ai" className="relative pb-2.5 text-xs">
               AI
@@ -233,13 +233,13 @@ function NoteContextPanel({
               )}
             </TabsTrigger>
             <TabsTrigger value="more" className="pb-2.5 text-xs">
-              More
+              History
             </TabsTrigger>
           </TabsList>
         </div>
 
-        {/* ── Info tab (Info + Links + Backlinks merged) ── */}
-        <TabsContent value="info" className="flex-1 overflow-hidden">
+        {/* ── Context tab (Info + Links + Backlinks merged) ── */}
+        <TabsContent value="context" className="flex-1 overflow-hidden">
           <ScrollArea className="h-full">
 
             {/* ── About section ── */}
