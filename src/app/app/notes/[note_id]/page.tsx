@@ -7,6 +7,7 @@ import {
   Clock,
   GitBranch,
   History,
+  MessageSquare,
   Trash2,
 } from "lucide-react";
 import Link from "next/link";
@@ -134,7 +135,7 @@ function InfoLabel({ children }: { children: React.ReactNode }) {
 
 // ─── Right panel — Note context ───────────────────────────────────────────────
 
-const VALID_TABS = ["notes", "ai", "more"] as const;
+const VALID_TABS = ["info", "ai", "more"] as const;
 type NoteContextTab = (typeof VALID_TABS)[number];
 
 function NoteContextPanel({
@@ -153,7 +154,7 @@ function NoteContextPanel({
   unresolvedCommentCount,
   currentUserId,
   noteEntities,
-  defaultTab = "ai",
+  defaultTab = "info",
   markdownContent,
   aiTimelineEntries,
   pendingProposals,
@@ -220,8 +221,8 @@ function NoteContextPanel({
       <Tabs defaultValue={defaultTab} className="flex flex-1 flex-col overflow-hidden">
         <div className="border-b border-border px-4">
           <TabsList variant="line" className="h-auto pb-0">
-            <TabsTrigger value="notes" className="pb-2.5 text-xs">
-              Notes
+            <TabsTrigger value="info" className="pb-2.5 text-xs">
+              Info
             </TabsTrigger>
             <TabsTrigger value="ai" className="relative pb-2.5 text-xs">
               AI
@@ -232,13 +233,13 @@ function NoteContextPanel({
               )}
             </TabsTrigger>
             <TabsTrigger value="more" className="pb-2.5 text-xs">
-              ···
+              More
             </TabsTrigger>
           </TabsList>
         </div>
 
-        {/* ── Notes tab (Info + Links + Backlinks merged) ── */}
-        <TabsContent value="notes" className="flex-1 overflow-hidden">
+        {/* ── Info tab (Info + Links + Backlinks merged) ── */}
+        <TabsContent value="info" className="flex-1 overflow-hidden">
           <ScrollArea className="h-full">
 
             {/* ── About section ── */}
@@ -718,9 +719,29 @@ export default async function NotePage({
             )}
           </div>
           <div className="flex shrink-0 items-center gap-1.5">
+            {/* Quick-jump to history in the More tab */}
+            <Link
+              href="?tab=more"
+              aria-label="Version history"
+              title="Version history"
+              className="flex items-center justify-center rounded-md p-1.5 text-muted-foreground hover:text-foreground hover:bg-accent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <Clock className="h-4 w-4" />
+            </Link>
+
+            {/* Quick-jump to comments in the More tab */}
+            <Link
+              href="?tab=more"
+              aria-label="Comments"
+              title="Comments"
+              className="flex items-center justify-center rounded-md p-1.5 text-muted-foreground hover:text-foreground hover:bg-accent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <MessageSquare className="h-4 w-4" />
+            </Link>
+
             {/* Version history — opens the History tab in the context panel */}
             <Link
-              href="?tab=history"
+              href="?tab=more"
               aria-label="Version history"
               title="Version history"
               className={cn(
