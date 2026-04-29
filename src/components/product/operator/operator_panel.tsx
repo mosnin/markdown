@@ -15,6 +15,11 @@ import {
   Maximize2,
   PanelLeftClose,
   PanelLeft,
+  Layers,
+  Quote,
+  Zap,
+  ArrowUp,
+  BookOpen,
 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
@@ -797,12 +802,14 @@ export function OperatorPanel({
 
   // -- render helpers --------------------------------------------------------
 
+  const [savedPromptsOpen, setSavedPromptsOpen] = useState(false);
+
   function renderIdle() {
     return (
-      <div className="flex flex-1 flex-col gap-4 overflow-y-auto p-4">
-        {/* Session run history — compact view above the form */}
+      <div className="flex flex-1 flex-col overflow-hidden">
+        {/* Session history — keep existing code, unchanged */}
         {activeSessionId && (
-          <div className="flex flex-col gap-1">
+          <div className="flex flex-col gap-1 p-4 pb-0">
             <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60">
               This session
             </p>
@@ -815,187 +822,148 @@ export function OperatorPanel({
             </div>
           </div>
         )}
-        {savedPrompts.length > 0 && (
-          <div className="flex flex-col gap-1.5">
-            <label
-              htmlFor="operator-saved-prompt"
-              className="text-xs font-medium text-muted-foreground"
-            >
-              Use saved prompt
-            </label>
-            <select
-              id="operator-saved-prompt"
-              value=""
-              onChange={(e) => handleSelectSavedPrompt(e.target.value)}
-              className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              aria-label="Use saved prompt"
-            >
-              <option value="">-- Pick a saved prompt --</option>
-              {savedPrompts.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name}
-                </option>
-              ))}
-            </select>
-          </div>
-        )}
 
-        <div className="flex flex-col gap-1.5">
-          <label
-            htmlFor="operator-prompt"
-            className="text-sm font-medium text-foreground"
-          >
-            What should the operator do?
-          </label>
-          <Textarea
-            id="operator-prompt"
-            ref={promptTextareaRef}
-            placeholder="e.g. Research recent advances in transformer architectures and draft summary notes..."
-            value={prompt}
-            onChange={(e) => {
-              // A real edit exits history-recall mode — the textarea is
-              // no longer mirroring a recalled entry verbatim.
-              if (historyIndex !== -1) setHistoryIndex(-1);
-              setPrompt(e.target.value.slice(0, MAX_PROMPT_LENGTH));
-            }}
-            onKeyDown={handlePromptKeyDown}
-            maxLength={MAX_PROMPT_LENGTH}
-            className="min-h-28 resize-none"
-            aria-describedby="prompt-char-count operator-prompt-shortcuts"
-          />
-          <p
-            id="operator-prompt-shortcuts"
-            className="text-[10px] text-muted-foreground"
-          >
-            <kbd className="font-mono">Ctrl</kbd>/
-            <kbd className="font-mono">Cmd</kbd>+
-            <kbd className="font-mono">Enter</kbd> to submit &middot;{" "}
-            <kbd className="font-mono">Up</kbd>/
-            <kbd className="font-mono">Down</kbd> to recall history &middot;{" "}
-            <kbd className="font-mono">Esc</kbd> while running to cancel
-          </p>
-          <div className="flex items-center justify-between">
+        {/* Spacer that pushes composer to bottom */}
+        <div className="flex-1" />
+
+        {/* Composer area */}
+        <div className="flex flex-col gap-2 border-t border-border p-4">
+          {/* Context chips */}
+          <div className="flex items-center gap-2 flex-wrap">
+            {/* Collection chip — shows defaultBoxId if set */}
+            {defaultBoxId && (
+              <span className="inline-flex items-center gap-1 rounded-full border border-border bg-muted/50 px-2.5 py-0.5 text-[11px] text-muted-foreground">
+                <Layers className="h-3 w-3" />
+                Collection
+              </span>
+            )}
+            {/* Citations toggle chip */}
+            <button
+              type="button"
+              onClick={() => setRequireCitations((v) => !v)}
+              className={cn(
+                "inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-[11px] transition-colors",
+                requireCitations
+                  ? "border-primary/40 bg-primary/10 text-primary"
+                  : "border-border bg-muted/50 text-muted-foreground hover:text-foreground"
+              )}
+            >
+              <Quote className="h-3 w-3" />
+              Cite sources
+            </button>
+            {/* Auto-run chip */}
+            <button
+              type="button"
+              onClick={() => setAutoMode((v) => !v)}
+              className={cn(
+                "inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-[11px] transition-colors",
+                autoMode
+                  ? "border-primary/40 bg-primary/10 text-primary"
+                  : "border-border bg-muted/50 text-muted-foreground hover:text-foreground"
+              )}
+            >
+              <Zap className="h-3 w-3" />
+              Auto run
+            </button>
+            {/* Templates chip — only shown when saved prompts exist */}
+            {savedPrompts.length > 0 && (
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setSavedPromptsOpen((v) => !v)}
+                  className={cn(
+                    "inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-[11px] transition-colors",
+                    savedPromptsOpen
+                      ? "border-primary/40 bg-primary/10 text-primary"
+                      : "border-border bg-muted/50 text-muted-foreground hover:text-foreground"
+                  )}
+                  aria-label="Templates"
+                >
+                  <BookOpen className="h-3 w-3" />
+                  Templates
+                </button>
+                {savedPromptsOpen && (
+                  <div className="absolute bottom-full left-0 mb-1 z-10 min-w-[200px] rounded-md border border-border bg-background shadow-md">
+                    <div className="flex flex-col py-1">
+                      {savedPrompts.map((p) => (
+                        <button
+                          key={p.id}
+                          type="button"
+                          onClick={() => {
+                            handleSelectSavedPrompt(p.id);
+                            setSavedPromptsOpen(false);
+                          }}
+                          className="px-3 py-1.5 text-left text-xs text-foreground hover:bg-accent truncate"
+                        >
+                          {p.name}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+            {/* Save as template button */}
             <button
               type="button"
               onClick={handleOpenSaveDialog}
               disabled={!prompt.trim()}
-              className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground disabled:opacity-50 disabled:cursor-not-allowed"
+              className="inline-flex items-center gap-1 rounded-full border border-border bg-muted/50 px-2.5 py-0.5 text-[11px] text-muted-foreground transition-colors hover:text-foreground disabled:opacity-40 disabled:cursor-not-allowed"
+              aria-label="Save as template"
             >
-              <Save className="h-3 w-3" aria-hidden="true" />
-              Save as template
+              <Save className="h-3 w-3" />
+              Save
             </button>
-            <span
-              id="prompt-char-count"
-              className={cn(
-                "text-xs tabular-nums",
-                prompt.length >= MAX_PROMPT_LENGTH
-                  ? "text-destructive"
-                  : "text-muted-foreground"
-              )}
+          </div>
+
+          {/* Textarea */}
+          <div className="relative">
+            <Textarea
+              id="operator-prompt"
+              ref={promptTextareaRef}
+              placeholder="Research, write, or organize your notes..."
+              value={prompt}
+              onChange={(e) => {
+                if (historyIndex !== -1) setHistoryIndex(-1);
+                setPrompt(e.target.value.slice(0, MAX_PROMPT_LENGTH));
+              }}
+              onKeyDown={handlePromptKeyDown}
+              maxLength={MAX_PROMPT_LENGTH}
+              className="min-h-[80px] resize-none pr-16 text-sm"
+              aria-describedby="operator-prompt-shortcuts"
+            />
+            {/* Send button — overlaid bottom-right of textarea */}
+            <Button
+              size="sm"
+              disabled={
+                !prompt.trim() ||
+                !boxId ||
+                isPlanPending ||
+                isExecPending ||
+                (quotaPreview !== null && !quotaPreview.allowed)
+              }
+              onClick={handleGeneratePlan}
+              className="absolute bottom-2 right-2 h-7 w-7 p-0"
+              title={
+                quotaPreview !== null && !quotaPreview.allowed
+                  ? `You've used all ${quotaPreview.limit ?? "∞"} Operator runs on the ${quotaPreview.tier} tier this month. Resets on ${formatResetDate(quotaPreview.resetsAt)}.`
+                  : autoMode ? "Run now" : "Generate plan"
+              }
             >
-              {prompt.length}/{MAX_PROMPT_LENGTH}
-            </span>
+              <ArrowUp className="h-3.5 w-3.5" />
+            </Button>
+          </div>
+
+          {/* Bottom metadata row */}
+          <div className="flex items-center justify-between">
+            <p id="operator-prompt-shortcuts" className="text-[10px] text-muted-foreground/60">
+              {autoMode ? "↵ runs immediately" : "↵ generates a plan to review"}
+            </p>
+            {quotaPreview && !quotaPreview.allowed && (
+              <p className="text-[10px] text-destructive">Quota reached</p>
+            )}
           </div>
         </div>
-
-        <div className="flex flex-col gap-1.5">
-          <label
-            htmlFor="operator-model"
-            className="text-xs font-medium text-muted-foreground"
-          >
-            Model
-          </label>
-          <select
-            id="operator-model"
-            value={selectedModel}
-            onChange={(e) => {
-              const v = e.target.value as OperatorModel;
-              const isPremium = v === "gpt-4.1" || v === "o3";
-              if (isPremium && !canUseLargeModel) return;
-              setSelectedModel(v);
-            }}
-            className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            aria-label="Operator model"
-          >
-            {OPERATOR_MODELS.map((m) => {
-              const isPremium = m === "gpt-4.1" || m === "o3";
-              const locked = isPremium && !canUseLargeModel;
-              return (
-                <option key={m} value={m} disabled={locked}>
-                  {m}
-                  {locked ? " — Pro+ only" : ""}
-                </option>
-              );
-            })}
-          </select>
-        </div>
-
-        <label className="flex items-start gap-2 text-xs text-foreground/90">
-          <input
-            type="checkbox"
-            className="mt-0.5 h-3.5 w-3.5 rounded border-input accent-primary"
-            checked={requireCitations}
-            onChange={(e) => setRequireCitations(e.target.checked)}
-          />
-          <span className="flex flex-col gap-0.5">
-            <span className="font-medium">Require citations</span>
-            <span className="text-[11px] text-muted-foreground">
-              Force Pog to attach a <code>[[note-id]]</code> or URL to every
-              factual claim. Slower but safer for research output.
-            </span>
-          </span>
-        </label>
-
-        <label className="flex items-start gap-2 text-xs text-foreground/90">
-          <input
-            type="checkbox"
-            className="mt-0.5 h-3.5 w-3.5 rounded border-input accent-primary"
-            checked={autoMode}
-            onChange={(e) => setAutoMode(e.target.checked)}
-          />
-          <span className="flex flex-col gap-0.5">
-            <span className="font-medium">Auto run (skip plan)</span>
-            <span className="text-[11px] text-muted-foreground">
-              Dispatch the prompt straight to execution without the
-              plan-and-approve gate. Best for simple, trusted prompts.
-            </span>
-          </span>
-        </label>
-
-        {quotaPreview && (
-          <p
-            className={cn(
-              "text-xs",
-              quotaPreview.allowed
-                ? "text-muted-foreground"
-                : "text-destructive"
-            )}
-          >
-            {quotaPreview.limit == null
-              ? `Unlimited runs this month (${quotaPreview.tier} tier).`
-              : `${quotaPreview.used} of ${quotaPreview.limit} runs used this month (${quotaPreview.tier} tier).`}
-          </p>
-        )}
-
-        <Button
-          disabled={
-            !prompt.trim() ||
-            !boxId ||
-            isPlanPending ||
-            isExecPending ||
-            (quotaPreview !== null && !quotaPreview.allowed)
-          }
-          onClick={handleGeneratePlan}
-          className="self-start"
-          title={
-            quotaPreview !== null && !quotaPreview.allowed
-              ? `You've used all ${quotaPreview.limit ?? "\u221e"} Operator runs on the ${quotaPreview.tier} tier this month. Resets on ${formatResetDate(quotaPreview.resetsAt)}.`
-              : undefined
-          }
-        >
-          <Sparkles className="h-4 w-4" aria-hidden="true" />
-          {autoMode ? "Run Now" : "Generate Plan"}
-        </Button>
       </div>
     );
   }
@@ -1359,10 +1327,10 @@ export function OperatorPanel({
             </button>
             <SheetTitle className="flex items-center gap-2 text-base">
               <Bot className="h-4 w-4" aria-hidden="true" />
-              Pog Agent
+              AI
             </SheetTitle>
             <SheetDescription id="operator-panel-desc" className="sr-only">
-              Plan, review, and execute AI-powered workspace operations.
+              Your AI for research, writing, and organizing your notes.
             </SheetDescription>
           </SheetHeader>
 
