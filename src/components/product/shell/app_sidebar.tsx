@@ -8,22 +8,17 @@ import {
   ChevronDown,
   ChevronRight,
   FileText,
-  GitBranch,
-  LayoutDashboard,
+  GitFork,
+  Network,
   Plus,
-  Undo2,
+  Sparkles,
 } from "lucide-react";
 import {
   AccountSetting01Icon,
   Alert01Icon,
-  DashboardSpeed02Icon,
   Home01Icon,
-  LaborIcon,
-  Satellite01Icon,
   SearchAreaIcon,
-  ToolsIcon,
 } from "hugeicons-react";
-import { BarChart3, GitFork, Globe, Lightbulb, Network, Workflow } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { type Box as BoxType } from "@/server/domain/types/box";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -44,32 +39,17 @@ const mainNav: Array<{
   label: string;
   href: string;
   icon: React.ElementType;
-  /**
-   * Optional keyboard hint rendered as a small <kbd> next to the label.
-   * Used to surface that the palette (Cmd/Ctrl+K) is the faster path.
-   */
   shortcut?: string;
 }> = [
   { label: "Home", href: "/app", icon: Home01Icon },
-  { label: "Dashboard", href: "/app/dashboard", icon: LayoutDashboard },
   { label: "Search", href: "/app/search", icon: SearchAreaIcon, shortcut: "⌘K" },
-  { label: "Workspaces", href: "/app/workspaces", icon: Satellite01Icon },
 ];
 
-const advancedNav = [
-  { label: "Agents", href: "/app/agents", icon: LaborIcon },
-  { label: "Pog Agent", href: "/app/workspace_operator", icon: Bot },
-  { label: "Skills", href: "/app/skills", icon: ToolsIcon },
-  { label: "Graph", href: "/app/graph", icon: Network },
-  { label: "Insights", href: "/app/insights", icon: Lightbulb },
-  { label: "Web sessions", href: "/app/web_sessions", icon: Globe },
-  { label: "Sub-agents", href: "/app/sub_agents", icon: Workflow },
-  { label: "Workflows", href: "/app/workflows", icon: GitFork },
-  { label: "Usage", href: "/app/usage", icon: BarChart3 },
-  { label: "Proposals", href: "/app/proposals", icon: Alert01Icon },
-  { label: "Branches", href: "/app/branches", icon: GitBranch },
-  { label: "History", href: "/app/history", icon: Undo2 },
-  { label: "Audit log", href: "/app/audit", icon: DashboardSpeed02Icon },
+const aiNav = [
+  { label: "AI", href: "/app/workspace_operator", icon: Sparkles },
+  { label: "Suggestions", href: "/app/proposals", icon: Alert01Icon },
+  { label: "Connections", href: "/app/graph", icon: Network },
+  { label: "Automations", href: "/app/workflows", icon: GitFork },
 ];
 
 // ─── Nav item ─────────────────────────────────────────────────────────────────
@@ -208,7 +188,7 @@ export function AppSidebar({
   pendingProposalsCount = 0,
 }: AppSidebarProps) {
   const pathname = usePathname();
-  const [advancedOpen, setAdvancedOpen] = useState(false);
+  const [aiNavOpen, setAiNavOpen] = useState(true);
 
   // Extract the current box and note IDs from the pathname
   const boxMatch = pathname.match(/\/app\/boxes\/([^/]+)/);
@@ -261,29 +241,29 @@ export function AppSidebar({
             ))}
           </ul>
 
-          {/* Collapsible Advanced section */}
+          {/* AI & Automation section */}
           <div className="mt-1">
             <button
               type="button"
-              onClick={() => setAdvancedOpen((prev) => !prev)}
+              onClick={() => setAiNavOpen((prev) => !prev)}
               className={cn(
                 "flex w-full items-center gap-1 px-2.5 py-1.5 text-[10px] font-medium uppercase tracking-wider",
                 "text-muted-foreground/60 hover:text-foreground transition-colors"
               )}
             >
-              {advancedOpen ? (
+              {aiNavOpen ? (
                 <ChevronDown className="h-3 w-3 shrink-0" aria-hidden="true" />
               ) : (
                 <ChevronRight className="h-3 w-3 shrink-0" aria-hidden="true" />
               )}
-              Advanced
+              AI &amp; Automation
             </button>
 
-            {advancedOpen && (
+            {aiNavOpen && (
               <ul className="flex flex-col gap-0.5 list-none">
-                {advancedNav.map((item) => (
+                {aiNav.map((item) => (
                   <li key={item.href}>
-                    {item.href === "/app/proposals" && pendingProposalsCount > 0 ? (
+                    {item.href === "/app/proposals" ? (
                       <NavItemWithBadge
                         href={item.href}
                         icon={item.icon}
@@ -360,7 +340,7 @@ export function AppSidebar({
             )}
             title={`Workspace: ${workspaceName}`}
           >
-            Boxes
+            Collections
           </Link>
           <Link
             href="/app/workspaces"
@@ -369,7 +349,7 @@ export function AppSidebar({
               "hover:bg-accent/60 hover:text-foreground",
               "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             )}
-            aria-label="Manage boxes and workspace"
+            aria-label="Manage collections and workspace"
           >
             <Plus className="h-3 w-3" aria-hidden="true" />
           </Link>
@@ -386,7 +366,7 @@ export function AppSidebar({
               )}
             >
               <Plus className="h-3 w-3 shrink-0" aria-hidden="true" />
-              Create your first box
+              Create your first collection
             </Link>
           ) : (
             <TreeSidebar

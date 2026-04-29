@@ -203,7 +203,7 @@ export function MobileSidebar({
                 )}
               >
                 <Plus className="h-3 w-3 shrink-0" aria-hidden="true" />
-                Create your first box
+                Create your first collection
               </Link>
             ) : (
               <TreeSidebar
