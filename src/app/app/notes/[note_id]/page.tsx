@@ -134,7 +134,7 @@ function InfoLabel({ children }: { children: React.ReactNode }) {
 
 // ─── Right panel — Note context ───────────────────────────────────────────────
 
-const VALID_TABS = ["info", "links", "backlinks", "bundle", "history", "comments"] as const;
+const VALID_TABS = ["notes", "ai", "more"] as const;
 type NoteContextTab = (typeof VALID_TABS)[number];
 
 function NoteContextPanel({
@@ -153,7 +153,7 @@ function NoteContextPanel({
   unresolvedCommentCount,
   currentUserId,
   noteEntities,
-  defaultTab = "info",
+  defaultTab = "ai",
   markdownContent,
   aiTimelineEntries,
   pendingProposals,
@@ -220,30 +220,8 @@ function NoteContextPanel({
       <Tabs defaultValue={defaultTab} className="flex flex-1 flex-col overflow-hidden">
         <div className="border-b border-border px-4">
           <TabsList variant="line" className="h-auto pb-0">
-            <TabsTrigger value="info" className="pb-2.5 text-xs">
-              Info
-            </TabsTrigger>
-            <TabsTrigger value="links" className="relative pb-2.5 text-xs">
-              Links
-              {linkCount > 0 && (
-                <span className="ml-1 rounded-full bg-muted px-1 text-[10px] text-muted-foreground">
-                  {linkCount}
-                </span>
-              )}
-            </TabsTrigger>
-            <TabsTrigger value="backlinks" className="relative pb-2.5 text-xs">
-              Backlinks
-              {links.incoming.length > 0 && (
-                <span className="ml-1 rounded-full bg-muted px-1 text-[10px] text-muted-foreground">
-                  {links.incoming.length}
-                </span>
-              )}
-            </TabsTrigger>
-            <TabsTrigger value="bundle" className="pb-2.5 text-xs">
-              Bundle
-            </TabsTrigger>
-            <TabsTrigger value="history" className="pb-2.5 text-xs">
-              History
+            <TabsTrigger value="notes" className="pb-2.5 text-xs">
+              Notes
             </TabsTrigger>
             <TabsTrigger value="ai" className="relative pb-2.5 text-xs">
               AI
@@ -253,20 +231,20 @@ function NoteContextPanel({
                 </span>
               )}
             </TabsTrigger>
-            <TabsTrigger value="comments" className="relative pb-2.5 text-xs">
-              Comments
-              {unresolvedCommentCount > 0 && (
-                <span className="ml-1 rounded-full bg-muted px-1 text-[10px] text-muted-foreground">
-                  {unresolvedCommentCount}
-                </span>
-              )}
+            <TabsTrigger value="more" className="pb-2.5 text-xs">
+              ···
             </TabsTrigger>
           </TabsList>
         </div>
 
-        {/* ── Info tab ── */}
-        <TabsContent value="info" className="flex-1 overflow-hidden">
+        {/* ── Notes tab (Info + Links + Backlinks merged) ── */}
+        <TabsContent value="notes" className="flex-1 overflow-hidden">
           <ScrollArea className="h-full">
+
+            {/* ── About section ── */}
+            <div className="px-4 pt-3 pb-1">
+              <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground/60">About</p>
+            </div>
 
             {/* Guide note callout — shown prominently when this IS the guide */}
             {isGuideNote && (
@@ -471,12 +449,11 @@ function NoteContextPanel({
                 )}
               </div>
             </InfoSection>
-          </ScrollArea>
-        </TabsContent>
 
-        {/* ── Links tab ── */}
-        <TabsContent value="links" className="flex-1 overflow-hidden">
-          <ScrollArea className="h-full">
+            {/* ── Links section ── */}
+            <div className="border-t border-border px-4 pt-3 pb-1">
+              <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground/60">Links</p>
+            </div>
             <div className="px-4 py-3">
               <SemanticLinksPanel
                 sourceNoteId={note.id}
@@ -496,12 +473,11 @@ function NoteContextPanel({
                 />
               </div>
             )}
-          </ScrollArea>
-        </TabsContent>
 
-        {/* ── Backlinks tab ── */}
-        <TabsContent value="backlinks" className="flex-1 overflow-hidden">
-          <ScrollArea className="h-full">
+            {/* ── Backlinks section ── */}
+            <div className="border-t border-border px-4 pt-3 pb-1">
+              <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground/60">Backlinks</p>
+            </div>
             <div className="px-4 py-3">
               <NoteBacklinksPanel
                 noteId={note.id}
@@ -511,32 +487,6 @@ function NoteContextPanel({
               />
             </div>
           </ScrollArea>
-        </TabsContent>
-
-        {/* ── Bundle tab ── */}
-        <TabsContent value="bundle" className="flex-1 overflow-hidden">
-          <ScrollArea className="h-full">
-            <div className="px-4 py-3 space-y-4">
-              <NoteBundleExportButton
-                noteId={note.id}
-                noteTitle={note.title}
-                noteSlug={note.slug}
-              />
-              <ContextBundleViewer
-                initialBundle={initialBundle}
-                noteId={note.id}
-              />
-            </div>
-          </ScrollArea>
-        </TabsContent>
-
-        {/* ── History tab ── */}
-        <TabsContent value="history" className="flex-1 overflow-hidden">
-          <NoteHistoryPanel
-            noteId={note.id}
-            initialVersions={historyResult.versions}
-            currentVersionId={historyResult.current_version_id}
-          />
         </TabsContent>
 
         {/* ── AI copilot tab ── */}
@@ -551,13 +501,55 @@ function NoteContextPanel({
           </ScrollArea>
         </TabsContent>
 
-        {/* ── Comments tab ── */}
-        <TabsContent value="comments" className="flex-1 overflow-hidden">
-          <NoteCommentsPanel
-            noteId={note.id}
-            threads={commentThreads}
-            currentUserId={currentUserId}
-          />
+        {/* ── More tab (Bundle + History + Comments) ── */}
+        <TabsContent value="more" className="flex-1 overflow-hidden">
+          <ScrollArea className="h-full">
+            <details className="border-b border-border">
+              <summary className="cursor-pointer select-none px-4 py-3 text-xs font-medium text-foreground hover:bg-accent">
+                Bundle &amp; Export
+              </summary>
+              <div className="px-4 py-3 space-y-4">
+                <NoteBundleExportButton
+                  noteId={note.id}
+                  noteTitle={note.title}
+                  noteSlug={note.slug}
+                />
+                <ContextBundleViewer
+                  initialBundle={initialBundle}
+                  noteId={note.id}
+                />
+              </div>
+            </details>
+            <details className="border-b border-border">
+              <summary className="cursor-pointer select-none px-4 py-3 text-xs font-medium text-foreground hover:bg-accent">
+                Version History
+              </summary>
+              <div className="px-0 py-0">
+                <NoteHistoryPanel
+                  noteId={note.id}
+                  initialVersions={historyResult.versions}
+                  currentVersionId={historyResult.current_version_id}
+                />
+              </div>
+            </details>
+            <details className="border-b border-border">
+              <summary className="cursor-pointer select-none px-4 py-3 text-xs font-medium text-foreground hover:bg-accent">
+                Comments
+                {unresolvedCommentCount > 0 && (
+                  <span className="ml-1 rounded-full bg-muted px-1 text-[10px] text-muted-foreground">
+                    {unresolvedCommentCount}
+                  </span>
+                )}
+              </summary>
+              <div>
+                <NoteCommentsPanel
+                  noteId={note.id}
+                  threads={commentThreads}
+                  currentUserId={currentUserId}
+                />
+              </div>
+            </details>
+          </ScrollArea>
         </TabsContent>
       </Tabs>
     </div>
@@ -575,10 +567,10 @@ export default async function NotePage({
 }) {
   const { note_id } = await params;
   const resolvedSearch = await searchParams;
-  const rawTab = typeof resolvedSearch.tab === "string" ? resolvedSearch.tab : "info";
+  const rawTab = typeof resolvedSearch.tab === "string" ? resolvedSearch.tab : "ai";
   const defaultTab: NoteContextTab = VALID_TABS.includes(rawTab as NoteContextTab)
     ? (rawTab as NoteContextTab)
-    : "info";
+    : "ai";
   // Freeze "now" at server render start. React hydrates the client
   // with exactly this string (embedded in the server HTML via the
   // `nowIso` prop), so relative-date computation produces identical
