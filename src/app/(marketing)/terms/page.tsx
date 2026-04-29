@@ -3,9 +3,9 @@ import { PageHeroSection } from "@/components/marketing/hero";
 import { TermsContent } from "@/components/legal/terms_content";
 
 export const metadata: Metadata = {
-  title: "Terms of Service — Atlas",
+  title: "Terms of Service — Poggle",
   description:
-    "The rules and commitments that govern your use of Atlas.",
+    "The rules and commitments that govern your use of Poggle.",
 };
 
 export default function TermsPage() {
@@ -14,7 +14,7 @@ export default function TermsPage() {
       <PageHeroSection
         eyebrow="Legal"
         title="Terms of Service"
-        description="Please read these terms carefully. They form a binding agreement between you and Atlas."
+        description="Please read these terms carefully. They form a binding agreement between you and Poggle."
       />
       <section className="mx-auto w-full max-w-3xl px-6 py-16">
         <TermsContent />

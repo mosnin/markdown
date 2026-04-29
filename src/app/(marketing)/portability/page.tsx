@@ -14,7 +14,7 @@ import { PageHeroSection } from "@/components/marketing/hero";
 import { Button } from "@/components/ui/button";
 
 export const metadata: Metadata = {
-  title: "Import & Export — Atlas",
+  title: "Import & Export — Poggle",
   description:
     "Portable packages you own forever. Import from Obsidian or any markdown source. Export any box, folder, or note as a structured zip.",
 };
@@ -44,7 +44,7 @@ export default function PortabilityPage() {
             </div>
             <h3 className="text-sm font-semibold text-foreground">Markdown import</h3>
             <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">
-              Drop in a zip of markdown files. Atlas creates notes, folders, and links automatically.
+              Drop in a zip of markdown files. Poggle creates notes, folders, and links automatically.
             </p>
           </div>
           <div className="rounded-xl border border-border/50 bg-card p-6">

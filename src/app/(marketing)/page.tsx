@@ -19,7 +19,7 @@ function AppMockup() {
           <div className="h-2.5 w-2.5 rounded-full bg-yellow-400/70" />
           <div className="h-2.5 w-2.5 rounded-full bg-green-400/70" />
           <span className="ml-3 font-mono text-[11px] text-muted-foreground/60">
-            architecture.md — Atlas
+            architecture.md — Poggle
           </span>
         </div>
         <div className="grid grid-cols-5 divide-x divide-border/40">
@@ -453,7 +453,7 @@ export default async function HomePage() {
           </p>
           <div className="mt-10 flex justify-center">
             <Button size="lg" render={<Link href="/sign_in" />}>
-              Get Atlas
+              Get Poggle
             </Button>
           </div>
         </div>

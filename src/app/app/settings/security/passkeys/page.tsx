@@ -13,7 +13,7 @@ import { listCredentials } from "@/server/services/webauthn_service";
 import { PasskeysManager } from "./passkeys_client";
 
 export const metadata = {
-  title: "Passkeys — Settings — Atlas",
+  title: "Passkeys — Settings — Poggle",
 };
 
 export default async function PasskeysPage() {

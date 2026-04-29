@@ -3,9 +3,9 @@ import { PageHeroSection } from "@/components/marketing/hero";
 import { PrivacyContent } from "@/components/legal/privacy_content";
 
 export const metadata: Metadata = {
-  title: "Privacy Policy — Atlas",
+  title: "Privacy Policy — Poggle",
   description:
-    "How Atlas collects, uses, and protects your personal information.",
+    "How Poggle collects, uses, and protects your personal information.",
 };
 
 export default function PrivacyPage() {

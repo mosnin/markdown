@@ -11,7 +11,7 @@ export function DMCAContent() {
       <LegalLastUpdated />
 
       <p className="mb-6 text-sm leading-relaxed text-muted-foreground">
-        Atlas respects the intellectual property rights of others and expects
+        Poggle respects the intellectual property rights of others and expects
         users to do the same. This DMCA Policy explains how to submit a
         notice of alleged copyright infringement and how to counter a
         takedown notice, in accordance with the Digital Millennium Copyright
@@ -81,7 +81,7 @@ export function DMCAContent() {
             consent to the jurisdiction of the Federal District Court for the
             judicial district in which your address is located (or, if your
             address is outside the United States, any judicial district in
-            which Atlas may be found), and that you will accept service of
+            which Poggle may be found), and that you will accept service of
             process from the person who provided the original notice or that
             person&rsquo;s agent.
           </li>

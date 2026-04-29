@@ -3,9 +3,9 @@ import { Calendar } from "lucide-react";
 import { PageHeroSection } from "@/components/marketing/hero";
 
 export const metadata: Metadata = {
-  title: "Changelog — Atlas",
+  title: "Changelog — Poggle",
   description:
-    "What's new in each Atlas release. Follow along as we ship new features and improvements.",
+    "What's new in each Poggle release. Follow along as we ship new features and improvements.",
 };
 
 const entries = [
@@ -41,7 +41,7 @@ export default function ChangelogPage() {
     <div className="min-h-screen bg-background">
       <PageHeroSection
         eyebrow="Changelog"
-        title="What's new in Atlas"
+        title="What's new in Poggle"
         description="Follow along as we ship new features and improvements."
       />
 

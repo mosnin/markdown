@@ -7,7 +7,7 @@ import { ServiceWorkerRegister } from "@/components/product/sw_register";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Atlas",
+  title: "Poggle",
   description:
     "A structured, markdown-native context operating system for humans and AI.",
   icons: {
@@ -16,11 +16,11 @@ export const metadata: Metadata = {
     apple: "/logo-symbol-light.png",
   },
   manifest: "/manifest.webmanifest",
-  applicationName: "Atlas",
+  applicationName: "Poggle",
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
-    title: "Atlas",
+    title: "Poggle",
   },
   formatDetection: {
     telephone: false,

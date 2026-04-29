@@ -5,7 +5,7 @@ import { PageHeroSection } from "@/components/marketing/hero";
 import { Button } from "@/components/ui/button";
 
 export const metadata: Metadata = {
-  title: "About — Atlas",
+  title: "About — Poggle",
   description:
     "We're building the context layer between human knowledge and AI reasoning.",
 };
@@ -28,7 +28,7 @@ const VALUES = [
     icon: "⚡",
     title: "AI as a collaborator",
     description:
-      "AI doesn't replace thinking — it amplifies it. Atlas exists to make the handoff between your knowledge and your AI as seamless as possible.",
+      "AI doesn't replace thinking — it amplifies it. Poggle exists to make the handoff between your knowledge and your AI as seamless as possible.",
   },
   {
     icon: "⊛",
@@ -58,7 +58,7 @@ export default function AboutPage() {
         <div className="mx-auto max-w-2xl px-6">
           <div className="space-y-5 text-base leading-relaxed text-muted-foreground">
             <p>
-              Atlas started with a simple frustration: every time we
+              Poggle started with a simple frustration: every time we
               started a conversation with an AI, we spent the first five minutes
               copying, pasting, and curating context from dozens of scattered
               notes. The AI was capable — but it was flying blind.
@@ -72,7 +72,7 @@ export default function AboutPage() {
               assemble exactly the right context for any task.
             </p>
             <p>
-              Atlas is that home. It&apos;s built on plain markdown, organized
+              Poggle is that home. It&apos;s built on plain markdown, organized
               into semantic containers, and designed from day one to produce
               AI-ready context bundles. Write once, use everywhere — in your
               notes, in your prompts, and in your team&apos;s shared understanding.
@@ -160,7 +160,7 @@ export default function AboutPage() {
           </h2>
           <p className="mt-3 text-muted-foreground">
             Whether you&apos;re organizing a solo knowledge base or building AI
-            context for a team — we built Atlas for you.
+            context for a team — we built Poggle for you.
           </p>
           <div className="mt-8 flex flex-col items-center gap-3 sm:flex-row sm:justify-center">
             <Button size="lg" render={<Link href="/sign_in" />}>Get started free

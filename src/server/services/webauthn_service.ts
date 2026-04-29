@@ -13,7 +13,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 // ─── Configuration ───────────────────────────────────────────────────────────
 
-const RP_NAME = process.env.WEBAUTHN_RP_NAME ?? "Atlas";
+const RP_NAME = process.env.WEBAUTHN_RP_NAME ?? "Poggle";
 const RP_ID = process.env.WEBAUTHN_RP_ID ?? "localhost";
 const ORIGIN = process.env.NEXT_PUBLIC_APP_URL ?? `https://${RP_ID}`;
 

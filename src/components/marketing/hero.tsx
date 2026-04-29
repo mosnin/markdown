@@ -142,7 +142,7 @@ export function HeroSection() {
 					transition={{ delay: 0.2, duration: 0.5, ease: "easeOut" }}
 					className="text-muted-foreground text-sm tracking-wide sm:text-lg md:text-xl"
 				>
-					Atlas is a structured context store for AI workflows.
+					Poggle is a structured context store for AI workflows.
 					Organize notes, files, skills, and agents into focused boxes.
 					Build real package structures, connect everything with
 					semantic links, and deliver clean context via API or MCP.
@@ -204,7 +204,7 @@ export function HeroSection() {
 					<div className="relative mx-auto max-w-5xl overflow-hidden rounded-lg border bg-background p-2 shadow-xl ring-1 ring-border/40">
 						<Image
 							src="/dashboard-screenshot.png"
-							alt="Atlas dashboard"
+							alt="Poggle dashboard"
 							width={1280}
 							height={720}
 							className="rounded-lg w-full"

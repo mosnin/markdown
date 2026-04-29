@@ -14,7 +14,7 @@ import { PageHeroSection } from "@/components/marketing/hero";
 import { Button } from "@/components/ui/button";
 
 export const metadata: Metadata = {
-  title: "Collections & Folders — Atlas",
+  title: "Collections & Folders — Poggle",
   description:
     "Organize your work into focused containers. Collections are top-level workspaces, folders give you real structural depth.",
 };

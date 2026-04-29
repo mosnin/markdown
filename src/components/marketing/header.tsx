@@ -270,7 +270,7 @@ const companyLinks: LinkItem[] = [
 	{
 		title: 'About Us',
 		href: '/about',
-		description: 'Our story and the team behind Atlas',
+		description: 'Our story and the team behind Poggle',
 		icon: Users,
 	},
 	{
@@ -282,7 +282,7 @@ const companyLinks: LinkItem[] = [
 	{
 		title: 'How It Works',
 		href: '/how-it-works',
-		description: 'See how Atlas fits into your workflow',
+		description: 'See how Poggle fits into your workflow',
 		icon: BookOpen,
 	},
 ];
@@ -290,7 +290,7 @@ const companyLinks: LinkItem[] = [
 const companyLinks2: LinkItem[] = [
 	{
 		title: 'Docs',
-		href: 'https://docs.atlas.app',
+		href: 'https://docs.poggle.app',
 		icon: BookOpen,
 	},
 	{
@@ -342,10 +342,10 @@ function useScroll(threshold: number) {
 function WordmarkLogo() {
 	return (
 		<>
-			<Image src="/logo-symbol-dark.png" alt="Atlas" width={20} height={20} className="rounded dark:hidden" />
-			<Image src="/logo-symbol-light.png" alt="Atlas" width={20} height={20} className="rounded hidden dark:block" />
-			<Image src="/logo-text-black.png" alt="Atlas" width={60} height={20} className="dark:hidden" />
-			<Image src="/logo-text-white.png" alt="Atlas" width={60} height={20} className="hidden dark:block" />
+			<Image src="/logo-symbol-dark.png" alt="Poggle" width={20} height={20} className="rounded dark:hidden" />
+			<Image src="/logo-symbol-light.png" alt="Poggle" width={20} height={20} className="rounded hidden dark:block" />
+			<Image src="/logo-text-black.png" alt="Poggle" width={60} height={20} className="dark:hidden" />
+			<Image src="/logo-text-white.png" alt="Poggle" width={60} height={20} className="hidden dark:block" />
 		</>
 	);
 }

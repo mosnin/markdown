@@ -148,7 +148,7 @@ export function WorkspaceSwitcher({
           <div className="flex h-6 w-6 shrink-0 items-center justify-center">
             <Image
               src="/logo-symbol-dark.png"
-              alt="Atlas"
+              alt="Poggle"
               width={24}
               height={24}
               className="rounded dark:hidden"
@@ -156,7 +156,7 @@ export function WorkspaceSwitcher({
             />
             <Image
               src="/logo-symbol-light.png"
-              alt="Atlas"
+              alt="Poggle"
               width={24}
               height={24}
               className="rounded hidden dark:block"

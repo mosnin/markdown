@@ -7,9 +7,9 @@ import {
 import { PageHeroSection } from "@/components/marketing/hero";
 
 export const metadata: Metadata = {
-  title: "Help Center — Atlas",
+  title: "Help Center — Poggle",
   description:
-    "Get help with Atlas. Guides, common questions, and contact support.",
+    "Get help with Poggle. Guides, common questions, and contact support.",
 };
 
 export default function HelpPage() {

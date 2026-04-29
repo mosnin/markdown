@@ -30,7 +30,7 @@ export const LEGAL_DOCS: Record<LegalDocId, LegalDoc> = {
     shortLabel: "Terms",
     path: "/terms",
     description:
-      "The rules and commitments that govern your use of Atlas.",
+      "The rules and commitments that govern your use of Poggle.",
     Content: TermsContent,
   },
   privacy: {
@@ -54,7 +54,7 @@ export const LEGAL_DOCS: Record<LegalDocId, LegalDoc> = {
     title: "Cookie Policy",
     shortLabel: "Cookies",
     path: "/cookies",
-    description: "How Atlas uses cookies and similar technologies.",
+    description: "How Poggle uses cookies and similar technologies.",
     Content: CookieContent,
   },
   "acceptable-use": {

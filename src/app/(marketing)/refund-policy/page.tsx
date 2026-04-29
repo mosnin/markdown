@@ -3,9 +3,9 @@ import { PageHeroSection } from "@/components/marketing/hero";
 import { RefundContent } from "@/components/legal/refund_content";
 
 export const metadata: Metadata = {
-  title: "Refund Policy — Atlas",
+  title: "Refund Policy — Poggle",
   description:
-    "When and how refunds are issued for Atlas subscriptions.",
+    "When and how refunds are issued for Poggle subscriptions.",
 };
 
 export default function RefundPolicyPage() {

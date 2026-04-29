@@ -14,7 +14,7 @@ import { PageHeroSection } from "@/components/marketing/hero";
 import { Button } from "@/components/ui/button";
 
 export const metadata: Metadata = {
-  title: "Notes & Files — Atlas",
+  title: "Notes & Files — Poggle",
   description:
     "Markdown notes and code artifacts in one place. Write notes for humans, manage files for machines — all with full version history.",
 };

@@ -12,7 +12,7 @@ import { PageHeroSection } from "@/components/marketing/hero";
 import { Button } from "@/components/ui/button";
 
 export const metadata: Metadata = {
-  title: "How It Works — Atlas",
+  title: "How It Works — Poggle",
   description:
     "From notes to AI-ready context in four steps. Write, organize, connect, and deliver.",
 };
@@ -54,7 +54,7 @@ export default function HowItWorksPage() {
       <PageHeroSection
         eyebrow="How It Works"
         title="From notes to AI-ready context in four steps"
-        description="See how Atlas fits into your workflow."
+        description="See how Poggle fits into your workflow."
         ctaPrimary={{ label: "Get started free", href: "/sign_in" }}
       />
 

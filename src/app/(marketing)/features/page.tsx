@@ -29,7 +29,7 @@ import { FeatureCard } from "@/components/ui/grid-feature-cards";
 import { GridCard } from "@/components/ui/grid-card";
 
 export const metadata: Metadata = {
-  title: "Features — Atlas",
+  title: "Features — Poggle",
   description:
     "Everything you need to organize knowledge and build AI-ready context. Notes, files, skills, agents, and more.",
 };
@@ -193,7 +193,7 @@ export default async function FeaturesPage() {
       <PageHeroSection
         eyebrow="Features"
         title={<>Everything you need to organize<br className="hidden sm:block" /> knowledge for AI</>}
-        description="Atlas brings notes, files, skills, and agents together in one structured context store with semantic links, version history, and full API access."
+        description="Poggle brings notes, files, skills, and agents together in one structured context store with semantic links, version history, and full API access."
         ctaPrimary={{ label: "Start free trial", href: "/sign_in" }}
         ctaSecondary={{ label: "View pricing", href: "/pricing" }}
       />

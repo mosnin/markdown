@@ -10,7 +10,7 @@ const LINKS = {
     { href: "/pricing", label: "Pricing" },
   ],
   Developers: [
-    { href: "https://docs.atlas.app", label: "Documentation" },
+    { href: "https://docs.poggle.app", label: "Documentation" },
     { href: "/api", label: "API & MCP" },
     { href: "/portability", label: "Import & Export" },
     { href: "/changelog", label: "Changelog" },
@@ -39,10 +39,10 @@ export function MarketingFooter() {
           {/* Brand column */}
           <div className="col-span-2 sm:col-span-3 md:col-span-1">
             <div className="flex items-center gap-2.5">
-              <Image src="/logo-symbol-dark.png" alt="Atlas" width={28} height={28} className="rounded dark:hidden" />
-              <Image src="/logo-symbol-light.png" alt="Atlas" width={28} height={28} className="rounded hidden dark:block" />
-              <Image src="/logo-text-black.png" alt="Atlas" width={64} height={22} className="dark:hidden" />
-              <Image src="/logo-text-white.png" alt="Atlas" width={64} height={22} className="hidden dark:block" />
+              <Image src="/logo-symbol-dark.png" alt="Poggle" width={28} height={28} className="rounded dark:hidden" />
+              <Image src="/logo-symbol-light.png" alt="Poggle" width={28} height={28} className="rounded hidden dark:block" />
+              <Image src="/logo-text-black.png" alt="Poggle" width={64} height={22} className="dark:hidden" />
+              <Image src="/logo-text-white.png" alt="Poggle" width={64} height={22} className="hidden dark:block" />
             </div>
             <p className="mt-4 max-w-[200px] text-xs leading-relaxed text-muted-foreground">
               A markdown-native context operating system for humans and AI.
@@ -80,7 +80,7 @@ export function MarketingFooter() {
            * cannot disagree.
            */}
           <p className="text-xs text-muted-foreground">
-            © {new Date().getFullYear()} Atlas. All rights reserved.
+            © {new Date().getFullYear()} Poggle. All rights reserved.
           </p>
           <ul className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
             {[
