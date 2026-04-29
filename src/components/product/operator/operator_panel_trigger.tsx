@@ -63,7 +63,7 @@ export function OperatorPanelTrigger({
       <button
         type="button"
         onClick={() => setOpen(true)}
-        aria-label="Ask Pog Agent"
+        aria-label="Ask AI"
         className={cn(
           "inline-flex h-9 items-center gap-1.5 rounded-full border border-input bg-foreground px-3 py-2 text-sm font-medium text-background shadow-sm transition-colors",
           "hover:bg-foreground/90",
@@ -71,7 +71,7 @@ export function OperatorPanelTrigger({
         )}
       >
         <Sparkles className="h-3.5 w-3.5" aria-hidden="true" />
-        <span>Ask Pog</span>
+        <span>Ask AI</span>
       </button>
       <OperatorPanel
         open={open}
