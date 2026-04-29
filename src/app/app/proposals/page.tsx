@@ -61,8 +61,8 @@ export default async function ProposalsPage() {
   return (
     <div className="flex h-full flex-col overflow-hidden">
       <PageHeader
-        title="AI Proposals"
-        description="Review machine-proposed changes to your workspace content before they are applied."
+        title="AI Edits"
+        description="Review AI-proposed changes to your workspace content before they are applied."
         actions={
           pendingCount > 0 ? (
             <Badge className="bg-amber-100 text-amber-800 border-amber-200 dark:bg-amber-900/30 dark:text-amber-400 dark:border-amber-800 text-xs font-medium">
@@ -76,8 +76,8 @@ export default async function ProposalsPage() {
           {items.length === 0 ? (
             <EmptyState
               icon={<CircleDashed className="h-5 w-5" />}
-              title="No proposals yet"
-              description="When connected integrations submit write proposals, they will appear here for your review."
+              title="No AI edits yet"
+              description="When Atlas AI proposes changes to your notes, they will appear here for your review before anything is saved."
             />
           ) : (
             <ProposalsPanel initialProposals={items} />

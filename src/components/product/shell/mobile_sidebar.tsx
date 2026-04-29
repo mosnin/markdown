@@ -37,7 +37,7 @@ const primaryNav = [
   { label: "Home", href: "/app", icon: Home },
   { label: "Search", href: "/app/search", icon: Search },
   { label: "AI", href: "/app/workspace_operator", icon: Bot },
-  { label: "Suggestions", href: "/app/proposals", icon: Inbox },
+  { label: "AI Edits", href: "/app/proposals", icon: Inbox },
 ];
 
 interface MobileSidebarProps {

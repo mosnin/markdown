@@ -8,8 +8,6 @@ import {
   ChevronDown,
   ChevronRight,
   FileText,
-  GitFork,
-  Network,
   Plus,
   Sparkles,
 } from "lucide-react";
@@ -47,9 +45,7 @@ const mainNav: Array<{
 
 const aiNav = [
   { label: "AI", href: "/app/workspace_operator", icon: Sparkles },
-  { label: "Suggestions", href: "/app/proposals", icon: Alert01Icon },
-  { label: "Connections", href: "/app/graph", icon: Network },
-  { label: "Automations", href: "/app/workflows", icon: GitFork },
+  { label: "AI Edits", href: "/app/proposals", icon: Alert01Icon },
 ];
 
 // ─── Nav item ─────────────────────────────────────────────────────────────────
@@ -256,7 +252,7 @@ export function AppSidebar({
               ) : (
                 <ChevronRight className="h-3 w-3 shrink-0" aria-hidden="true" />
               )}
-              AI &amp; Automation
+              Intelligence
             </button>
 
             {aiNavOpen && (

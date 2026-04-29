@@ -22,7 +22,7 @@ const LABEL_MAP: Record<string, string> = {
   notes: "Notes",
   search: "Search",
   workspaces: "Workspaces",
-  proposals: "Proposals",
+  proposals: "AI Edits",
   audit: "Audit log",
   settings: "Settings",
   import_export: "Import / Export",
