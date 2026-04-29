@@ -1,15 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { PenLine, X } from "lucide-react";
 import type { WorkspaceOperatorRunRow } from "@/server/services/workspace_operator_runs_service";
 import { WorkspaceConversation } from "@/components/product/workspace/workspace_conversation";
 import { ConversationComposer } from "@/components/product/conversation_composer";
-import { OnboardingCallout } from "@/components/product/onboarding_callout";
 import { BulkImportPanel } from "@/components/product/bulk_import_panel";
-import { OnboardingMilestoneBar } from "@/components/product/onboarding_milestone_bar";
 import { startConversationTurnAction } from "@/app/app/conversation/actions";
 
 export interface ConversationHomeClientProps {
@@ -36,7 +32,6 @@ export function ConversationHomeClient({
   const [activeRunId, setActiveRunId] = useState<string | null>(null);
   const [importToast, setImportToast] = useState<string | null>(null);
   const [suggestionPending, setSuggestionPending] = useState(false);
-  const [calloutDismissed, setCalloutDismissed] = useState<boolean>(false);
   const router = useRouter();
 
   async function startSuggestedPrompt(prompt: string) {
@@ -62,28 +57,18 @@ export function ConversationHomeClient({
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
-      {/* Slim header — workspace name + New Note button */}
-      <header className="flex h-12 shrink-0 items-center justify-between border-b border-border px-4">
+      {/* Slim header — workspace name only */}
+      <header className="flex h-12 shrink-0 items-center border-b border-border px-4">
         <h1 className="text-sm font-semibold tracking-tight text-foreground">
           {workspaceName}
         </h1>
-        <Link
-          href="/app/notes/new"
-          className="inline-flex items-center gap-1.5 rounded-md border border-border bg-background px-2.5 py-1 text-xs text-foreground/70 transition-colors hover:bg-accent hover:text-foreground"
-        >
-          <PenLine className="h-3.5 w-3.5" aria-hidden="true" />
-          New Note
-        </Link>
       </header>
 
       {/* Conversation thread — flex-1, scrollable */}
       <div className="mx-auto flex w-full max-w-3xl min-h-0 flex-1 flex-col px-4">
-        {/* Show bulk importer for truly fresh workspaces */}
         {isFreshWorkspace ? (
           <div className="flex-1 overflow-y-auto">
             <div className="flex w-full flex-col gap-6 py-8">
-              <OnboardingMilestoneBar />
-
               {importToast && (
                 <div className="rounded-lg border border-violet-500/30 bg-violet-500/10 px-4 py-3">
                   <p className="text-sm font-medium text-foreground">
@@ -107,21 +92,14 @@ export function ConversationHomeClient({
                 }}
               />
 
-              {!calloutDismissed && (
-                <div className="rounded-md border border-border bg-muted/20 px-4 py-3">
-                  <div className="flex items-center justify-between mb-2">
-                    <p className="text-xs font-medium text-muted-foreground">How Atlas AI works</p>
-                    <button
-                      onClick={() => setCalloutDismissed(true)}
-                      className="text-muted-foreground/50 hover:text-muted-foreground transition-colors"
-                      aria-label="Dismiss"
-                    >
-                      <X className="h-3.5 w-3.5" />
-                    </button>
-                  </div>
-                  <OnboardingCallout />
-                </div>
-              )}
+              <div className="flex flex-1 flex-col items-center justify-center px-6 text-center">
+                <p className="text-2xl font-semibold tracking-tight text-foreground">
+                  What would you like to work on?
+                </p>
+                <p className="mt-2 max-w-sm text-sm text-muted-foreground">
+                  Atlas AI knows your notes and can research, write, or organize anything in your workspace.
+                </p>
+              </div>
             </div>
           </div>
         ) : (
@@ -136,28 +114,17 @@ export function ConversationHomeClient({
           </div>
         )}
 
-        {/* Suggestion pills — only when no runs */}
+        {/* Lighter empty state when workspace has boxes but no AI runs yet */}
         {hasNoRuns && !isFreshWorkspace && (
-          <div className="flex flex-wrap gap-2 px-1 pb-2 pt-1">
-            {[
-              "What should I work on today?",
-              "Summarize my workspace",
-              "What changed recently?",
-            ].map((suggestion) => (
-              <button
-                key={suggestion}
-                onClick={() => startSuggestedPrompt(suggestion)}
-                disabled={suggestionPending}
-                className="rounded-full border border-border bg-muted/40 px-3 py-1 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50"
-              >
-                {suggestion}
-              </button>
-            ))}
+          <div className="flex flex-1 flex-col items-center justify-center px-6 text-center">
+            <p className="text-lg font-medium text-foreground/80">
+              Ask Atlas AI anything about your workspace.
+            </p>
           </div>
         )}
 
         {/* ConversationComposer — pinned at bottom */}
-        <div className="shrink-0 border-t border-border py-3">
+        <div className="shrink-0 border-t border-border px-4 pb-6 pt-2">
           <ConversationComposer
             workspaceId={workspaceId}
             defaultBoxId={defaultBoxId}
