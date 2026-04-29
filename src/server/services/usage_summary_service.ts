@@ -330,7 +330,7 @@ export async function getWorkspaceUsageSummary(
   const byCategory: UsageCategoryBreakdown[] = [
     {
       category: "operator",
-      label: "Pog (operator)",
+      label: "Atlas AI (operator)",
       runs: operatorRows.length,
       costCents: operatorCosts.reduce((a, b) => a + b, 0),
     },

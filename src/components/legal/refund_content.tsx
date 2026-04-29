@@ -10,7 +10,7 @@ export function RefundContent() {
       <LegalLastUpdated />
 
       <p className="mb-6 text-sm leading-relaxed text-muted-foreground">
-        We want you to be satisfied with Poggle. This Refund Policy explains
+        We want you to be satisfied with Atlas. This Refund Policy explains
         when and how refunds may be issued. This policy forms part of our
         Terms of Service.
       </p>

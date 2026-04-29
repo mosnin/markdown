@@ -28,7 +28,7 @@ export async function ensureDailyNoteAction(): Promise<void> {
 
   const markdownContent = `# ${title}
 
-<!-- Captures, thoughts, tasks for today. Ask Pog to summarize at end of day. -->`;
+<!-- Captures, thoughts, tasks for today. Ask Atlas AI to summarize at end of day. -->`;
 
   await createNote(supabase, ctx.user.id, ctx.workspace.id, {
     boxId: inbox.id,

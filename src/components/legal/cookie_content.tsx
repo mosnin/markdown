@@ -11,7 +11,7 @@ export function CookieContent() {
       <LegalLastUpdated />
 
       <p className="mb-6 text-sm leading-relaxed text-muted-foreground">
-        This Cookie Policy explains how Poggle uses cookies and similar
+        This Cookie Policy explains how Atlas uses cookies and similar
         technologies. It supplements our Privacy Policy.
       </p>
 

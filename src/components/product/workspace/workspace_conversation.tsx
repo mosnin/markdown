@@ -299,7 +299,7 @@ function LiveNewTurnBubble({ runId }: LiveNewTurnBubbleProps) {
     <AssistantBubbleShell>
       <div className="flex items-center gap-2">
         <Spinner size={12} />
-        <span className="text-xs text-muted-foreground">Pog is thinking…</span>
+        <span className="text-xs text-muted-foreground">Atlas AI is thinking…</span>
       </div>
       <div className="mt-2 max-h-72 overflow-y-auto">
         <LiveEventStream runId={runId} />
