@@ -12,12 +12,89 @@ import {
 } from "lucide-react";
 import { PageHeroSection } from "@/components/marketing/hero";
 import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+} from "@/components/ui/card";
 
 export const metadata: Metadata = {
   title: "Connections — Poggle",
   description:
     "Connect your knowledge with typed relationships. Every object can link to any other with explicit semantics, visible in an interactive graph.",
 };
+
+type Feature = {
+  icon: React.ComponentType<{ className?: string }>;
+  title: string;
+  description: string;
+};
+
+function FeatureCard({ icon: Icon, title, description }: Feature) {
+  return (
+    <Card>
+      <CardHeader>
+        <div className="mb-3 flex h-9 w-9 items-center justify-center rounded-md border border-border bg-muted/40">
+          <Icon className="h-4.5 w-4.5 text-muted-foreground" />
+        </div>
+        <CardTitle>{title}</CardTitle>
+        <CardDescription>{description}</CardDescription>
+      </CardHeader>
+    </Card>
+  );
+}
+
+function SectionHeading({ children }: { children: string }) {
+  return (
+    <div className="mb-8">
+      <h2 className="text-headline text-foreground">{children}</h2>
+      <div className="mt-2 h-0.5 w-12 rounded-full bg-brand" />
+    </div>
+  );
+}
+
+const SEMANTIC: Feature[] = [
+  {
+    icon: List,
+    title: "Ten relationship types",
+    description:
+      "Related, depends on, extends, parent of, derived from — pick the one that fits.",
+  },
+  {
+    icon: Unlink,
+    title: "Cross-type linking",
+    description:
+      "Link notes to files, skills to agents, folders to anything. Not just note-to-note.",
+  },
+  {
+    icon: MessageSquare,
+    title: "Directed and annotated",
+    description:
+      "Every link has a direction and optional annotation for context.",
+  },
+];
+
+const GRAPH: Feature[] = [
+  {
+    icon: Move,
+    title: "Interactive visualization",
+    description:
+      "Pan, zoom, click, and explore your knowledge graph in real time.",
+  },
+  {
+    icon: Shapes,
+    title: "All object types",
+    description:
+      "Notes, files, skills, agents, and folders all appear as nodes with typed edges.",
+  },
+  {
+    icon: Eye,
+    title: "Read-only by design",
+    description:
+      "The graph is for understanding structure, not editing it — changes happen in the tree.",
+  },
+];
 
 export default function ConnectionsPage() {
   return (
@@ -29,96 +106,37 @@ export default function ConnectionsPage() {
         ctaPrimary={{ label: "Start connecting", href: "/sign_in" }}
       />
 
-      {/* Semantic links section */}
-      <section className="mx-auto w-full max-w-5xl px-6 py-24">
-        <div className="mb-8">
-          <h2 className="text-xl font-bold tracking-tight text-foreground">
-            Semantic links
-          </h2>
-          <div className="mt-2 h-0.5 w-12 rounded-full bg-violet-500/50" />
-        </div>
-        <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-          <div className="rounded-xl border border-border/50 bg-card p-6">
-            <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-lg bg-muted">
-              <List className="h-5 w-5 text-muted-foreground" />
-            </div>
-            <h3 className="text-sm font-semibold text-foreground">Ten relationship types</h3>
-            <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">
-              Related, depends on, extends, parent of, derived from — pick the one that fits.
-            </p>
-          </div>
-          <div className="rounded-xl border border-border/50 bg-card p-6">
-            <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-lg bg-muted">
-              <Unlink className="h-5 w-5 text-muted-foreground" />
-            </div>
-            <h3 className="text-sm font-semibold text-foreground">Cross-type linking</h3>
-            <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">
-              Link notes to files, skills to agents, folders to anything. Not just note-to-note.
-            </p>
-          </div>
-          <div className="rounded-xl border border-border/50 bg-card p-6">
-            <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-lg bg-muted">
-              <MessageSquare className="h-5 w-5 text-muted-foreground" />
-            </div>
-            <h3 className="text-sm font-semibold text-foreground">Directed and annotated</h3>
-            <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">
-              Every link has a direction and optional annotation for context.
-            </p>
-          </div>
+      <section className="mx-auto w-full max-w-5xl px-6 py-20">
+        <SectionHeading>Semantic links</SectionHeading>
+        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
+          {SEMANTIC.map((f) => (
+            <FeatureCard key={f.title} {...f} />
+          ))}
         </div>
       </section>
 
-      {/* Graph view section */}
-      <section className="mx-auto w-full max-w-5xl px-6 py-24">
-        <div className="mb-8">
-          <h2 className="text-xl font-bold tracking-tight text-foreground">
-            Graph view
-          </h2>
-          <div className="mt-2 h-0.5 w-12 rounded-full bg-violet-500/50" />
-        </div>
-        <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-          <div className="rounded-xl border border-border/50 bg-card p-6">
-            <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-lg bg-muted">
-              <Move className="h-5 w-5 text-muted-foreground" />
-            </div>
-            <h3 className="text-sm font-semibold text-foreground">Interactive visualization</h3>
-            <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">
-              Pan, zoom, click, and explore your knowledge graph in real time.
-            </p>
-          </div>
-          <div className="rounded-xl border border-border/50 bg-card p-6">
-            <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-lg bg-muted">
-              <Shapes className="h-5 w-5 text-muted-foreground" />
-            </div>
-            <h3 className="text-sm font-semibold text-foreground">All object types</h3>
-            <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">
-              Notes, files, skills, agents, and folders all appear as nodes with typed edges.
-            </p>
-          </div>
-          <div className="rounded-xl border border-border/50 bg-card p-6">
-            <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-lg bg-muted">
-              <Eye className="h-5 w-5 text-muted-foreground" />
-            </div>
-            <h3 className="text-sm font-semibold text-foreground">Read-only by design</h3>
-            <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">
-              The graph is for understanding structure, not editing it — changes happen in the tree.
-            </p>
-          </div>
+      <section className="mx-auto w-full max-w-5xl px-6 pb-24">
+        <SectionHeading>Graph view</SectionHeading>
+        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
+          {GRAPH.map((f) => (
+            <FeatureCard key={f.title} {...f} />
+          ))}
         </div>
       </section>
 
-      {/* Bottom CTA */}
-      <section className="border-t border-border/50 py-20">
+      <section className="border-t border-border py-20">
         <div className="mx-auto max-w-2xl px-6 text-center">
-          <h2 className="text-2xl font-bold tracking-tight text-foreground">
+          <h2 className="text-headline text-foreground">
             Ready to connect your knowledge?
           </h2>
-          <p className="mt-3 text-muted-foreground">
+          <p className="mt-3 text-base text-muted-foreground">
             Build your first graph in minutes. No credit card needed.
           </p>
           <div className="mt-6 flex flex-col items-center gap-2">
-            <Button size="lg" render={<Link href="/sign_in" />}>Start connecting
-              <ArrowRight className="h-4 w-4" /></Button>
+            <Button size="lg" render={<Link href="/sign_in" />}>
+              Start connecting
+              <ArrowRight className="h-4 w-4" />
+            </Button>
             <ul className="mt-4 flex flex-wrap justify-center gap-4 text-xs text-muted-foreground">
               {[
                 "Free plan forever",
@@ -126,7 +144,7 @@ export default function ConnectionsPage() {
                 "No vendor lock-in",
               ].map((item) => (
                 <li key={item} className="flex items-center gap-1.5">
-                  <Check className="h-3 w-3 text-violet-400" />
+                  <Check className="h-3 w-3 text-brand" />
                   {item}
                 </li>
               ))}

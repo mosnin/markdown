@@ -77,13 +77,13 @@ export function MobileSidebar({
 
   return (
     <>
-      {/* Hamburger trigger */}
+      {/* Hamburger trigger — 44px tap target */}
       <button
         onClick={() => setOpen(true)}
         className={cn(
-          "flex items-center justify-center rounded-md p-2",
-          "text-foreground/70 hover:bg-accent hover:text-foreground",
-          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          "inline-flex h-11 w-11 items-center justify-center rounded-md",
+          "text-muted-foreground transition-colors hover:bg-accent hover:text-foreground",
+          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:ring-offset-1 focus-visible:ring-offset-background"
         )}
         aria-label="Open navigation menu"
         aria-expanded={open}
@@ -97,17 +97,20 @@ export function MobileSidebar({
           id="mobile-nav-sheet"
           side="left"
           showCloseButton={false}
-          className="w-72 p-0 bg-sidebar text-sidebar-foreground flex flex-col gap-0"
+          className="flex h-full w-[18rem] flex-col gap-0 border-r border-border bg-card p-0 text-foreground"
         >
           {/* Header */}
-          <SheetHeader className="flex-row items-center justify-between border-b border-sidebar-border px-4 py-3">
+          <SheetHeader className="flex-row items-center justify-between border-b border-border px-3 py-2">
             <SheetTitle className="sr-only">Navigation</SheetTitle>
+            <span className="ml-1 truncate text-sm font-semibold tracking-tight text-foreground">
+              {workspaceName}
+            </span>
             <button
               onClick={close}
               className={cn(
-                "ml-auto flex items-center justify-center rounded-md p-1.5",
-                "text-sidebar-foreground/60 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
-                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                "inline-flex h-11 w-11 items-center justify-center rounded-md",
+                "text-muted-foreground transition-colors hover:bg-accent hover:text-foreground",
+                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:ring-offset-1 focus-visible:ring-offset-background"
               )}
               aria-label="Close navigation menu"
             >
@@ -122,14 +125,14 @@ export function MobileSidebar({
               own portal, which blocked the sheet from opening on
               mobile. Users switch / create workspaces from
               /app/workspaces. */}
-          <div className="px-4 pt-3 pb-1">
+          <div className="px-3 pt-3 pb-1">
             <div className="flex items-center justify-between gap-2">
               <div className="min-w-0">
-                <p className="text-[10px] font-semibold uppercase tracking-wider text-sidebar-foreground/40">
+                <p className="text-overline text-muted-foreground/70">
                   Workspace
                 </p>
                 <p
-                  className="truncate text-sm font-semibold text-sidebar-foreground"
+                  className="truncate text-[15px] font-semibold text-foreground"
                   title={workspaceName}
                 >
                   {workspaceName}
@@ -138,14 +141,18 @@ export function MobileSidebar({
               <Link
                 href="/app/workspaces"
                 onClick={close}
-                className="shrink-0 rounded-md px-2 py-1 text-[11px] text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                className={cn(
+                  "shrink-0 rounded-md px-2.5 py-1.5 text-[12px] text-muted-foreground transition-colors",
+                  "hover:bg-accent hover:text-foreground",
+                  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:ring-offset-1 focus-visible:ring-offset-background"
+                )}
               >
                 Manage
               </Link>
             </div>
           </div>
 
-          {/* Primary nav */}
+          {/* Primary nav — 44px tap targets */}
           <nav aria-label="Primary navigation" className="px-2 pt-3 pb-1">
             <ul className="flex flex-col gap-0.5 list-none">
               {primaryNav.map((item) => {
@@ -157,19 +164,23 @@ export function MobileSidebar({
                       href={item.href}
                       onClick={close}
                       className={cn(
-                        "flex items-center gap-2.5 rounded-md px-2.5 py-2 text-sm transition-fast",
-                        "hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+                        "flex h-11 items-center gap-2.5 rounded-md px-2.5 text-[14px] transition-colors",
+                        "hover:bg-accent/60 hover:text-foreground",
                         isActive
-                          ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium"
-                          : "text-sidebar-foreground/70"
+                          ? "bg-accent text-foreground font-medium"
+                          : "text-muted-foreground",
+                        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:ring-offset-1 focus-visible:ring-offset-background"
                       )}
                       aria-current={isActive ? "page" : undefined}
                     >
                       <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
                       {item.label}
                       {item.href === "/app/proposals" && pendingProposalsCount > 0 && (
-                        <span className="ml-auto flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-medium text-primary-foreground">
-                          {pendingProposalsCount}
+                        <span
+                          className="ml-auto inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-md border border-transparent bg-brand px-1.5 text-[11px] font-medium text-brand-foreground"
+                          aria-label={`${pendingProposalsCount} pending`}
+                        >
+                          {pendingProposalsCount > 99 ? "99+" : pendingProposalsCount}
                         </span>
                       )}
                     </Link>
@@ -179,22 +190,20 @@ export function MobileSidebar({
             </ul>
           </nav>
 
-          <Separator className="mx-2 my-1 bg-sidebar-border" />
+          <Separator className="mx-2 my-1 bg-border" />
 
-          {/* Workspace + tree */}
-          <div className="flex items-center justify-between px-4 py-2">
+          {/* Collections heading + tree */}
+          <div className="flex items-center justify-between px-3 py-2">
             <Link
               href="/app/workspaces"
               onClick={close}
               className={cn(
-                "min-w-0 flex-1 text-[11px] font-semibold uppercase tracking-wider truncate",
-                "text-sidebar-foreground/40 transition-fast",
-                "hover:text-sidebar-foreground/70",
-                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:rounded-sm"
+                "min-w-0 flex-1 truncate text-overline text-muted-foreground/70 transition-colors hover:text-foreground/80",
+                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:ring-offset-1 focus-visible:ring-offset-background focus-visible:rounded"
               )}
               title={`Workspace: ${workspaceName}`}
             >
-              {workspaceName}
+              Collections
             </Link>
           </div>
 
@@ -204,8 +213,8 @@ export function MobileSidebar({
                 href="/app/workspaces"
                 onClick={close}
                 className={cn(
-                  "flex items-center gap-1.5 rounded-md px-2.5 py-2 text-xs transition-fast",
-                  "text-sidebar-foreground/40 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                  "flex items-center gap-1.5 rounded-md px-2.5 py-2 text-[13px] transition-colors",
+                  "text-muted-foreground hover:bg-accent/60 hover:text-foreground"
                 )}
               >
                 <Plus className="h-3 w-3 shrink-0" aria-hidden="true" />

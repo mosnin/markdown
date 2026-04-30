@@ -6,6 +6,7 @@ import Link from "next/link";
 import { ArrowLeft, ArrowRight, Check, ChevronDown, Mic, MicOff } from "lucide-react";
 import { quickCaptureAction } from "@/app/capture/actions";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
 import { cn } from "@/lib/utils";
 import { useVoiceCapture } from "@/lib/hooks/use_voice_capture";
@@ -123,31 +124,27 @@ export function CaptureView(props: CaptureViewProps) {
       <header className="sticky top-0 z-10 flex items-center justify-between border-b border-border bg-background/95 px-4 py-3 backdrop-blur">
         <Link
           href="/app"
-          className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
+          className="inline-flex items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-foreground"
         >
           <ArrowLeft className="h-4 w-4" aria-hidden="true" />
           Done
         </Link>
-        <span className="text-sm font-medium">Capture</span>
+        <span className="text-sm font-medium text-foreground">Capture</span>
         <div className="flex items-center gap-2">
           {voiceState !== "unsupported" && (
-            <button
+            <Button
               type="button"
+              size="icon-sm"
+              variant={voiceState === "listening" ? "destructive" : "outline"}
               onClick={toggleVoice}
               title={voiceState === "listening" ? "Stop recording" : "Voice input"}
-              className={cn(
-                "flex h-8 w-8 items-center justify-center rounded-md border transition-colors",
-                voiceState === "listening"
-                  ? "border-red-500/50 bg-red-500/10 text-red-500"
-                  : "border-border bg-background text-muted-foreground hover:bg-muted hover:text-foreground"
-              )}
             >
               {voiceState === "listening" ? (
                 <MicOff className="h-4 w-4" aria-hidden="true" />
               ) : (
                 <Mic className="h-4 w-4" aria-hidden="true" />
               )}
-            </button>
+            </Button>
           )}
           <Button
             size="sm"
@@ -165,47 +162,81 @@ export function CaptureView(props: CaptureViewProps) {
       </header>
 
       {error && (
-        <div className="border-b border-destructive/30 bg-destructive/10 px-4 py-2 text-sm text-destructive">
+        <div
+          role="alert"
+          className="border-b border-destructive/30 bg-destructive/5 px-4 py-2 text-sm text-destructive"
+        >
           {error}
         </div>
       )}
 
       {/* Body — fills the rest of the screen */}
-      <div className="flex flex-1 flex-col gap-3 p-4">
-        <input
-          type="text"
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          placeholder="Title (optional)"
-          className="rounded-md border border-border bg-background px-3 py-2 text-base text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-          maxLength={200}
-        />
+      <div className="flex flex-1 flex-col gap-4 p-4">
+        <div>
+          <label
+            htmlFor="capture-title"
+            className="mb-1.5 block text-sm font-medium text-foreground"
+          >
+            Title
+          </label>
+          <Input
+            id="capture-title"
+            type="text"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder="Optional"
+            maxLength={200}
+          />
+        </div>
 
-        <textarea
-          ref={bodyRef}
-          value={body}
-          onChange={(e) => setBody(e.target.value)}
-          onKeyDown={onBodyKeyDown}
-          placeholder={
-            props.hasShareData
-              ? "Add a note to the shared content…"
-              : "What's on your mind? Markdown welcome."
-          }
-          className="flex-1 resize-none rounded-md border border-border bg-background px-3 py-2 text-base text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-        />
+        <div className="flex flex-1 flex-col">
+          <label
+            htmlFor="capture-body"
+            className="mb-1.5 block text-sm font-medium text-foreground"
+          >
+            Note
+          </label>
+          <textarea
+            id="capture-body"
+            ref={bodyRef}
+            value={body}
+            onChange={(e) => setBody(e.target.value)}
+            onKeyDown={onBodyKeyDown}
+            placeholder={
+              props.hasShareData
+                ? "Add a note to the shared content…"
+                : "What's on your mind? Markdown welcome."
+            }
+            className={cn(
+              "flex-1 resize-none rounded-md border border-input bg-card px-3 py-2 text-sm text-foreground",
+              "placeholder:text-foreground/40",
+              "transition-[border-color,box-shadow,background-color] duration-150 ease-[cubic-bezier(0.2,0,0,1)]",
+              "outline-none focus-visible:border-brand/60 focus-visible:ring-2 focus-visible:ring-ring/40",
+              "dark:bg-card/60"
+            )}
+          />
+        </div>
 
         {/* Box picker — minimal native select for v1 */}
-        <div className="flex items-center justify-between">
-          <span className="text-xs text-muted-foreground">Save to</span>
+        <div>
+          <label
+            htmlFor="capture-box"
+            className="mb-1.5 block text-sm font-medium text-foreground"
+          >
+            Save to
+          </label>
           <div className="relative">
             <select
+              id="capture-box"
               value={boxId ?? "__create__"}
               onChange={(e) =>
                 setBoxId(e.target.value === "__create__" ? null : e.target.value)
               }
               className={cn(
-                "appearance-none rounded-md border border-border bg-background px-3 py-1.5 pr-8 text-sm text-foreground",
-                "focus:outline-none focus:ring-2 focus:ring-ring"
+                "h-9 w-full appearance-none rounded-md border border-input bg-card px-3 pr-8 text-sm text-foreground",
+                "outline-none transition-[border-color,box-shadow,background-color] duration-150",
+                "focus-visible:border-brand/60 focus-visible:ring-2 focus-visible:ring-ring/40",
+                "dark:bg-card/60"
               )}
             >
               {props.boxes.length === 0 && (
@@ -221,26 +252,26 @@ export function CaptureView(props: CaptureViewProps) {
               )}
             </select>
             <ChevronDown
-              className="pointer-events-none absolute right-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground"
+              className="pointer-events-none absolute right-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground"
               aria-hidden="true"
             />
           </div>
         </div>
 
-        <p className="text-center text-[10px] text-muted-foreground">
+        <p className="text-xs text-muted-foreground">
           {body.length} chars · ⌘↵ to save
         </p>
 
         {recentCaptures.length > 0 && (
-          <div className="border-t border-border pt-4 mt-2">
-            <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground/60 mb-2">
+          <div className="mt-2 border-t border-border pt-4">
+            <p className="mb-2 text-overline text-muted-foreground/70">
               Saved this session
             </p>
-            <ul className="space-y-1.5">
+            <ul className="space-y-1">
               {recentCaptures.map((entry) => (
                 <li
                   key={entry.id}
-                  className="flex items-center justify-between gap-2 rounded-md px-2 py-1.5 hover:bg-muted/40 transition-colors"
+                  className="flex items-center justify-between gap-2 rounded-md px-2 py-1.5 transition-colors hover:bg-accent"
                 >
                   <div className="min-w-0">
                     <p className="truncate text-sm text-foreground">
@@ -250,20 +281,17 @@ export function CaptureView(props: CaptureViewProps) {
                       {entry.boxName}
                     </p>
                   </div>
-                  <span className="shrink-0 text-xs text-muted-foreground/50">
+                  <span className="shrink-0 text-xs text-muted-foreground/60">
                     {formatRelativeTime(entry.savedAt)}
                   </span>
                 </li>
               ))}
             </ul>
             <div className="mt-4">
-              <a
-                href="/app"
-                className="inline-flex items-center gap-2 rounded-lg bg-violet-600 px-4 py-2.5 text-sm font-medium text-white shadow-sm transition-colors hover:bg-violet-700"
-              >
-                <ArrowRight className="h-4 w-4" aria-hidden="true" />
+              <Button render={<a href="/app" />}>
                 View in workspace
-              </a>
+                <ArrowRight className="h-4 w-4" aria-hidden="true" />
+              </Button>
             </div>
           </div>
         )}

@@ -44,7 +44,7 @@ export function InviteActions({ token }: { token: string }) {
 
   if (declined) {
     return (
-      <div className="text-center">
+      <div className="rounded-md border border-border bg-muted/30 px-3 py-3 text-center">
         <p className="text-sm text-muted-foreground">
           Invitation declined. You can close this page.
         </p>
@@ -53,30 +53,30 @@ export function InviteActions({ token }: { token: string }) {
   }
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-2.5">
       {error && (
-        <p className="text-xs text-destructive text-center" role="alert">
+        <p role="alert" className="text-xs text-destructive">
           {error}
         </p>
       )}
-      <div className="flex gap-3">
+      <div className="flex gap-2">
         <Button
           variant="outline"
           className="flex-1"
           onClick={decline}
           disabled={pending}
         >
-          {pending ? "Processing..." : "Decline"}
+          {pending ? "Processing…" : "Decline"}
         </Button>
         <Button
           className="flex-1"
           onClick={accept}
           disabled={pending}
         >
-          {pending ? "Processing..." : "Accept invitation"}
+          {pending ? "Processing…" : "Accept invitation"}
         </Button>
       </div>
-      <p className="text-[10px] text-muted-foreground text-center">
+      <p className="text-[11px] text-muted-foreground">
         You need to be signed in to accept the invitation.
       </p>
     </div>

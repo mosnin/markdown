@@ -1,42 +1,35 @@
-import { ShieldCheck, Lock, Download } from "lucide-react";
-
-const items = [
-  {
-    icon: ShieldCheck,
-    label: "Your notes never train AI models",
-  },
-  {
-    icon: Lock,
-    label: "Encrypted at rest & in transit",
-  },
-  {
-    icon: Download,
-    label: "Export everything as Markdown, anytime",
-  },
+/**
+ * Quiet "Trusted by" row.
+ *
+ * Six monochrome wordmark placeholders rendered in `text-foreground/40`,
+ * lifting to `/60` on hover. No icons, no animation. The list is data-driven
+ * so a real customer logo set can swap in without restructuring.
+ */
+const COMPANIES = [
+  "Acme",
+  "Northwind",
+  "Helix",
+  "Vector",
+  "Atlas",
+  "Quanta",
 ] as const;
 
 export function TrustBar() {
   return (
-    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-0">
-      {items.map((item, index) => {
-        const Icon = item.icon;
-        return (
-          <div key={item.label} className="flex items-center gap-1.5 sm:contents">
-            {index > 0 && (
-              <span
-                aria-hidden="true"
-                className="hidden sm:mx-3 sm:block text-muted-foreground/30 select-none"
-              >
-                ·
-              </span>
-            )}
-            <div className="flex items-center gap-1.5">
-              <Icon className="h-4 w-4 shrink-0 text-muted-foreground/60" aria-hidden="true" />
-              <span className="text-xs text-muted-foreground">{item.label}</span>
-            </div>
-          </div>
-        );
-      })}
+    <div className="flex flex-col items-center gap-3">
+      <p className="text-overline text-muted-foreground/60">
+        Trusted by teams at
+      </p>
+      <ul className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2 sm:gap-x-8">
+        {COMPANIES.map((name) => (
+          <li
+            key={name}
+            className="text-sm font-semibold tracking-tight text-foreground/40 transition-colors hover:text-foreground/60"
+          >
+            {name}
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }

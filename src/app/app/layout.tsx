@@ -76,7 +76,7 @@ export default async function AppLayout({
       {/* Skip to main content — visually hidden until focused (accessibility) */}
       <a
         href="#main-content"
-        className="sr-only focus:not-sr-only focus:absolute focus:z-[100] focus:left-4 focus:top-4 focus:rounded-md focus:bg-background focus:px-3 focus:py-2 focus:text-sm focus:font-medium focus:shadow-md focus:ring-2 focus:ring-ring"
+        className="sr-only focus:not-sr-only focus:absolute focus:z-[100] focus:left-4 focus:top-4 focus:rounded-md focus:border focus:border-border focus:bg-card focus:px-3 focus:py-2 focus:text-sm focus:font-medium focus:text-foreground focus:shadow-lg focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:ring-offset-1 focus-visible:ring-offset-background"
       >
         Skip to content
       </a>
@@ -97,9 +97,9 @@ export default async function AppLayout({
       {/* Main content column — flex column filling remaining width */}
       <div className="flex flex-1 flex-col overflow-hidden min-w-0">
         {/* ── Top bar ────────────────────────────────────────────────────────── */}
-        <header className="flex h-12 shrink-0 items-center gap-3 border-b border-border/40 bg-background px-3 md:px-4">
+        <header className="flex h-12 shrink-0 items-center gap-3 border-b border-border bg-background px-3 md:px-4">
           {/* Mobile: hamburger + workspace name */}
-          <div className="flex items-center gap-3 md:hidden">
+          <div className="flex items-center gap-2 md:hidden">
             <MobileShellSidebar
               userEmail={userEmail}
               workspaceName={workspaceName}
@@ -108,7 +108,7 @@ export default async function AppLayout({
               workspaces={workspaces}
               pendingProposalsCount={pendingProposalsCount}
             />
-            <span className="text-sm font-semibold tracking-tight truncate">
+            <span className="truncate text-sm font-semibold tracking-tight text-foreground">
               {workspaceName ?? "Context Store"}
             </span>
           </div>
@@ -118,9 +118,9 @@ export default async function AppLayout({
             <AppBreadcrumbs />
           </div>
 
-          {/* Desktop: global search + utility links + theme toggle (right) */}
+          {/* Desktop: quiet operator/activity/docs/theme toolbar (right) */}
           <div
-            className="hidden md:flex md:items-center md:gap-2 md:ml-auto"
+            className="hidden md:flex md:items-center md:gap-1 md:ml-auto"
             role="toolbar"
             aria-label="User actions"
           >
@@ -132,7 +132,7 @@ export default async function AppLayout({
               href="https://docs.contextstore.app"
               target="_blank"
               rel="noopener noreferrer"
-              className="text-xs text-foreground/50 hover:text-foreground transition-fast focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded"
+              className="inline-flex h-7 items-center justify-center rounded-md px-2 text-[13px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:ring-offset-1 focus-visible:ring-offset-background"
             >
               Docs
             </a>

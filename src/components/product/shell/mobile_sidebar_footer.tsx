@@ -48,15 +48,16 @@ export function MobileSidebarFooter({
     : "";
 
   return (
-    <div className="border-t border-sidebar-border">
-      <div className="flex items-center justify-between px-3 py-2">
+    <div className="border-t border-border">
+      <div className="flex items-center justify-between gap-2 px-2 py-2">
         <Link
           href="/app/settings"
           onClick={onNavigate}
           className={cn(
-            "flex items-center gap-2 rounded-md p-1.5 text-sidebar-foreground/60 transition-fast text-sm",
-            "hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
-            isSettingsActive && "text-sidebar-accent-foreground",
+            "inline-flex h-11 flex-1 items-center gap-2 rounded-md px-2.5 text-[13px] transition-colors",
+            "text-muted-foreground hover:bg-accent hover:text-foreground",
+            isSettingsActive && "bg-accent text-foreground font-medium",
+            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:ring-offset-1 focus-visible:ring-offset-background"
           )}
           aria-label="Settings"
           aria-current={isSettingsActive ? "page" : undefined}
@@ -73,26 +74,28 @@ export function MobileSidebarFooter({
           aria-label={isDark ? "Switch to light theme" : "Switch to dark theme"}
           className={cn(
             buttonVariants({ variant: "ghost", size: "icon" }),
-            "h-8 w-8 text-muted-foreground hover:text-foreground",
+            "relative h-11 w-11 text-muted-foreground hover:text-foreground"
           )}
         >
           <Sun
             className={cn(
-              "h-4 w-4 transition-all",
-              isDark ? "rotate-90 scale-0" : "rotate-0 scale-100",
+              "h-4 w-4 transition-[opacity,transform] duration-200 ease-[cubic-bezier(0.2,0,0,1)]",
+              isDark ? "scale-90 opacity-0" : "scale-100 opacity-100",
             )}
+            aria-hidden="true"
           />
           <Moon
             className={cn(
-              "absolute h-4 w-4 transition-all",
-              isDark ? "rotate-0 scale-100" : "rotate-90 scale-0",
+              "absolute h-4 w-4 transition-[opacity,transform] duration-200 ease-[cubic-bezier(0.2,0,0,1)]",
+              isDark ? "scale-100 opacity-100" : "scale-90 opacity-0",
             )}
+            aria-hidden="true"
           />
         </button>
       </div>
 
       {userEmail && (
-        <div className="border-t border-sidebar-border px-2 py-2">
+        <div className="border-t border-border px-2 py-2">
           {/* Inline user row — shows email + a plain Sign out button.
               Previously this was <UserMenu /> which wraps a Base UI
               DropdownMenu; that dropdown's Floating UI portal nested
@@ -101,11 +104,11 @@ export function MobileSidebarFooter({
               layout is sufficient here: the user only needs Settings
               (already linked above) and Sign out. */}
           <div className="flex items-center gap-2 px-1.5 py-1">
-            <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-muted text-[10px] font-semibold text-muted-foreground">
+            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-muted text-[11px] font-semibold text-foreground">
               {initials}
             </div>
             <span
-              className="min-w-0 flex-1 truncate text-xs text-sidebar-foreground/70"
+              className="min-w-0 flex-1 truncate text-[13px] text-foreground"
               title={userEmail}
             >
               {userEmail}
@@ -115,13 +118,13 @@ export function MobileSidebarFooter({
                 type="submit"
                 aria-label="Sign out"
                 className={cn(
-                  "flex h-7 w-7 items-center justify-center rounded-md",
-                  "text-sidebar-foreground/60 transition-fast",
-                  "hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
-                  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                  "inline-flex h-11 w-11 items-center justify-center rounded-md",
+                  "text-muted-foreground transition-colors",
+                  "hover:bg-destructive/10 hover:text-destructive",
+                  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:ring-offset-1 focus-visible:ring-offset-background"
                 )}
               >
-                <LogOut className="h-3.5 w-3.5" aria-hidden="true" />
+                <LogOut className="h-4 w-4" aria-hidden="true" />
               </button>
             </form>
           </div>

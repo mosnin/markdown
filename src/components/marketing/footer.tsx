@@ -1,5 +1,4 @@
 import Link from "next/link";
-import Image from "next/image";
 
 const LINKS = {
   Product: [
@@ -9,16 +8,16 @@ const LINKS = {
     { href: "/connections", label: "Connections" },
     { href: "/pricing", label: "Pricing" },
   ],
-  Developers: [
-    { href: "https://docs.poggle.app", label: "Documentation" },
-    { href: "/api", label: "API & MCP" },
-    { href: "/portability", label: "Import & Export" },
-    { href: "/changelog", label: "Changelog" },
-  ],
   Company: [
     { href: "/about", label: "About" },
     { href: "/how-it-works", label: "How It Works" },
     { href: "/blog", label: "Blog" },
+    { href: "/changelog", label: "Changelog" },
+  ],
+  Resources: [
+    { href: "https://docs.poggle.app", label: "Documentation" },
+    { href: "/api", label: "API & MCP" },
+    { href: "/portability", label: "Import & Export" },
     { href: "/help", label: "Help Center" },
   ],
   Legal: [
@@ -33,18 +32,25 @@ const LINKS = {
 
 export function MarketingFooter() {
   return (
-    <footer className="border-t border-border/50 bg-background">
-      <div className="mx-auto max-w-6xl px-6 py-14">
+    <footer className="border-t border-border bg-background">
+      <div className="mx-auto max-w-6xl px-6 py-16">
         <div className="grid grid-cols-2 gap-10 sm:grid-cols-3 md:grid-cols-5">
           {/* Brand column */}
           <div className="col-span-2 sm:col-span-3 md:col-span-1">
-            <div className="flex items-center gap-2.5">
-              <Image src="/logo-symbol-dark.png" alt="Poggle" width={28} height={28} className="rounded dark:hidden" />
-              <Image src="/logo-symbol-light.png" alt="Poggle" width={28} height={28} className="rounded hidden dark:block" />
-              <Image src="/logo-text-black.png" alt="Poggle" width={64} height={22} className="dark:hidden" />
-              <Image src="/logo-text-white.png" alt="Poggle" width={64} height={22} className="hidden dark:block" />
-            </div>
-            <p className="mt-4 max-w-[200px] text-xs leading-relaxed text-muted-foreground">
+            <Link
+              href="/"
+              className="inline-flex items-center gap-2"
+              aria-label="Poggle home"
+            >
+              <span
+                aria-hidden
+                className="inline-block size-4 rounded-[3px] bg-brand"
+              />
+              <span className="text-[15px] font-semibold tracking-tight text-foreground">
+                Poggle
+              </span>
+            </Link>
+            <p className="mt-4 max-w-[220px] text-sm leading-relaxed text-muted-foreground">
               A markdown-native context operating system for humans and AI.
             </p>
           </div>
@@ -52,7 +58,7 @@ export function MarketingFooter() {
           {/* Link columns */}
           {Object.entries(LINKS).map(([group, links]) => (
             <div key={group}>
-              <p className="mb-3 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground/70">
+              <p className="mb-4 text-overline text-muted-foreground/70">
                 {group}
               </p>
               <ul className="space-y-2.5">
@@ -71,7 +77,8 @@ export function MarketingFooter() {
           ))}
         </div>
 
-        <div className="mt-12 flex flex-col items-start justify-between gap-4 border-t border-border/50 pt-8 sm:flex-row sm:items-center">
+        {/* Small print row */}
+        <div className="mt-14 flex flex-col items-start justify-between gap-4 border-t border-border pt-8 sm:flex-row sm:items-center">
           {/*
            * `new Date().getFullYear()` is hydration-safe here: this is a
            * server component (no "use client"), so it only runs on the

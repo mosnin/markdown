@@ -12,12 +12,88 @@ import {
 } from "lucide-react";
 import { PageHeroSection } from "@/components/marketing/hero";
 import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+} from "@/components/ui/card";
 
 export const metadata: Metadata = {
   title: "Notes & Files — Poggle",
   description:
     "Markdown notes and code artifacts in one place. Write notes for humans, manage files for machines — all with full version history.",
 };
+
+type Feature = {
+  icon: React.ComponentType<{ className?: string }>;
+  title: string;
+  description: string;
+};
+
+function FeatureCard({ icon: Icon, title, description }: Feature) {
+  return (
+    <Card>
+      <CardHeader>
+        <div className="mb-3 flex h-9 w-9 items-center justify-center rounded-md border border-border bg-muted/40">
+          <Icon className="h-4.5 w-4.5 text-muted-foreground" />
+        </div>
+        <CardTitle>{title}</CardTitle>
+        <CardDescription>{description}</CardDescription>
+      </CardHeader>
+    </Card>
+  );
+}
+
+function SectionHeading({ children }: { children: string }) {
+  return (
+    <div className="mb-8">
+      <h2 className="text-headline text-foreground">{children}</h2>
+      <div className="mt-2 h-0.5 w-12 rounded-full bg-brand" />
+    </div>
+  );
+}
+
+const NOTES: Feature[] = [
+  {
+    icon: FileText,
+    title: "Markdown native",
+    description:
+      "Every note is plain markdown. No proprietary formats, no lock-in.",
+  },
+  {
+    icon: Eye,
+    title: "Document preview",
+    description:
+      "Notes render with readable formatting — headings, lists, code blocks, and more.",
+  },
+  {
+    icon: History,
+    title: "Version history",
+    description:
+      "Every save creates a version. Roll back to any point with one click.",
+  },
+];
+
+const FILES: Feature[] = [
+  {
+    icon: FileCode,
+    title: "Code artifacts",
+    description:
+      "JSON, YAML, Python, TypeScript, SQL, shell scripts — any format you need.",
+  },
+  {
+    icon: Code,
+    title: "Source editing",
+    description: "Files open in a real code editor, not a rich text pretender.",
+  },
+  {
+    icon: RefreshCw,
+    title: "Full lifecycle",
+    description:
+      "Draft, active, archived, or trashed. Every file has a clear status.",
+  },
+];
 
 export default function NotesAndFilesPage() {
   return (
@@ -29,96 +105,37 @@ export default function NotesAndFilesPage() {
         ctaPrimary={{ label: "Get started free", href: "/sign_in" }}
       />
 
-      {/* Notes section */}
-      <section className="mx-auto w-full max-w-5xl px-6 py-24">
-        <div className="mb-8">
-          <h2 className="text-xl font-bold tracking-tight text-foreground">
-            Notes
-          </h2>
-          <div className="mt-2 h-0.5 w-12 rounded-full bg-violet-500/50" />
-        </div>
-        <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-          <div className="rounded-xl border border-border/50 bg-card p-6">
-            <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-lg bg-muted">
-              <FileText className="h-5 w-5 text-muted-foreground" />
-            </div>
-            <h3 className="text-sm font-semibold text-foreground">Markdown native</h3>
-            <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">
-              Every note is plain markdown. No proprietary formats, no lock-in.
-            </p>
-          </div>
-          <div className="rounded-xl border border-border/50 bg-card p-6">
-            <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-lg bg-muted">
-              <Eye className="h-5 w-5 text-muted-foreground" />
-            </div>
-            <h3 className="text-sm font-semibold text-foreground">Document preview</h3>
-            <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">
-              Notes render with readable formatting — headings, lists, code blocks, and more.
-            </p>
-          </div>
-          <div className="rounded-xl border border-border/50 bg-card p-6">
-            <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-lg bg-muted">
-              <History className="h-5 w-5 text-muted-foreground" />
-            </div>
-            <h3 className="text-sm font-semibold text-foreground">Version history</h3>
-            <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">
-              Every save creates a version. Roll back to any point with one click.
-            </p>
-          </div>
+      <section className="mx-auto w-full max-w-5xl px-6 py-20">
+        <SectionHeading>Notes</SectionHeading>
+        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
+          {NOTES.map((f) => (
+            <FeatureCard key={f.title} {...f} />
+          ))}
         </div>
       </section>
 
-      {/* Files section */}
-      <section className="mx-auto w-full max-w-5xl px-6 py-24">
-        <div className="mb-8">
-          <h2 className="text-xl font-bold tracking-tight text-foreground">
-            Files
-          </h2>
-          <div className="mt-2 h-0.5 w-12 rounded-full bg-violet-500/50" />
-        </div>
-        <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-          <div className="rounded-xl border border-border/50 bg-card p-6">
-            <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-lg bg-muted">
-              <FileCode className="h-5 w-5 text-muted-foreground" />
-            </div>
-            <h3 className="text-sm font-semibold text-foreground">Code artifacts</h3>
-            <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">
-              JSON, YAML, Python, TypeScript, SQL, shell scripts — any format you need.
-            </p>
-          </div>
-          <div className="rounded-xl border border-border/50 bg-card p-6">
-            <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-lg bg-muted">
-              <Code className="h-5 w-5 text-muted-foreground" />
-            </div>
-            <h3 className="text-sm font-semibold text-foreground">Source editing</h3>
-            <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">
-              Files open in a real code editor, not a rich text pretender.
-            </p>
-          </div>
-          <div className="rounded-xl border border-border/50 bg-card p-6">
-            <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-lg bg-muted">
-              <RefreshCw className="h-5 w-5 text-muted-foreground" />
-            </div>
-            <h3 className="text-sm font-semibold text-foreground">Full lifecycle</h3>
-            <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">
-              Draft, active, archived, or trashed. Every file has a clear status.
-            </p>
-          </div>
+      <section className="mx-auto w-full max-w-5xl px-6 pb-24">
+        <SectionHeading>Files</SectionHeading>
+        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
+          {FILES.map((f) => (
+            <FeatureCard key={f.title} {...f} />
+          ))}
         </div>
       </section>
 
-      {/* Bottom CTA */}
-      <section className="border-t border-border/50 py-20">
+      <section className="border-t border-border py-20">
         <div className="mx-auto max-w-2xl px-6 text-center">
-          <h2 className="text-2xl font-bold tracking-tight text-foreground">
+          <h2 className="text-headline text-foreground">
             Ready to start writing?
           </h2>
-          <p className="mt-3 text-muted-foreground">
+          <p className="mt-3 text-base text-muted-foreground">
             Create notes and files in seconds. No credit card needed.
           </p>
           <div className="mt-6 flex flex-col items-center gap-2">
-            <Button size="lg" render={<Link href="/sign_in" />}>Get started free
-              <ArrowRight className="h-4 w-4" /></Button>
+            <Button size="lg" render={<Link href="/sign_in" />}>
+              Get started free
+              <ArrowRight className="h-4 w-4" />
+            </Button>
             <ul className="mt-4 flex flex-wrap justify-center gap-4 text-xs text-muted-foreground">
               {[
                 "Free plan forever",
@@ -126,7 +143,7 @@ export default function NotesAndFilesPage() {
                 "No vendor lock-in",
               ].map((item) => (
                 <li key={item} className="flex items-center gap-1.5">
-                  <Check className="h-3 w-3 text-violet-400" />
+                  <Check className="h-3 w-3 text-brand" />
                   {item}
                 </li>
               ))}

@@ -12,12 +12,89 @@ import {
 } from "lucide-react";
 import { PageHeroSection } from "@/components/marketing/hero";
 import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+} from "@/components/ui/card";
 
 export const metadata: Metadata = {
   title: "API & MCP — Poggle",
   description:
     "Programmatic access for your tools and agents. The REST API is the canonical interface; MCP lets AI agents use it natively.",
 };
+
+type Feature = {
+  icon: React.ComponentType<{ className?: string }>;
+  title: string;
+  description: string;
+};
+
+function FeatureCard({ icon: Icon, title, description }: Feature) {
+  return (
+    <Card>
+      <CardHeader>
+        <div className="mb-3 flex h-9 w-9 items-center justify-center rounded-md border border-border bg-muted/40">
+          <Icon className="h-4.5 w-4.5 text-muted-foreground" />
+        </div>
+        <CardTitle>{title}</CardTitle>
+        <CardDescription>{description}</CardDescription>
+      </CardHeader>
+    </Card>
+  );
+}
+
+function SectionHeading({ children }: { children: string }) {
+  return (
+    <div className="mb-8">
+      <h2 className="text-headline text-foreground">{children}</h2>
+      <div className="mt-2 h-0.5 w-12 rounded-full bg-brand" />
+    </div>
+  );
+}
+
+const REST: Feature[] = [
+  {
+    icon: Database,
+    title: "Full CRUD",
+    description:
+      "Create, read, update, and search notes, files, and context bundles programmatically.",
+  },
+  {
+    icon: Key,
+    title: "Connection tokens",
+    description:
+      "Scoped API tokens with box-level access control and permission modes.",
+  },
+  {
+    icon: ShieldCheck,
+    title: "Write proposals",
+    description:
+      "External agents propose changes. Humans approve or reject. No unsupervised edits.",
+  },
+];
+
+const MCP: Feature[] = [
+  {
+    icon: Cpu,
+    title: "Model Context Protocol",
+    description:
+      "AI agents discover and use your tools natively through the MCP standard.",
+  },
+  {
+    icon: Layers,
+    title: "Same API, different interface",
+    description:
+      "MCP is an adapter over the canonical API — not a second backend.",
+  },
+  {
+    icon: Lock,
+    title: "Scoped access",
+    description:
+      "Each MCP connection gets the same box-level permissions as API tokens.",
+  },
+];
 
 export default function ApiPage() {
   return (
@@ -30,95 +107,37 @@ export default function ApiPage() {
       />
 
       {/* REST API section */}
-      <section className="mx-auto w-full max-w-5xl px-6 py-24">
-        <div className="mb-8">
-          <h2 className="text-xl font-bold tracking-tight text-foreground">
-            REST API
-          </h2>
-          <div className="mt-2 h-0.5 w-12 rounded-full bg-violet-500/50" />
-        </div>
-        <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-          <div className="rounded-xl border border-border/50 bg-card p-6">
-            <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-lg bg-muted">
-              <Database className="h-5 w-5 text-muted-foreground" />
-            </div>
-            <h3 className="text-sm font-semibold text-foreground">Full CRUD</h3>
-            <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">
-              Create, read, update, and search notes, files, and context bundles programmatically.
-            </p>
-          </div>
-          <div className="rounded-xl border border-border/50 bg-card p-6">
-            <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-lg bg-muted">
-              <Key className="h-5 w-5 text-muted-foreground" />
-            </div>
-            <h3 className="text-sm font-semibold text-foreground">Connection tokens</h3>
-            <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">
-              Scoped API tokens with box-level access control and permission modes.
-            </p>
-          </div>
-          <div className="rounded-xl border border-border/50 bg-card p-6">
-            <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-lg bg-muted">
-              <ShieldCheck className="h-5 w-5 text-muted-foreground" />
-            </div>
-            <h3 className="text-sm font-semibold text-foreground">Write proposals</h3>
-            <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">
-              External agents propose changes. Humans approve or reject. No unsupervised edits.
-            </p>
-          </div>
+      <section className="mx-auto w-full max-w-5xl px-6 py-20">
+        <SectionHeading>REST API</SectionHeading>
+        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
+          {REST.map((f) => (
+            <FeatureCard key={f.title} {...f} />
+          ))}
         </div>
       </section>
 
       {/* MCP section */}
-      <section className="mx-auto w-full max-w-5xl px-6 py-24">
-        <div className="mb-8">
-          <h2 className="text-xl font-bold tracking-tight text-foreground">
-            MCP
-          </h2>
-          <div className="mt-2 h-0.5 w-12 rounded-full bg-violet-500/50" />
-        </div>
-        <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-          <div className="rounded-xl border border-border/50 bg-card p-6">
-            <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-lg bg-muted">
-              <Cpu className="h-5 w-5 text-muted-foreground" />
-            </div>
-            <h3 className="text-sm font-semibold text-foreground">Model Context Protocol</h3>
-            <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">
-              AI agents discover and use your tools natively through the MCP standard.
-            </p>
-          </div>
-          <div className="rounded-xl border border-border/50 bg-card p-6">
-            <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-lg bg-muted">
-              <Layers className="h-5 w-5 text-muted-foreground" />
-            </div>
-            <h3 className="text-sm font-semibold text-foreground">Same API, different interface</h3>
-            <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">
-              MCP is an adapter over the canonical API — not a second backend.
-            </p>
-          </div>
-          <div className="rounded-xl border border-border/50 bg-card p-6">
-            <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-lg bg-muted">
-              <Lock className="h-5 w-5 text-muted-foreground" />
-            </div>
-            <h3 className="text-sm font-semibold text-foreground">Scoped access</h3>
-            <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">
-              Each MCP connection gets the same box-level permissions as API tokens.
-            </p>
-          </div>
+      <section className="mx-auto w-full max-w-5xl px-6 pb-24">
+        <SectionHeading>MCP</SectionHeading>
+        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
+          {MCP.map((f) => (
+            <FeatureCard key={f.title} {...f} />
+          ))}
         </div>
       </section>
 
       {/* Bottom CTA */}
-      <section className="border-t border-border/50 py-20">
+      <section className="border-t border-border py-20">
         <div className="mx-auto max-w-2xl px-6 text-center">
-          <h2 className="text-2xl font-bold tracking-tight text-foreground">
-            Ready to integrate?
-          </h2>
-          <p className="mt-3 text-muted-foreground">
+          <h2 className="text-headline text-foreground">Ready to integrate?</h2>
+          <p className="mt-3 text-base text-muted-foreground">
             Get your API token and start building. No credit card needed.
           </p>
           <div className="mt-6 flex flex-col items-center gap-2">
-            <Button size="lg" render={<Link href="/sign_in" />}>Get API access
-              <ArrowRight className="h-4 w-4" /></Button>
+            <Button size="lg" render={<Link href="/sign_in" />}>
+              Get API access
+              <ArrowRight className="h-4 w-4" />
+            </Button>
             <ul className="mt-4 flex flex-wrap justify-center gap-4 text-xs text-muted-foreground">
               {[
                 "Free plan forever",
@@ -126,7 +145,7 @@ export default function ApiPage() {
                 "No vendor lock-in",
               ].map((item) => (
                 <li key={item} className="flex items-center gap-1.5">
-                  <Check className="h-3 w-3 text-violet-400" />
+                  <Check className="h-3 w-3 text-brand" />
                   {item}
                 </li>
               ))}

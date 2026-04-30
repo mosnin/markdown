@@ -13,6 +13,15 @@ type GridCardProps = React.ComponentProps<'div'> & {
 	patternSeed?: string;
 };
 
+/**
+ * Decorative grid-pattern card.
+ *
+ * The redesign drops the conic rainbow halo. The background is now a
+ * single monochrome dotted/lined pattern rendered at low opacity through
+ * a subtle radial mask, with the standard hairline border + bg-card
+ * surface. The seed-driven pattern is preserved so SSR hydration stays
+ * deterministic.
+ */
 export function GridCard({
 	className,
 	children,
@@ -22,30 +31,25 @@ export function GridCard({
 	return (
 		<div
 			className={cn(
-				'group bg-background relative isolate z-0 flex h-full flex-col justify-between overflow-hidden rounded-sm border px-5 py-4 transition-colors duration-75',
+				'group relative isolate z-0 flex h-full flex-col justify-between overflow-hidden rounded-lg border border-border bg-card px-5 py-4 transition-colors duration-150',
 				className,
 			)}
 			{...props}
 		>
-			<div className="absolute inset-0">
-				<div className="absolute -inset-[25%] -skew-y-12 [mask-image:linear-gradient(225deg,black,transparent)]">
-					<GridPattern
-						width={30}
-						height={30}
-						x={0}
-						y={0}
-						squares={getSeededPattern(patternSeed ?? '', 5)}
-						className="fill-border/50 stroke-border absolute inset-0 size-full translate-y-2 transition-transform duration-150 ease-out group-hover:translate-y-0"
-					/>
-				</div>
-				<div
-					className={cn(
-						'absolute -inset-[10%] opacity-0 blur-[50px] transition-opacity duration-150 group-hover:opacity-10',
-						'bg-[conic-gradient(#F35066_0deg,#F35066_117deg,#9071F9_180deg,#5182FC_240deg,#F35066_360deg)]',
-					)}
+			<div
+				aria-hidden
+				className="pointer-events-none absolute inset-0 [mask-image:radial-gradient(farthest-side_at_top_right,black,transparent_70%)]"
+			>
+				<GridPattern
+					width={28}
+					height={28}
+					x={0}
+					y={0}
+					squares={getSeededPattern(patternSeed ?? '', 4)}
+					className="fill-foreground/[0.04] stroke-foreground/[0.06] absolute inset-0 size-full"
 				/>
 			</div>
-			{children}
+			<div className="relative">{children}</div>
 		</div>
 	);
 }

@@ -1,47 +1,24 @@
 'use client';
 import React from 'react';
 import Link from 'next/link';
-import Image from 'next/image';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { MenuToggleIcon } from '@/components/ui/menu-toggle-icon';
 import { createPortal } from 'react-dom';
-import {
-	NavigationMenu,
-	NavigationMenuContent,
-	NavigationMenuItem,
-	NavigationMenuLink,
-	NavigationMenuList,
-	NavigationMenuTrigger,
-} from '@/components/ui/navigation-menu';
-import { type LucideIcon } from 'lucide-react';
-import {
-	CodeIcon,
-	LayersIcon,
-	FileText,
-	Shield,
-	RotateCcw,
-	Leaf,
-	HelpCircle,
-	BarChart2,
-	Archive,
-	GitBranch,
-	Users,
-	Upload,
-	BookOpen,
-	Star,
-} from 'lucide-react';
 
-type LinkItem = {
-	title: string;
-	href: string;
-	icon: LucideIcon;
-	description?: string;
-};
+type NavLink = { title: string; href: string };
+
+const NAV_LINKS: NavLink[] = [
+	{ title: 'Features', href: '/features' },
+	{ title: 'Pricing', href: '/pricing' },
+	{ title: 'Docs', href: 'https://docs.poggle.app' },
+	{ title: 'Blog', href: '/blog' },
+	{ title: 'Changelog', href: '/changelog' },
+];
 
 export function MarketingHeader() {
 	const [open, setOpen] = React.useState(false);
-	const scrolled = useScroll(10);
+	const scrolled = useScroll(8);
 
 	React.useEffect(() => {
 		if (open) {
@@ -56,77 +33,59 @@ export function MarketingHeader() {
 
 	return (
 		<header
-			className={cn('sticky top-0 z-50 w-full border-b border-transparent', {
-				'bg-background/95 supports-[backdrop-filter]:bg-background/50 border-border backdrop-blur-lg':
-					scrolled,
-			})}
+			className={cn(
+				'sticky top-0 z-50 w-full border-b transition-colors duration-150',
+				scrolled
+					? 'border-border bg-background/85 backdrop-blur-md supports-[backdrop-filter]:bg-background/70'
+					: 'border-transparent bg-background',
+			)}
 		>
-			<nav className="mx-auto flex h-14 w-full max-w-5xl items-center justify-between px-4">
-				<div className="flex items-center gap-5">
-					<Link href="/" className="hover:bg-accent flex items-center gap-2.5 rounded-md px-2 py-1.5">
-						<WordmarkLogo />
+			<nav className="mx-auto flex h-14 w-full max-w-6xl items-center justify-between px-6">
+				{/* Brand mark */}
+				<div className="flex items-center gap-8">
+					<Link
+						href="/"
+						className="flex items-center gap-2 rounded-md px-1 py-1 transition-colors hover:opacity-90"
+						aria-label="Poggle home"
+					>
+						<span
+							aria-hidden
+							className="inline-block size-4 rounded-[3px] bg-brand"
+						/>
+						<span className="text-[15px] font-semibold tracking-tight text-foreground">
+							Poggle
+						</span>
 					</Link>
-					<NavigationMenu className="hidden md:flex">
-						<NavigationMenuList>
-							<NavigationMenuItem>
-								<NavigationMenuTrigger className="bg-transparent">Product</NavigationMenuTrigger>
-								<NavigationMenuContent className="bg-background p-1 pr-1.5">
-									<ul className="bg-popover grid w-lg grid-cols-2 gap-2 rounded-md border p-2 shadow">
-										{productLinks.map((item, i) => (
-											<li key={i}>
-												<ListItem {...item} />
-											</li>
-										))}
-									</ul>
-									<div className="p-2">
-										<p className="text-muted-foreground text-sm">
-											Want a closer look?{' '}
-											<Link href="/pricing" className="text-foreground font-medium hover:underline">
-												View pricing
-											</Link>
-										</p>
-									</div>
-								</NavigationMenuContent>
-							</NavigationMenuItem>
-							<NavigationMenuItem>
-								<NavigationMenuTrigger className="bg-transparent">Company</NavigationMenuTrigger>
-								<NavigationMenuContent className="bg-background p-1 pr-1.5 pb-1.5">
-									<div className="grid w-lg grid-cols-2 gap-2">
-										<ul className="bg-popover space-y-2 rounded-md border p-2 shadow">
-											{companyLinks.map((item, i) => (
-												<li key={i}>
-													<ListItem {...item} />
-												</li>
-											))}
-										</ul>
-										<ul className="space-y-2 p-3">
-											{companyLinks2.map((item, i) => (
-												<li key={i}>
-													<NavigationMenuLink
-														href={item.href}
-														className="flex p-2 hover:bg-accent flex-row rounded-md items-center gap-x-2"
-													>
-														<item.icon className="text-foreground size-4" />
-														<span className="font-medium">{item.title}</span>
-													</NavigationMenuLink>
-												</li>
-											))}
-										</ul>
-									</div>
-								</NavigationMenuContent>
-							</NavigationMenuItem>
-							<NavigationMenuLink className="px-4" asChild>
-								<Link href="/pricing" className="hover:bg-accent rounded-md p-2">
-									Pricing
+
+					{/* Center nav */}
+					<ul className="hidden items-center gap-1 md:flex">
+						{NAV_LINKS.map((link) => (
+							<li key={link.href}>
+								<Link
+									href={link.href}
+									className={cn(
+										'rounded-md px-3 py-1.5 text-sm text-muted-foreground',
+										'transition-colors hover:text-foreground',
+									)}
+								>
+									{link.title}
 								</Link>
-							</NavigationMenuLink>
-						</NavigationMenuList>
-					</NavigationMenu>
+							</li>
+						))}
+					</ul>
 				</div>
+
+				{/* Right CTAs */}
 				<div className="hidden items-center gap-2 md:flex">
-					<Button variant="outline" render={<Link href="/sign_in" />}>Sign In</Button>
-					<Button render={<Link href="/sign_in" />}>Get Started</Button>
+					<Button variant="ghost" size="sm" render={<Link href="/sign_in" />}>
+						Sign in
+					</Button>
+					<Button size="sm" render={<Link href="/sign_in" />}>
+						Get started
+					</Button>
 				</div>
+
+				{/* Mobile toggle */}
 				<Button
 					size="icon"
 					variant="outline"
@@ -139,186 +98,60 @@ export function MarketingHeader() {
 					<MenuToggleIcon open={open} className="size-5" duration={300} />
 				</Button>
 			</nav>
-			<MobileMenu open={open} className="flex flex-col justify-between gap-2 overflow-y-auto">
-				<NavigationMenu className="max-w-full">
-					<div className="flex w-full flex-col gap-y-2">
-						<span className="text-sm">Product</span>
-						{productLinks.map((link) => (
-							<ListItem key={link.title} {...link} />
-						))}
-						<span className="text-sm">Company</span>
-						{companyLinks.map((link) => (
-							<ListItem key={link.title} {...link} />
-						))}
-						{companyLinks2.map((link) => (
-							<ListItem key={link.title} {...link} />
-						))}
-					</div>
-				</NavigationMenu>
-				<div className="flex flex-col gap-2">
-					<Button variant="outline" className="w-full bg-transparent" render={<Link href="/sign_in" />}>
-						Sign In
-					</Button>
-					<Button className="w-full" render={<Link href="/sign_in" />}>Get Started</Button>
-				</div>
-			</MobileMenu>
+
+			<MobileMenu open={open} onNavigate={() => setOpen(false)} />
 		</header>
 	);
 }
 
-type MobileMenuProps = React.ComponentProps<'div'> & {
+function MobileMenu({
+	open,
+	onNavigate,
+}: {
 	open: boolean;
-};
-
-function MobileMenu({ open, children, className, ...props }: MobileMenuProps) {
+	onNavigate: () => void;
+}) {
 	if (!open || typeof window === 'undefined') return null;
 
 	return createPortal(
 		<div
 			id="mobile-menu"
 			className={cn(
-				'bg-background/95 supports-[backdrop-filter]:bg-background/50 backdrop-blur-lg',
-				'fixed top-14 right-0 bottom-0 left-0 z-40 flex flex-col overflow-hidden border-y md:hidden',
+				'fixed top-14 right-0 bottom-0 left-0 z-40 flex flex-col overflow-hidden md:hidden',
+				'border-t border-border bg-background/95 supports-[backdrop-filter]:bg-background/80 backdrop-blur-md',
 			)}
 		>
-			<div
-				data-slot={open ? 'open' : 'closed'}
-				className={cn(
-					'data-[slot=open]:animate-in data-[slot=open]:zoom-in-97 ease-out',
-					'size-full p-4',
-					className,
-				)}
-				{...props}
-			>
-				{children}
+			<div className="flex flex-1 flex-col justify-between gap-6 p-6">
+				<ul className="flex flex-col gap-1">
+					{NAV_LINKS.map((link) => (
+						<li key={link.href}>
+							<Link
+								href={link.href}
+								onClick={onNavigate}
+								className="block rounded-md px-3 py-2.5 text-base text-foreground hover:bg-accent"
+							>
+								{link.title}
+							</Link>
+						</li>
+					))}
+				</ul>
+				<div className="flex flex-col gap-2">
+					<Button
+						variant="outline"
+						className="w-full"
+						render={<Link href="/sign_in" />}
+					>
+						Sign in
+					</Button>
+					<Button className="w-full" render={<Link href="/sign_in" />}>
+						Get started
+					</Button>
+				</div>
 			</div>
 		</div>,
 		document.body,
 	);
 }
-
-function ListItem({
-	title,
-	description,
-	icon: Icon,
-	className,
-	href,
-	...props
-}: React.ComponentProps<typeof NavigationMenuLink> & LinkItem) {
-	return (
-		<NavigationMenuLink
-			className={cn(
-				'w-full flex flex-row gap-x-2 data-[active=true]:focus:bg-accent data-[active=true]:hover:bg-accent data-[active=true]:bg-accent/50 data-[active=true]:text-accent-foreground hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground rounded-sm p-2',
-				className,
-			)}
-			{...props}
-			asChild
-		>
-			<Link href={href}>
-				<div className="bg-background/40 flex aspect-square size-12 items-center justify-center rounded-md border shadow-sm">
-					<Icon className="text-foreground size-5" />
-				</div>
-				<div className="flex flex-col items-start justify-center">
-					<span className="font-medium">{title}</span>
-					<span className="text-muted-foreground text-xs">{description}</span>
-				</div>
-			</Link>
-		</NavigationMenuLink>
-	);
-}
-
-const productLinks: LinkItem[] = [
-	{
-		title: 'Notes & Files',
-		href: '/notes-and-files',
-		description: 'Markdown notes and code artifacts in one place',
-		icon: FileText,
-	},
-	{
-		title: 'Boxes & Folders',
-		href: '/organization',
-		description: 'Organize your work into focused containers',
-		icon: Archive,
-	},
-	{
-		title: 'Skills & Agents',
-		href: '/skills-and-agents',
-		description: 'Reusable modules and orchestrators with real structure',
-		icon: LayersIcon,
-	},
-	{
-		title: 'Connections',
-		href: '/connections',
-		description: 'Typed relationships and interactive graph views',
-		icon: GitBranch,
-	},
-	{
-		title: 'API & MCP',
-		href: '/api',
-		description: 'Programmatic access for your tools and agents',
-		icon: CodeIcon,
-	},
-	{
-		title: 'Import & Export',
-		href: '/portability',
-		description: 'Portable packages you own forever',
-		icon: Upload,
-	},
-];
-
-const companyLinks: LinkItem[] = [
-	{
-		title: 'About Us',
-		href: '/about',
-		description: 'Our story and the team behind Poggle',
-		icon: Users,
-	},
-	{
-		title: 'Changelog',
-		href: '/changelog',
-		description: "What's new in each release",
-		icon: BarChart2,
-	},
-	{
-		title: 'How It Works',
-		href: '/how-it-works',
-		description: 'See how Poggle fits into your workflow',
-		icon: BookOpen,
-	},
-];
-
-const companyLinks2: LinkItem[] = [
-	{
-		title: 'Docs',
-		href: 'https://docs.poggle.app',
-		icon: BookOpen,
-	},
-	{
-		title: 'Privacy Policy',
-		href: '/privacy',
-		icon: Shield,
-	},
-	{
-		title: 'Terms of Service',
-		href: '/terms',
-		icon: FileText,
-	},
-	{
-		title: 'Refund Policy',
-		href: '/refund-policy',
-		icon: RotateCcw,
-	},
-	{
-		title: 'Blog',
-		href: '/blog',
-		icon: Leaf,
-	},
-	{
-		title: 'Help Center',
-		href: '/help',
-		icon: HelpCircle,
-	},
-];
 
 function useScroll(threshold: number) {
 	const [scrolled, setScrolled] = React.useState(false);
@@ -328,7 +161,7 @@ function useScroll(threshold: number) {
 	}, [threshold]);
 
 	React.useEffect(() => {
-		window.addEventListener('scroll', onScroll);
+		window.addEventListener('scroll', onScroll, { passive: true });
 		return () => window.removeEventListener('scroll', onScroll);
 	}, [onScroll]);
 
@@ -338,17 +171,3 @@ function useScroll(threshold: number) {
 
 	return scrolled;
 }
-
-function WordmarkLogo() {
-	return (
-		<>
-			<Image src="/logo-symbol-dark.png" alt="Poggle" width={20} height={20} className="rounded dark:hidden" />
-			<Image src="/logo-symbol-light.png" alt="Poggle" width={20} height={20} className="rounded hidden dark:block" />
-			<Image src="/logo-text-black.png" alt="Poggle" width={60} height={20} className="dark:hidden" />
-			<Image src="/logo-text-white.png" alt="Poggle" width={60} height={20} className="hidden dark:block" />
-		</>
-	);
-}
-
-// Suppress unused import warning — Star is kept for potential use
-void Star;

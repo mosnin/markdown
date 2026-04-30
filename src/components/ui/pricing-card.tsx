@@ -1,13 +1,20 @@
 import React from 'react';
 import { cn } from '@/lib/utils';
 
+/**
+ * Enterprise pricing card primitives.
+ *
+ * Flat surfaces, hairline borders, no neon gradients. The brand yellow is
+ * reserved for the "popular" `Badge` and any primary CTA placed inside
+ * the card by the caller — not for headers, glass effects, or wash.
+ */
+
 function Card({ className, ...props }: React.ComponentProps<'div'>) {
 	return (
 		<div
 			className={cn(
-				'bg-card relative w-full max-w-xs rounded-xl dark:bg-transparent',
-				'p-1.5 shadow-xl backdrop-blur-xl',
-				'dark:border-border/80 border',
+				'bg-card relative w-full max-w-xs rounded-lg border border-border',
+				'p-1.5',
 				className,
 			)}
 			{...props}
@@ -18,7 +25,10 @@ function Card({ className, ...props }: React.ComponentProps<'div'>) {
 function Header({
 	className,
 	children,
-	glassEffect = true,
+	// `glassEffect` is preserved as a prop for backwards compatibility with
+	// existing callers, but it intentionally no longer renders any glass
+	// gradient — the redesign drops decorative glass.
+	glassEffect: _glassEffect = true,
 	...props
 }: React.ComponentProps<'div'> & {
 	glassEffect?: boolean;
@@ -26,22 +36,11 @@ function Header({
 	return (
 		<div
 			className={cn(
-				'bg-muted/80 dark:bg-muted/50 relative mb-4 rounded-xl border p-4',
+				'relative mb-4 rounded-md border border-border bg-muted/40 p-4',
 				className,
 			)}
 			{...props}
 		>
-			{/* Top glass gradient */}
-			{glassEffect && (
-				<div
-					aria-hidden="true"
-					className="absolute inset-x-0 top-0 h-48 rounded-[inherit]"
-					style={{
-						background:
-							'linear-gradient(180deg, rgba(255,255,255,0.07) 0%, rgba(255,255,255,0.03) 40%, rgba(0,0,0,0) 100%)',
-					}}
-				/>
-			)}
 			{children}
 		</div>
 	);
@@ -74,11 +73,16 @@ function PlanName({ className, ...props }: React.ComponentProps<'div'>) {
 	);
 }
 
+/**
+ * The "popular" pill. This is the single place brand-yellow is allowed
+ * inside the pricing card. Use `<Badge variant="default" />` for neutral
+ * tags; this dedicated component carries the brand spark.
+ */
 function Badge({ className, ...props }: React.ComponentProps<'span'>) {
 	return (
 		<span
 			className={cn(
-				'border-foreground/20 text-foreground/80 rounded-full border px-2 py-0.5 text-xs',
+				'border-transparent bg-brand text-brand-foreground rounded-full px-2 py-0.5 text-[11px] font-medium',
 				className,
 			)}
 			{...props}
@@ -95,7 +99,7 @@ function Price({ className, ...props }: React.ComponentProps<'div'>) {
 function MainPrice({ className, ...props }: React.ComponentProps<'span'>) {
 	return (
 		<span
-			className={cn('text-3xl font-extrabold tracking-tight', className)}
+			className={cn('text-3xl font-semibold tracking-tight text-foreground', className)}
 			{...props}
 		/>
 	);
@@ -104,7 +108,7 @@ function MainPrice({ className, ...props }: React.ComponentProps<'span'>) {
 function Period({ className, ...props }: React.ComponentProps<'span'>) {
 	return (
 		<span
-			className={cn('text-foreground/80 pb-1 text-sm', className)}
+			className={cn('text-muted-foreground pb-1 text-sm', className)}
 			{...props}
 		/>
 	);
@@ -153,14 +157,14 @@ function Separator({
 	return (
 		<div
 			className={cn(
-				'text-muted-foreground flex items-center gap-3 text-sm',
+				'text-muted-foreground flex items-center gap-3 text-xs',
 				className,
 			)}
 			{...props}
 		>
-			<span className="bg-muted-foreground/40 h-[1px] flex-1" />
+			<span className="bg-border h-px flex-1" />
 			<span className="text-muted-foreground shrink-0">{children}</span>
-			<span className="bg-muted-foreground/40 h-[1px] flex-1" />
+			<span className="bg-border h-px flex-1" />
 		</div>
 	);
 }

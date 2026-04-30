@@ -38,7 +38,7 @@ export function AppShell({
       {/* Skip to main content link — visually hidden until focused */}
       <a
         href="#main-content"
-        className="sr-only focus:not-sr-only focus:absolute focus:z-[100] focus:left-4 focus:top-4 focus:rounded-md focus:bg-background focus:px-3 focus:py-2 focus:text-sm focus:font-medium focus:shadow-md focus:ring-2 focus:ring-ring"
+        className="sr-only focus:not-sr-only focus:absolute focus:z-[100] focus:left-4 focus:top-4 focus:rounded-md focus:border focus:border-border focus:bg-card focus:px-3 focus:py-2 focus:text-sm focus:font-medium focus:text-foreground focus:shadow-lg focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:ring-offset-1 focus-visible:ring-offset-background"
       >
         Skip to main content
       </a>
@@ -55,15 +55,20 @@ export function AppShell({
       {/* Main content column */}
       <div className="flex flex-1 flex-col overflow-hidden min-w-0">
         {/* Mobile top bar — visible only on small screens */}
-        <div className="flex md:hidden h-12 shrink-0 items-center gap-3 border-b border-border bg-background px-3">
+        <div className="flex md:hidden h-12 shrink-0 items-center gap-2 border-b border-border bg-background px-3">
           <MobileSidebar
             userEmail={userEmail}
             workspaceName={workspaceName}
             boxes={boxes}
           />
           <div className="flex items-center gap-2 min-w-0">
-            <div className="h-4 w-4 shrink-0 rounded-sm bg-foreground" aria-hidden="true" />
-            <span className="text-sm font-semibold tracking-tight truncate">
+            <span
+              className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md border border-border bg-muted text-[10px] font-semibold text-foreground"
+              aria-hidden="true"
+            >
+              {(workspaceName ?? "C").trim().charAt(0).toUpperCase()}
+            </span>
+            <span className="text-sm font-semibold tracking-tight truncate text-foreground">
               {workspaceName ?? "Context Store"}
             </span>
           </div>

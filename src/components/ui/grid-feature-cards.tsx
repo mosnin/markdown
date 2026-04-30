@@ -11,6 +11,14 @@ type FeatureCardPorps = React.ComponentProps<'div'> & {
 	feature: FeatureType;
 };
 
+/**
+ * Feature card with a quiet monochrome grid backdrop.
+ *
+ * The redesign drops the radial color wash; the background is now a
+ * deterministic dotted pattern rendered at ~5% opacity in the foreground
+ * color, masked into the upper area of the card. Type carries the page —
+ * the icon, title, and description sit on a flat surface.
+ */
 export function FeatureCard({ feature, className, ...props }: FeatureCardPorps) {
 	// Seed from the feature title so server and client produce the same
 	// pattern during hydration (previously `Math.random()` at render time
@@ -19,21 +27,22 @@ export function FeatureCard({ feature, className, ...props }: FeatureCardPorps) 
 
 	return (
 		<div className={cn('relative overflow-hidden p-6', className)} {...props}>
-			<div className="pointer-events-none absolute top-0 left-1/2 -mt-2 -ml-20 h-full w-full [mask-image:linear-gradient(white,transparent)]">
-				<div className="from-foreground/5 to-foreground/1 absolute inset-0 bg-gradient-to-r [mask-image:radial-gradient(farthest-side_at_top,white,transparent)] opacity-100">
-					<GridPattern
-						width={20}
-						height={20}
-						x="-12"
-						y="4"
-						squares={p}
-						className="fill-foreground/5 stroke-foreground/25 absolute inset-0 h-full w-full mix-blend-overlay"
-					/>
-				</div>
+			<div
+				aria-hidden
+				className="pointer-events-none absolute inset-0 [mask-image:linear-gradient(white,transparent)]"
+			>
+				<GridPattern
+					width={20}
+					height={20}
+					x="-12"
+					y="4"
+					squares={p}
+					className="fill-foreground/[0.05] stroke-foreground/[0.08] absolute inset-0 h-full w-full"
+				/>
 			</div>
-			<feature.icon className="text-foreground/75 size-6" strokeWidth={1} aria-hidden />
-			<h3 className="mt-10 text-sm md:text-base">{feature.title}</h3>
-			<p className="text-muted-foreground relative z-20 mt-2 text-xs font-light">{feature.description}</p>
+			<feature.icon className="text-muted-foreground size-5" strokeWidth={1.5} aria-hidden />
+			<h3 className="mt-8 text-base font-semibold tracking-tight text-foreground">{feature.title}</h3>
+			<p className="text-muted-foreground relative z-20 mt-2 text-sm leading-relaxed">{feature.description}</p>
 		</div>
 	);
 }

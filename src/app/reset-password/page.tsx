@@ -17,21 +17,24 @@ export const metadata = {
 export default function ResetPasswordPage() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-6 py-12">
-      <div className="w-full max-w-sm space-y-6">
-        {/* Logo */}
+      <div className="w-full max-w-sm space-y-7">
+        {/* Brand mark */}
         <div className="flex justify-center">
           <Link href="/" className="flex items-center gap-2.5">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-violet-600">
-              <div className="h-3 w-3 rounded-sm bg-background" />
-            </div>
-            <span className="text-sm font-semibold text-foreground">Poggle</span>
+            <span
+              aria-hidden="true"
+              className="block h-5 w-5 rounded-[3px] bg-brand"
+            />
+            <span className="text-sm font-semibold tracking-tight text-foreground">
+              Poggle
+            </span>
           </Link>
         </div>
 
         {/* Heading */}
-        <div className="space-y-1 text-center">
-          <h1 className="text-xl font-bold tracking-tight text-foreground">
-            Set new password
+        <div className="space-y-1.5 text-center">
+          <h1 className="text-2xl font-semibold tracking-tight text-foreground">
+            Set a new password
           </h1>
           <p className="text-sm text-muted-foreground">
             Choose a strong password for your account.
@@ -42,7 +45,10 @@ export default function ResetPasswordPage() {
 
         <p className="text-center text-xs text-muted-foreground">
           Changed your mind?{" "}
-          <Link href="/sign_in" className="font-medium text-foreground underline-offset-2 hover:underline">
+          <Link
+            href="/sign_in"
+            className="font-medium text-foreground underline-offset-2 hover:underline"
+          >
             Back to sign in
           </Link>
         </p>

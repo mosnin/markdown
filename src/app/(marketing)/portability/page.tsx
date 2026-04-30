@@ -12,12 +12,88 @@ import {
 } from "lucide-react";
 import { PageHeroSection } from "@/components/marketing/hero";
 import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+} from "@/components/ui/card";
 
 export const metadata: Metadata = {
   title: "Import & Export — Poggle",
   description:
     "Portable packages you own forever. Import from Obsidian or any markdown source. Export any box, folder, or note as a structured zip.",
 };
+
+type Feature = {
+  icon: React.ComponentType<{ className?: string }>;
+  title: string;
+  description: string;
+};
+
+function FeatureCard({ icon: Icon, title, description }: Feature) {
+  return (
+    <Card>
+      <CardHeader>
+        <div className="mb-3 flex h-9 w-9 items-center justify-center rounded-md border border-border bg-muted/40">
+          <Icon className="h-4.5 w-4.5 text-muted-foreground" />
+        </div>
+        <CardTitle>{title}</CardTitle>
+        <CardDescription>{description}</CardDescription>
+      </CardHeader>
+    </Card>
+  );
+}
+
+function SectionHeading({ children }: { children: string }) {
+  return (
+    <div className="mb-8">
+      <h2 className="text-headline text-foreground">{children}</h2>
+      <div className="mt-2 h-0.5 w-12 rounded-full bg-brand" />
+    </div>
+  );
+}
+
+const IMPORT: Feature[] = [
+  {
+    icon: FileDown,
+    title: "Markdown import",
+    description:
+      "Drop in a zip of markdown files. Poggle creates notes, folders, and links automatically.",
+  },
+  {
+    icon: FolderOpen,
+    title: "Obsidian compatible",
+    description: "Import your Obsidian vault with structure preserved.",
+  },
+  {
+    icon: AlertTriangle,
+    title: "Collision handling",
+    description:
+      "Skip, rename, or overwrite when imported content overlaps with existing.",
+  },
+];
+
+const EXPORT: Feature[] = [
+  {
+    icon: Archive,
+    title: "Box export",
+    description:
+      "Download an entire box as a zip with all notes, folders, links, and a manifest.",
+  },
+  {
+    icon: FolderDown,
+    title: "Folder export",
+    description:
+      "Export just one folder and its descendants — scoped and clean.",
+  },
+  {
+    icon: Link2,
+    title: "Signed downloads",
+    description:
+      "Export links are signed and valid for one hour. No permanent storage URLs.",
+  },
+];
 
 export default function PortabilityPage() {
   return (
@@ -29,96 +105,37 @@ export default function PortabilityPage() {
         ctaPrimary={{ label: "Start importing", href: "/sign_in" }}
       />
 
-      {/* Import section */}
-      <section className="mx-auto w-full max-w-5xl px-6 py-24">
-        <div className="mb-8">
-          <h2 className="text-xl font-bold tracking-tight text-foreground">
-            Import
-          </h2>
-          <div className="mt-2 h-0.5 w-12 rounded-full bg-violet-500/50" />
-        </div>
-        <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-          <div className="rounded-xl border border-border/50 bg-card p-6">
-            <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-lg bg-muted">
-              <FileDown className="h-5 w-5 text-muted-foreground" />
-            </div>
-            <h3 className="text-sm font-semibold text-foreground">Markdown import</h3>
-            <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">
-              Drop in a zip of markdown files. Poggle creates notes, folders, and links automatically.
-            </p>
-          </div>
-          <div className="rounded-xl border border-border/50 bg-card p-6">
-            <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-lg bg-muted">
-              <FolderOpen className="h-5 w-5 text-muted-foreground" />
-            </div>
-            <h3 className="text-sm font-semibold text-foreground">Obsidian compatible</h3>
-            <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">
-              Import your Obsidian vault with structure preserved.
-            </p>
-          </div>
-          <div className="rounded-xl border border-border/50 bg-card p-6">
-            <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-lg bg-muted">
-              <AlertTriangle className="h-5 w-5 text-muted-foreground" />
-            </div>
-            <h3 className="text-sm font-semibold text-foreground">Collision handling</h3>
-            <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">
-              Skip, rename, or overwrite when imported content overlaps with existing.
-            </p>
-          </div>
+      <section className="mx-auto w-full max-w-5xl px-6 py-20">
+        <SectionHeading>Import</SectionHeading>
+        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
+          {IMPORT.map((f) => (
+            <FeatureCard key={f.title} {...f} />
+          ))}
         </div>
       </section>
 
-      {/* Export section */}
-      <section className="mx-auto w-full max-w-5xl px-6 py-24">
-        <div className="mb-8">
-          <h2 className="text-xl font-bold tracking-tight text-foreground">
-            Export
-          </h2>
-          <div className="mt-2 h-0.5 w-12 rounded-full bg-violet-500/50" />
-        </div>
-        <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-          <div className="rounded-xl border border-border/50 bg-card p-6">
-            <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-lg bg-muted">
-              <Archive className="h-5 w-5 text-muted-foreground" />
-            </div>
-            <h3 className="text-sm font-semibold text-foreground">Box export</h3>
-            <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">
-              Download an entire box as a zip with all notes, folders, links, and a manifest.
-            </p>
-          </div>
-          <div className="rounded-xl border border-border/50 bg-card p-6">
-            <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-lg bg-muted">
-              <FolderDown className="h-5 w-5 text-muted-foreground" />
-            </div>
-            <h3 className="text-sm font-semibold text-foreground">Folder export</h3>
-            <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">
-              Export just one folder and its descendants — scoped and clean.
-            </p>
-          </div>
-          <div className="rounded-xl border border-border/50 bg-card p-6">
-            <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-lg bg-muted">
-              <Link2 className="h-5 w-5 text-muted-foreground" />
-            </div>
-            <h3 className="text-sm font-semibold text-foreground">Signed downloads</h3>
-            <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">
-              Export links are signed and valid for one hour. No permanent storage URLs.
-            </p>
-          </div>
+      <section className="mx-auto w-full max-w-5xl px-6 pb-24">
+        <SectionHeading>Export</SectionHeading>
+        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
+          {EXPORT.map((f) => (
+            <FeatureCard key={f.title} {...f} />
+          ))}
         </div>
       </section>
 
-      {/* Bottom CTA */}
-      <section className="border-t border-border/50 py-20">
+      <section className="border-t border-border py-20">
         <div className="mx-auto max-w-2xl px-6 text-center">
-          <h2 className="text-2xl font-bold tracking-tight text-foreground">
+          <h2 className="text-headline text-foreground">
             Ready to take control of your data?
           </h2>
-          <p className="mt-3 text-muted-foreground">
+          <p className="mt-3 text-base text-muted-foreground">
             Import your existing notes in minutes. No credit card needed.
           </p>
           <div className="mt-6 flex flex-col items-center gap-2">
-            <Button size="lg" render={<Link href="/sign_in" />}>Start importing
-              <ArrowRight className="h-4 w-4" /></Button>
+            <Button size="lg" render={<Link href="/sign_in" />}>
+              Start importing
+              <ArrowRight className="h-4 w-4" />
+            </Button>
             <ul className="mt-4 flex flex-wrap justify-center gap-4 text-xs text-muted-foreground">
               {[
                 "Free plan forever",
@@ -126,7 +143,7 @@ export default function PortabilityPage() {
                 "No vendor lock-in",
               ].map((item) => (
                 <li key={item} className="flex items-center gap-1.5">
-                  <Check className="h-3 w-3 text-violet-400" />
+                  <Check className="h-3 w-3 text-brand" />
                   {item}
                 </li>
               ))}

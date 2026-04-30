@@ -18,22 +18,36 @@ export default async function SharedNotePage({ params }: PageProps) {
   if (!note) notFound();
 
   return (
-    <div className="mx-auto max-w-3xl px-4 py-12">
-      <div className="mb-8">
-        <p className="mb-1 text-xs uppercase tracking-wider text-muted-foreground">Shared note</p>
-        <h1 className="text-2xl font-semibold text-foreground">{note.title}</h1>
+    <div className="mx-auto max-w-3xl px-6 py-12">
+      {/* Attribution / eyebrow */}
+      <p className="text-overline text-muted-foreground">Shared note</p>
+
+      <header className="mt-2 border-b border-border pb-6">
+        <h1 className="text-3xl font-semibold leading-tight tracking-tight text-foreground">
+          {note.title}
+        </h1>
         {note.summary && (
-          <p className="mt-2 text-sm text-muted-foreground">{note.summary}</p>
+          <p className="mt-3 text-base leading-relaxed text-muted-foreground">
+            {note.summary}
+          </p>
         )}
-      </div>
-      <article className="prose prose-neutral max-w-none dark:prose-invert">
-        <pre className="whitespace-pre-wrap font-sans text-sm text-foreground/90">
+      </header>
+
+      <article className="prose prose-neutral mt-8 max-w-none dark:prose-invert">
+        <pre className="whitespace-pre-wrap break-words font-sans text-[15px] leading-relaxed text-foreground/90">
           {note.markdown_content}
         </pre>
       </article>
-      <div className="mt-12 border-t border-border pt-4 text-xs text-muted-foreground">
-        Shared via <Link href="/" className="underline hover:text-foreground">Poggle</Link>
-      </div>
+
+      <footer className="mt-16 border-t border-border pt-4 text-xs text-muted-foreground">
+        Shared via{" "}
+        <Link
+          href="/"
+          className="font-medium text-foreground underline-offset-2 hover:underline"
+        >
+          Poggle
+        </Link>
+      </footer>
     </div>
   );
 }

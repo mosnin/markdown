@@ -28,6 +28,7 @@ const Command = React.forwardRef<
   <CommandPrimitive
     ref={ref}
     className={cn(
+      // Popover surface — border lives on the host Dialog/Container.
       "flex h-full w-full flex-col overflow-hidden rounded-lg bg-popover text-popover-foreground",
       className,
     )}
@@ -70,18 +71,19 @@ const CommandInput = React.forwardRef<
   React.ComponentPropsWithoutRef<typeof CommandPrimitive.Input>
 >(({ className, ...props }, ref) => (
   <div
-    className="flex items-center border-b border-input px-5"
+    // Hairline divider between the input and the list below it.
+    className="flex items-center border-b border-border px-4"
     cmdk-input-wrapper=""
   >
     <Search
-      className="me-3 h-4 w-4 text-muted-foreground/80"
+      className="me-2.5 h-4 w-4 text-muted-foreground"
       strokeWidth={2}
       aria-hidden="true"
     />
     <CommandPrimitive.Input
       ref={ref}
       className={cn(
-        "flex h-10 w-full rounded-lg bg-transparent py-3 text-sm outline-none placeholder:text-muted-foreground/70 disabled:cursor-not-allowed disabled:opacity-50",
+        "flex h-11 w-full rounded-lg bg-transparent py-3 text-[13px] text-foreground outline-none placeholder:text-muted-foreground/70 disabled:cursor-not-allowed disabled:opacity-50",
         className,
       )}
       {...props}
@@ -148,7 +150,7 @@ const CommandItem = React.forwardRef<
   <CommandPrimitive.Item
     ref={ref}
     className={cn(
-      "relative flex cursor-default select-none items-center gap-3 rounded-md px-2 py-1.5 text-sm outline-none data-[disabled=true]:pointer-events-none data-[selected=true]:bg-accent data-[selected=true]:text-accent-foreground data-[disabled=true]:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0",
+      "relative flex cursor-default select-none items-center gap-2.5 rounded-[6px] px-2 py-1.5 text-[13px] text-foreground outline-none transition-colors duration-150 ease-[cubic-bezier(0.2,0,0,1)] data-[disabled=true]:pointer-events-none data-[selected=true]:bg-accent data-[selected=true]:text-accent-foreground data-[disabled=true]:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
       className,
     )}
     {...props}
@@ -163,7 +165,8 @@ const CommandShortcut = ({
   return (
     <kbd
       className={cn(
-        "-me-1 ms-auto inline-flex h-5 max-h-full items-center rounded border border-border bg-background px-1 font-[inherit] text-[0.625rem] font-medium text-muted-foreground/70",
+        // Right-aligned kbd hint, 11px muted, hairline border.
+        "ms-auto inline-flex h-5 max-h-full items-center rounded-[4px] border border-border bg-muted/60 px-1.5 font-[inherit] text-[11px] font-medium text-muted-foreground",
         className,
       )}
       {...props}

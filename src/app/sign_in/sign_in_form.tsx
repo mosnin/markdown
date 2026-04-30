@@ -2,12 +2,45 @@
 
 import Link from "next/link";
 import { useActionState, useState } from "react";
-import { Eye, EyeOff, Fingerprint } from "lucide-react";
+import { Eye, EyeOff, Fingerprint, MailCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { signIn, signUp, requestPasswordReset, type AuthState } from "./actions";
+import { cn } from "@/lib/utils";
 
 const INITIAL: AuthState = { status: "idle" };
+
+// ─── Field primitives ────────────────────────────────────────────────────────
+
+function Label({
+  htmlFor,
+  children,
+  trailing,
+}: {
+  htmlFor: string;
+  children: React.ReactNode;
+  trailing?: React.ReactNode;
+}) {
+  return (
+    <div className="mb-1.5 flex items-center justify-between">
+      <label
+        htmlFor={htmlFor}
+        className="text-sm font-medium text-foreground"
+      >
+        {children}
+      </label>
+      {trailing}
+    </div>
+  );
+}
+
+function ErrorText({ children }: { children: React.ReactNode }) {
+  return (
+    <p role="alert" className="mt-1.5 text-xs text-destructive">
+      {children}
+    </p>
+  );
+}
 
 // ─── Password field with show/hide toggle ────────────────────────────────────
 
@@ -35,7 +68,7 @@ function PasswordInput({
         autoComplete={autoComplete}
         required
         disabled={disabled}
-        className="h-9 pr-9"
+        className="pr-9"
       />
       <button
         type="button"
@@ -58,11 +91,11 @@ function PasswordInput({
 
 function ConfirmView({ message }: { message: string }) {
   return (
-    <div className="flex flex-col items-center gap-4 text-center">
-      <div className="flex h-12 w-12 items-center justify-center rounded-full bg-violet-500/10">
-        <span className="text-xl">✉️</span>
+    <div className="flex flex-col items-center gap-4 py-2 text-center">
+      <div className="flex h-11 w-11 items-center justify-center rounded-full border border-border bg-card">
+        <MailCheck className="h-5 w-5 text-brand" aria-hidden="true" />
       </div>
-      <div className="space-y-1.5">
+      <div className="space-y-1">
         <p className="text-sm font-semibold text-foreground">Almost there</p>
         <p className="text-sm text-muted-foreground">{message}</p>
       </div>
@@ -80,27 +113,23 @@ function ForgotPasswordForm({ onBack }: { onBack: () => void }) {
 
   if (state.status === "confirm") {
     return (
-      <div className="flex flex-col items-center gap-4 text-center">
-        <div className="flex h-12 w-12 items-center justify-center rounded-full bg-violet-500/10">
-          <span className="text-xl">✉️</span>
+      <div className="flex flex-col items-center gap-4 py-2 text-center">
+        <div className="flex h-11 w-11 items-center justify-center rounded-full border border-border bg-card">
+          <MailCheck className="h-5 w-5 text-brand" aria-hidden="true" />
         </div>
-        <div className="space-y-1.5">
+        <div className="space-y-1">
           <p className="text-sm font-semibold text-foreground">Check your email</p>
           <p className="text-sm text-muted-foreground">{state.message}</p>
         </div>
-        <button
-          type="button"
-          className="text-xs font-medium text-foreground underline-offset-2 hover:underline"
-          onClick={onBack}
-        >
+        <Button variant="link" size="sm" onClick={onBack}>
           Back to sign in
-        </button>
+        </Button>
       </div>
     );
   }
 
   return (
-    <form action={formAction} className="flex flex-col gap-3">
+    <form action={formAction} className="flex flex-col gap-4">
       <div className="space-y-1">
         <p className="text-sm font-semibold text-foreground">Reset your password</p>
         <p className="text-xs text-muted-foreground">
@@ -108,10 +137,8 @@ function ForgotPasswordForm({ onBack }: { onBack: () => void }) {
         </p>
       </div>
 
-      <div className="flex flex-col gap-1.5">
-        <label htmlFor="reset-email" className="text-sm font-medium text-foreground">
-          Email address
-        </label>
+      <div>
+        <Label htmlFor="reset-email">Email address</Label>
         <Input
           id="reset-email"
           name="email"
@@ -121,13 +148,10 @@ function ForgotPasswordForm({ onBack }: { onBack: () => void }) {
           autoFocus
           required
           disabled={pending}
-          className="h-9"
         />
       </div>
 
-      {state.status === "error" && (
-        <p role="alert" className="text-xs text-destructive">{state.message}</p>
-      )}
+      {state.status === "error" && <ErrorText>{state.message}</ErrorText>}
 
       <Button type="submit" disabled={pending} className="mt-1 w-full">
         {pending ? "Sending…" : "Send reset link"}
@@ -205,11 +229,7 @@ function PasskeySignInButton() {
 
   return (
     <div className="flex flex-col gap-2">
-      {error && (
-        <p role="alert" className="text-xs text-destructive">
-          {error}
-        </p>
-      )}
+      {error && <ErrorText>{error}</ErrorText>}
       <Button
         type="button"
         variant="outline"
@@ -217,8 +237,8 @@ function PasskeySignInButton() {
         className="w-full"
         onClick={handlePasskeySignIn}
       >
-        <Fingerprint className="mr-2 h-4 w-4" />
-        {loading ? "Authenticating..." : "Sign in with passkey"}
+        <Fingerprint className="h-4 w-4" aria-hidden="true" />
+        {loading ? "Authenticating…" : "Sign in with passkey"}
       </Button>
     </div>
   );
@@ -236,12 +256,10 @@ function LoginForm({
   const [state, formAction, pending] = useActionState(signIn, INITIAL);
 
   return (
-    <form action={formAction} className="flex flex-col gap-3">
+    <form action={formAction} className="flex flex-col gap-4">
       {/* Email */}
-      <div className="flex flex-col gap-1.5">
-        <label htmlFor="signin-email" className="text-sm font-medium text-foreground">
-          Email address
-        </label>
+      <div>
+        <Label htmlFor="signin-email">Email address</Label>
         <Input
           id="signin-email"
           name="email"
@@ -251,24 +269,25 @@ function LoginForm({
           autoFocus
           required
           disabled={pending}
-          className="h-9"
         />
       </div>
 
       {/* Password */}
-      <div className="flex flex-col gap-1.5">
-        <div className="flex items-center justify-between">
-          <label htmlFor="signin-password" className="text-sm font-medium text-foreground">
-            Password
-          </label>
-          <button
-            type="button"
-            className="text-xs text-muted-foreground hover:text-foreground underline-offset-2 hover:underline transition-colors"
-            onClick={onForgotPassword}
-          >
-            Forgot password?
-          </button>
-        </div>
+      <div>
+        <Label
+          htmlFor="signin-password"
+          trailing={
+            <button
+              type="button"
+              className="text-xs text-muted-foreground transition-colors hover:text-foreground hover:underline underline-offset-2"
+              onClick={onForgotPassword}
+            >
+              Forgot password?
+            </button>
+          }
+        >
+          Password
+        </Label>
         <PasswordInput
           id="signin-password"
           name="password"
@@ -279,23 +298,21 @@ function LoginForm({
       </div>
 
       {/* Error */}
-      {state.status === "error" && (
-        <p role="alert" className="text-xs text-destructive">
-          {state.message}
-        </p>
-      )}
+      {state.status === "error" && <ErrorText>{state.message}</ErrorText>}
 
       <Button type="submit" disabled={pending} className="mt-1 w-full">
         {pending ? "Signing in…" : "Sign in"}
       </Button>
 
-      {/* Passkey sign-in */}
+      {/* Divider */}
       <div className="relative my-1">
-        <div className="absolute inset-0 flex items-center">
+        <div aria-hidden="true" className="absolute inset-0 flex items-center">
           <span className="w-full border-t border-border" />
         </div>
-        <div className="relative flex justify-center text-xs uppercase">
-          <span className="bg-background px-2 text-muted-foreground">or</span>
+        <div className="relative flex justify-center">
+          <span className="bg-background px-2 text-[11px] uppercase tracking-wider text-muted-foreground">
+            or
+          </span>
         </div>
       </div>
 
@@ -326,12 +343,10 @@ function SignUpForm({ onSwitch }: { onSwitch: () => void }) {
   }
 
   return (
-    <form action={formAction} className="flex flex-col gap-3">
+    <form action={formAction} className="flex flex-col gap-4">
       {/* Email */}
-      <div className="flex flex-col gap-1.5">
-        <label htmlFor="signup-email" className="text-sm font-medium text-foreground">
-          Email address
-        </label>
+      <div>
+        <Label htmlFor="signup-email">Email address</Label>
         <Input
           id="signup-email"
           name="email"
@@ -341,15 +356,12 @@ function SignUpForm({ onSwitch }: { onSwitch: () => void }) {
           autoFocus
           required
           disabled={pending}
-          className="h-9"
         />
       </div>
 
       {/* Password */}
-      <div className="flex flex-col gap-1.5">
-        <label htmlFor="signup-password" className="text-sm font-medium text-foreground">
-          Password
-        </label>
+      <div>
+        <Label htmlFor="signup-password">Password</Label>
         <PasswordInput
           id="signup-password"
           name="password"
@@ -357,13 +369,14 @@ function SignUpForm({ onSwitch }: { onSwitch: () => void }) {
           autoComplete="new-password"
           disabled={pending}
         />
+        <p className="mt-1.5 text-xs text-muted-foreground">
+          At least 8 characters.
+        </p>
       </div>
 
       {/* Confirm password */}
-      <div className="flex flex-col gap-1.5">
-        <label htmlFor="signup-confirm" className="text-sm font-medium text-foreground">
-          Confirm password
-        </label>
+      <div>
+        <Label htmlFor="signup-confirm">Confirm password</Label>
         <PasswordInput
           id="signup-confirm"
           name="confirmPassword"
@@ -374,7 +387,7 @@ function SignUpForm({ onSwitch }: { onSwitch: () => void }) {
       </div>
 
       {/* Terms & Privacy agreement — required */}
-      <div className="mt-1 flex items-start gap-2 rounded-md border border-border bg-muted/20 p-3">
+      <div className="mt-1 flex items-start gap-2.5 rounded-md border border-border bg-muted/30 p-3">
         <input
           id="signup-agree"
           name="agreeToTerms"
@@ -384,7 +397,7 @@ function SignUpForm({ onSwitch }: { onSwitch: () => void }) {
           checked={agreed}
           disabled={pending}
           onChange={(e) => setAgreed(e.target.checked)}
-          className="mt-0.5 h-4 w-4 shrink-0 cursor-pointer rounded border-border accent-violet-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="mt-0.5 h-4 w-4 shrink-0 cursor-pointer rounded border-border accent-[var(--brand)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         />
         <label htmlFor="signup-agree" className="cursor-pointer text-xs leading-relaxed text-muted-foreground">
           I am at least 16 years old and I agree to the{" "}
@@ -392,7 +405,7 @@ function SignUpForm({ onSwitch }: { onSwitch: () => void }) {
             href="/terms"
             target="_blank"
             rel="noopener noreferrer"
-            className="font-medium text-foreground underline underline-offset-2 hover:text-violet-500"
+            className="font-medium text-foreground underline underline-offset-2 hover:text-brand"
           >
             Terms of Service
           </Link>
@@ -401,7 +414,7 @@ function SignUpForm({ onSwitch }: { onSwitch: () => void }) {
             href="/privacy"
             target="_blank"
             rel="noopener noreferrer"
-            className="font-medium text-foreground underline underline-offset-2 hover:text-violet-500"
+            className="font-medium text-foreground underline underline-offset-2 hover:text-brand"
           >
             Privacy Policy
           </Link>
@@ -410,7 +423,7 @@ function SignUpForm({ onSwitch }: { onSwitch: () => void }) {
             href="/acceptable-use"
             target="_blank"
             rel="noopener noreferrer"
-            className="font-medium text-foreground underline underline-offset-2 hover:text-violet-500"
+            className="font-medium text-foreground underline underline-offset-2 hover:text-brand"
           >
             Acceptable Use Policy
           </Link>
@@ -419,7 +432,7 @@ function SignUpForm({ onSwitch }: { onSwitch: () => void }) {
             href="/cookies"
             target="_blank"
             rel="noopener noreferrer"
-            className="font-medium text-foreground underline underline-offset-2 hover:text-violet-500"
+            className="font-medium text-foreground underline underline-offset-2 hover:text-brand"
           >
             Cookie Policy
           </Link>
@@ -428,11 +441,7 @@ function SignUpForm({ onSwitch }: { onSwitch: () => void }) {
       </div>
 
       {/* Error */}
-      {state.status === "error" && (
-        <p role="alert" className="text-xs text-destructive">
-          {state.message}
-        </p>
-      )}
+      {state.status === "error" && <ErrorText>{state.message}</ErrorText>}
 
       <Button type="submit" disabled={pending || !agreed} className="mt-1 w-full">
         {pending ? "Creating account…" : "Create account"}
@@ -462,24 +471,41 @@ export function AuthPanel({
   const [mode, setMode] = useState<"signin" | "signup" | "forgot">(defaultMode);
 
   return (
-    <div className="flex w-full flex-col gap-6">
-      {/* Mode toggle — hidden in forgot-password view */}
+    <div className="flex w-full flex-col gap-5">
+      {/* Underline tabs — hidden in forgot-password view */}
       {mode !== "forgot" && (
-        <div className="flex rounded-lg border border-border bg-muted/40 p-0.5">
-          {(["signin", "signup"] as const).map((m) => (
-            <button
-              key={m}
-              type="button"
-              onClick={() => setMode(m)}
-              className={`flex-1 rounded-md py-1.5 text-sm font-medium transition-colors ${
-                mode === m
-                  ? "bg-background text-foreground shadow-sm"
-                  : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              {m === "signin" ? "Sign in" : "Create account"}
-            </button>
-          ))}
+        <div
+          role="tablist"
+          aria-label="Authentication mode"
+          className="flex border-b border-border"
+        >
+          {(["signin", "signup"] as const).map((m) => {
+            const active = mode === m;
+            return (
+              <button
+                key={m}
+                type="button"
+                role="tab"
+                aria-selected={active}
+                onClick={() => setMode(m)}
+                className={cn(
+                  "relative -mb-px px-4 py-2.5 text-sm font-medium transition-colors",
+                  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:rounded-sm",
+                  active
+                    ? "text-foreground"
+                    : "text-muted-foreground hover:text-foreground"
+                )}
+              >
+                {m === "signin" ? "Sign in" : "Create account"}
+                {active && (
+                  <span
+                    aria-hidden="true"
+                    className="absolute inset-x-0 -bottom-px h-0.5 bg-brand"
+                  />
+                )}
+              </button>
+            );
+          })}
         </div>
       )}
 

@@ -22,31 +22,53 @@ export default async function SharedBoxPage({ params }: PageProps) {
   const notes = await listNotesByBox(supabase, boxId, { limit: 100, branchId: null });
 
   return (
-    <div className="mx-auto max-w-3xl px-4 py-12">
-      <div className="mb-8">
-        <p className="mb-1 text-xs uppercase tracking-wider text-muted-foreground">Shared box</p>
-        <h1 className="text-2xl font-semibold text-foreground">{box.name}</h1>
+    <div className="mx-auto max-w-3xl px-6 py-12">
+      {/* Attribution / eyebrow */}
+      <p className="text-overline text-muted-foreground">Shared box</p>
+
+      <header className="mt-2 border-b border-border pb-6">
+        <h1 className="text-3xl font-semibold leading-tight tracking-tight text-foreground">
+          {box.name}
+        </h1>
         {box.description && (
-          <p className="mt-2 text-sm text-muted-foreground">{box.description}</p>
+          <p className="mt-3 text-base leading-relaxed text-muted-foreground">
+            {box.description}
+          </p>
         )}
-      </div>
+      </header>
 
-      {notes.length === 0 ? (
-        <p className="text-sm text-muted-foreground">No notes in this box.</p>
-      ) : (
-        <ul className="space-y-2">
-          {notes.map((note) => (
-            <li key={note.id} className="flex items-center gap-2.5 rounded-md border border-border bg-card px-3 py-2.5">
-              <FileText className="h-4 w-4 shrink-0 text-muted-foreground/60" aria-hidden="true" />
-              <span className="text-sm text-foreground">{note.title}</span>
-            </li>
-          ))}
-        </ul>
-      )}
+      <section className="mt-8">
+        {notes.length === 0 ? (
+          <p className="text-sm text-muted-foreground">No notes in this box.</p>
+        ) : (
+          <ul className="divide-y divide-border rounded-lg border border-border bg-card">
+            {notes.map((note) => (
+              <li
+                key={note.id}
+                className="flex items-center gap-2.5 px-4 py-3"
+              >
+                <FileText
+                  className="h-4 w-4 shrink-0 text-muted-foreground/60"
+                  aria-hidden="true"
+                />
+                <span className="truncate text-sm text-foreground">
+                  {note.title}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
 
-      <div className="mt-12 border-t border-border pt-4 text-xs text-muted-foreground">
-        Shared via <Link href="/" className="underline hover:text-foreground">Poggle</Link>
-      </div>
+      <footer className="mt-16 border-t border-border pt-4 text-xs text-muted-foreground">
+        Shared via{" "}
+        <Link
+          href="/"
+          className="font-medium text-foreground underline-offset-2 hover:underline"
+        >
+          Poggle
+        </Link>
+      </footer>
     </div>
   );
 }

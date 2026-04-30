@@ -12,6 +12,14 @@ interface GridPatternProps {
   [key: string]: unknown;
 }
 
+/**
+ * A dignified grid pattern.
+ *
+ * Used as a quiet background texture. Lines and squares are rendered in
+ * the foreground color at 5–8% opacity (monochrome only) so the pattern
+ * reads as a whisper of structure rather than decoration. Original
+ * props preserved for back-compat.
+ */
 function GridPattern({
   width = 40,
   height = 40,
@@ -28,7 +36,10 @@ function GridPattern({
     <svg
       aria-hidden="true"
       className={cn(
-        "pointer-events-none absolute inset-0 h-full w-full fill-gray-400/30 stroke-gray-400/30",
+        // Monochrome — fill carries the squares, stroke carries the grid.
+        // Caller can override via `className`, but the default is intentionally
+        // restrained.
+        "pointer-events-none absolute inset-0 h-full w-full fill-foreground/[0.05] stroke-foreground/[0.08]",
         className,
       )}
       {...props}

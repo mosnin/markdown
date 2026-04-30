@@ -1,9 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState, useTransition } from "react";
-import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { Check, ChevronDown, LayoutGrid, Plus } from "lucide-react";
+import { Check, ChevronsUpDown, LayoutGrid, Plus } from "lucide-react";
 import { AccountSetting01Icon } from "hugeicons-react";
 import { cn } from "@/lib/utils";
 import {
@@ -66,6 +65,8 @@ export function WorkspaceSwitcher({
 
   const active = workspaces.find((w) => w.id === activeWorkspaceId);
   const activeName = active?.name ?? "My Workspace";
+  const initial = (activeName.trim().charAt(0) || "W").toUpperCase();
+  const hasActive = Boolean(active);
 
   // Hold every post-menu-close defer timer in a ref so unmount (or a
   // rapid second click) can clear the pending timeout. Without this the
@@ -139,35 +140,31 @@ export function WorkspaceSwitcher({
       <DropdownMenu>
         <DropdownMenuTrigger
           className={cn(
-            "flex w-full items-center gap-2 rounded-lg px-2.5 py-2 transition-fast",
-            "hover:bg-accent/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+            "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left transition-colors",
+            "hover:bg-accent",
+            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:ring-offset-1 focus-visible:ring-offset-background",
+            "aria-expanded:bg-accent",
             switching && "opacity-60",
           )}
           aria-label={`Workspace: ${activeName}. Click to switch.`}
         >
-          <div className="flex h-6 w-6 shrink-0 items-center justify-center">
-            <Image
-              src="/logo-symbol-dark.png"
-              alt="Poggle"
-              width={24}
-              height={24}
-              className="rounded dark:hidden"
-              priority
-            />
-            <Image
-              src="/logo-symbol-light.png"
-              alt="Poggle"
-              width={24}
-              height={24}
-              className="rounded hidden dark:block"
-              priority
-            />
-          </div>
-          <span className="min-w-0 flex-1 truncate text-sm font-semibold tracking-tight text-foreground text-left">
+          <span
+            className={cn(
+              "flex h-6 w-6 shrink-0 items-center justify-center rounded-md",
+              "text-[11px] font-semibold tracking-tight",
+              hasActive
+                ? "border border-[oklch(0.78_0.18_88)] bg-brand text-brand-foreground"
+                : "border border-border bg-muted text-foreground",
+            )}
+            aria-hidden="true"
+          >
+            {initial}
+          </span>
+          <span className="min-w-0 flex-1 truncate text-sm font-semibold tracking-tight text-foreground">
             {activeName}
           </span>
-          <ChevronDown
-            className="h-3.5 w-3.5 shrink-0 text-foreground/40"
+          <ChevronsUpDown
+            className="h-3.5 w-3.5 shrink-0 text-muted-foreground"
             aria-hidden="true"
           />
         </DropdownMenuTrigger>

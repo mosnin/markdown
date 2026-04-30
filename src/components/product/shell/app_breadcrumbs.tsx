@@ -83,7 +83,7 @@ export function AppBreadcrumbs() {
   // If we are at root (/app), show only the app name — no breadcrumb trail needed
   if (crumbs.length <= 1) {
     return (
-      <span className="text-sm font-medium text-foreground/80">
+      <span className="text-[13px] font-medium text-foreground">
         Home
       </span>
     );
@@ -91,20 +91,24 @@ export function AppBreadcrumbs() {
 
   return (
     <nav aria-label="Breadcrumb">
-      <ol className="flex items-center gap-1 text-sm list-none" role="list">
+      <ol
+        className="flex items-center gap-1.5 text-[13px] list-none"
+        role="list"
+      >
         {crumbs.map((crumb, i) => {
           const isLast = i === crumbs.length - 1;
           return (
-            <li key={crumb.href} className="flex items-center gap-1">
+            <li key={crumb.href} className="flex items-center gap-1.5">
               {i > 0 && (
                 <ChevronRight
-                  className="h-3.5 w-3.5 text-muted-foreground shrink-0"
+                  className="h-3 w-3 shrink-0 text-muted-foreground/60"
+                  strokeWidth={1.5}
                   aria-hidden="true"
                 />
               )}
               {isLast ? (
                 <span
-                  className="font-medium text-foreground truncate max-w-[200px]"
+                  className="max-w-[220px] truncate font-medium text-foreground"
                   aria-current="page"
                 >
                   {crumb.label}
@@ -113,8 +117,9 @@ export function AppBreadcrumbs() {
                 <Link
                   href={crumb.href}
                   className={cn(
-                    "text-muted-foreground hover:text-foreground transition-colors truncate max-w-[160px]",
-                    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded"
+                    "max-w-[160px] truncate rounded text-muted-foreground transition-colors",
+                    "hover:text-foreground",
+                    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:ring-offset-1 focus-visible:ring-offset-background"
                   )}
                 >
                   {crumb.label}

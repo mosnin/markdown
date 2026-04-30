@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect } from "react";
-import { AlertCircle, RefreshCw } from "lucide-react";
+import Link from "next/link";
+import { RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 /**
@@ -22,34 +23,40 @@ export default function RootError({
   }, [error]);
 
   return (
-    <div className="flex h-full min-h-screen flex-col items-center justify-center gap-6 px-4 text-center">
-      <div className="flex h-14 w-14 items-center justify-center rounded-full bg-destructive/10">
-        <AlertCircle className="h-7 w-7 text-destructive" aria-hidden="true" />
-      </div>
+    <div className="flex min-h-screen flex-col items-center justify-center gap-8 bg-background px-6 py-12 text-center">
+      {/* Brand mark */}
+      <Link href="/" className="flex items-center gap-2.5">
+        <span
+          aria-hidden="true"
+          className="block h-5 w-5 rounded-[3px] bg-brand"
+        />
+        <span className="text-sm font-semibold tracking-tight text-foreground">
+          Poggle
+        </span>
+      </Link>
 
-      <div className="space-y-2">
-        <h1 className="text-xl font-semibold tracking-tight text-foreground">
+      <div className="max-w-md space-y-2">
+        <h2 className="text-2xl font-semibold tracking-tight text-foreground">
           Something went wrong
-        </h1>
-        <p className="max-w-sm text-sm text-muted-foreground">
+        </h2>
+        <p className="text-sm leading-relaxed text-muted-foreground">
           An unexpected error occurred. Your data is safe — refresh the page or
           try again.
         </p>
         {error.digest && (
-          <p className="font-mono text-[11px] text-muted-foreground/50">
+          <p className="font-mono text-[11px] text-muted-foreground/60">
             Error ID: {error.digest}
           </p>
         )}
       </div>
 
       <div className="flex gap-2">
-        <Button onClick={reset} size="sm" className="gap-2">
-          <RefreshCw className="h-3.5 w-3.5" aria-hidden="true" />
+        <Button onClick={reset}>
+          <RefreshCw className="h-4 w-4" aria-hidden="true" />
           Try again
         </Button>
         <Button
           variant="outline"
-          size="sm"
           onClick={() => (window.location.href = "/app")}
         >
           Go home

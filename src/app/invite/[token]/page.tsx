@@ -8,7 +8,6 @@ import {
   CardTitle,
   CardDescription,
 } from "@/components/ui/card";
-import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import { InviteActions } from "./invite_actions";
 
@@ -39,25 +38,24 @@ export default async function InviteTokenPage({
 
   if (!invitation) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-background px-4">
+      <PageShell>
         <Card className="w-full max-w-md">
-          <CardHeader className="text-center">
+          <CardHeader>
             <CardTitle>Invitation not found</CardTitle>
             <CardDescription>
               This invitation link is invalid or has already been used.
             </CardDescription>
           </CardHeader>
-          <Separator />
-          <CardContent className="pt-5 text-center">
+          <CardContent>
             <Link
               href="/sign_in"
-              className="text-sm text-primary hover:underline"
+              className="text-sm font-medium text-foreground underline-offset-2 hover:underline"
             >
-              Sign in to your account
+              Sign in to your account →
             </Link>
           </CardContent>
         </Card>
-      </div>
+      </PageShell>
     );
   }
 
@@ -97,70 +95,90 @@ export default async function InviteTokenPage({
           : "expired";
 
     return (
-      <div className="flex min-h-screen items-center justify-center bg-background px-4">
+      <PageShell>
         <Card className="w-full max-w-md">
-          <CardHeader className="text-center">
+          <CardHeader>
             <CardTitle>Invitation unavailable</CardTitle>
             <CardDescription>
-              This invitation to <strong>{workspaceName}</strong> has{" "}
-              {statusLabel}.
+              This invitation to{" "}
+              <span className="font-medium text-foreground">{workspaceName}</span>{" "}
+              has {statusLabel}.
             </CardDescription>
           </CardHeader>
-          <Separator />
-          <CardContent className="pt-5 text-center">
+          <CardContent>
             <Link
               href="/sign_in"
-              className="text-sm text-primary hover:underline"
+              className="text-sm font-medium text-foreground underline-offset-2 hover:underline"
             >
-              Sign in to your account
+              Sign in to your account →
             </Link>
           </CardContent>
         </Card>
-      </div>
+      </PageShell>
     );
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background px-4">
+    <PageShell>
       <Card className="w-full max-w-md">
-        <CardHeader className="text-center">
-          <CardTitle>You&apos;re invited!</CardTitle>
+        <CardHeader>
+          <p className="text-overline text-muted-foreground">Invitation</p>
+          <CardTitle className="text-lg">You&apos;re invited</CardTitle>
           <CardDescription>
             {inviterEmail ? (
               <>
-                <strong>{inviterEmail}</strong> has invited you to join
+                <span className="font-medium text-foreground">
+                  {inviterEmail}
+                </span>{" "}
+                has invited you to join{" "}
               </>
             ) : (
-              <>You have been invited to join</>
-            )}{" "}
-            <strong>{workspaceName}</strong>.
+              <>You have been invited to join </>
+            )}
+            <span className="font-medium text-foreground">{workspaceName}</span>.
           </CardDescription>
         </CardHeader>
-        <Separator />
-        <CardContent className="pt-5 space-y-4">
-          <div className="flex items-center justify-between rounded-md border border-border px-4 py-3">
-            <div>
-              <p className="text-sm font-medium text-foreground">
+        <CardContent className="space-y-4">
+          <div className="flex items-center justify-between rounded-md border border-border bg-muted/30 px-3 py-2.5">
+            <div className="min-w-0">
+              <p className="truncate text-sm font-medium text-foreground">
                 {workspaceName}
               </p>
-              <p className="text-xs text-muted-foreground">
-                Invited as
-              </p>
+              <p className="text-xs text-muted-foreground">Invited as</p>
             </div>
             <Badge variant="secondary" className="capitalize">
               {invitation.role}
             </Badge>
           </div>
 
-          <p className="text-xs text-muted-foreground text-center">
-            This invitation was sent to{" "}
-            <strong>{invitation.email}</strong> and expires on{" "}
-            {new Date(invitation.expires_at).toLocaleDateString()}.
+          <p className="text-xs text-muted-foreground">
+            Sent to{" "}
+            <span className="font-medium text-foreground">
+              {invitation.email}
+            </span>
+            . Expires on {new Date(invitation.expires_at).toLocaleDateString()}.
           </p>
 
           <InviteActions token={token} />
         </CardContent>
       </Card>
+    </PageShell>
+  );
+}
+
+function PageShell({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="flex min-h-screen flex-col items-center justify-center gap-8 bg-background px-6 py-12">
+      <Link href="/" className="flex items-center gap-2.5">
+        <span
+          aria-hidden="true"
+          className="block h-5 w-5 rounded-[3px] bg-brand"
+        />
+        <span className="text-sm font-semibold tracking-tight text-foreground">
+          Poggle
+        </span>
+      </Link>
+      {children}
     </div>
   );
 }

@@ -12,12 +12,89 @@ import {
 } from "lucide-react";
 import { PageHeroSection } from "@/components/marketing/hero";
 import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+} from "@/components/ui/card";
 
 export const metadata: Metadata = {
   title: "Collections & Folders — Poggle",
   description:
     "Organize your work into focused containers. Collections are top-level workspaces, folders give you real structural depth.",
 };
+
+type Feature = {
+  icon: React.ComponentType<{ className?: string }>;
+  title: string;
+  description: string;
+};
+
+function FeatureCard({ icon: Icon, title, description }: Feature) {
+  return (
+    <Card>
+      <CardHeader>
+        <div className="mb-3 flex h-9 w-9 items-center justify-center rounded-md border border-border bg-muted/40">
+          <Icon className="h-4.5 w-4.5 text-muted-foreground" />
+        </div>
+        <CardTitle>{title}</CardTitle>
+        <CardDescription>{description}</CardDescription>
+      </CardHeader>
+    </Card>
+  );
+}
+
+function SectionHeading({ children }: { children: string }) {
+  return (
+    <div className="mb-8">
+      <h2 className="text-headline text-foreground">{children}</h2>
+      <div className="mt-2 h-0.5 w-12 rounded-full bg-brand" />
+    </div>
+  );
+}
+
+const COLLECTIONS: Feature[] = [
+  {
+    icon: Archive,
+    title: "Focused collections",
+    description:
+      "Each collection is a self-contained context domain with its own notes, files, skills, and agents.",
+  },
+  {
+    icon: BookOpen,
+    title: "Guide notes",
+    description:
+      "Every collection can have a guide note — the first thing AI reads to understand the domain.",
+  },
+  {
+    icon: Network,
+    title: "Tree and graph views",
+    description:
+      "Navigate your collection contents as an interactive tree or explore relationships in the graph.",
+  },
+];
+
+const FOLDERS: Feature[] = [
+  {
+    icon: FolderTree,
+    title: "Real structural depth",
+    description:
+      "Nest folders as deep as you need. Folders are first-class objects, not just names.",
+  },
+  {
+    icon: GripVertical,
+    title: "Drag and drop",
+    description:
+      "Move items between folders by dragging them in the sidebar tree.",
+  },
+  {
+    icon: RefreshCw,
+    title: "Full lifecycle",
+    description:
+      "Archive or trash entire folder subtrees. Restore them when you need them.",
+  },
+];
 
 export default function OrganizationPage() {
   return (
@@ -29,96 +106,37 @@ export default function OrganizationPage() {
         ctaPrimary={{ label: "Start organizing", href: "/sign_in" }}
       />
 
-      {/* Collections section */}
-      <section className="mx-auto w-full max-w-5xl px-6 py-24">
-        <div className="mb-8">
-          <h2 className="text-xl font-bold tracking-tight text-foreground">
-            Collections
-          </h2>
-          <div className="mt-2 h-0.5 w-12 rounded-full bg-violet-500/50" />
-        </div>
-        <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-          <div className="rounded-xl border border-border/50 bg-card p-6">
-            <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-lg bg-muted">
-              <Archive className="h-5 w-5 text-muted-foreground" />
-            </div>
-            <h3 className="text-sm font-semibold text-foreground">Focused collections</h3>
-            <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">
-              Each collection is a self-contained context domain with its own notes, files, skills, and agents.
-            </p>
-          </div>
-          <div className="rounded-xl border border-border/50 bg-card p-6">
-            <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-lg bg-muted">
-              <BookOpen className="h-5 w-5 text-muted-foreground" />
-            </div>
-            <h3 className="text-sm font-semibold text-foreground">Guide notes</h3>
-            <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">
-              Every collection can have a guide note — the first thing AI reads to understand the domain.
-            </p>
-          </div>
-          <div className="rounded-xl border border-border/50 bg-card p-6">
-            <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-lg bg-muted">
-              <Network className="h-5 w-5 text-muted-foreground" />
-            </div>
-            <h3 className="text-sm font-semibold text-foreground">Tree and graph views</h3>
-            <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">
-              Navigate your collection contents as an interactive tree or explore relationships in the graph.
-            </p>
-          </div>
+      <section className="mx-auto w-full max-w-5xl px-6 py-20">
+        <SectionHeading>Collections</SectionHeading>
+        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
+          {COLLECTIONS.map((f) => (
+            <FeatureCard key={f.title} {...f} />
+          ))}
         </div>
       </section>
 
-      {/* Folders section */}
-      <section className="mx-auto w-full max-w-5xl px-6 py-24">
-        <div className="mb-8">
-          <h2 className="text-xl font-bold tracking-tight text-foreground">
-            Folders
-          </h2>
-          <div className="mt-2 h-0.5 w-12 rounded-full bg-violet-500/50" />
-        </div>
-        <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-          <div className="rounded-xl border border-border/50 bg-card p-6">
-            <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-lg bg-muted">
-              <FolderTree className="h-5 w-5 text-muted-foreground" />
-            </div>
-            <h3 className="text-sm font-semibold text-foreground">Real structural depth</h3>
-            <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">
-              Nest folders as deep as you need. Folders are first-class objects, not just names.
-            </p>
-          </div>
-          <div className="rounded-xl border border-border/50 bg-card p-6">
-            <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-lg bg-muted">
-              <GripVertical className="h-5 w-5 text-muted-foreground" />
-            </div>
-            <h3 className="text-sm font-semibold text-foreground">Drag and drop</h3>
-            <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">
-              Move items between folders by dragging them in the sidebar tree.
-            </p>
-          </div>
-          <div className="rounded-xl border border-border/50 bg-card p-6">
-            <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-lg bg-muted">
-              <RefreshCw className="h-5 w-5 text-muted-foreground" />
-            </div>
-            <h3 className="text-sm font-semibold text-foreground">Full lifecycle</h3>
-            <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">
-              Archive or trash entire folder subtrees. Restore them when you need them.
-            </p>
-          </div>
+      <section className="mx-auto w-full max-w-5xl px-6 pb-24">
+        <SectionHeading>Folders</SectionHeading>
+        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
+          {FOLDERS.map((f) => (
+            <FeatureCard key={f.title} {...f} />
+          ))}
         </div>
       </section>
 
-      {/* Bottom CTA */}
-      <section className="border-t border-border/50 py-20">
+      <section className="border-t border-border py-20">
         <div className="mx-auto max-w-2xl px-6 text-center">
-          <h2 className="text-2xl font-bold tracking-tight text-foreground">
+          <h2 className="text-headline text-foreground">
             Ready to organize your knowledge?
           </h2>
-          <p className="mt-3 text-muted-foreground">
+          <p className="mt-3 text-base text-muted-foreground">
             Create your first collection in seconds. No credit card needed.
           </p>
           <div className="mt-6 flex flex-col items-center gap-2">
-            <Button size="lg" render={<Link href="/sign_in" />}>Start organizing
-              <ArrowRight className="h-4 w-4" /></Button>
+            <Button size="lg" render={<Link href="/sign_in" />}>
+              Start organizing
+              <ArrowRight className="h-4 w-4" />
+            </Button>
             <ul className="mt-4 flex flex-wrap justify-center gap-4 text-xs text-muted-foreground">
               {[
                 "Free plan forever",
@@ -126,7 +144,7 @@ export default function OrganizationPage() {
                 "No vendor lock-in",
               ].map((item) => (
                 <li key={item} className="flex items-center gap-1.5">
-                  <Check className="h-3 w-3 text-violet-400" />
+                  <Check className="h-3 w-3 text-brand" />
                   {item}
                 </li>
               ))}

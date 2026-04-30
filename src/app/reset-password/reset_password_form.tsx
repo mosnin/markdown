@@ -32,7 +32,7 @@ function PasswordInput({
         autoComplete={autoComplete}
         required
         disabled={disabled}
-        className="h-9 pr-9"
+        className="pr-9"
       />
       <button
         type="button"
@@ -55,10 +55,13 @@ export function ResetPasswordForm() {
   const [state, formAction, pending] = useActionState(updatePassword, INITIAL);
 
   return (
-    <form action={formAction} className="flex flex-col gap-3">
+    <form action={formAction} className="flex flex-col gap-4">
       {/* New password */}
-      <div className="flex flex-col gap-1.5">
-        <label htmlFor="new-password" className="text-sm font-medium text-foreground">
+      <div>
+        <label
+          htmlFor="new-password"
+          className="mb-1.5 block text-sm font-medium text-foreground"
+        >
           New password
         </label>
         <PasswordInput
@@ -68,11 +71,17 @@ export function ResetPasswordForm() {
           autoComplete="new-password"
           disabled={pending}
         />
+        <p className="mt-1.5 text-xs text-muted-foreground">
+          At least 8 characters.
+        </p>
       </div>
 
       {/* Confirm password */}
-      <div className="flex flex-col gap-1.5">
-        <label htmlFor="confirm-password" className="text-sm font-medium text-foreground">
+      <div>
+        <label
+          htmlFor="confirm-password"
+          className="mb-1.5 block text-sm font-medium text-foreground"
+        >
           Confirm password
         </label>
         <PasswordInput

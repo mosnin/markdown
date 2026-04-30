@@ -4,40 +4,51 @@ import * as React from "react";
 import { cva, type VariantProps } from "class-variance-authority";
 
 import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
 
-const glassButtonVariants = cva(
-  "relative isolate all-unset cursor-pointer rounded-full transition-all",
-  {
-    variants: {
-      size: {
-        default: "text-base font-medium",
-        sm: "text-sm font-medium",
-        lg: "text-lg font-medium",
-        icon: "h-10 w-10",
-      },
-    },
-    defaultVariants: {
-      size: "default",
+/**
+ * Legacy `GlassButton` — now a thin compatibility wrapper.
+ *
+ * The redesign drops the multi-layer glass DOM and gradient highlights in
+ * favor of the flat brand-yellow primary defined by `<Button variant="default">`.
+ * This module is kept around so existing imports and the existing prop
+ * signature (`size`, `className`, `contentClassName`, `children`, native
+ * button props) continue to compile and render. All instances now route to
+ * the canonical Button component.
+ *
+ * `glassButtonVariants` is preserved as an export so any caller pulling it
+ * for a `cn()` merge keeps working — but it now resolves to the Button's
+ * `default` styling responsibilities and does not contribute multi-layer
+ * chrome of its own.
+ */
+const glassButtonVariants = cva("", {
+  variants: {
+    size: {
+      default: "",
+      sm: "",
+      lg: "",
+      icon: "",
     },
   },
-);
-
-const glassButtonTextVariants = cva(
-  "glass-button-text relative block select-none tracking-tighter",
-  {
-    variants: {
-      size: {
-        default: "px-6 py-3.5",
-        sm: "px-4 py-2",
-        lg: "px-8 py-4",
-        icon: "flex h-10 w-10 items-center justify-center",
-      },
-    },
-    defaultVariants: {
-      size: "default",
-    },
+  defaultVariants: {
+    size: "default",
   },
-);
+});
+
+// Map the legacy `size` vocabulary to the shared Button's size scale.
+function mapSize(size?: VariantProps<typeof glassButtonVariants>["size"]) {
+  switch (size) {
+    case "sm":
+      return "sm" as const;
+    case "lg":
+      return "lg" as const;
+    case "icon":
+      return "icon" as const;
+    case "default":
+    default:
+      return "default" as const;
+  }
+}
 
 export interface GlassButtonProps
   extends React.ButtonHTMLAttributes<HTMLButtonElement>,
@@ -48,28 +59,17 @@ export interface GlassButtonProps
 const GlassButton = React.forwardRef<HTMLButtonElement, GlassButtonProps>(
   ({ className, children, size, contentClassName, ...props }, ref) => {
     return (
-      <div
-        className={cn(
-          "glass-button-wrap cursor-pointer rounded-full",
-          className,
-        )}
+      <Button
+        ref={ref as unknown as React.Ref<HTMLButtonElement>}
+        // The shared Button uses Base UI's button primitive; HTML button
+        // attributes still flow through unchanged.
+        variant="default"
+        size={mapSize(size)}
+        className={cn(className)}
+        {...(props as React.ComponentProps<typeof Button>)}
       >
-        <button
-          className={cn("glass-button", glassButtonVariants({ size }))}
-          ref={ref}
-          {...props}
-        >
-          <span
-            className={cn(
-              glassButtonTextVariants({ size }),
-              contentClassName,
-            )}
-          >
-            {children}
-          </span>
-        </button>
-        <div className="glass-button-shadow rounded-full"></div>
-      </div>
+        <span className={cn(contentClassName)}>{children}</span>
+      </Button>
     );
   },
 );
