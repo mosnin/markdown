@@ -36,28 +36,35 @@ export default async function EntityPage({ params }: { params: Promise<{ entity_
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
-      <div className="border-b border-border px-6 py-4">
-        <Link href="/app/graph" className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors mb-2">
-          <ArrowLeft className="h-3 w-3" aria-hidden="true" />
-          All entities
-        </Link>
-        <div className="flex items-center gap-3">
-          <EntityChip id={entity.id} name={entity.name} type={entity.entity_type as EntityChipType} interactive={false} size="md" mentionCount={entity.mention_count} />
-          <div className="ml-auto">
+      <PageHeader
+        eyebrow="Entity"
+        title={entity.name}
+        description={entity.description ?? undefined}
+        actions={
+          <div className="flex items-center gap-2">
+            <Link
+              href="/app/graph"
+              className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <ArrowLeft className="h-3 w-3" aria-hidden="true" />
+              All entities
+            </Link>
             <EntityMergeDialog sourceEntity={{ id: entity.id, name: entity.name, entity_type: entity.entity_type as EntityChipType }} />
           </div>
-        </div>
-        {entity.description && (
-          <p className="mt-2 text-sm text-muted-foreground max-w-3xl">{entity.description}</p>
-        )}
-      </div>
+        }
+        below={
+          <div className="pb-4 pt-1">
+            <EntityChip id={entity.id} name={entity.name} type={entity.entity_type as EntityChipType} interactive={false} size="md" mentionCount={entity.mention_count} />
+          </div>
+        }
+      />
 
-      <div className="flex-1 overflow-auto px-6 py-5">
-        <div className="mx-auto max-w-4xl space-y-6">
+      <div className="flex-1 overflow-auto px-6 py-6 md:px-8">
+        <div className="mx-auto max-w-4xl space-y-8">
           {/* Connections */}
           {edges.length > 0 && (
             <section>
-              <h2 className="flex items-center gap-1.5 text-sm font-semibold text-foreground mb-3">
+              <h2 className="mb-3 flex items-center gap-1.5 text-overline text-muted-foreground">
                 <Network className="h-3.5 w-3.5" aria-hidden="true" />
                 Connections ({edges.length})
               </h2>
@@ -79,11 +86,11 @@ export default async function EntityPage({ params }: { params: Promise<{ entity_
 
           {/* Mentions */}
           <section>
-            <h2 className="flex items-center gap-1.5 text-sm font-semibold text-foreground mb-3">
+            <h2 className="mb-3 flex items-center gap-1.5 text-overline text-muted-foreground">
               <FileText className="h-3.5 w-3.5" aria-hidden="true" />
               Appears in {uniqueNoteIds.length} note{uniqueNoteIds.length === 1 ? "" : "s"}
             </h2>
-            <div className="space-y-2">
+            <div className="divide-y divide-border rounded-lg border border-border bg-card overflow-hidden">
               {uniqueNoteIds.map((nid) => {
                 const note = noteMap.get(nid);
                 const mention = mentions.find((m) => m.note_id === nid);
@@ -92,11 +99,11 @@ export default async function EntityPage({ params }: { params: Promise<{ entity_
                   <Link
                     key={nid}
                     href={`/app/notes/${nid}`}
-                    className="block rounded-lg border border-border bg-card p-3 transition-colors hover:bg-accent/40"
+                    className="block px-4 py-3 transition-colors hover:bg-accent/60"
                   >
                     <p className="text-sm font-medium text-foreground truncate">{note.title}</p>
                     {mention?.context && (
-                      <p className="mt-1 text-xs text-muted-foreground line-clamp-2">
+                      <p className="mt-1 text-sm text-muted-foreground line-clamp-2">
                         &ldquo;{mention.context}&rdquo;
                       </p>
                     )}

@@ -3,9 +3,10 @@ import { Skeleton } from "@/components/ui/skeleton";
 export default function GraphLoading() {
   return (
     <div className="flex h-full flex-col overflow-hidden">
-      <div className="border-b border-border px-6 py-4">
-        <Skeleton className="h-6 w-48 mb-2" />
-        <Skeleton className="h-4 w-80 max-w-full" />
+      <div className="border-b border-border px-6 pt-6 pb-5 md:px-8">
+        <Skeleton className="h-3 w-20 mb-2" />
+        <Skeleton className="h-7 w-56 mb-2" />
+        <Skeleton className="h-4 w-96 max-w-full" />
       </div>
       <div className="mx-auto w-full max-w-7xl px-6 py-6 space-y-3">
         <div className="flex gap-1.5">
