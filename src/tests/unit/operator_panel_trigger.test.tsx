@@ -75,7 +75,7 @@ describe("OperatorPanelTrigger collaborator prop shapes", () => {
       },
       defaultBoxId: "box-1",
     };
-    sample.onOpenChange(true);
+    sample.onOpenChange?.(true);
     expect(opened).toBe(true);
     expect(sample.defaultBoxId).toBe("box-1");
     expect(sample.open).toBe(false);

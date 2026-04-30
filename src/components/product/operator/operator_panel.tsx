@@ -82,8 +82,10 @@ import type { WorkspacePlan } from "@/server/services/subscription_service";
 // ---------------------------------------------------------------------------
 
 interface OperatorPanelProps {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
+  /** "sheet" (default) slides in as a right-side drawer. "page" renders inline at full height. */
+  mode?: "sheet" | "page";
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
   defaultBoxId?: string;
 }
 
@@ -158,8 +160,9 @@ interface QuotaPreview {
 }
 
 export function OperatorPanel({
-  open,
-  onOpenChange,
+  mode = "sheet",
+  open = false,
+  onOpenChange = () => {},
   defaultBoxId,
 }: OperatorPanelProps) {
   // -- state -----------------------------------------------------------------
@@ -1304,14 +1307,10 @@ export function OperatorPanel({
 
   return (
     <>
-      <Sheet open={open} onOpenChange={(o) => onOpenChange(o)}>
-        <SheetContent
-          side="right"
-          className="flex w-full flex-col p-0 sm:max-w-[680px]"
-          aria-describedby="operator-panel-desc"
-        >
-          {/* ── Header ────────────────────────────────────────────────────── */}
-          <SheetHeader className="flex-row items-center gap-2 px-4 py-3 border-b border-border">
+      {mode === "page" ? (
+        <div className="flex h-full flex-col">
+          {/* ── Header (page mode) ──────────────────────────────────────── */}
+          <div className="flex flex-row items-center gap-2 px-4 py-3 border-b border-border">
             <button
               type="button"
               onClick={() => setShowSessionsSidebar((v) => !v)}
@@ -1325,18 +1324,14 @@ export function OperatorPanel({
                 <PanelLeft className="h-4 w-4" />
               )}
             </button>
-            <SheetTitle className="flex items-center gap-2 text-base">
+            <h1 className="flex items-center gap-2 text-base font-semibold">
               <Bot className="h-4 w-4" aria-hidden="true" />
               AI
-            </SheetTitle>
-            <SheetDescription id="operator-panel-desc" className="sr-only">
-              Your AI for research, writing, and organizing your notes.
-            </SheetDescription>
-          </SheetHeader>
+            </h1>
+          </div>
 
           {/* ── Two-column layout ─────────────────────────────────────────── */}
           <div className="flex flex-1 overflow-hidden">
-            {/* Sessions sidebar */}
             {showSessionsSidebar && (
               <div className="w-[180px] shrink-0 overflow-hidden">
                 <OperatorSessionsSidebar
@@ -1346,14 +1341,60 @@ export function OperatorPanel({
                 />
               </div>
             )}
-
-            {/* Main content panel */}
             <div className="flex flex-1 min-w-0 flex-col overflow-hidden">
               {renderBody()}
             </div>
           </div>
-        </SheetContent>
-      </Sheet>
+        </div>
+      ) : (
+        <Sheet open={open} onOpenChange={(o) => onOpenChange(o)}>
+          <SheetContent
+            side="right"
+            className="flex w-full flex-col p-0 sm:max-w-[680px]"
+            aria-describedby="operator-panel-desc"
+          >
+            {/* ── Header ────────────────────────────────────────────────────── */}
+            <SheetHeader className="flex-row items-center gap-2 px-4 py-3 border-b border-border">
+              <button
+                type="button"
+                onClick={() => setShowSessionsSidebar((v) => !v)}
+                className="shrink-0 rounded-md p-1 text-muted-foreground hover:text-foreground hover:bg-accent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                aria-label={showSessionsSidebar ? "Hide sessions" : "Show sessions"}
+                title={showSessionsSidebar ? "Hide sessions" : "Show sessions"}
+              >
+                {showSessionsSidebar ? (
+                  <PanelLeftClose className="h-4 w-4" />
+                ) : (
+                  <PanelLeft className="h-4 w-4" />
+                )}
+              </button>
+              <SheetTitle className="flex items-center gap-2 text-base">
+                <Bot className="h-4 w-4" aria-hidden="true" />
+                AI
+              </SheetTitle>
+              <SheetDescription id="operator-panel-desc" className="sr-only">
+                Your AI for research, writing, and organizing your notes.
+              </SheetDescription>
+            </SheetHeader>
+
+            {/* ── Two-column layout ─────────────────────────────────────────── */}
+            <div className="flex flex-1 overflow-hidden">
+              {showSessionsSidebar && (
+                <div className="w-[180px] shrink-0 overflow-hidden">
+                  <OperatorSessionsSidebar
+                    activeSessionId={activeSessionId}
+                    onSelectSession={handleSelectSession}
+                    onNewSession={handleNewSession}
+                  />
+                </div>
+              )}
+              <div className="flex flex-1 min-w-0 flex-col overflow-hidden">
+                {renderBody()}
+              </div>
+            </div>
+          </SheetContent>
+        </Sheet>
+      )}
 
       <Dialog
         open={varsDialog !== null}

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { usePathname } from "next/navigation";
 import { Sparkles } from "lucide-react";
 
 import { cn } from "@/lib/utils";
@@ -50,12 +51,18 @@ export function OperatorPanelTrigger({
 }: OperatorPanelTriggerProps) {
   const [open, setOpen] = useState(false);
   const resolvedDefaultBoxId = defaultBoxId ?? boxes[0]?.id;
+  const pathname = usePathname();
+  const isHomePage = pathname === "/app";
 
   useEffect(() => {
     const handler = () => setOpen(true);
     window.addEventListener(OPEN_OPERATOR_EVENT, handler);
     return () => window.removeEventListener(OPEN_OPERATOR_EVENT, handler);
   }, []);
+
+  if (isHomePage) {
+    return <GlobalSearch boxes={boxes} />;
+  }
 
   return (
     <>
