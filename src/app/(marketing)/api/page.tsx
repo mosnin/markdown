@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import type { ComponentType, SVGProps } from "react";
 import Link from "next/link";
 import {
   ArrowRight,
@@ -26,12 +27,20 @@ export const metadata: Metadata = {
 };
 
 type Feature = {
-  icon: React.ComponentType<{ className?: string }>;
+  icon: ComponentType<SVGProps<SVGSVGElement>>;
   title: string;
   description: string;
 };
 
-function FeatureCard({ icon: Icon, title, description }: Feature) {
+function FeatureCard({
+  icon: Icon,
+  title,
+  description,
+}: {
+  icon: ComponentType<SVGProps<SVGSVGElement>>;
+  title: string;
+  description: string;
+}) {
   return (
     <Card>
       <CardHeader>
@@ -111,7 +120,12 @@ export default function ApiPage() {
         <SectionHeading>REST API</SectionHeading>
         <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
           {REST.map((f) => (
-            <FeatureCard key={f.title} {...f} />
+            <FeatureCard
+              key={f.title}
+              icon={f.icon}
+              title={f.title}
+              description={f.description}
+            />
           ))}
         </div>
       </section>
@@ -121,7 +135,12 @@ export default function ApiPage() {
         <SectionHeading>MCP</SectionHeading>
         <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
           {MCP.map((f) => (
-            <FeatureCard key={f.title} {...f} />
+            <FeatureCard
+              key={f.title}
+              icon={f.icon}
+              title={f.title}
+              description={f.description}
+            />
           ))}
         </div>
       </section>

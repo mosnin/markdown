@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import type { ComponentType, SVGProps } from "react";
 import Link from "next/link";
 import {
   ArrowRight,
@@ -26,7 +27,7 @@ export const metadata: Metadata = {
 };
 
 type Feature = {
-  icon: React.ComponentType<{ className?: string }>;
+  icon: ComponentType<SVGProps<SVGSVGElement>>;
   title: string;
   description: string;
 };
@@ -109,7 +110,12 @@ export default function NotesAndFilesPage() {
         <SectionHeading>Notes</SectionHeading>
         <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
           {NOTES.map((f) => (
-            <FeatureCard key={f.title} {...f} />
+            <FeatureCard
+              key={f.title}
+              icon={f.icon}
+              title={f.title}
+              description={f.description}
+            />
           ))}
         </div>
       </section>
@@ -118,7 +124,12 @@ export default function NotesAndFilesPage() {
         <SectionHeading>Files</SectionHeading>
         <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
           {FILES.map((f) => (
-            <FeatureCard key={f.title} {...f} />
+            <FeatureCard
+              key={f.title}
+              icon={f.icon}
+              title={f.title}
+              description={f.description}
+            />
           ))}
         </div>
       </section>

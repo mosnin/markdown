@@ -208,10 +208,8 @@ export function SettingsSidebar({
           ))}
         </ul>
 
-        <div className="mt-4 mb-1 flex items-center px-2.5">
-          <span className="text-[11px] font-semibold uppercase tracking-wider text-foreground/40">
-            Developer &amp; Apps
-          </span>
+        <div className="mt-4 mb-1 flex items-center text-overline text-muted-foreground/70 px-2.5">
+          Developer &amp; Apps
         </div>
         <ul className="flex flex-col gap-0.5 list-none">
           {developerNav.map(({ href, label, subLabel, icon: Icon }) => {
@@ -241,10 +239,8 @@ export function SettingsSidebar({
           })}
         </ul>
 
-        <div className="mt-4 mb-1 flex items-center px-2.5">
-          <span className="text-[11px] font-semibold uppercase tracking-wider text-foreground/40">
-            Workspace Operator
-          </span>
+        <div className="mt-4 mb-1 flex items-center text-overline text-muted-foreground/70 px-2.5">
+          Workspace Operator
         </div>
         <ul className="flex flex-col gap-0.5 list-none">
           {operatorNav.map(({ href, label, subLabel, icon: Icon }) => {
@@ -274,10 +270,8 @@ export function SettingsSidebar({
           })}
         </ul>
 
-        <div className="mt-4 mb-1 flex items-center px-2.5">
-          <span className="text-[11px] font-semibold uppercase tracking-wider text-foreground/40">
-            Workspace admin
-          </span>
+        <div className="mt-4 mb-1 flex items-center text-overline text-muted-foreground/70 px-2.5">
+          Workspace admin
         </div>
         <ul className="flex flex-col gap-0.5 list-none">
           {workspaceAdminNav.map(({ href, label, subLabel, icon: Icon }) => {
@@ -307,10 +301,8 @@ export function SettingsSidebar({
           })}
         </ul>
 
-        <div className="mt-4 mb-1 flex items-center px-2.5">
-          <span className="text-[11px] font-semibold uppercase tracking-wider text-foreground/40">
-            Security
-          </span>
+        <div className="mt-4 mb-1 flex items-center text-overline text-muted-foreground/70 px-2.5">
+          Security
         </div>
         <ul className="flex flex-col gap-0.5 list-none">
           {securityNav.map(({ href, label, subLabel, icon: Icon }) => {
@@ -342,25 +334,26 @@ export function SettingsSidebar({
       </ScrollArea>
 
       {/* Bottom chrome — matches the main sidebar so the shell feels stable */}
-      <div className="border-t border-border/40">
-        <div className="flex items-center justify-between px-3 py-2">
+      <div className="border-t border-border">
+        <div className="flex items-center justify-between gap-1 px-2 py-1.5">
           <Link
             href="/app/settings"
             aria-label="Settings"
             aria-current={pathname === "/app/settings" ? "page" : undefined}
             className={cn(
-              "flex items-center gap-2 rounded-md p-1.5 text-foreground/50 transition-fast",
-              "hover:bg-accent/60 hover:text-foreground",
-              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-              pathname === "/app/settings" && "text-foreground",
+              "inline-flex h-7 items-center gap-2 rounded-md px-2 text-[13px] transition-colors",
+              "text-muted-foreground hover:bg-accent hover:text-foreground",
+              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:ring-offset-1 focus-visible:ring-offset-background",
+              pathname === "/app/settings" && "bg-accent text-foreground font-medium",
             )}
           >
             <AccountSetting01Icon className="h-4 w-4" aria-hidden="true" />
+            <span>Settings</span>
           </Link>
           <ThemeToggle />
         </div>
         {userEmail && (
-          <div className="border-t border-border/40 px-2 py-2">
+          <div className="border-t border-border px-2 py-2">
             <UserMenu email={userEmail} />
           </div>
         )}

@@ -16,7 +16,7 @@ export default function DMCAPage() {
         title="DMCA Policy"
         description="How we handle copyright complaints and counter-notices."
       />
-      <section className="mx-auto w-full max-w-3xl px-6 py-16">
+      <section className="page-content py-16">
         <DMCAContent />
       </section>
     </div>

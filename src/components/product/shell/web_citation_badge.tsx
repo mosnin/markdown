@@ -59,30 +59,30 @@ function sourceMeta(type: WebCitation["source_type"]) {
     case "exa":
       return {
         icon: Search,
-        iconColor: "text-violet-500",
-        border: "border-violet-500/30",
-        hoverBg: "hover:bg-violet-500/5",
+        iconColor: "text-brand",
+        border: "border-brand/25",
+        hoverBg: "hover:bg-brand/5",
       };
     case "tavily":
       return {
         icon: Search,
-        iconColor: "text-blue-500",
-        border: "border-blue-500/30",
-        hoverBg: "hover:bg-blue-500/5",
+        iconColor: "text-info",
+        border: "border-info/25",
+        hoverBg: "hover:bg-info/5",
       };
     case "browserbase":
       return {
         icon: MousePointer2,
-        iconColor: "text-amber-500",
-        border: "border-amber-500/30",
-        hoverBg: "hover:bg-amber-500/5",
+        iconColor: "text-warning",
+        border: "border-warning/25",
+        hoverBg: "hover:bg-warning/5",
       };
     case "web_fetch":
       return {
         icon: FileCode,
-        iconColor: "text-emerald-500",
-        border: "border-emerald-500/30",
-        hoverBg: "hover:bg-emerald-500/5",
+        iconColor: "text-success",
+        border: "border-success/25",
+        hoverBg: "hover:bg-success/5",
       };
     default:
       return {

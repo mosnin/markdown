@@ -19,7 +19,7 @@ export function WebBudgetCard() {
 
   if (error) {
     return (
-      <p className="flex items-center gap-1.5 text-xs text-rose-500">
+      <p className="flex items-center gap-1.5 text-xs text-destructive">
         <AlertTriangle className="h-3.5 w-3.5" aria-hidden="true" />
         {error}
       </p>
@@ -59,16 +59,16 @@ export function WebBudgetCard() {
           className={cn(
             "h-full transition-all duration-300",
             exhausted
-              ? "bg-rose-500"
+              ? "bg-destructive"
               : warning
-                ? "bg-amber-500"
-                : "bg-emerald-500"
+                ? "bg-warning"
+                : "bg-success"
           )}
           style={{ width: `${Math.min(100, status.percent_used)}%` }}
         />
       </div>
       {exhausted && (
-        <p className="flex items-center gap-1 text-[11px] text-rose-500">
+        <p className="flex items-center gap-1 text-[11px] text-destructive">
           <AlertTriangle className="h-3 w-3" aria-hidden="true" />
           Budget exhausted. Agents cannot call web tools until next month or
           budget is raised.

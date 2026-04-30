@@ -1,4 +1,5 @@
 import { connection } from "next/server";
+import type { ComponentType, SVGProps } from "react";
 import Link from "next/link";
 import {
   CheckCircle2,
@@ -45,7 +46,7 @@ function FileRow({
   meta,
   active = false,
 }: {
-  icon: React.ComponentType<{ className?: string; "aria-hidden"?: boolean }>;
+  icon: ComponentType<SVGProps<SVGSVGElement>>;
   label: string;
   meta?: string;
   active?: boolean;

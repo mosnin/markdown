@@ -101,7 +101,8 @@ export function UserMenu({ email }: UserMenuProps) {
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem
-          className="gap-2 text-destructive data-[highlighted]:bg-destructive/10 data-[highlighted]:text-destructive"
+          variant="destructive"
+          className="gap-2"
           onClick={() => void signOut()}
         >
           <LogOut className="h-3.5 w-3.5" aria-hidden="true" />

@@ -16,7 +16,7 @@ export default function AcceptableUsePage() {
         title="Acceptable Use Policy"
         description="What you can and cannot do with Poggle."
       />
-      <section className="mx-auto w-full max-w-3xl px-6 py-16">
+      <section className="page-content py-16">
         <AcceptableUseContent />
       </section>
     </div>

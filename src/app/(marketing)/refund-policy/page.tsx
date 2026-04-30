@@ -16,7 +16,7 @@ export default function RefundPolicyPage() {
         title="Refund Policy"
         description="Our refund practices explained plainly."
       />
-      <section className="mx-auto w-full max-w-3xl px-6 py-16">
+      <section className="page-content py-16">
         <RefundContent />
       </section>
     </div>
