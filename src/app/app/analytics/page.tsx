@@ -46,7 +46,6 @@ export default async function AnalyticsPage() {
   return (
     <div className="flex h-full flex-col overflow-hidden">
       <PageHeader
-        eyebrow="Workspace"
         title="Analytics"
         description="Workspace health, search analytics, and content metrics."
       />

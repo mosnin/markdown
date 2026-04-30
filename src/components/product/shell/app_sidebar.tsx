@@ -1,24 +1,19 @@
 "use client";
 
-import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
+  Bell,
   Bot,
-  ChevronDown,
   ChevronRight,
   FileText,
   GitBranch,
   GitFork,
+  Home,
   Network,
   Plus,
   Puzzle,
 } from "lucide-react";
-import {
-  AccountSetting01Icon,
-  Alert01Icon,
-  Home01Icon,
-} from "hugeicons-react";
 import { cn } from "@/lib/utils";
 import { type Box as BoxType } from "@/server/domain/types/box";
 import { Badge } from "@/components/ui/badge";
@@ -28,7 +23,6 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { ThemeToggle } from "@/components/product/theme_toggle";
 import { UserMenu } from "@/components/product/user_menu";
 import { TreeSidebar } from "@/components/product/tree_sidebar";
 import { WorkspaceSwitcher } from "@/components/product/workspace/workspace_switcher";
@@ -59,7 +53,6 @@ function NavItem({
   icon: React.ElementType;
   label: string;
   isActive: boolean;
-  /** Optional keyboard hint rendered as a trailing <kbd>. */
   shortcut?: string;
 }) {
   return (
@@ -142,41 +135,6 @@ function NavItemWithBadge({
   );
 }
 
-// ─── Section header (collapsible group) ───────────────────────────────────────
-
-function SectionToggle({
-  label,
-  open,
-  onToggle,
-}: {
-  label: string;
-  open: boolean;
-  onToggle: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onToggle}
-      className={cn(
-        "group/section flex w-full items-center gap-1",
-        SECTION_OVERLINE,
-        "transition-colors hover:text-foreground/80",
-        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:ring-offset-1 focus-visible:ring-offset-background focus-visible:rounded"
-      )}
-      aria-expanded={open}
-    >
-      <ChevronRight
-        className={cn(
-          "h-3 w-3 shrink-0 text-muted-foreground/60 transition-transform duration-150",
-          open && "rotate-90"
-        )}
-        aria-hidden="true"
-      />
-      <span>{label}</span>
-    </button>
-  );
-}
-
 // ─── Sidebar ──────────────────────────────────────────────────────────────────
 
 interface AppSidebarProps {
@@ -186,19 +144,14 @@ interface AppSidebarProps {
   boxes?: BoxType[];
   /** All workspaces the user owns; enables the multi-workspace switcher. */
   workspaces?: Array<{ id: string; name: string; slug: string }>;
-  /**
-   * 5 most-recently-updated notes in the workspace. Powers the "Recent"
-   * section between the primary nav and the boxes tree so users can
-   * jump back to what they were working on without reorienting via the
-   * full box tree each session.
-   */
+  /** 5 most-recently-updated notes — rendered in the "Recent" section. */
   recentNotes?: Array<{
     id: string;
     title: string;
     box_id: string;
     updated_at: string;
   }>;
-  /** Count of pending write proposals — shown as a badge on the Proposals nav item. */
+  /** Pending write proposal count — drives the AI Edits badge. */
   pendingProposalsCount?: number;
 }
 
@@ -212,9 +165,8 @@ export function AppSidebar({
   pendingProposalsCount = 0,
 }: AppSidebarProps) {
   const pathname = usePathname();
-  const [buildOpen, setBuildOpen] = useState(true);
-  const [exploreOpen, setExploreOpen] = useState(true);
 
+  // Flat nav — no collapsible groups. Ordered by frequency of use.
   const buildNav = [
     { label: "Skills", href: "/app/skills", icon: Puzzle },
     { label: "Agents", href: "/app/agents", icon: Bot },
@@ -261,7 +213,7 @@ export function AppSidebar({
             <li>
               <NavItem
                 href="/app"
-                icon={Home01Icon}
+                icon={Home}
                 label="Home"
                 isActive={pathname === "/app"}
               />
@@ -269,7 +221,7 @@ export function AppSidebar({
             <li>
               <NavItemWithBadge
                 href="/app/proposals"
-                icon={Alert01Icon}
+                icon={Bell}
                 label="AI Edits"
                 isActive={pathname === "/app/proposals" || pathname.startsWith("/app/proposals/")}
                 badge={pendingProposalsCount}
@@ -279,53 +231,41 @@ export function AppSidebar({
         </nav>
       </div>
 
-      {/* Build section */}
+      {/* Build — flat, no collapse */}
       <div className="px-2 pt-2 pb-1">
-        <SectionToggle
-          label="Build"
-          open={buildOpen}
-          onToggle={() => setBuildOpen((v) => !v)}
-        />
-        {buildOpen && (
-          <ul className="mt-0.5 flex flex-col gap-0.5 list-none">
-            {buildNav.map((item) => (
-              <li key={item.href}>
-                <NavItem
-                  href={item.href}
-                  icon={item.icon}
-                  label={item.label}
-                  isActive={pathname === item.href || pathname.startsWith(item.href + "/")}
-                />
-              </li>
-            ))}
-          </ul>
-        )}
+        <p className={SECTION_OVERLINE}>Build</p>
+        <ul className="mt-0.5 flex flex-col gap-0.5 list-none">
+          {buildNav.map((item) => (
+            <li key={item.href}>
+              <NavItem
+                href={item.href}
+                icon={item.icon}
+                label={item.label}
+                isActive={pathname === item.href || pathname.startsWith(item.href + "/")}
+              />
+            </li>
+          ))}
+        </ul>
       </div>
 
-      {/* Explore section */}
+      {/* Explore — flat, no collapse */}
       <div className="px-2 pt-2 pb-1">
-        <SectionToggle
-          label="Explore"
-          open={exploreOpen}
-          onToggle={() => setExploreOpen((v) => !v)}
-        />
-        {exploreOpen && (
-          <ul className="mt-0.5 flex flex-col gap-0.5 list-none">
-            {exploreNav.map((item) => (
-              <li key={item.href}>
-                <NavItem
-                  href={item.href}
-                  icon={item.icon}
-                  label={item.label}
-                  isActive={pathname === item.href || pathname.startsWith(item.href + "/")}
-                />
-              </li>
-            ))}
-          </ul>
-        )}
+        <p className={SECTION_OVERLINE}>Explore</p>
+        <ul className="mt-0.5 flex flex-col gap-0.5 list-none">
+          {exploreNav.map((item) => (
+            <li key={item.href}>
+              <NavItem
+                href={item.href}
+                icon={item.icon}
+                label={item.label}
+                isActive={pathname === item.href || pathname.startsWith(item.href + "/")}
+              />
+            </li>
+          ))}
+        </ul>
       </div>
 
-      {/* Recent notes — most-recently-updated notes in the workspace */}
+      {/* Recent notes */}
       {recentNotes && recentNotes.length > 0 && (
         <div className="px-2 pt-2 pb-1">
           <p className={SECTION_OVERLINE}>Recent</p>
@@ -413,32 +353,13 @@ export function AppSidebar({
         </ScrollArea>
       </div>
 
-      {/* Bottom chrome — settings + theme + user menu */}
-      <div className="border-t border-border">
-        <div className="flex items-center justify-between gap-1 px-2 py-1.5">
-          <Link
-            href="/app/settings"
-            aria-label="Settings"
-            aria-current={pathname === "/app/settings" ? "page" : undefined}
-            className={cn(
-              "inline-flex h-7 items-center gap-2 rounded-md px-2 text-[13px] transition-colors",
-              "text-muted-foreground hover:bg-accent hover:text-foreground",
-              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:ring-offset-1 focus-visible:ring-offset-background",
-              pathname === "/app/settings" && "bg-accent text-foreground font-medium"
-            )}
-          >
-            <AccountSetting01Icon className="h-4 w-4" aria-hidden="true" />
-            <span>Settings</span>
-          </Link>
-          <ThemeToggle />
+      {/* Bottom chrome — single user menu row. Settings, Theme, Sign out
+          all live inside the menu so the sidebar stays clean. */}
+      {userEmail && (
+        <div className="border-t border-border px-2 py-2">
+          <UserMenu email={userEmail} />
         </div>
-
-        {userEmail && (
-          <div className="border-t border-border px-2 py-2">
-            <UserMenu email={userEmail} />
-          </div>
-        )}
-      </div>
+      )}
     </aside>
   );
 }

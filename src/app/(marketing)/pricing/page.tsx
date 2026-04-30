@@ -43,7 +43,7 @@ const PLANS = [
     description: "For power users who need unlimited knowledge and AI context.",
     cta: "Start 14-day trial",
     href: "/sign_in",
-    variant: "default" as const,
+    variant: "brand" as const,
     features: [
       "Unlimited everything",
       "Unlimited boxes",

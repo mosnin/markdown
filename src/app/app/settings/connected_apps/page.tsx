@@ -29,7 +29,6 @@ export default async function ConnectedAppsPage() {
   return (
     <div className="flex h-full flex-col overflow-hidden">
       <PageHeader
-        eyebrow="Settings"
         title="Connected apps"
         description="OAuth apps you've authorized to access your workspaces. Revoke any app to immediately invalidate every live token it holds."
         actions={

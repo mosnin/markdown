@@ -326,7 +326,7 @@ export default async function HomePage() {
                 description: "For serious knowledge workers.",
                 cta: "Start free trial",
                 href: "/sign_in",
-                variant: "default" as const,
+                variant: "brand" as const,
                 features: [
                   "Unlimited everything",
                   "Unlimited boxes",
@@ -432,8 +432,8 @@ export default async function HomePage() {
             in one place.
           </p>
           <div className="mt-10 flex justify-center">
-            <Button size="lg" render={<Link href="/sign_in" />}>
-              Get Poggle
+            <Button size="lg" variant="brand" render={<Link href="/sign_in" />}>
+              Get started
             </Button>
           </div>
         </div>

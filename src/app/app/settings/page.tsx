@@ -141,7 +141,6 @@ export default async function SettingsPage() {
   return (
     <div className="flex h-full flex-col overflow-hidden">
       <PageHeader
-        eyebrow="Account"
         title="Settings"
         description="Manage your account, preferences, and integrations."
       />
@@ -274,7 +273,7 @@ export default async function SettingsPage() {
                 </CardTitle>
                 <CardDescription className="text-sm text-muted-foreground">
                   Entity and relationship extraction from your notes. Powers
-                  GraphRAG context in the Atlas AI agent.
+                  GraphRAG context in the Poggle agent.
                 </CardDescription>
               </CardHeader>
               <Separator />

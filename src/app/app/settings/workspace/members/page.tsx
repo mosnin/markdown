@@ -63,7 +63,6 @@ export default async function WorkspaceMembersPage() {
   return (
     <div className="flex h-full flex-col overflow-hidden">
       <PageHeader
-        eyebrow="Workspace"
         title="Members"
         description="Manage workspace members and invitations. Invite teammates by email — they receive a link to accept or decline."
         actions={

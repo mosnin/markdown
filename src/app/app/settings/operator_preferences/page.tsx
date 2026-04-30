@@ -32,7 +32,6 @@ export default async function OperatorPreferencesPage() {
   return (
     <div className="flex h-full flex-col overflow-hidden">
       <PageHeader
-        eyebrow="Settings"
         title="Operator preferences"
         description="Notification preferences and REST API keys for the Workspace Operator."
       />

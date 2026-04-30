@@ -15,7 +15,6 @@ export default async function InsightsPage() {
     <div className="flex h-full flex-col overflow-hidden">
       <ActiveBranchBannerServer />
       <PageHeader
-        eyebrow="Knowledge"
         title="Insights"
         description="Atomic claims, decisions, and open questions extracted from your notes."
       />

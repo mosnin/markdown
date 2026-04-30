@@ -2,8 +2,7 @@
 
 import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Check, ChevronsUpDown, LayoutGrid, Plus } from "lucide-react";
-import { AccountSetting01Icon } from "hugeicons-react";
+import { Check, ChevronsUpDown, LayoutGrid, Plus, Settings } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   DropdownMenu,
@@ -221,7 +220,7 @@ export function WorkspaceSwitcher({
             onClick={() => deferAfterMenuClose(() => router.push("/app/settings"))}
             className="flex items-center gap-2"
           >
-            <AccountSetting01Icon className="h-3.5 w-3.5" aria-hidden="true" />
+            <Settings className="h-3.5 w-3.5" aria-hidden="true" />
             Workspace settings
           </DropdownMenuItem>
         </DropdownMenuContent>

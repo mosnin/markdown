@@ -54,7 +54,6 @@ export default async function PromotionGatesPage() {
   return (
     <div className="flex h-full flex-col overflow-hidden">
       <PageHeader
-        eyebrow="Workspace"
         title="Branch promotion gates"
         description="CI/CD-style webhooks that run before a branch is promoted to main. Each gate can veto the promotion. Signing secrets are shown once on creation — store them safely."
         actions={

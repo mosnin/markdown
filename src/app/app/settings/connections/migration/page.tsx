@@ -18,7 +18,6 @@ export default async function LegacyMigrationPage() {
   return (
     <div className="flex h-full flex-col overflow-hidden">
       <PageHeader
-        eyebrow="Admin"
         title="Legacy token migration"
         description="Migrate csk_v1_ connection tokens to OAuth 2.1 clients. Each legacy connection can be replaced by an OAuth client with equivalent scopes, then deprecated once the new client is in use."
         actions={

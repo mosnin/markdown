@@ -52,7 +52,6 @@ export default async function SkillsPage() {
       <ActiveBranchBannerServer />
       <WorkspaceLiveRefresh workspaceId={ctx.workspace.id} scope="library" />
       <PageHeader
-        eyebrow="Library"
         title="Skills"
         description="Workspace-level reusable skills shared across every box."
         actions={

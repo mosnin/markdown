@@ -105,7 +105,6 @@ export default async function OperatorRunsPage() {
   return (
     <div className="flex h-full flex-col overflow-hidden">
       <PageHeader
-        eyebrow="Atlas AI"
         title="Operator runs"
         description="Recent Workspace Operator invocations across all your workspaces."
       />

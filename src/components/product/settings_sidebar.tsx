@@ -15,12 +15,12 @@ import {
   Key,
   Mail,
   Palette,
+  Settings,
   Shield,
   Sparkles,
   User,
   Users,
 } from "lucide-react";
-import { AccountSetting01Icon } from "hugeicons-react";
 import { cn } from "@/lib/utils";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
@@ -347,7 +347,7 @@ export function SettingsSidebar({
               pathname === "/app/settings" && "bg-accent text-foreground font-medium",
             )}
           >
-            <AccountSetting01Icon className="h-4 w-4" aria-hidden="true" />
+            <Settings className="h-4 w-4" aria-hidden="true" />
             <span>Settings</span>
           </Link>
           <ThemeToggle />

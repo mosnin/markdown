@@ -25,7 +25,6 @@ export default async function PasskeysPage() {
   return (
     <div className="flex h-full flex-col overflow-hidden">
       <PageHeader
-        eyebrow="Security"
         title="Passkeys"
         description="Manage passkeys for passwordless sign-in."
       />

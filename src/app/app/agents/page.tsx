@@ -55,7 +55,6 @@ export default async function AgentsPage() {
       <ActiveBranchBannerServer />
       <WorkspaceLiveRefresh workspaceId={ctx.workspace.id} scope="library" />
       <PageHeader
-        eyebrow="Library"
         title="Agents"
         description="Workspace-level reusable agents shared across every box."
         actions={

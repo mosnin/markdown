@@ -24,7 +24,6 @@ export default async function ActivityPage() {
   return (
     <div className="flex h-full flex-col overflow-hidden">
       <PageHeader
-        eyebrow="Workspace"
         title="Activity"
         description="What happened in your workspace while you were away."
       />

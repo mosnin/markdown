@@ -25,7 +25,6 @@ export default async function OperatorPromptsPage() {
   return (
     <div className="flex h-full flex-col overflow-hidden">
       <PageHeader
-        eyebrow="Atlas AI"
         title="Saved prompts"
         description="Reusable prompts for the Workspace Operator. Private to you."
         actions={

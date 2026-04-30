@@ -423,19 +423,19 @@ export function WorkspaceSection({
               htmlFor="workspace-agent-instructions"
               className="text-sm font-medium text-foreground"
             >
-              Atlas AI instructions
+              Poggle instructions
             </label>
             <Textarea
               id="workspace-agent-instructions"
               name="agent_instructions"
               defaultValue={initialAgentInstructions ?? ""}
-              placeholder="Workspace-wide rules Atlas AI should follow on every run — tone, required citations, forbidden topics, etc."
+              placeholder="Workspace-wide rules Poggle should follow on every run — tone, required citations, forbidden topics, etc."
               rows={5}
               maxLength={4000}
               className="resize-none"
             />
             <p className="text-xs text-muted-foreground">
-              Injected into every Atlas AI run in this workspace. Box-level
+              Injected into every Poggle run in this workspace. Box-level
               instructions stack on top of these.
             </p>
           </div>

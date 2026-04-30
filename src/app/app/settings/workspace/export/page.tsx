@@ -17,7 +17,6 @@ export default async function WorkspaceExportPage() {
   return (
     <div className="flex h-full flex-col overflow-hidden">
       <PageHeader
-        eyebrow="Workspace"
         title="Export / Import"
         description="Export your entire workspace or import content from another workspace."
         actions={

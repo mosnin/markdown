@@ -78,7 +78,7 @@ export default async function ProposalsPage() {
             <EmptyState
               icon={<CircleDashed className="h-5 w-5" />}
               title="No edits pending"
-              description="Ask Atlas AI to review, improve, or reorganize your notes — it will propose specific changes here before touching anything."
+              description="Ask Poggle to review, improve, or reorganize your notes — it will propose specific changes here before touching anything."
               action={
                 <Link
                   href="/app"

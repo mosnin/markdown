@@ -14,19 +14,16 @@ import {
   ExternalLink,
   File,
   FileText,
+  Folder,
+  FolderOpen,
   FolderPlus,
   Link2,
   Package,
+  PackageOpen,
   Plus,
   Trash2,
   Zap,
 } from "lucide-react";
-import {
-  Folder01Icon,
-  Folder02Icon,
-  PackageIcon,
-  PackageOpenIcon,
-} from "hugeicons-react";
 import { Tree, type NodeRendererProps, type NodeApi, type TreeApi } from "react-arborist";
 import { getBoxColor, setBoxColor, BOX_COLOR_OPTIONS } from "@/lib/box_colors";
 import { cn } from "@/lib/utils";
@@ -316,7 +313,7 @@ function TreeNode({
   // Icon
   const Icon = (() => {
     switch (data.nodeType) {
-      case "folder": return node.isOpen ? Folder02Icon : Folder01Icon;
+      case "folder": return node.isOpen ? FolderOpen : Folder;
       case "note": return noteIcon(data.kind ?? "note");
       case "file": return File;
       case "skill": return Zap;
@@ -422,7 +419,7 @@ function TreeNode({
           )}
           aria-current={isActive ? "page" : undefined}
         >
-          {/* Icon is a stable module-level reference from lucide/hugeicons, not a new component */}
+          {/* Icon is a stable module-level reference from lucide-react, not a new component */}
           {/* eslint-disable-next-line react-hooks/static-components */}
           <Icon className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
           <span className="truncate">{data.name}</span>
@@ -996,8 +993,8 @@ function BoxRow({
           )}
         >
           {isExpanded
-            ? <PackageOpenIcon className="h-4 w-4 shrink-0" aria-hidden="true" />
-            : <PackageIcon className="h-4 w-4 shrink-0" aria-hidden="true" />
+            ? <PackageOpen className="h-4 w-4 shrink-0" aria-hidden="true" />
+            : <Package className="h-4 w-4 shrink-0" aria-hidden="true" />
           }
           <span className="truncate">{box.name}</span>
         </Link>

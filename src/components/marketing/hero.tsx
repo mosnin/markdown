@@ -4,17 +4,17 @@ import React from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { motion, useReducedMotion } from "motion/react";
-import { ArrowRightIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { TrustBar } from "@/components/marketing/trust_bar";
 
 // ─── Full homepage hero ───────────────────────────────────────────────────────
 
 /**
- * Quiet, centered marketing hero. No glitch, no animated blob background.
- * Single fade-in on mount, gracefully muted under prefers-reduced-motion.
+ * Quiet, centered marketing hero. One H1, one paragraph, two actions, one
+ * screenshot. Single fade-in on mount, muted under prefers-reduced-motion.
+ *
+ * The brand-yellow primary CTA carries the only saturated color above the
+ * fold — every other affordance is neutral so the eye lands on the action.
  */
 export function HeroSection() {
 	const reduceMotion = useReducedMotion();
@@ -28,64 +28,51 @@ export function HeroSection() {
 					initial={initial}
 					animate={animate}
 					transition={{ duration: 0.5, ease: [0.2, 0, 0, 1] }}
-					className="flex flex-col items-center gap-6 text-center"
+					className="flex flex-col items-center gap-7 text-center"
 				>
-					{/* Eyebrow / NEW chip */}
-					<Link
-						href="/features"
-						className="group inline-flex items-center gap-2"
-					>
-						<Badge variant="brand-subtle" className="h-6 px-2 text-[11px]">
-							NEW
-						</Badge>
-						<span className="text-sm text-muted-foreground transition-colors group-hover:text-foreground">
-							Skills, agents, files &amp; multi-object workspaces
-						</span>
-						<ArrowRightIcon className="size-3.5 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
-					</Link>
-
-					{/* H1 */}
+					{/* H1 — three words. The poster. */}
 					<h1
 						className={cn(
 							"max-w-3xl text-balance",
-							"text-5xl font-semibold tracking-tight text-foreground",
+							"text-4xl font-semibold tracking-tight text-foreground",
 							"sm:text-6xl md:text-7xl",
-							"leading-[1.05]",
+							"leading-[1.04]",
 						)}
 					>
-						Structured context.
+						Knowledge,
 						<br />
-						Built for AI.
+						organized.
 					</h1>
 
-					{/* Description */}
-					<p className="max-w-xl text-balance text-lg leading-relaxed text-muted-foreground">
-						Poggle is a structured context store for AI workflows. Organize
-						notes, files, skills, and agents into focused boxes — and deliver
-						clean context via API or MCP.
+					{/* Supporting paragraph — the engineer-words */}
+					<p className="max-w-xl text-balance text-base leading-relaxed text-muted-foreground sm:text-lg">
+						A structured context store for the work you do with AI. Notes,
+						files, skills, and agents — gathered into focused boxes, ready
+						to bundle and deliver clean context to any model.
 					</p>
 
-					{/* CTAs */}
-					<div className="mt-2 flex flex-col items-center gap-3 sm:flex-row">
-						<Button size="lg" render={<Link href="/sign_in" />}>
-							Get started free
+					{/* CTAs — full-width on small screens, side-by-side on sm+ */}
+					<div className="mt-1 flex w-full max-w-sm flex-col gap-3 sm:max-w-none sm:flex-row sm:justify-center">
+						<Button
+							size="lg"
+							variant="brand"
+							className="w-full sm:w-auto"
+							render={<Link href="/sign_in" />}
+						>
+							Get started
 						</Button>
 						<Button
 							size="lg"
 							variant="ghost"
+							className="w-full sm:w-auto"
 							render={<Link href="/features" />}
 						>
-							Explore features
+							See how it works
 						</Button>
 					</div>
 
-					{/* Trust */}
-					<div className="mt-4">
-						<TrustBar />
-					</div>
-
 					<p className="text-xs text-muted-foreground/70">
-						Free forever · No credit card · Import from Obsidian in minutes
+						No credit card. Import from Obsidian in minutes.
 					</p>
 				</motion.div>
 

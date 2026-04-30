@@ -38,7 +38,6 @@ export default async function ContentWebhooksPage() {
   return (
     <div className="flex h-full flex-col overflow-hidden">
       <PageHeader
-        eyebrow="Workspace"
         title="Content webhooks"
         description="HTTP endpoints that receive events when notes, links, files, branches, or members change. Signing secrets are shown once on creation — store them somewhere safe before closing the dialog."
         actions={

@@ -35,7 +35,6 @@ export default async function OauthClientsPage() {
   return (
     <div className="flex h-full flex-col overflow-hidden">
       <PageHeader
-        eyebrow="Developer"
         title="OAuth clients"
         description="Apps you've registered to integrate with the Context Store API via OAuth 2.1. Secrets are shown once at registration — store them somewhere safe before closing the dialog."
         actions={

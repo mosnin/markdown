@@ -80,9 +80,8 @@ export default async function WorkspaceOperatorHistoryPage({
   return (
     <div className="flex h-full flex-col overflow-hidden">
       <PageHeader
-        eyebrow="Atlas AI"
         title="Operator runs"
-        description="History of every Atlas AI run in this workspace."
+        description="History of every Poggle run in this workspace."
         actions={
           <>
             <Button variant="outline" size="sm" render={<Link href="/app/workspace_operator/prompts" />}>

@@ -33,7 +33,7 @@ export default async function SubagentsPage() {
     <div className="flex h-full flex-col overflow-hidden">
       <PageHeader
         title="Sub-agents"
-        description="Recent sub-agent invocations by Atlas AI and your agents. Each invocation runs in a fresh context window so orchestrator memory stays lean."
+        description="Recent sub-agent invocations by Poggle and your agents. Each invocation runs in a fresh context window so orchestrator memory stays lean."
       />
       <div className="flex-1 overflow-auto">
         <div className="mx-auto max-w-3xl space-y-6 px-4 py-6 md:px-6">
@@ -48,7 +48,7 @@ export default async function SubagentsPage() {
               </p>
               <p className="mx-auto mt-1 max-w-md text-xs text-muted-foreground">
                 Turn on a skill&apos;s &ldquo;sub-agent&rdquo; toggle in the
-                skill editor to make it callable by Atlas AI. Invocations will
+                skill editor to make it callable by Poggle. Invocations will
                 appear here.
               </p>
             </div>

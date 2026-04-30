@@ -23,7 +23,6 @@ export default async function NotificationPreferencesPage() {
   return (
     <div className="flex h-full flex-col overflow-hidden">
       <PageHeader
-        eyebrow="Settings"
         title="Notification preferences"
         description="Choose which events appear in your activity feed."
       />

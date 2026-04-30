@@ -24,7 +24,6 @@ export default async function SemanticSearchSettingsPage() {
   return (
     <div className="flex h-full flex-col overflow-hidden">
       <PageHeader
-        eyebrow="Workspace"
         title="Semantic search"
         description="Vector embeddings power search by meaning across your workspace's notes. The embed worker keeps new and edited notes fresh automatically — use this page to force a full reindex after a bulk import or embedding model change."
         actions={

@@ -20,7 +20,6 @@ export default async function GraphPage() {
     <div className="flex h-full flex-col overflow-hidden">
       <ActiveBranchBannerServer />
       <PageHeader
-        eyebrow="Knowledge"
         title="Knowledge graph"
         description="People, projects, concepts, and relationships extracted from your notes. Entities appear here as you write — click one to see every note it touches."
       />

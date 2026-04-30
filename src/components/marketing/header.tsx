@@ -80,7 +80,7 @@ export function MarketingHeader() {
 					<Button variant="ghost" size="sm" render={<Link href="/sign_in" />}>
 						Sign in
 					</Button>
-					<Button size="sm" render={<Link href="/sign_in" />}>
+					<Button variant="brand" size="sm" render={<Link href="/sign_in" />}>
 						Get started
 					</Button>
 				</div>
@@ -143,7 +143,7 @@ function MobileMenu({
 					>
 						Sign in
 					</Button>
-					<Button className="w-full" render={<Link href="/sign_in" />}>
+					<Button variant="brand" className="w-full" render={<Link href="/sign_in" />}>
 						Get started
 					</Button>
 				</div>

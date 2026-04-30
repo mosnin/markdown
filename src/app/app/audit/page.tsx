@@ -23,7 +23,6 @@ export default async function AuditPage() {
   return (
     <div className="flex h-full flex-col overflow-hidden">
       <PageHeader
-        eyebrow="Compliance"
         title="Audit log"
         description="An append-only record of every change and action in your workspace."
       />

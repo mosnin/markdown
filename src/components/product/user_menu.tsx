@@ -1,7 +1,8 @@
 "use client";
 
-import { ChevronsUpDown, CreditCard, LogOut, Settings, User } from "lucide-react";
+import { ChevronsUpDown, CreditCard, LogOut, Moon, Settings, Sun, User } from "lucide-react";
 import Link from "next/link";
+import { useTheme } from "next-themes";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -33,6 +34,9 @@ export function UserMenu({ email }: UserMenuProps) {
     .split("@")[0]
     .slice(0, 2)
     .toUpperCase();
+
+  const { theme, setTheme } = useTheme();
+  const isDark = theme === "dark";
 
   return (
     <DropdownMenu>
@@ -98,6 +102,21 @@ export function UserMenu({ email }: UserMenuProps) {
         >
           <CreditCard className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
           Billing
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          className="gap-2 text-foreground"
+          onClick={(e) => {
+            // Keep the menu open on toggle so users can confirm the change
+            e.preventDefault();
+            setTheme(isDark ? "light" : "dark");
+          }}
+        >
+          {isDark ? (
+            <Sun className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
+          ) : (
+            <Moon className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
+          )}
+          {isDark ? "Light theme" : "Dark theme"}
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem

@@ -32,7 +32,6 @@ export default async function BranchRetentionPage() {
   return (
     <div className="flex h-full flex-col overflow-hidden">
       <PageHeader
-        eyebrow="Workspace"
         title="Branch retention"
         description="Automatically warn authors about idle draft branches and discard them after a retention period. Discarded branches leave their version history as audit trail — nothing promoted to main is ever deleted."
         actions={

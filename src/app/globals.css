@@ -527,12 +527,53 @@
 
 /* ─── Brand button (primary CTA) ─────────────────────────────────────────
  *
- * Flat brand-yellow surface. Hairline darker border, near-black text,
- * subtle inner highlight, quiet drop shadow. Hover lightens 8%, active
- * darkens 6% and translates 1px. Defined here (not as Tailwind arbitrary
- * classes) because the multi-stop color-mix() box-shadow stack does not
+ * Two surfaces — `.btn-primary` (charcoal) is the default action across the
+ * authenticated app and most marketing CTAs. `.btn-brand` (yellow) is the
+ * deliberate brand spark — used sparingly on the marketing primary CTA and
+ * a few signature moments. Both carry hairline borders, subtle inner
+ * highlight, and a quiet drop shadow; defined here (not as Tailwind
+ * arbitraries) because the multi-stop color-mix() box-shadow stack does not
  * survive Tailwind's class-string scanner reliably.
  * ──────────────────────────────────────────────────────────────────────── */
+
+/* Primary — charcoal in light, near-white in dark. The canonical action. */
+.btn-primary {
+  background-color: var(--foreground);
+  color: var(--background);
+  border-color: var(--foreground);
+  box-shadow:
+    inset 0 1px 0 0 color-mix(in oklch, white 8%, transparent),
+    0 1px 2px 0 rgb(0 0 0 / 0.10);
+}
+
+.btn-primary:hover:not(:disabled):not([data-disabled]),
+.btn-primary[aria-expanded="true"] {
+  background-color: color-mix(in oklch, var(--foreground) 88%, var(--background));
+  border-color: color-mix(in oklch, var(--foreground) 88%, var(--background));
+  box-shadow:
+    inset 0 1px 0 0 color-mix(in oklch, white 12%, transparent),
+    0 2px 6px -1px rgb(0 0 0 / 0.12);
+}
+
+.btn-primary:active:not(:disabled):not([data-disabled]) {
+  background-color: color-mix(in oklch, var(--foreground) 94%, black);
+  transform: translateY(1px);
+}
+
+.dark .btn-primary {
+  box-shadow:
+    inset 0 1px 0 0 color-mix(in oklch, white 18%, transparent),
+    0 1px 2px 0 rgb(0 0 0 / 0.40);
+}
+
+.dark .btn-primary:hover:not(:disabled):not([data-disabled]),
+.dark .btn-primary[aria-expanded="true"] {
+  box-shadow:
+    inset 0 1px 0 0 color-mix(in oklch, white 24%, transparent),
+    0 2px 6px -1px rgb(0 0 0 / 0.45);
+}
+
+/* Brand — flat yellow, deliberate spark. Used on marketing primary CTAs. */
 .btn-brand {
   background-color: var(--brand);
   color: var(--brand-foreground);

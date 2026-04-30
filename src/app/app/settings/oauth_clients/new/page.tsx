@@ -25,7 +25,6 @@ export default async function NewOauthClientPage() {
   return (
     <div className="flex h-full flex-col overflow-hidden">
       <PageHeader
-        eyebrow="Developer"
         title="Register OAuth client"
         description="Guided setup for a new OAuth 2.1 client. You'll see the credentials once at the end — store them somewhere safe."
         actions={

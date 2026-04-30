@@ -54,7 +54,6 @@ export default async function OperatorRunReplayPage({ params }: PageProps) {
   return (
     <div className="flex h-full flex-col overflow-hidden">
       <PageHeader
-        eyebrow="Atlas AI"
         title="Operator run replay"
         description="Step-by-step playback of the durable event stream."
         actions={
