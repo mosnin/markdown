@@ -100,14 +100,18 @@ export default async function SignInPage({
           </div>
 
           {/* Heading */}
-          <div className="space-y-1 text-center">
-            <h1 className="text-xl font-bold tracking-tight text-foreground">
-              Welcome back
-            </h1>
-            <p className="text-sm text-muted-foreground">
-              Sign in or create your free account below.
+          <div className="mb-6 text-center">
+            <p className="text-2xl font-semibold tracking-tight text-foreground">
+              Your AI knows your notes.
+            </p>
+            <p className="mt-1.5 text-sm text-muted-foreground">
+              Notes that remember. AI that understands.
             </p>
           </div>
+
+          <p className="text-center text-sm text-muted-foreground">
+            Sign in to continue.
+          </p>
 
           {/* Callback error */}
           {callbackError && (
