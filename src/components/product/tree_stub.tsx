@@ -37,10 +37,14 @@ function TreeNodeRow({
     <div>
       <div
         className={cn(
-          "flex items-center gap-1.5 rounded-md py-1 pr-2 text-sm text-foreground/70 transition-fast",
-          "hover:bg-accent hover:text-foreground cursor-pointer select-none"
+          "flex cursor-pointer select-none items-center gap-1.5 rounded-md py-1 pr-2 text-sm",
+          "text-muted-foreground transition-colors duration-150",
+          "hover:bg-accent/60 hover:text-foreground"
         )}
-        style={{ paddingLeft: `${0.5 + depth * 1}rem` }}
+        style={{
+          // 2.5px padding-left per indent level, atop a 6px base.
+          paddingLeft: `${0.375 + depth * 0.625}rem`,
+        }}
       >
         {hasChildren ? (
           <ChevronRight className="h-3 w-3 shrink-0 text-muted-foreground" />

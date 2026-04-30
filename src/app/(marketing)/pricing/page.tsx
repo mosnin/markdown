@@ -145,7 +145,7 @@ const FAQS = [
 
 function Cell({ value }: { value: boolean | string }) {
   if (value === true)
-    return <Check className="mx-auto h-4 w-4 text-violet-400" />;
+    return <Check className="mx-auto h-4 w-4 text-brand" />;
   if (value === false)
     return <Minus className="mx-auto h-4 w-4 text-muted-foreground/40" />;
   return <span className="text-sm text-foreground">{value}</span>;
@@ -164,18 +164,6 @@ export default async function PricingPage() {
 
       {/* Plan cards */}
       <section className="relative overflow-hidden py-16">
-        {/* Subtle dotted grid */}
-        <div
-          aria-hidden="true"
-          className="pointer-events-none absolute inset-0"
-          style={{
-            backgroundImage:
-              'radial-gradient(rgba(255,255,255,0.06) 0.8px, transparent 0.8px)',
-            backgroundSize: '14px 14px',
-            maskImage:
-              'radial-gradient(circle at 50% 0%, rgba(0,0,0,1), rgba(0,0,0,0.2) 60%, rgba(0,0,0,0) 90%)',
-          }}
-        />
         <div className="relative mx-auto max-w-5xl px-6">
           <div className="grid grid-cols-1 gap-6 justify-items-center md:grid-cols-3">
             {PLANS.map((plan) => (
@@ -217,7 +205,7 @@ export default async function PricingPage() {
                     {plan.features.map((feature) => (
                       <PricingCard.ListItem key={feature}>
                         <CheckCircle2
-                          className="size-4 shrink-0 text-violet-400"
+                          className="size-4 shrink-0 text-brand"
                           aria-hidden="true"
                         />
                         <span>{feature}</span>
@@ -235,15 +223,15 @@ export default async function PricingPage() {
       </section>
 
       {/* Comparison table */}
-      <section className="border-y border-border/50 bg-muted/10 py-16">
+      <section className="border-y border-border bg-muted/30 py-16">
         <div className="mx-auto max-w-5xl px-6">
-          <h2 className="mb-8 text-xl font-bold tracking-tight text-foreground">
+          <h2 className="mb-8 text-headline text-foreground">
             Full comparison
           </h2>
           <div className="overflow-x-auto">
             <table className="w-full min-w-[560px]">
               <thead>
-                <tr className="border-b border-border/50">
+                <tr className="border-b border-border">
                   <th className="pb-3 text-left text-sm font-medium text-muted-foreground">
                     Feature
                   </th>
@@ -251,7 +239,7 @@ export default async function PricingPage() {
                     <th
                       key={p}
                       className={`pb-3 text-center text-sm font-semibold ${
-                        p === "Pro" ? "text-violet-400" : "text-foreground"
+                        p === "Pro" ? "text-brand" : "text-foreground"
                       }`}
                     >
                       {p}
@@ -265,17 +253,15 @@ export default async function PricingPage() {
                     <tr key={section.category}>
                       <td
                         colSpan={4}
-                        className="pb-2 pt-6 text-xs font-semibold uppercase tracking-widest text-muted-foreground/60"
+                        className="pb-2 pt-6 text-overline text-muted-foreground/70"
                       >
                         {section.category}
                       </td>
                     </tr>
-                    {section.rows.map((row, i) => (
+                    {section.rows.map((row) => (
                       <tr
                         key={row.feature}
-                        className={`border-b border-border/30 ${
-                          i % 2 === 0 ? "" : "bg-muted/20"
-                        }`}
+                        className="border-b border-border/60"
                       >
                         <td className="py-2.5 text-sm text-muted-foreground">
                           {row.feature}
@@ -302,13 +288,11 @@ export default async function PricingPage() {
       {/* Enterprise */}
       <section className="py-16">
         <div className="mx-auto max-w-5xl px-6">
-          <div className="rounded-xl border border-border/60 bg-card p-8">
+          <div className="rounded-xl border border-border bg-card p-8">
             <div className="flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <p className="text-xs font-semibold uppercase tracking-widest text-violet-400">
-                  Enterprise
-                </p>
-                <h3 className="mt-1 text-xl font-bold tracking-tight text-foreground">
+                <p className="text-overline text-brand">Enterprise</p>
+                <h3 className="mt-2 text-headline text-foreground">
                   Custom deployment for large teams
                 </h3>
                 <p className="mt-2 text-sm text-muted-foreground">
@@ -316,25 +300,24 @@ export default async function PricingPage() {
                   volume discounts for 50+ seat deployments.
                 </p>
               </div>
-              <Link
-                href="/contact"
-                className="inline-flex shrink-0 items-center gap-2 rounded-lg border border-border px-5 py-2.5 text-sm font-semibold text-foreground transition-colors hover:bg-muted"
+              <Button
+                variant="outline"
+                size="lg"
+                render={<Link href="/contact" />}
               >
                 Talk to sales
                 <ArrowRight className="h-4 w-4" />
-              </Link>
+              </Button>
             </div>
           </div>
         </div>
       </section>
 
       {/* FAQ */}
-      <section className="border-t border-border/50 py-16">
+      <section className="border-t border-border py-16">
         <div className="mx-auto max-w-2xl px-6">
-          <h2 className="mb-8 text-xl font-bold tracking-tight text-foreground">
-            Pricing FAQ
-          </h2>
-          <div className="divide-y divide-border/60">
+          <h2 className="mb-8 text-headline text-foreground">Pricing FAQ</h2>
+          <div className="divide-y divide-border">
             {FAQS.map((faq) => (
               <details key={faq.q} className="group py-4">
                 <summary className="flex cursor-pointer list-none items-center justify-between gap-4 text-sm font-medium text-foreground">

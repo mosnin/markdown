@@ -260,12 +260,12 @@ export default async function FeaturesPage() {
       </div>
 
       {/* Bottom CTA */}
-      <section className="border-t border-border/50 py-20">
+      <section className="border-t border-border py-20">
         <div className="mx-auto max-w-2xl px-6 text-center">
-          <h2 className="text-2xl font-bold tracking-tight text-foreground">
+          <h2 className="text-headline text-foreground">
             Ready to organize your knowledge?
           </h2>
-          <p className="mt-3 text-muted-foreground">
+          <p className="mt-3 text-base text-muted-foreground">
             Everything above is available on the free plan. No credit card needed.
           </p>
           <div className="mt-6 flex flex-col items-center gap-2">
@@ -278,7 +278,7 @@ export default async function FeaturesPage() {
                 "No vendor lock-in",
               ].map((item) => (
                 <li key={item} className="flex items-center gap-1.5">
-                  <Check className="h-3 w-3 text-violet-400" />
+                  <Check className="h-3 w-3 text-brand" />
                   {item}
                 </li>
               ))}

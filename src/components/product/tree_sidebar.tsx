@@ -347,25 +347,27 @@ function TreeNode({
         isArchived && "opacity-50"
       )}
     >
-      {/* Folder expand/collapse toggle */}
+      {/* Folder expand/collapse toggle — chevron rotates 90deg on open */}
       {data.nodeType === "folder" ? (
         <button
           type="button"
           onClick={(e) => { e.stopPropagation(); node.toggle(); }}
           className={cn(
-            "flex h-5 w-5 shrink-0 items-center justify-center rounded",
-            "transition-colors duration-150",
-            "text-muted-foreground hover:bg-accent/50 hover:text-foreground cursor-pointer",
-            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            "flex h-5 w-5 shrink-0 cursor-pointer items-center justify-center rounded",
+            "text-muted-foreground transition-colors duration-150",
+            "hover:bg-accent/60 hover:text-foreground",
+            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:ring-offset-1 focus-visible:ring-offset-background"
           )}
           aria-label={node.isOpen ? `Collapse ${data.name}` : `Expand ${data.name}`}
           aria-expanded={node.isOpen}
         >
-          {node.isOpen ? (
-            <ChevronDown className="h-3.5 w-3.5" aria-hidden="true" />
-          ) : (
-            <ChevronRight className="h-3.5 w-3.5" aria-hidden="true" />
-          )}
+          <ChevronRight
+            className={cn(
+              "h-3.5 w-3.5 transition-transform duration-150",
+              node.isOpen && "rotate-90"
+            )}
+            aria-hidden="true"
+          />
         </button>
       ) : (
         <span className="w-5 shrink-0" />
@@ -411,12 +413,12 @@ function TreeNode({
             }
           }}
           className={cn(
-            "flex flex-1 min-w-0 items-center gap-1.5 rounded-md px-1 py-0.5 text-xs",
+            "flex min-w-0 flex-1 items-center gap-1.5 rounded-md px-1 py-0.5 text-xs",
             "transition-colors duration-150",
-            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:ring-offset-1 focus-visible:ring-offset-background",
             isActive
               ? "bg-accent text-foreground font-medium"
-              : "text-muted-foreground hover:text-foreground hover:bg-accent/50"
+              : "text-muted-foreground hover:bg-accent/60 hover:text-foreground"
           )}
           aria-current={isActive ? "page" : undefined}
         >
@@ -985,12 +987,12 @@ function BoxRow({
           onClick={onNavigate}
           aria-current={isBoxActive ? "page" : undefined}
           className={cn(
-            "flex flex-1 min-w-0 items-center gap-2 rounded-md px-1.5 py-1 text-sm",
+            "flex min-w-0 flex-1 items-center gap-2 rounded-md px-1.5 py-1 text-sm",
             "transition-colors duration-150",
-            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1",
+            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:ring-offset-1 focus-visible:ring-offset-background",
             isBoxActive
               ? "bg-accent text-foreground font-medium"
-              : "text-muted-foreground hover:text-foreground hover:bg-accent/50"
+              : "text-muted-foreground hover:bg-accent/60 hover:text-foreground"
           )}
         >
           {isExpanded
