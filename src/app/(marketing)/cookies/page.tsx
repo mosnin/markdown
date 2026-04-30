@@ -16,7 +16,7 @@ export default function CookiePolicyPage() {
         title="Cookie Policy"
         description="How we use cookies and similar technologies."
       />
-      <section className="mx-auto w-full max-w-3xl px-6 py-16">
+      <section className="page-content py-16">
         <CookieContent />
       </section>
     </div>

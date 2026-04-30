@@ -16,7 +16,7 @@ export default function PrivacyPage() {
         title="Privacy Policy"
         description="We respect your data. Read how we collect, use, and protect it."
       />
-      <section className="mx-auto w-full max-w-3xl px-6 py-16">
+      <section className="page-content py-16">
         <PrivacyContent />
       </section>
     </div>

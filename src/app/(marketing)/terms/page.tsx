@@ -16,7 +16,7 @@ export default function TermsPage() {
         title="Terms of Service"
         description="Please read these terms carefully. They form a binding agreement between you and Poggle."
       />
-      <section className="mx-auto w-full max-w-3xl px-6 py-16">
+      <section className="page-content py-16">
         <TermsContent />
       </section>
     </div>

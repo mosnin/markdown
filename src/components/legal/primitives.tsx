@@ -31,11 +31,11 @@ export function LegalSection({
   id?: string;
 }) {
   return (
-    <section id={id} className="mb-8">
-      <h2 className="mb-3 scroll-mt-24 text-base font-semibold text-foreground">
+    <section id={id} className="mb-10">
+      <h2 className="mb-4 scroll-mt-24 text-lg font-semibold tracking-tight text-foreground">
         {heading}
       </h2>
-      <div className="space-y-3 text-sm leading-relaxed text-muted-foreground">
+      <div className="space-y-3 text-base leading-relaxed text-muted-foreground">
         {children}
       </div>
     </section>
@@ -52,11 +52,11 @@ export function LegalSubsection({
   id?: string;
 }) {
   return (
-    <div id={id} className="mt-4">
-      <h3 className="mb-2 text-sm font-semibold text-foreground/90">
+    <div id={id} className="mt-5">
+      <h3 className="mb-2 text-base font-semibold tracking-tight text-foreground/90">
         {heading}
       </h3>
-      <div className="space-y-2 text-sm leading-relaxed text-muted-foreground">
+      <div className="space-y-2 text-base leading-relaxed text-muted-foreground">
         {children}
       </div>
     </div>
@@ -65,7 +65,7 @@ export function LegalSubsection({
 
 export function LegalList({ children }: { children: ReactNode }) {
   return (
-    <ul className="list-disc space-y-1.5 pl-5 marker:text-muted-foreground/60">
+    <ul className="list-disc space-y-2 pl-5 text-base leading-relaxed text-muted-foreground marker:text-muted-foreground/60">
       {children}
     </ul>
   );

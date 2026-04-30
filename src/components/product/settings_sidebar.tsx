@@ -147,11 +147,11 @@ export function SettingsSidebar({
       aria-label="Settings navigation"
       className={cn(
         "flex h-full w-60 shrink-0 flex-col",
-        "bg-white dark:bg-background border-r border-border/40",
+        "bg-card border-r border-border",
       )}
     >
       {/* Workspace switcher (same as main sidebar) */}
-      <div className="px-3 pt-3 pb-2">
+      <div className="px-2 pt-2 pb-1">
         <WorkspaceSwitcher
           workspaces={
             workspaces.length > 0
@@ -164,16 +164,16 @@ export function SettingsSidebar({
         />
       </div>
 
-      <Separator className="mx-3 mb-1" />
+      <Separator className="mx-2 mb-1 bg-border" />
 
       {/* Back to workspace */}
       <div className="px-2 pt-1 pb-1">
         <Link
           href="/app"
           className={cn(
-            "flex items-center gap-2.5 rounded-md px-2.5 py-2 text-sm transition-fast",
-            "text-foreground/60 hover:bg-accent/60 hover:text-foreground",
-            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+            "flex items-center gap-2.5 rounded-md px-2.5 py-2 text-[13px] transition-colors duration-150",
+            "text-muted-foreground hover:bg-accent/60 hover:text-foreground",
+            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:ring-offset-1 focus-visible:ring-offset-background",
           )}
         >
           <ArrowLeft className="h-4 w-4 shrink-0" aria-hidden="true" />
@@ -181,13 +181,11 @@ export function SettingsSidebar({
         </Link>
       </div>
 
-      <Separator className="mx-2 my-1" />
+      <Separator className="mx-2 my-1 bg-border" />
 
       {/* Settings section header */}
-      <div className="flex items-center px-4 py-1.5">
-        <span className="text-[11px] font-semibold uppercase tracking-wider text-foreground/40">
-          Settings
-        </span>
+      <div className="flex items-center text-overline text-muted-foreground/70 px-2.5 py-1.5">
+        Settings
       </div>
 
       {/* Settings sections */}
@@ -198,9 +196,9 @@ export function SettingsSidebar({
               <Link
                 href={`/app/settings#settings-${id}`}
                 className={cn(
-                  "flex items-center gap-2.5 rounded-md px-2.5 py-2 text-sm transition-fast",
-                  "text-foreground/70 hover:bg-accent/60 hover:text-foreground",
-                  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                  "flex items-center gap-2.5 rounded-md px-2.5 py-2 text-[13px] transition-colors duration-150",
+                  "text-muted-foreground hover:bg-accent/60 hover:text-foreground",
+                  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:ring-offset-1 focus-visible:ring-offset-background",
                 )}
               >
                 <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
@@ -224,16 +222,16 @@ export function SettingsSidebar({
                   href={href}
                   aria-current={active ? "page" : undefined}
                   className={cn(
-                    "flex items-start gap-2.5 rounded-md px-2.5 py-2 text-sm transition-fast",
-                    "text-foreground/70 hover:bg-accent/60 hover:text-foreground",
-                    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                    active && "bg-accent/60 text-foreground",
+                    "flex items-start gap-2.5 rounded-md px-2.5 py-2 text-[13px] transition-colors duration-150",
+                    "text-muted-foreground hover:bg-accent/60 hover:text-foreground",
+                    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:ring-offset-1 focus-visible:ring-offset-background",
+                    active && "bg-accent text-foreground font-medium",
                   )}
                 >
                   <Icon className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
                   <span className="flex min-w-0 flex-col leading-tight">
                     <span className="truncate">{label}</span>
-                    <span className="truncate text-[10px] text-foreground/40">
+                    <span className="truncate text-[11px] text-muted-foreground/70">
                       {subLabel}
                     </span>
                   </span>
@@ -257,16 +255,16 @@ export function SettingsSidebar({
                   href={href}
                   aria-current={active ? "page" : undefined}
                   className={cn(
-                    "flex items-start gap-2.5 rounded-md px-2.5 py-2 text-sm transition-fast",
-                    "text-foreground/70 hover:bg-accent/60 hover:text-foreground",
-                    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                    active && "bg-accent/60 text-foreground",
+                    "flex items-start gap-2.5 rounded-md px-2.5 py-2 text-[13px] transition-colors duration-150",
+                    "text-muted-foreground hover:bg-accent/60 hover:text-foreground",
+                    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:ring-offset-1 focus-visible:ring-offset-background",
+                    active && "bg-accent text-foreground font-medium",
                   )}
                 >
                   <Icon className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
                   <span className="flex min-w-0 flex-col leading-tight">
                     <span className="truncate">{label}</span>
-                    <span className="truncate text-[10px] text-foreground/40">
+                    <span className="truncate text-[11px] text-muted-foreground/70">
                       {subLabel}
                     </span>
                   </span>
@@ -290,16 +288,16 @@ export function SettingsSidebar({
                   href={href}
                   aria-current={active ? "page" : undefined}
                   className={cn(
-                    "flex items-start gap-2.5 rounded-md px-2.5 py-2 text-sm transition-fast",
-                    "text-foreground/70 hover:bg-accent/60 hover:text-foreground",
-                    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                    active && "bg-accent/60 text-foreground",
+                    "flex items-start gap-2.5 rounded-md px-2.5 py-2 text-[13px] transition-colors duration-150",
+                    "text-muted-foreground hover:bg-accent/60 hover:text-foreground",
+                    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:ring-offset-1 focus-visible:ring-offset-background",
+                    active && "bg-accent text-foreground font-medium",
                   )}
                 >
                   <Icon className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
                   <span className="flex min-w-0 flex-col leading-tight">
                     <span className="truncate">{label}</span>
-                    <span className="truncate text-[10px] text-foreground/40">
+                    <span className="truncate text-[11px] text-muted-foreground/70">
                       {subLabel}
                     </span>
                   </span>
@@ -323,16 +321,16 @@ export function SettingsSidebar({
                   href={href}
                   aria-current={active ? "page" : undefined}
                   className={cn(
-                    "flex items-start gap-2.5 rounded-md px-2.5 py-2 text-sm transition-fast",
-                    "text-foreground/70 hover:bg-accent/60 hover:text-foreground",
-                    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                    active && "bg-accent/60 text-foreground",
+                    "flex items-start gap-2.5 rounded-md px-2.5 py-2 text-[13px] transition-colors duration-150",
+                    "text-muted-foreground hover:bg-accent/60 hover:text-foreground",
+                    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:ring-offset-1 focus-visible:ring-offset-background",
+                    active && "bg-accent text-foreground font-medium",
                   )}
                 >
                   <Icon className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
                   <span className="flex min-w-0 flex-col leading-tight">
                     <span className="truncate">{label}</span>
-                    <span className="truncate text-[10px] text-foreground/40">
+                    <span className="truncate text-[11px] text-muted-foreground/70">
                       {subLabel}
                     </span>
                   </span>
