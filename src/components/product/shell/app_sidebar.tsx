@@ -4,9 +4,15 @@ import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
+  Bot,
+  ChevronDown,
   ChevronRight,
   FileText,
+  GitBranch,
+  GitFork,
+  Network,
   Plus,
+  Puzzle,
 } from "lucide-react";
 import {
   AccountSetting01Icon,
@@ -163,6 +169,19 @@ export function AppSidebar({
   pendingProposalsCount = 0,
 }: AppSidebarProps) {
   const pathname = usePathname();
+  const [buildOpen, setBuildOpen] = useState(true);
+  const [exploreOpen, setExploreOpen] = useState(true);
+
+  const buildNav = [
+    { label: "Skills", href: "/app/skills", icon: Puzzle },
+    { label: "Agents", href: "/app/agents", icon: Bot },
+    { label: "Workflows", href: "/app/workflows", icon: GitFork },
+    { label: "Branches", href: "/app/branches", icon: GitBranch },
+  ];
+
+  const exploreNav = [
+    { label: "Knowledge Graph", href: "/app/graph", icon: Network },
+  ];
 
   // Extract the current box and note IDs from the pathname
   const boxMatch = pathname.match(/\/app\/boxes\/([^/]+)/);
@@ -217,6 +236,68 @@ export function AppSidebar({
             </li>
           </ul>
         </nav>
+      </div>
+
+      <Separator className="mx-2 my-1" />
+
+      {/* Build section */}
+      <div className="px-2 pt-1 pb-1">
+        <button
+          type="button"
+          onClick={() => setBuildOpen((prev) => !prev)}
+          className="flex w-full items-center gap-1 px-2.5 py-1.5 text-[10px] font-medium uppercase tracking-wider text-muted-foreground/60 hover:text-foreground transition-colors"
+        >
+          {buildOpen ? (
+            <ChevronDown className="h-3 w-3 shrink-0" aria-hidden="true" />
+          ) : (
+            <ChevronRight className="h-3 w-3 shrink-0" aria-hidden="true" />
+          )}
+          Build
+        </button>
+        {buildOpen && (
+          <ul className="flex flex-col gap-0.5 list-none">
+            {buildNav.map((item) => (
+              <li key={item.href}>
+                <NavItem
+                  href={item.href}
+                  icon={item.icon}
+                  label={item.label}
+                  isActive={pathname === item.href || pathname.startsWith(item.href + "/")}
+                />
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+
+      {/* Explore section */}
+      <div className="px-2 pt-1 pb-1">
+        <button
+          type="button"
+          onClick={() => setExploreOpen((prev) => !prev)}
+          className="flex w-full items-center gap-1 px-2.5 py-1.5 text-[10px] font-medium uppercase tracking-wider text-muted-foreground/60 hover:text-foreground transition-colors"
+        >
+          {exploreOpen ? (
+            <ChevronDown className="h-3 w-3 shrink-0" aria-hidden="true" />
+          ) : (
+            <ChevronRight className="h-3 w-3 shrink-0" aria-hidden="true" />
+          )}
+          Explore
+        </button>
+        {exploreOpen && (
+          <ul className="flex flex-col gap-0.5 list-none">
+            {exploreNav.map((item) => (
+              <li key={item.href}>
+                <NavItem
+                  href={item.href}
+                  icon={item.icon}
+                  label={item.label}
+                  isActive={pathname === item.href || pathname.startsWith(item.href + "/")}
+                />
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
 
       <Separator className="mx-2 my-1" />

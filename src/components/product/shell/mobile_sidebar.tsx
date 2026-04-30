@@ -4,10 +4,15 @@ import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
+  Bot,
+  GitBranch,
+  GitFork,
   Home,
   Inbox,
   Menu,
+  Network,
   Plus,
+  Puzzle,
   X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -34,6 +39,11 @@ import { TreeSidebar } from "@/components/product/tree_sidebar";
 const primaryNav = [
   { label: "Home", href: "/app", icon: Home },
   { label: "AI Edits", href: "/app/proposals", icon: Inbox },
+  { label: "Skills", href: "/app/skills", icon: Puzzle },
+  { label: "Agents", href: "/app/agents", icon: Bot },
+  { label: "Workflows", href: "/app/workflows", icon: GitFork },
+  { label: "Branches", href: "/app/branches", icon: GitBranch },
+  { label: "Graph", href: "/app/graph", icon: Network },
 ];
 
 interface MobileSidebarProps {

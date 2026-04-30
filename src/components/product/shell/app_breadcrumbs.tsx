@@ -18,7 +18,7 @@ import { cn } from "@/lib/utils";
 
 const LABEL_MAP: Record<string, string> = {
   app: "Home",
-  boxes: "Boxes",
+  boxes: "Collections",
   notes: "Notes",
   search: "Search",
   workspaces: "Workspaces",
@@ -27,6 +27,21 @@ const LABEL_MAP: Record<string, string> = {
   settings: "Settings",
   import_export: "Import / Export",
   links: "Links",
+  // Restore entries for all app routes:
+  skills: "Skills",
+  agents: "Agents",
+  workflows: "Workflows",
+  branches: "Branches",
+  graph: "Knowledge Graph",
+  activity: "Activity",
+  analytics: "Analytics",
+  insights: "Insights",
+  usage: "Usage",
+  web_sessions: "Web sessions",
+  sub_agents: "Sub-agents",
+  history: "History",
+  workspace_operator: "AI History",
+  dashboard: "Dashboard",
 };
 
 /** Labels for UUID segments based on the preceding path segment. */
@@ -54,7 +69,7 @@ export function AppBreadcrumbs() {
 
   // Always show "Home" as the root
   const crumbs: { label: string; href: string }[] = [
-    { label: "Context Store", href: "/app" },
+    { label: "Home", href: "/app" },
   ];
 
   let href = "/app";
@@ -69,7 +84,7 @@ export function AppBreadcrumbs() {
   if (crumbs.length <= 1) {
     return (
       <span className="text-sm font-medium text-foreground/80">
-        Context Store
+        Home
       </span>
     );
   }
