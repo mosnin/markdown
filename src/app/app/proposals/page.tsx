@@ -3,6 +3,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { listWriteProposalsByWorkspace } from "@/server/repositories/write_proposal_repository";
 import { buildProposalPreview } from "@/server/services/write_proposal_service";
 import { CircleDashed } from "lucide-react";
+import Link from "next/link";
 import { PageHeader } from "@/components/product/page_header";
 import { ProposalsPanel } from "@/components/product/proposals_panel";
 import { EmptyState } from "@/components/product/empty_state";
@@ -76,8 +77,16 @@ export default async function ProposalsPage() {
           {items.length === 0 ? (
             <EmptyState
               icon={<CircleDashed className="h-5 w-5" />}
-              title="No AI edits yet"
-              description="When Atlas AI proposes changes to your notes, they will appear here for your review before anything is saved."
+              title="No edits pending"
+              description="Ask Atlas AI to review, improve, or reorganize your notes — it will propose specific changes here before touching anything."
+              action={
+                <Link
+                  href="/app"
+                  className="mt-4 inline-flex items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
+                >
+                  Start a conversation
+                </Link>
+              }
             />
           ) : (
             <ProposalsPanel initialProposals={items} />

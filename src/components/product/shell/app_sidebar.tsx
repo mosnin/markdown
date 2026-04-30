@@ -4,18 +4,14 @@ import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
-  Bot,
-  ChevronDown,
   ChevronRight,
   FileText,
   Plus,
-  Sparkles,
 } from "lucide-react";
 import {
   AccountSetting01Icon,
   Alert01Icon,
   Home01Icon,
-  SearchAreaIcon,
 } from "hugeicons-react";
 import { cn } from "@/lib/utils";
 import { type Box as BoxType } from "@/server/domain/types/box";
@@ -30,23 +26,6 @@ import { ThemeToggle } from "@/components/product/theme_toggle";
 import { UserMenu } from "@/components/product/user_menu";
 import { TreeSidebar } from "@/components/product/tree_sidebar";
 import { WorkspaceSwitcher } from "@/components/product/workspace/workspace_switcher";
-
-// ─── Nav items ────────────────────────────────────────────────────────────────
-
-const mainNav: Array<{
-  label: string;
-  href: string;
-  icon: React.ElementType;
-  shortcut?: string;
-}> = [
-  { label: "Home", href: "/app", icon: Home01Icon },
-  { label: "Search", href: "/app/search", icon: SearchAreaIcon, shortcut: "⌘K" },
-];
-
-const aiNav = [
-  { label: "AI", href: "/app/workspace_operator", icon: Sparkles },
-  { label: "AI Edits", href: "/app/proposals", icon: Alert01Icon },
-];
 
 // ─── Nav item ─────────────────────────────────────────────────────────────────
 
@@ -184,7 +163,6 @@ export function AppSidebar({
   pendingProposalsCount = 0,
 }: AppSidebarProps) {
   const pathname = usePathname();
-  const [aiNavOpen, setAiNavOpen] = useState(true);
 
   // Extract the current box and note IDs from the pathname
   const boxMatch = pathname.match(/\/app\/boxes\/([^/]+)/);
@@ -216,74 +194,28 @@ export function AppSidebar({
 
       <Separator className="mx-3 mb-1" />
 
-      {/* Primary navigation */}
+      {/* Navigation */}
       <div className="px-2 pt-1 pb-1">
         <nav aria-label="Primary navigation">
           <ul className="flex flex-col gap-0.5 list-none">
-            {mainNav.map((item) => (
-              <li key={item.href}>
-                <NavItem
-                  href={item.href}
-                  icon={item.icon}
-                  label={item.label}
-                  shortcut={item.shortcut}
-                  isActive={
-                    item.href === "/app"
-                      ? pathname === "/app"
-                      : pathname === item.href || pathname.startsWith(item.href + "/")
-                  }
-                />
-              </li>
-            ))}
+            <li>
+              <NavItem
+                href="/app"
+                icon={Home01Icon}
+                label="Home"
+                isActive={pathname === "/app"}
+              />
+            </li>
+            <li>
+              <NavItemWithBadge
+                href="/app/proposals"
+                icon={Alert01Icon}
+                label="AI Edits"
+                isActive={pathname === "/app/proposals" || pathname.startsWith("/app/proposals/")}
+                badge={pendingProposalsCount}
+              />
+            </li>
           </ul>
-
-          {/* AI & Automation section */}
-          <div className="mt-1">
-            <button
-              type="button"
-              onClick={() => setAiNavOpen((prev) => !prev)}
-              className={cn(
-                "flex w-full items-center gap-1 px-2.5 py-1.5 text-[10px] font-medium uppercase tracking-wider",
-                "text-muted-foreground/60 hover:text-foreground transition-colors"
-              )}
-            >
-              {aiNavOpen ? (
-                <ChevronDown className="h-3 w-3 shrink-0" aria-hidden="true" />
-              ) : (
-                <ChevronRight className="h-3 w-3 shrink-0" aria-hidden="true" />
-              )}
-              Intelligence
-            </button>
-
-            {aiNavOpen && (
-              <ul className="flex flex-col gap-0.5 list-none">
-                {aiNav.map((item) => (
-                  <li key={item.href}>
-                    {item.href === "/app/proposals" ? (
-                      <NavItemWithBadge
-                        href={item.href}
-                        icon={item.icon}
-                        label={item.label}
-                        isActive={
-                          pathname === item.href || pathname.startsWith(item.href + "/")
-                        }
-                        badge={pendingProposalsCount}
-                      />
-                    ) : (
-                      <NavItem
-                        href={item.href}
-                        icon={item.icon}
-                        label={item.label}
-                        isActive={
-                          pathname === item.href || pathname.startsWith(item.href + "/")
-                        }
-                      />
-                    )}
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
         </nav>
       </div>
 
