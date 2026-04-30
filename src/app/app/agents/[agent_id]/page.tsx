@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { Archive, Bot, ChevronRight, History, Trash2 } from "lucide-react";
+import { PageHeader } from "@/components/product/page_header";
 import { AgentExportMenu } from "@/components/product/export_menu";
 import { CopyAsJsonButton } from "@/components/product/copy_as_json_button";
 import Link from "next/link";
@@ -329,87 +330,92 @@ export default async function AgentPage({
       />
       {/* Center — main workspace */}
       <div className="flex flex-1 flex-col overflow-hidden min-w-0">
-        {/* Top bar */}
-        <div className="flex items-center justify-between gap-3 border-b border-border px-6 py-2.5">
-          <div className="flex items-center gap-3 min-w-0">
-            <Breadcrumb
-              workspaceName={ctx.workspace.name}
-              boxId={refBox?.id ?? box?.id ?? null}
-              boxName={refBox?.name ?? box?.name ?? null}
-              agentName={agent.name}
-              isReusable={agent.is_reusable && !refBox}
-            />
-          </div>
-          <div className="flex shrink-0 items-center gap-1.5">
-            {/* Status badges */}
-            {agent.status === "archived" && (
-              <Badge variant="secondary" className="flex items-center gap-1 text-[10px] font-normal">
-                <Archive className="h-3 w-3" aria-hidden="true" />
-                Archived
-              </Badge>
-            )}
-            {agent.status === "trashed" && (
-              <Badge variant="secondary" className="flex items-center gap-1 text-[10px] font-normal text-destructive">
-                <Trash2 className="h-3 w-3" aria-hidden="true" />
-                Trash
-              </Badge>
-            )}
-            {/* Export */}
-            <CopyAsJsonButton data={agentExportData} label="Copy JSON" />
-            <AgentExportMenu agentId={agent_id} agentName={agent.name} />
-            {/* History shortcut */}
-            <Link
-              href="?tab=trust"
-              aria-label="Version history"
-              title="Version history"
-              className={cn(
-                "flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs transition-fast",
-                "text-muted-foreground hover:text-foreground hover:bg-accent"
+        <PageHeader
+          eyebrow={
+            agent.is_reusable && !refBox
+              ? "Agents"
+              : (refBox?.name ?? box?.name ?? "Agents")
+          }
+          eyebrowHref={
+            agent.is_reusable && !refBox
+              ? "/app/agents"
+              : refBox
+                ? `/app/boxes/${refBox.id}`
+                : box
+                  ? `/app/boxes/${box.id}`
+                  : "/app/agents"
+          }
+          title={agent.name}
+          description={agent.description ?? undefined}
+          meta={
+            <>
+              <AgentReferenceBadge isReusable={agent.is_reusable} />
+              {agent.agent_type && (
+                <AgentTypeBadge agentType={agent.agent_type} subtle />
               )}
-            >
-              <History className="h-3.5 w-3.5" aria-hidden="true" />
-              <span className="hidden sm:inline">History</span>
-            </Link>
-            {/* Lifecycle menu */}
-            <AgentLifecycleMenu
-              agentId={agent_id}
-              agentStatus={agent.status as "draft" | "active" | "archived" | "trashed"}
-            />
-          </div>
-        </div>
-
-        {/* Agent header */}
-        <div className="border-b border-border bg-background px-6 py-4">
-          <div className="flex items-start gap-3">
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-muted mt-0.5">
-              <Bot className="h-5 w-5 text-muted-foreground" aria-hidden="true" />
-            </div>
-            <div className="min-w-0 flex-1">
-              <div className="flex flex-wrap items-center gap-2">
-                <h1 className="text-lg font-semibold tracking-tight text-foreground truncate">
-                  {agent.name}
-                </h1>
-                <AgentReferenceBadge isReusable={agent.is_reusable} />
-                {agent.agent_type && <AgentTypeBadge agentType={agent.agent_type} subtle />}
-              </div>
-              {agent.description && (
-                <p className="mt-0.5 text-sm text-muted-foreground">{agent.description}</p>
+              {agent.status === "archived" && (
+                <Badge
+                  variant="secondary"
+                  className="flex items-center gap-1 text-[10px] font-normal"
+                >
+                  <Archive className="h-3 w-3" aria-hidden="true" />
+                  Archived
+                </Badge>
               )}
-              <div className="mt-2">
-                <ObjectTrustHeader
-                  objectType="agent"
-                  objectName={agent.name}
-                  isReusable={agent.is_reusable}
-                  attachedBoxCount={attachments.length}
-                  pendingProposalCount={pendingProposals.length}
-                  lifecycleStatus={agent.status as "draft" | "active" | "archived" | "trashed"}
-                  isGenerated={agent.origin_type === "generated"}
-                  canonicalFormat={agent.canonical_format}
-                />
-              </div>
-            </div>
-          </div>
-        </div>
+              {agent.status === "trashed" && (
+                <Badge
+                  variant="secondary"
+                  className="flex items-center gap-1 text-[10px] font-normal text-destructive"
+                >
+                  <Trash2 className="h-3 w-3" aria-hidden="true" />
+                  Trash
+                </Badge>
+              )}
+            </>
+          }
+          actions={
+            <>
+              <CopyAsJsonButton data={agentExportData} label="Copy JSON" />
+              <AgentExportMenu agentId={agent_id} agentName={agent.name} />
+              <Link
+                href="?tab=trust"
+                aria-label="Version history"
+                title="Version history"
+                className={cn(
+                  "flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs transition-colors",
+                  "text-muted-foreground hover:bg-accent hover:text-foreground"
+                )}
+              >
+                <History className="h-3.5 w-3.5" aria-hidden="true" />
+                <span className="hidden sm:inline">History</span>
+              </Link>
+              <AgentLifecycleMenu
+                agentId={agent_id}
+                agentStatus={
+                  agent.status as
+                    | "draft"
+                    | "active"
+                    | "archived"
+                    | "trashed"
+                }
+              />
+            </>
+          }
+          belowTitle={
+            <ObjectTrustHeader
+              objectType="agent"
+              objectName={agent.name}
+              isReusable={agent.is_reusable}
+              attachedBoxCount={attachments.length}
+              pendingProposalCount={pendingProposals.length}
+              lifecycleStatus={
+                agent.status as "draft" | "active" | "archived" | "trashed"
+              }
+              isGenerated={agent.origin_type === "generated"}
+              canonicalFormat={agent.canonical_format}
+            />
+          }
+        />
 
         {/* Machine provenance */}
         <MachineProvenancePanel

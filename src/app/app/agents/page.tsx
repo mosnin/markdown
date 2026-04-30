@@ -12,28 +12,17 @@ import { ActiveBranchBannerServer } from "@/components/product/active_branch_ban
 import { AgentsListClient } from "@/components/product/agents/agents_list_client";
 import { PageHeader } from "@/components/product/page_header";
 import { Button } from "@/components/ui/button";
+import { EmptyState } from "@/components/product/empty_state";
 
 // ─── Empty state ──────────────────────────────────────────────────────────────
 
 function EmptyAgents() {
   return (
-    <div className="mx-auto w-full max-w-7xl px-6 py-10">
-      <div className="rounded-lg border border-dashed border-border bg-card/40 p-8">
-        <div className="flex items-start gap-4">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-muted">
-            <Bot className="h-5 w-5 text-muted-foreground" aria-hidden="true" />
-          </div>
-          <div className="space-y-1">
-            <p className="text-sm font-semibold text-foreground">No workspace agents yet</p>
-            <p className="text-xs text-muted-foreground">
-              Workspace-level reusable agents appear here. Create one with the
-              New agent button, or import a packaged agent. Box-local agents
-              live inside their box.
-            </p>
-          </div>
-        </div>
-      </div>
-    </div>
+    <EmptyState
+      icon={<Bot />}
+      title="No workspace agents yet"
+      description="Workspace-level reusable agents appear here. Create one with the New agent button, or import a packaged agent. Box-local agents live inside their box."
+    />
   );
 }
 

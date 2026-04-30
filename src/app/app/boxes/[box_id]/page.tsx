@@ -59,6 +59,7 @@ import { WorkspaceLiveRefresh } from "@/components/product/workspace/workspace_l
 import { ActiveBranchBannerServer } from "@/components/product/active_branch_banner_server";
 import { ShareBoxButton } from "@/components/product/share_box_button";
 import { BoxPublicToggle } from "@/components/product/boxes/box_public_toggle";
+import { PageHeader } from "@/components/product/page_header";
 import { type Folder as FolderType } from "@/server/domain/types/folder";
 import { type Note } from "@/server/domain/types/note";
 import { formatAbsoluteDate, formatRelativeDate } from "@/lib/format_date";
@@ -368,73 +369,38 @@ export default async function BoxPage({
       {/* Main content */}
       <div className="flex flex-1 flex-col overflow-hidden min-w-0 pb-16">
 
-        {/* Box header */}
-        <div className="border-b border-border px-4 py-4 md:px-6">
-          <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between md:gap-4">
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-2 mb-0.5">
-                <p className="text-xs text-muted-foreground">{ctx.workspace.name}</p>
-                {box.status === "archived" && (
-                  <Badge variant="secondary" className="text-[10px] font-normal">
-                    Archived
-                  </Badge>
-                )}
-              </div>
-              <div className="flex items-center gap-1">
-                <h1 className="text-2xl font-semibold tracking-tight text-foreground truncate">
-                  {box.name}
-                </h1>
-                <BoxEditDialog
-                  boxId={box.id}
-                  initialName={box.name}
-                  initialDescription={box.description}
-                  initialAgentInstructions={box.agent_instructions}
-                />
-              </div>
-              {box.description && (
-                <p className="mt-1 text-sm text-muted-foreground">
-                  {box.description}
-                </p>
+        <PageHeader
+          eyebrow="Collections"
+          eyebrowHref="/app/workspaces"
+          title={box.name}
+          description={box.description ?? undefined}
+          meta={
+            <>
+              <BoxEditDialog
+                boxId={box.id}
+                initialName={box.name}
+                initialDescription={box.description}
+                initialAgentInstructions={box.agent_instructions}
+              />
+              {box.status === "archived" && (
+                <Badge variant="secondary" className="text-[10px] font-normal">
+                  Archived
+                </Badge>
               )}
-
-              {/* Background template setup — only rendered for new empty boxes.
-                  Guard: notes.length === 0 && folders.length === 0 prevents
-                  re-application to boxes that already have content. */}
-              {typeof resolvedSearch.setup === "string" &&
-                resolvedSearch.setup.length > 0 &&
-                notes.length === 0 &&
-                folders.length === 0 && (
-                  <BoxTemplateSetup
-                    boxId={box.id}
-                    templateId={resolvedSearch.setup}
-                  />
-                )}
-
-              {/* Guide note — front door strip */}
-              {guideNote ? (
-                <Link
-                  href={`/app/notes/${guideNote.id}`}
-                  className="mt-2 flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-fast group"
-                  aria-label={`Open guide note: ${guideNote.title}`}
-                >
-                  <BookOpen
-                    className="h-3.5 w-3.5 shrink-0 text-amber-600/80 dark:text-amber-500/80"
-                    aria-hidden="true"
-                  />
-                  <span className="text-muted-foreground/70">Guide —</span>
-                  <span className="font-medium text-foreground group-hover:underline underline-offset-2 truncate">
-                    {guideNote.title}
-                  </span>
-                </Link>
-              ) : (
-                <div className="mt-2 flex items-center gap-1.5 text-xs text-muted-foreground/50">
-                  <BookOpen className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-                  <span>No guide note — assign one in the box context panel</span>
-                </div>
-              )}
-            </div>
-            <div className="flex shrink-0 flex-wrap items-center gap-2">
-              <CreateNoteDialog boxId={box.id} folders={folders} savedTemplates={savedTemplates.map((t) => ({ id: t.id, name: t.name, description: t.description, markdown_content: t.markdown_content }))} />
+            </>
+          }
+          actions={
+            <>
+              <CreateNoteDialog
+                boxId={box.id}
+                folders={folders}
+                savedTemplates={savedTemplates.map((t) => ({
+                  id: t.id,
+                  name: t.name,
+                  description: t.description,
+                  markdown_content: t.markdown_content,
+                }))}
+              />
               <CreateFolderDialog boxId={box.id} />
               <AskPogInlineButton
                 label="Ask AI about this collection"
@@ -452,7 +418,7 @@ export default async function BoxPage({
               <BoxExportMenu boxId={box.id} boxName={box.name} />
               <Link
                 href={`/app/boxes/${box.id}/templates`}
-                className="inline-flex items-center gap-1.5 rounded-md border border-input bg-background px-3 py-1.5 text-xs font-medium text-foreground shadow-sm transition-fast hover:bg-accent hover:text-accent-foreground"
+                className="inline-flex items-center gap-1.5 rounded-md border border-input bg-background px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
               >
                 <FileText className="h-3.5 w-3.5" aria-hidden="true" />
                 Templates
@@ -463,9 +429,51 @@ export default async function BoxPage({
                 boxId={box.id}
                 boxStatus={box.status as "active" | "archived"}
               />
-            </div>
-          </div>
-        </div>
+            </>
+          }
+          belowTitle={
+            <>
+              {/* Background template setup — only rendered for new empty
+                  boxes. Guards prevent re-application to boxes that
+                  already have content. */}
+              {typeof resolvedSearch.setup === "string" &&
+                resolvedSearch.setup.length > 0 &&
+                notes.length === 0 &&
+                folders.length === 0 && (
+                  <div className="mb-3">
+                    <BoxTemplateSetup
+                      boxId={box.id}
+                      templateId={resolvedSearch.setup}
+                    />
+                  </div>
+                )}
+              {guideNote ? (
+                <Link
+                  href={`/app/notes/${guideNote.id}`}
+                  className="group flex items-center gap-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground"
+                  aria-label={`Open guide note: ${guideNote.title}`}
+                >
+                  <BookOpen
+                    className="h-3.5 w-3.5 shrink-0 text-amber-600/80 dark:text-amber-500/80"
+                    aria-hidden="true"
+                  />
+                  <span className="text-muted-foreground/70">Guide —</span>
+                  <span className="font-medium text-foreground group-hover:underline underline-offset-2 truncate">
+                    {guideNote.title}
+                  </span>
+                </Link>
+              ) : (
+                <div className="flex items-center gap-1.5 text-xs text-muted-foreground/60">
+                  <BookOpen
+                    className="h-3.5 w-3.5 shrink-0"
+                    aria-hidden="true"
+                  />
+                  <span>No guide note — assign one in the box context panel</span>
+                </div>
+              )}
+            </>
+          }
+        />
 
         {/* Tabs */}
         <Tabs defaultValue={defaultTab} className="flex flex-1 flex-col overflow-hidden">

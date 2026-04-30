@@ -217,7 +217,8 @@ export default async function SkillPage({
       />
 
       <PageHeader
-        eyebrow="Skill"
+        eyebrow="Skills"
+        eyebrowHref="/app/skills"
         title={skill.name}
         description={skill.description ?? undefined}
         actions={

@@ -32,6 +32,7 @@ import { FolderPolicyToggle } from "@/components/product/folders/folder_policy_t
 import { FolderExportButton } from "@/components/product/folders/folder_export_button";
 import { WorkspaceLiveRefresh } from "@/components/product/workspace/workspace_live_refresh";
 import { ActiveBranchBannerServer } from "@/components/product/active_branch_banner_server";
+import { PageHeader } from "@/components/product/page_header";
 import { formatAbsoluteDate } from "@/lib/format_date";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -122,52 +123,31 @@ export default async function FolderPage({
           folderId={folder.id}
         />
 
-        {/* Header */}
-        <div className="border-b border-border px-6 py-4">
-          <div className="flex items-start justify-between gap-4">
-            <div className="min-w-0 flex-1">
-              {/* Breadcrumbs */}
-              <div className="flex items-center gap-1 text-xs text-muted-foreground flex-wrap">
-                {box ? (
-                  <Link href={`/app/boxes/${box.id}`} className="hover:underline hover:text-foreground transition-fast">
-                    {box.name}
-                  </Link>
-                ) : (
-                  <span>Workspace</span>
-                )}
-                {breadcrumbs.map((bc) => (
-                  <span key={bc.id} className="flex items-center gap-1">
-                    <ChevronRight className="h-3 w-3 shrink-0" aria-hidden="true" />
-                    <Link href={`/app/folders/${bc.id}`} className="hover:underline hover:text-foreground transition-fast">
-                      {bc.name}
-                    </Link>
-                  </span>
-                ))}
-                <ChevronRight className="h-3 w-3 shrink-0" aria-hidden="true" />
-                <span className="text-foreground font-medium">{folder.name}</span>
-              </div>
-
-              {/* Title */}
-              <div className="mt-2 flex items-center gap-2">
-                <FolderOpen className="h-5 w-5 text-muted-foreground" aria-hidden="true" />
-                <h1 className="text-xl font-semibold tracking-tight text-foreground">
-                  {folder.name}
-                </h1>
-                {isArchived && (
-                  <Badge variant="secondary" className="text-[10px] font-normal">
-                    <Archive className="mr-1 h-3 w-3" aria-hidden="true" />
-                    Archived
-                  </Badge>
-                )}
-              </div>
-
-              {folder.description && (
-                <p className="mt-1 text-sm text-muted-foreground">{folder.description}</p>
-              )}
-            </div>
-
-            {/* Actions */}
-            <div className="flex shrink-0 items-center gap-2">
+        <PageHeader
+          eyebrow={
+            breadcrumbs.length > 0
+              ? breadcrumbs[breadcrumbs.length - 1].name
+              : (box?.name ?? "Workspace")
+          }
+          eyebrowHref={
+            breadcrumbs.length > 0
+              ? `/app/folders/${breadcrumbs[breadcrumbs.length - 1].id}`
+              : box
+                ? `/app/boxes/${box.id}`
+                : "/app/workspaces"
+          }
+          title={folder.name}
+          description={folder.description ?? undefined}
+          meta={
+            isArchived ? (
+              <Badge variant="secondary" className="text-[10px] font-normal">
+                <Archive className="mr-1 h-3 w-3" aria-hidden="true" />
+                Archived
+              </Badge>
+            ) : undefined
+          }
+          actions={
+            <>
               <FolderExportButton folderId={folder.id} folderName={folder.name} />
               <FolderLifecycleMenu
                 folderId={folder.id}
@@ -181,9 +161,9 @@ export default async function FolderPage({
                   <AgentCreateDialog boxId={box.id} folderId={folder.id} />
                 </>
               )}
-            </div>
-          </div>
-        </div>
+            </>
+          }
+        />
 
         {/* Content */}
         <ScrollArea className="flex-1">

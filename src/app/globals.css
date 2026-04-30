@@ -441,11 +441,11 @@
   }
 
   .text-overline {
-    font-size: 0.6875rem;
+    font-size: 0.75rem;        /* 12px — readable on hi-DPI without feeling thin */
     font-weight: 600;
     line-height: 1.4;
     text-transform: uppercase;
-    letter-spacing: 0.085em;
+    letter-spacing: 0.08em;
   }
 
   /* ── Layout ─────────────────────────────────────────────────────────── */

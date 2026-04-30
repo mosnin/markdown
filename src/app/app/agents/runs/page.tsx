@@ -4,6 +4,7 @@ import { requireAuthenticatedUser } from "@/server/auth/require_authenticated_us
 import { createClient } from "@/lib/supabase/server";
 import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/product/page_header";
+import { EmptyState } from "@/components/product/empty_state";
 import {
   listOperatorRuns,
   type OperatorRunStatus,
@@ -112,16 +113,11 @@ export default async function OperatorRunsPage() {
       <div className="flex-1 overflow-auto">
         <div className="mx-auto w-full max-w-4xl px-6 py-6">
           {rows.length === 0 ? (
-            <div className="rounded-lg border border-dashed border-border bg-card/40 p-8 text-center">
-              <p className="text-sm font-semibold text-foreground">
-                No operator runs yet
-              </p>
-              <p className="mt-1 text-xs text-muted-foreground">
-                When you kick off a Workspace Operator run, it will appear
-                here with its status, notes drafted, and a link to the
-                resulting branch.
-              </p>
-            </div>
+            <EmptyState
+              icon={<Bot />}
+              title="No operator runs yet"
+              description="When you kick off a Workspace Operator run, it will appear here with its status, notes drafted, and a link to the resulting branch."
+            />
           ) : (
             <ul className="flex flex-col gap-3 list-none p-0">
               {rows.map((run) => (

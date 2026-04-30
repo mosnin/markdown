@@ -9,28 +9,17 @@ import { WorkspaceLiveRefresh } from "@/components/product/workspace/workspace_l
 import { ActiveBranchBannerServer } from "@/components/product/active_branch_banner_server";
 import { SkillsListClient } from "@/components/product/skills/skills_list_client";
 import { PageHeader } from "@/components/product/page_header";
+import { EmptyState } from "@/components/product/empty_state";
 
 // ─── Empty state ──────────────────────────────────────────────────────────────
 
 function EmptySkills() {
   return (
-    <div className="mx-auto w-full max-w-7xl px-6 py-10">
-      <div className="rounded-lg border border-dashed border-border bg-card/40 p-8">
-        <div className="flex items-start gap-4">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-muted">
-            <Zap className="h-5 w-5 text-muted-foreground" aria-hidden="true" />
-          </div>
-          <div className="space-y-1">
-            <p className="text-sm font-semibold text-foreground">No workspace skills yet</p>
-            <p className="text-xs text-muted-foreground">
-              Workspace-level reusable skills will appear here. Create one with the
-              New skill button, or import a packaged skill. Box-local skills live
-              inside their box.
-            </p>
-          </div>
-        </div>
-      </div>
-    </div>
+    <EmptyState
+      icon={<Zap />}
+      title="No workspace skills yet"
+      description="Workspace-level reusable skills will appear here. Create one with the New skill button, or import a packaged skill. Box-local skills live inside their box."
+    />
   );
 }
 

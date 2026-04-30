@@ -5,6 +5,7 @@ import { listInsightsByWorkspace } from "@/server/repositories/insight_repositor
 import { InsightsList } from "@/components/product/insights_list";
 import { ActiveBranchBannerServer } from "@/components/product/active_branch_banner_server";
 import { PageHeader } from "@/components/product/page_header";
+import { EmptyState } from "@/components/product/empty_state";
 
 export default async function InsightsPage() {
   const ctx = await requireAuthenticatedUser();
@@ -20,15 +21,11 @@ export default async function InsightsPage() {
       />
       <div className="flex-1 overflow-auto">
         {insights.length === 0 ? (
-          <div className="mx-auto w-full max-w-7xl px-6 py-10">
-            <div className="rounded-lg border border-dashed border-border bg-card/40 p-8">
-              <Lightbulb className="h-5 w-5 text-muted-foreground mb-2" aria-hidden="true" />
-              <p className="text-sm font-semibold text-foreground mb-1">No insights extracted yet</p>
-              <p className="text-xs text-muted-foreground">
-                Insights appear as your notes are processed. Requires EMBEDDING_API_KEY to be configured and the extraction pipeline to be enabled.
-              </p>
-            </div>
-          </div>
+          <EmptyState
+            icon={<Lightbulb />}
+            title="No insights extracted yet"
+            description="Insights appear as your notes are processed. Requires EMBEDDING_API_KEY to be configured and the extraction pipeline to be enabled."
+          />
         ) : (
           <InsightsList insights={insights} />
         )}
