@@ -66,7 +66,7 @@ export function WorkspaceList({
               </p>
             </div>
             {isActive ? (
-              <span className="flex shrink-0 items-center gap-1 rounded-full bg-violet-500/10 px-2 py-0.5 text-[10px] font-medium text-violet-700 dark:text-violet-300">
+              <span className="flex shrink-0 items-center gap-1 rounded-full bg-brand-500/10 px-2 py-0.5 text-[10px] font-medium text-brand-700 dark:text-brand-300">
                 <Check className="h-3 w-3" aria-hidden="true" />
                 Active
               </span>

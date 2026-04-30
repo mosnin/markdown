@@ -186,14 +186,14 @@ function GraphNode({ data, selected }: NodeProps<Node<GraphNodeData>>) {
         "min-w-[140px] max-w-[200px]",
         isFolder
           ? selected
-            ? "border-violet-400/80 bg-violet-50 dark:border-violet-500/60 dark:bg-violet-950/60"
+            ? "border-brand-400/80 bg-brand-50 dark:border-brand-500/60 dark:bg-brand-950/60"
             : "border-border bg-muted/30 dark:bg-muted/20"
           : isGuide
           ? selected
-            ? "border-violet-400/80 bg-violet-50 dark:border-violet-500/60 dark:bg-violet-950/60"
+            ? "border-brand-400/80 bg-brand-50 dark:border-brand-500/60 dark:bg-brand-950/60"
             : "border-amber-300/70 bg-amber-50/60 dark:border-amber-600/40 dark:bg-amber-900/20"
           : selected
-          ? "border-violet-400/80 bg-violet-50 dark:border-violet-500/60 dark:bg-violet-950/60"
+          ? "border-brand-400/80 bg-brand-50 dark:border-brand-500/60 dark:bg-brand-950/60"
           : "border-border bg-card hover:border-border-strong hover:shadow-sm"
       )}
     >
@@ -224,7 +224,7 @@ function GraphNode({ data, selected }: NodeProps<Node<GraphNodeData>>) {
         <span
           className={cn(
             "truncate",
-            selected ? "font-medium text-violet-900 dark:text-violet-100" : "text-foreground",
+            selected ? "font-medium text-brand-900 dark:text-brand-100" : "text-foreground",
             isFolder && "font-medium"
           )}
         >
@@ -496,7 +496,7 @@ function BoxGraphViewInner({ overview }: { overview: BoxOverview }) {
           className={cn(
             "flex h-7 items-center gap-1.5 rounded-md border px-2 text-xs transition-fast",
             showOrphansOnly
-              ? "border-violet-400/70 bg-violet-50 text-violet-700 dark:border-violet-500/60 dark:bg-violet-950/50 dark:text-violet-300"
+              ? "border-brand-400/70 bg-brand-50 text-brand-700 dark:border-brand-500/60 dark:bg-brand-950/50 dark:text-brand-300"
               : "border-input bg-background text-muted-foreground hover:border-border-strong"
           )}
         >
@@ -587,7 +587,7 @@ function BoxGraphViewInner({ overview }: { overview: BoxOverview }) {
       {/* Selected node detail panel */}
       {selectedNode && (
         <div
-          className="rounded-lg border border-violet-300/60 bg-card px-4 py-3 shadow-sm dark:border-violet-600/40"
+          className="rounded-lg border border-brand-300/60 bg-card px-4 py-3 shadow-sm dark:border-brand-600/40"
           aria-label="Selected node details"
           aria-live="polite"
         >

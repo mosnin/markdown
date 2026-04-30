@@ -49,7 +49,7 @@ export function AgentsListClient({
               className={cn(
                 "rounded-full px-2.5 py-0.5 text-xs transition-colors",
                 activeTag === tag
-                  ? "bg-violet-500/20 text-violet-700 dark:text-violet-300 border border-violet-500/30"
+                  ? "bg-brand-500/20 text-brand-700 dark:text-brand-300 border border-brand-500/30"
                   : "bg-muted text-muted-foreground hover:bg-muted/80 border border-transparent"
               )}
             >

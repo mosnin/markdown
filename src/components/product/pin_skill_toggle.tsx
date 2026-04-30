@@ -31,7 +31,7 @@ export function PinSkillToggle({ attachmentId, initialIsPinned }: PinSkillToggle
       className={cn(
         "rounded p-1 transition-colors",
         isPinned
-          ? "text-violet-600 hover:text-violet-700"
+          ? "text-brand-600 hover:text-brand-700"
           : "text-muted-foreground/40 hover:text-muted-foreground",
         "disabled:opacity-50"
       )}

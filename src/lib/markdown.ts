@@ -60,8 +60,8 @@ const CALLOUT_CONFIG: Record<
   priority: {
     icon: "⭐",
     classes:
-      "callout callout-priority border-l-4 border-violet-400 bg-violet-50 dark:bg-violet-950/30 dark:border-violet-500 rounded-r-md px-4 py-3 my-3",
-    labelClasses: "font-semibold text-violet-700 dark:text-violet-400",
+      "callout callout-priority border-l-4 border-brand-400 bg-brand-50 dark:bg-brand-950/30 dark:border-brand-500 rounded-r-md px-4 py-3 my-3",
+    labelClasses: "font-semibold text-brand-700 dark:text-brand-400",
   },
 };
 

@@ -22,7 +22,7 @@ const NODE_TYPE_META: Record<
   subagent: {
     label: "Sub-agent",
     icon: "🤖",
-    color: "bg-violet-500/10 border-violet-500/40 text-violet-700",
+    color: "bg-brand-500/10 border-brand-500/40 text-brand-700",
   },
   web_search: {
     label: "Web Search",

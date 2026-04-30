@@ -47,7 +47,7 @@ const NODE_TYPE_META: Record<
   { label: string; icon: string; color: string }
 > = {
   start: { label: "Start", icon: "▶", color: "bg-emerald-500/10 border-emerald-500/40 text-emerald-700" },
-  subagent: { label: "Sub-agent", icon: "🤖", color: "bg-violet-500/10 border-violet-500/40 text-violet-700" },
+  subagent: { label: "Sub-agent", icon: "🤖", color: "bg-brand-500/10 border-brand-500/40 text-brand-700" },
   web_search: { label: "Web Search", icon: "🔍", color: "bg-blue-500/10 border-blue-500/40 text-blue-700" },
   web_fetch: { label: "Web Fetch", icon: "🌐", color: "bg-sky-500/10 border-sky-500/40 text-sky-700" },
   transform: { label: "Transform", icon: "⚡", color: "bg-amber-500/10 border-amber-500/40 text-amber-700" },

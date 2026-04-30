@@ -303,7 +303,7 @@ function ProposalCard({
         "border transition-colors relative",
         isConflicted && "border-destructive/40 bg-destructive/5",
         isPendingProposal && isReplace && !isConflicted && "border-destructive/30",
-        isSelected && "ring-2 ring-violet-500/40 border-violet-500/30"
+        isSelected && "ring-2 ring-brand-500/40 border-brand-500/30"
       )}
     >
       <CardHeader className="pb-2">

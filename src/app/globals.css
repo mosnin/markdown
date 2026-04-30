@@ -13,7 +13,7 @@
  * never more than ~5% of any view.
  *
  * Tailwind's `violet-*` utilities are aliased here to the brand ramp so any
- * legacy `bg-violet-500` / `text-violet-600` in the codebase continues to
+ * legacy `bg-brand-500` / `text-brand-600` in the codebase continues to
  * render as brand yellow without churn. New code should prefer semantic
  * tokens: `bg-brand`, `text-brand`, `border-brand`, `text-foreground`, etc.
  * ──────────────────────────────────────────────────────────────────────── */

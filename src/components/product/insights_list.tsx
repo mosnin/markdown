@@ -10,7 +10,7 @@ const CATEGORY_META: Record<InsightCategory, { icon: React.ElementType; label: s
   fact:     { icon: FileText,    label: "Fact",     color: "text-blue-600 bg-blue-500/10 border-blue-500/30" },
   decision: { icon: CheckCircle, label: "Decision", color: "text-indigo-600 bg-indigo-500/10 border-indigo-500/30" },
   insight:  { icon: Lightbulb,   label: "Insight",  color: "text-amber-600 bg-amber-500/10 border-amber-500/30" },
-  question: { icon: HelpCircle,  label: "Question", color: "text-violet-600 bg-violet-500/10 border-violet-500/30" },
+  question: { icon: HelpCircle,  label: "Question", color: "text-brand-600 bg-brand-500/10 border-brand-500/30" },
   action:   { icon: Zap,         label: "Action",   color: "text-emerald-600 bg-emerald-500/10 border-emerald-500/30" },
 };
 

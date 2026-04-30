@@ -139,7 +139,7 @@ export function AgentTriggersPanel({ agentId, boxes, initialTriggers = [] }: Age
                   className={cn(
                     "flex flex-col items-start gap-1 rounded-md border p-2.5 text-left text-xs transition-colors",
                     formType === type
-                      ? "border-violet-500/50 bg-violet-500/10 text-foreground"
+                      ? "border-brand-500/50 bg-brand-500/10 text-foreground"
                       : "border-border bg-background text-muted-foreground hover:bg-accent/40"
                   )}
                 >
@@ -158,7 +158,7 @@ export function AgentTriggersPanel({ agentId, boxes, initialTriggers = [] }: Age
               value={formLabel}
               onChange={(e) => setFormLabel(e.target.value)}
               placeholder={`e.g. "Run on new research notes"`}
-              className="rounded-md border border-border bg-background px-3 py-1.5 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-violet-500"
+              className="rounded-md border border-border bg-background px-3 py-1.5 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-brand-500"
             />
           </div>
 
@@ -169,7 +169,7 @@ export function AgentTriggersPanel({ agentId, boxes, initialTriggers = [] }: Age
               <select
                 value={formBoxId}
                 onChange={(e) => setFormBoxId(e.target.value)}
-                className="rounded-md border border-border bg-background px-3 py-1.5 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-violet-500"
+                className="rounded-md border border-border bg-background px-3 py-1.5 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-brand-500"
               >
                 <option value="">All boxes</option>
                 {boxes.map((box) => (
@@ -188,7 +188,7 @@ export function AgentTriggersPanel({ agentId, boxes, initialTriggers = [] }: Age
                 value={formCron}
                 onChange={(e) => setFormCron(e.target.value)}
                 placeholder="0 9 * * 1"
-                className="rounded-md border border-border bg-background px-3 py-1.5 font-mono text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-violet-500"
+                className="rounded-md border border-border bg-background px-3 py-1.5 font-mono text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-brand-500"
               />
               <p className="text-[10px] text-muted-foreground">Example: <code>0 9 * * 1</code> = every Monday at 9am UTC</p>
               {cronValidation && (
@@ -212,7 +212,7 @@ export function AgentTriggersPanel({ agentId, boxes, initialTriggers = [] }: Age
             <button
               onClick={handleCreate}
               disabled={isPending}
-              className="inline-flex items-center gap-1.5 rounded-md bg-violet-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-violet-700 disabled:opacity-50 transition-colors"
+              className="inline-flex items-center gap-1.5 rounded-md bg-brand-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-brand-700 disabled:opacity-50 transition-colors"
             >
               {isPending && <Loader2 className="h-3 w-3 animate-spin" />}
               Save trigger
@@ -274,7 +274,7 @@ export function AgentTriggersPanel({ agentId, boxes, initialTriggers = [] }: Age
                     onClick={() => handleRunNow(trigger.id)}
                     disabled={!trigger.is_enabled || runNowPending === trigger.id}
                     title="Run this trigger now"
-                    className="rounded p-1 text-muted-foreground hover:text-violet-600 transition-colors disabled:opacity-50"
+                    className="rounded p-1 text-muted-foreground hover:text-brand-600 transition-colors disabled:opacity-50"
                   >
                     {runNowPending === trigger.id
                       ? <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
@@ -287,7 +287,7 @@ export function AgentTriggersPanel({ agentId, boxes, initialTriggers = [] }: Age
                     className="rounded p-1 text-muted-foreground hover:text-foreground transition-colors"
                   >
                     {trigger.is_enabled
-                      ? <ToggleRight className="h-4 w-4 text-violet-500" aria-hidden="true" />
+                      ? <ToggleRight className="h-4 w-4 text-brand-500" aria-hidden="true" />
                       : <ToggleLeft className="h-4 w-4" aria-hidden="true" />
                     }
                   </button>

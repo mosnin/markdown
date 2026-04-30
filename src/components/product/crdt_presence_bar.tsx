@@ -17,7 +17,7 @@ interface AwarenessUser {
 // Palette: blue, violet, amber, emerald, rose, indigo
 const COLOR_PALETTE = [
   "text-blue-500",
-  "text-violet-500",
+  "text-brand-500",
   "text-amber-500",
   "text-emerald-500",
   "text-rose-500",

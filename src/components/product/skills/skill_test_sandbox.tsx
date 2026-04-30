@@ -75,7 +75,7 @@ export function SkillTestSandbox({ skill, defaultBoxId }: SkillTestSandboxProps)
                 value={paramValues[param] ?? ""}
                 onChange={(e) => setParamValues((prev) => ({ ...prev, [param]: e.target.value }))}
                 placeholder={`Value for {{${param}}}`}
-                className="rounded-md border border-border bg-background px-3 py-1.5 text-xs text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-violet-500"
+                className="rounded-md border border-border bg-background px-3 py-1.5 text-xs text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-brand-500"
               />
             </div>
           ))}
@@ -89,14 +89,14 @@ export function SkillTestSandbox({ skill, defaultBoxId }: SkillTestSandboxProps)
           onChange={(e) => setInput(e.target.value)}
           placeholder="Paste text to apply this skill to... (optional)"
           rows={6}
-          className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-violet-500 resize-y font-mono"
+          className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-brand-500 resize-y font-mono"
         />
       </div>
 
       <button
         onClick={handleRun}
         disabled={isPending}
-        className="inline-flex items-center gap-2 rounded-md bg-violet-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-violet-700 disabled:opacity-50"
+        className="inline-flex items-center gap-2 rounded-md bg-brand-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-brand-700 disabled:opacity-50"
       >
         {isPending ? (
           <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
@@ -113,7 +113,7 @@ export function SkillTestSandbox({ skill, defaultBoxId }: SkillTestSandboxProps)
           {runId && (
             <a
               href="/app"
-              className="mt-2 inline-flex text-xs text-violet-600 hover:underline"
+              className="mt-2 inline-flex text-xs text-brand-600 hover:underline"
             >
               View full output in workspace →
             </a>

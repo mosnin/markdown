@@ -21,7 +21,7 @@ export function BoxPublicToggle({ boxId, initialIsPublic }: { boxId: string; ini
       disabled={isPending}
       className={`flex items-center gap-2 rounded-md border px-3 py-1.5 text-xs transition-colors ${
         isPublic
-          ? "border-violet-500/50 bg-violet-500/10 text-violet-700 dark:text-violet-400"
+          ? "border-brand-500/50 bg-brand-500/10 text-brand-700 dark:text-brand-400"
           : "border-border bg-muted/40 text-muted-foreground hover:bg-muted"
       }`}
     >

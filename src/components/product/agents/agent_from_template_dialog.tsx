@@ -67,8 +67,8 @@ export function AgentFromTemplateDialog() {
                   disabled={pending}
                   className={cn(
                     "flex flex-col gap-1.5 rounded-lg border border-border bg-card p-4 text-left",
-                    "transition-colors hover:bg-accent/40 hover:border-violet-500/30",
-                    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500",
+                    "transition-colors hover:bg-accent/40 hover:border-brand-500/30",
+                    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500",
                     "disabled:opacity-50",
                     selectedId === template.id && pending && "opacity-50"
                   )}

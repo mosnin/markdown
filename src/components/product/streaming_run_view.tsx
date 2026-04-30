@@ -205,7 +205,7 @@ function AssistantBubble({
 
   return (
     <div className="flex w-full gap-2" aria-label="Assistant message">
-      <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-violet-500/15 text-violet-500">
+      <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-brand-500/15 text-brand-500">
         <Bot className="h-4 w-4" aria-hidden="true" />
       </div>
       <div className="flex max-w-[80%] flex-1 flex-col rounded-2xl rounded-tl-sm bg-muted px-4 py-2.5 text-sm text-foreground">

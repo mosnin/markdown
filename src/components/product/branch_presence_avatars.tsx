@@ -59,7 +59,7 @@ const COLORS = [
   "bg-emerald-500",
   "bg-amber-500",
   "bg-rose-500",
-  "bg-violet-500",
+  "bg-brand-500",
   "bg-cyan-500",
 ];
 

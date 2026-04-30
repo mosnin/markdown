@@ -114,7 +114,7 @@ export function SkillSubagentPanel({
           type="checkbox"
           checked={isSubagent}
           onChange={(e) => setIsSubagent(e.target.checked)}
-          className="h-4 w-4 rounded border-border text-violet-600 focus:ring-violet-500"
+          className="h-4 w-4 rounded border-border text-brand-600 focus:ring-brand-500"
         />
         <span className="text-sm font-medium text-foreground">
           Enable this skill as a sub-agent
@@ -136,7 +136,7 @@ export function SkillSubagentPanel({
               checked={useAllTools}
               disabled={fieldsDisabled}
               onChange={(e) => setUseAllTools(e.target.checked)}
-              className="h-3.5 w-3.5 rounded border-border text-violet-600 focus:ring-violet-500"
+              className="h-3.5 w-3.5 rounded border-border text-brand-600 focus:ring-brand-500"
             />
             Use all tools
           </label>
@@ -164,7 +164,7 @@ export function SkillSubagentPanel({
                   checked={checked}
                   disabled={useAllTools || fieldsDisabled}
                   onChange={() => toggleTool(t.name)}
-                  className="h-3.5 w-3.5 rounded border-border text-violet-600 focus:ring-violet-500"
+                  className="h-3.5 w-3.5 rounded border-border text-brand-600 focus:ring-brand-500"
                 />
                 <span className="truncate font-mono text-[11px]">{t.name}</span>
               </label>
@@ -195,7 +195,7 @@ export function SkillSubagentPanel({
             const parsed = Number.parseInt(raw, 10);
             if (Number.isFinite(parsed)) setMaxTurns(parsed);
           }}
-          className="w-28 rounded-md border border-border bg-background px-2.5 py-1.5 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-violet-500 disabled:cursor-not-allowed"
+          className="w-28 rounded-md border border-border bg-background px-2.5 py-1.5 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-brand-500 disabled:cursor-not-allowed"
         />
         <p className="text-[11px] text-muted-foreground">
           Hard cap on agent-loop iterations. Leave empty to use the system default (20). Allowed range 1-100.
@@ -208,7 +208,7 @@ export function SkillSubagentPanel({
           type="button"
           onClick={handleSave}
           disabled={saving}
-          className="inline-flex items-center gap-1.5 rounded-md bg-violet-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-violet-700 disabled:opacity-50 transition-colors"
+          className="inline-flex items-center gap-1.5 rounded-md bg-brand-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-brand-700 disabled:opacity-50 transition-colors"
         >
           {saving && <Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" />}
           {saving ? "Saving…" : "Save sub-agent settings"}

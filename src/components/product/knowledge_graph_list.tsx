@@ -38,7 +38,7 @@ export function KnowledgeGraphList({ entities }: { entities: Entity[] }) {
             placeholder="Search entities…"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            className="rounded-md border border-border bg-background px-3 py-1.5 text-xs text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-violet-500 w-48"
+            className="rounded-md border border-border bg-background px-3 py-1.5 text-xs text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-brand-500 w-48"
           />
         </div>
         <div className="flex flex-wrap items-center gap-1.5">
@@ -50,7 +50,7 @@ export function KnowledgeGraphList({ entities }: { entities: Entity[] }) {
               className={cn(
                 "rounded-full px-2.5 py-0.5 text-[11px] transition-colors capitalize",
                 activeType === t
-                  ? "bg-violet-500/20 text-violet-700 dark:text-violet-300 border border-violet-500/30"
+                  ? "bg-brand-500/20 text-brand-700 dark:text-brand-300 border border-brand-500/30"
                   : "bg-muted text-muted-foreground hover:bg-muted/80 border border-transparent"
               )}
             >
@@ -81,7 +81,7 @@ export function KnowledgeGraphList({ entities }: { entities: Entity[] }) {
               <a
                 key={e.id}
                 href={`/app/entities/${e.id}`}
-                className="flex flex-col gap-1.5 rounded-lg border border-border bg-card p-3 transition-colors hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500"
+                className="flex flex-col gap-1.5 rounded-lg border border-border bg-card p-3 transition-colors hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
               >
                 <div className="flex items-center gap-2">
                   <EntityChip id={e.id} name={e.name} type={e.entity_type} interactive={false} />

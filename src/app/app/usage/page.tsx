@@ -155,7 +155,7 @@ const CATEGORY_META: Record<
   subagent: {
     icon: Sparkles,
     label: "Sub-agent",
-    tone: "bg-violet-500/10 text-violet-700 dark:text-violet-300",
+    tone: "bg-brand-500/10 text-brand-700 dark:text-brand-300",
   },
   workflow: {
     icon: GitFork,

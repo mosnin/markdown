@@ -78,7 +78,7 @@ export function KgBackfillButton() {
       {isRunning && (
         <div className="h-1.5 w-64 rounded-full bg-muted overflow-hidden">
           <div
-            className="h-full bg-violet-500 transition-all duration-300"
+            className="h-full bg-brand-500 transition-all duration-300"
             style={{ width: `${percent}%` }}
           />
         </div>

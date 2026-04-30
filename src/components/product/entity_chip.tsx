@@ -16,7 +16,7 @@ const TYPE_ICONS: Record<EntityChipType, React.ElementType> = {
 
 const TYPE_COLORS: Record<EntityChipType, string> = {
   person:       "text-blue-600 bg-blue-500/10 border-blue-500/30 dark:text-blue-400",
-  project:      "text-violet-600 bg-violet-500/10 border-violet-500/30 dark:text-violet-400",
+  project:      "text-brand-600 bg-brand-500/10 border-brand-500/30 dark:text-brand-400",
   concept:      "text-amber-600 bg-amber-500/10 border-amber-500/30 dark:text-amber-400",
   organization: "text-emerald-600 bg-emerald-500/10 border-emerald-500/30 dark:text-emerald-400",
   event:        "text-rose-600 bg-rose-500/10 border-rose-500/30 dark:text-rose-400",
