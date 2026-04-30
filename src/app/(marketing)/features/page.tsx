@@ -12,9 +12,7 @@ import {
   Upload,
   Zap,
   Cpu,
-  TrendingUp,
   Download,
-  Sparkles,
   Code,
   History,
   GitMerge,
@@ -22,6 +20,7 @@ import {
   ClipboardList,
   FolderDown,
   Bell,
+  ShieldCheck,
 } from "lucide-react";
 import { PageHeroSection } from "@/components/marketing/hero";
 import { Button } from "@/components/ui/button";
@@ -106,7 +105,7 @@ const CATEGORIES = [
           "Assemble token-aware bundles of notes and files. Export for any AI model in one click.",
       },
       {
-        icon: Sparkles,
+        icon: ShieldCheck,
         title: "Write Proposals",
         description:
           "External agents propose changes to your content. You approve or reject. No unsupervised machine edits.",
@@ -171,12 +170,10 @@ function CategorySection({
   return (
     <section id={category.id} className="py-16">
       <div className="mb-8">
-        <h2 className="text-xl font-bold tracking-tight text-foreground">
-          {category.title}
-        </h2>
-        <div className="mt-2 h-0.5 w-12 rounded-full bg-violet-500/50" />
+        <h2 className="text-headline text-foreground">{category.title}</h2>
+        <div className="mt-2 h-0.5 w-12 rounded-full bg-brand" />
       </div>
-      <div className="grid grid-cols-1 divide-x divide-y divide-dashed border border-dashed sm:grid-cols-2 lg:grid-cols-3">
+      <div className="grid grid-cols-1 divide-x divide-y divide-border border border-border sm:grid-cols-2 lg:grid-cols-3">
         {category.features.map((f) => (
           <FeatureCard key={f.title} feature={f} />
         ))}
@@ -199,7 +196,7 @@ export default async function FeaturesPage() {
       />
 
       {/* Anchor nav */}
-      <div className="sticky top-[68px] z-30 border-b border-border/50 bg-background/90 backdrop-blur-sm">
+      <div className="sticky top-14 z-30 border-b border-border bg-background/85 backdrop-blur-md supports-[backdrop-filter]:bg-background/70">
         <div className="mx-auto max-w-5xl px-6">
           <nav className="flex gap-1 overflow-x-auto py-2">
             {CATEGORIES.map((c) => (

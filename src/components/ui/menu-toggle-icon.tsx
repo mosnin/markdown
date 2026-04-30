@@ -7,15 +7,24 @@ type MenuToggleProps = React.ComponentProps<'svg'> & {
 	duration?: number;
 };
 
+/**
+ * MenuToggleIcon — clean morphing hamburger / close icon.
+ *
+ * SVG path interpolation morphs three lines into an X without a "spin"
+ * gimmick. The brief calls for 150–200ms motion as standard; we default
+ * to 180ms here, but the `duration` prop is preserved for legacy
+ * call sites that pass an explicit value. `motion-reduce` removes the
+ * animation entirely for users who prefer it.
+ */
 export function MenuToggleIcon({
 	open,
 	className,
 	fill = 'none',
 	stroke = 'currentColor',
-	strokeWidth = 2.5,
+	strokeWidth = 2,
 	strokeLinecap = 'round',
 	strokeLinejoin = 'round',
-	duration = 500,
+	duration = 180,
 	...props
 }: MenuToggleProps) {
 	return (
@@ -27,7 +36,7 @@ export function MenuToggleIcon({
 			strokeLinecap={strokeLinecap}
 			strokeLinejoin={strokeLinejoin}
 			className={cn(
-				'transition-transform ease-in-out',
+				'transition-transform ease-[cubic-bezier(0.2,0,0,1)] motion-reduce:transition-none',
 				open && '-rotate-45',
 				className,
 			)}
@@ -38,7 +47,7 @@ export function MenuToggleIcon({
 		>
 			<path
 				className={cn(
-					'transition-all ease-in-out',
+					'transition-all ease-[cubic-bezier(0.2,0,0,1)] motion-reduce:transition-none',
 					open
 						? '[stroke-dasharray:20_300] [stroke-dashoffset:-32.42px]'
 						: '[stroke-dasharray:12_63]',

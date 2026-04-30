@@ -1,8 +1,14 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ArrowRight } from "lucide-react";
+import { ArrowRight, Hexagon, Zap, Sparkle, Aperture, Check } from "lucide-react";
 import { PageHeroSection } from "@/components/marketing/hero";
 import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+} from "@/components/ui/card";
 
 export const metadata: Metadata = {
   title: "About — Poggle",
@@ -19,25 +25,25 @@ const STATS = [
 
 const VALUES = [
   {
-    icon: "⬡",
+    icon: Hexagon,
     title: "Structure over chaos",
     description:
       "Unstructured notes are noise. We believe knowledge should have shape — semantic containers, clear relationships, and a consistent grammar for capturing thinking.",
   },
   {
-    icon: "⚡",
+    icon: Zap,
     title: "AI as a collaborator",
     description:
       "AI doesn't replace thinking — it amplifies it. Poggle exists to make the handoff between your knowledge and your AI as seamless as possible.",
   },
   {
-    icon: "⊛",
+    icon: Sparkle,
     title: "Durability first",
     description:
       "Your knowledge should outlive the tools you use to create it. We use plain markdown, open formats, and unrestricted export — always.",
   },
   {
-    icon: "◎",
+    icon: Aperture,
     title: "Radical transparency",
     description:
       "No black-box AI editing your notes. No opaque pricing. No data used for training. What you put in is exactly what you get out.",
@@ -47,10 +53,14 @@ const VALUES = [
 export default function AboutPage() {
   return (
     <div className="min-h-screen bg-background">
-      {/* Hero */}
       <PageHeroSection
         eyebrow="About"
-        title={<>Building the context layer<br className="hidden sm:block" /> between knowledge and AI</>}
+        title={
+          <>
+            Building the context layer
+            <br className="hidden sm:block" /> between knowledge and AI
+          </>
+        }
       />
 
       {/* Mission */}
@@ -58,10 +68,10 @@ export default function AboutPage() {
         <div className="mx-auto max-w-2xl px-6">
           <div className="space-y-5 text-base leading-relaxed text-muted-foreground">
             <p>
-              Poggle started with a simple frustration: every time we
-              started a conversation with an AI, we spent the first five minutes
-              copying, pasting, and curating context from dozens of scattered
-              notes. The AI was capable — but it was flying blind.
+              Poggle started with a simple frustration: every time we started a
+              conversation with an AI, we spent the first five minutes copying,
+              pasting, and curating context from dozens of scattered notes. The
+              AI was capable — but it was flying blind.
             </p>
             <p>
               We realized the missing piece wasn&apos;t a smarter model. It was a{" "}
@@ -75,7 +85,8 @@ export default function AboutPage() {
               Poggle is that home. It&apos;s built on plain markdown, organized
               into semantic containers, and designed from day one to produce
               AI-ready context bundles. Write once, use everywhere — in your
-              notes, in your prompts, and in your team&apos;s shared understanding.
+              notes, in your prompts, and in your team&apos;s shared
+              understanding.
             </p>
             <p>
               We&apos;re a small, focused team. We care deeply about durability,
@@ -87,12 +98,12 @@ export default function AboutPage() {
       </section>
 
       {/* Stats */}
-      <section className="border-y border-border/50 bg-muted/20 py-14">
+      <section className="border-y border-border bg-muted/30 py-14">
         <div className="mx-auto max-w-3xl px-6">
           <div className="grid grid-cols-2 gap-8 sm:grid-cols-4">
             {STATS.map((s) => (
               <div key={s.label} className="text-center">
-                <p className="text-3xl font-bold tracking-tight text-foreground">
+                <p className="text-3xl font-semibold tracking-tight text-foreground">
                   {s.value}
                 </p>
                 <p className="mt-1 text-sm text-muted-foreground">{s.label}</p>
@@ -106,33 +117,30 @@ export default function AboutPage() {
       <section className="py-20">
         <div className="mx-auto max-w-5xl px-6">
           <div className="mb-10">
-            <h2 className="text-2xl font-bold tracking-tight text-foreground">
-              What we believe
-            </h2>
+            <p className="text-overline text-brand mb-2">Values</p>
+            <h2 className="text-headline text-foreground">What we believe</h2>
           </div>
           <div className="grid gap-5 sm:grid-cols-2">
             {VALUES.map((v) => (
-              <div
-                key={v.title}
-                className="rounded-xl border border-border/60 bg-card p-6"
-              >
-                <div className="mb-3 flex h-9 w-9 items-center justify-center rounded-lg bg-violet-500/10 font-mono text-base text-violet-400">
-                  {v.icon}
-                </div>
-                <h3 className="mb-2 font-semibold text-foreground">{v.title}</h3>
-                <p className="text-sm leading-relaxed text-muted-foreground">
-                  {v.description}
-                </p>
-              </div>
+              <Card key={v.title}>
+                <CardHeader>
+                  <div className="mb-3 flex h-9 w-9 items-center justify-center rounded-md border border-border bg-muted/40">
+                    <v.icon className="h-4.5 w-4.5 text-muted-foreground" />
+                  </div>
+                  <CardTitle>{v.title}</CardTitle>
+                  <CardDescription>{v.description}</CardDescription>
+                </CardHeader>
+              </Card>
             ))}
           </div>
         </div>
       </section>
 
       {/* Built in the open */}
-      <section className="border-y border-border/50 bg-muted/20 py-14">
+      <section className="border-y border-border bg-muted/30 py-14">
         <div className="mx-auto max-w-2xl px-6">
-          <h2 className="mb-4 text-xl font-bold tracking-tight text-foreground">
+          <p className="text-overline text-brand mb-2">Principles</p>
+          <h2 className="mb-6 text-headline text-foreground">
             Principles we ship by
           </h2>
           <ul className="space-y-3 text-sm text-muted-foreground">
@@ -144,8 +152,11 @@ export default function AboutPage() {
               "If we can't explain a feature plainly, we don't build it.",
             ].map((item) => (
               <li key={item} className="flex items-start gap-3">
-                <span className="mt-0.5 shrink-0 font-mono text-violet-400">→</span>
-                {item}
+                <Check
+                  className="mt-0.5 h-4 w-4 shrink-0 text-brand"
+                  aria-hidden="true"
+                />
+                <span>{item}</span>
               </li>
             ))}
           </ul>
@@ -155,16 +166,16 @@ export default function AboutPage() {
       {/* CTA */}
       <section className="py-20">
         <div className="mx-auto max-w-2xl px-6 text-center">
-          <h2 className="text-2xl font-bold tracking-tight text-foreground">
-            Join us
-          </h2>
-          <p className="mt-3 text-muted-foreground">
+          <h2 className="text-headline text-foreground">Join us</h2>
+          <p className="mt-3 text-base text-muted-foreground">
             Whether you&apos;re organizing a solo knowledge base or building AI
             context for a team — we built Poggle for you.
           </p>
           <div className="mt-8 flex flex-col items-center gap-3 sm:flex-row sm:justify-center">
-            <Button size="lg" render={<Link href="/sign_in" />}>Get started free
-              <ArrowRight className="h-4 w-4" /></Button>
+            <Button size="lg" render={<Link href="/sign_in" />}>
+              Get started free
+              <ArrowRight className="h-4 w-4" />
+            </Button>
             <Link
               href="/contact"
               className="inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"

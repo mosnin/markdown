@@ -1,6 +1,11 @@
 import type { Metadata } from "next";
 import { Calendar } from "lucide-react";
 import { PageHeroSection } from "@/components/marketing/hero";
+import {
+  Card,
+  CardHeader,
+  CardDescription,
+} from "@/components/ui/card";
 
 export const metadata: Metadata = {
   title: "Changelog — Poggle",
@@ -16,8 +21,7 @@ const entries = [
   },
   {
     date: "April 2026",
-    description:
-      "Interactive graph view powered by xyflow with dagre layout.",
+    description: "Interactive graph view powered by xyflow with dagre layout.",
   },
   {
     date: "April 2026",
@@ -26,13 +30,11 @@ const entries = [
   },
   {
     date: "March 2026",
-    description:
-      "Files, skills, and agents added as first-class object types.",
+    description: "Files, skills, and agents added as first-class object types.",
   },
   {
     date: "March 2026",
-    description:
-      "Full version history and lifecycle controls for all objects.",
+    description: "Full version history and lifecycle controls for all objects.",
   },
 ];
 
@@ -45,21 +47,20 @@ export default function ChangelogPage() {
         description="Follow along as we ship new features and improvements."
       />
 
-      <section className="mx-auto w-full max-w-3xl px-6 py-16">
-        <div className="space-y-6">
+      <section className="mx-auto w-full max-w-3xl px-6 py-20">
+        <div className="space-y-4">
           {entries.map((entry, i) => (
-            <div
-              key={i}
-              className="rounded-xl border border-border/50 bg-card p-6"
-            >
-              <div className="mb-2 flex items-center gap-2 text-xs font-medium text-muted-foreground">
-                <Calendar className="h-3.5 w-3.5" />
-                {entry.date}
-              </div>
-              <p className="text-sm leading-relaxed text-foreground">
-                {entry.description}
-              </p>
-            </div>
+            <Card key={i}>
+              <CardHeader>
+                <div className="mb-1 flex items-center gap-2 text-overline text-muted-foreground/70">
+                  <Calendar className="h-3.5 w-3.5" aria-hidden="true" />
+                  {entry.date}
+                </div>
+                <CardDescription className="text-sm leading-relaxed text-foreground">
+                  {entry.description}
+                </CardDescription>
+              </CardHeader>
+            </Card>
           ))}
         </div>
       </section>

@@ -125,17 +125,20 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
       onOpenChange={onOpenChange}
       label="Command palette"
     >
-      <div className="flex items-center border-b border-border px-4">
+      <div className="flex items-center gap-2 border-b border-border px-4">
         <Command.Input
           value={query}
           onValueChange={setQuery}
           placeholder="Search notes, entities, agents…"
-          className="flex h-11 w-full bg-transparent py-3 text-sm text-foreground outline-none placeholder:text-muted-foreground/70"
+          className="flex h-11 w-full bg-transparent py-3 text-[14px] text-foreground outline-none placeholder:text-muted-foreground/70"
         />
+        <kbd className="hidden h-5 shrink-0 items-center rounded border border-border px-1.5 py-0.5 text-[11px] text-muted-foreground sm:inline-flex">
+          Esc
+        </kbd>
       </div>
 
-      <Command.List className="max-h-[22rem] overflow-y-auto overflow-x-hidden p-1">
-        <Command.Empty className="py-6 text-center text-sm text-muted-foreground">
+      <Command.List className="max-h-[22rem] overflow-y-auto overflow-x-hidden p-1.5">
+        <Command.Empty className="py-8 text-center text-[13px] text-muted-foreground">
           No matches
         </Command.Empty>
 
@@ -277,7 +280,7 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
 // ─── Internal helpers ──────────────────────────────────────────────────────
 
 const GROUP_CLASS =
-  "overflow-hidden px-1 py-1 text-foreground [&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:py-1.5 [&_[cmdk-group-heading]]:text-[10px] [&_[cmdk-group-heading]]:font-medium [&_[cmdk-group-heading]]:uppercase [&_[cmdk-group-heading]]:tracking-wider [&_[cmdk-group-heading]]:text-muted-foreground/60";
+  "overflow-hidden px-1 py-1 text-foreground [&_[cmdk-group-heading]]:px-2.5 [&_[cmdk-group-heading]]:py-1.5 [&_[cmdk-group-heading]]:text-overline [&_[cmdk-group-heading]]:text-muted-foreground/70";
 
 interface PaletteItemProps {
   value: string;
@@ -302,8 +305,8 @@ function PaletteItem({
       keywords={keywords}
       onSelect={onSelect}
       className={cn(
-        "relative flex w-full cursor-pointer select-none items-center gap-2.5 rounded-md px-2 py-1.5 text-sm outline-none",
-        "data-[selected=true]:bg-accent data-[selected=true]:text-accent-foreground",
+        "relative flex w-full cursor-pointer select-none items-center gap-2.5 rounded-md px-2.5 py-2 text-[13px] outline-none transition-colors duration-150",
+        "data-[selected=true]:bg-accent data-[selected=true]:text-foreground data-[selected=true]:font-medium",
         "data-[disabled=true]:pointer-events-none data-[disabled=true]:opacity-50",
       )}
     >
@@ -313,7 +316,7 @@ function PaletteItem({
       />
       <span className="flex-1 truncate">{label}</span>
       {meta && (
-        <span className="ml-2 shrink-0 truncate text-[10px] capitalize text-muted-foreground/70">
+        <span className="ml-2 shrink-0 truncate text-[11px] capitalize text-muted-foreground">
           {meta}
         </span>
       )}
@@ -346,8 +349,8 @@ function StyledCommandDialog({
       open={open}
       onOpenChange={onOpenChange}
       label={label}
-      overlayClassName="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm data-[state=closed]:animate-out data-[state=open]:animate-in data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0"
-      contentClassName="fixed left-1/2 top-[20%] z-50 w-[92vw] max-w-lg -translate-x-1/2 overflow-hidden rounded-xl border border-border bg-popover text-popover-foreground shadow-2xl outline-none"
+      overlayClassName="fixed inset-0 z-50 bg-foreground/30 data-[state=closed]:animate-out data-[state=open]:animate-in data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0"
+      contentClassName="fixed left-1/2 top-[18%] z-50 w-[92vw] max-w-xl -translate-x-1/2 overflow-hidden rounded-xl border border-border bg-popover text-popover-foreground shadow-lg outline-none data-[state=closed]:animate-out data-[state=open]:animate-in data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 data-[state=closed]:zoom-out-95"
     >
       <div ref={contentRef} className="flex flex-col">
         {children}
