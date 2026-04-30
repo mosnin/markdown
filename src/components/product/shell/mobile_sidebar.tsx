@@ -4,12 +4,10 @@ import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
-  Bot,
   Home,
   Inbox,
   Menu,
   Plus,
-  Search,
   X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -35,8 +33,6 @@ import { TreeSidebar } from "@/components/product/tree_sidebar";
 
 const primaryNav = [
   { label: "Home", href: "/app", icon: Home },
-  { label: "Search", href: "/app/search", icon: Search },
-  { label: "AI", href: "/app/workspace_operator", icon: Bot },
   { label: "AI Edits", href: "/app/proposals", icon: Inbox },
 ];
 
