@@ -1,12 +1,13 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { Separator } from "@/components/ui/separator";
+import { ArrowLeft, ArrowRight } from "lucide-react";
 import { requireAuthenticatedUser } from "@/server/auth/require_authenticated_user";
 import { createClient } from "@/lib/supabase/server";
 import { getOperatorRun } from "@/server/services/workspace_operator_runs_service";
 import { listRunArtifacts } from "@/server/services/operator_artifacts_service";
 import { OperatorRunDetail } from "@/components/product/operator/operator_run_detail";
 import { OperatorRunDiff } from "@/components/product/operator/operator_run_diff";
+import { PageHeader } from "@/components/product/page_header";
 
 /**
  * Run detail view: header, plan, result, artifact diff, actions.
@@ -35,29 +36,29 @@ export default async function OperatorRunDetailPage({ params }: PageProps) {
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
-      <div className="bg-background">
-        <div className="px-6 pt-6 pb-4">
-          <Link
-            href="/app/workspace_operator"
-            className="text-xs text-muted-foreground hover:underline"
-          >
-            ← Back to history
-          </Link>
-          <Link
-            href={`/app/workspace_operator/${runId}/replay`}
-            className="ml-3 text-xs text-muted-foreground hover:text-foreground hover:underline"
-          >
-            Open replay →
-          </Link>
-          <h1 className="mt-1 text-2xl font-semibold tracking-tight text-foreground">
-            Operator run
-          </h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Read-only view of a single Operator invocation.
-          </p>
-        </div>
-        <Separator />
-      </div>
+      <PageHeader
+        eyebrow="Atlas AI"
+        title="Operator run"
+        description="Read-only view of a single Operator invocation."
+        actions={
+          <>
+            <Link
+              href="/app/workspace_operator"
+              className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <ArrowLeft className="h-3.5 w-3.5" aria-hidden="true" />
+              History
+            </Link>
+            <Link
+              href={`/app/workspace_operator/${runId}/replay`}
+              className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+            >
+              Open replay
+              <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
+            </Link>
+          </>
+        }
+      />
 
       <div className="flex-1 overflow-auto">
         <div className="mx-auto flex max-w-4xl flex-col gap-4 px-6 py-6">

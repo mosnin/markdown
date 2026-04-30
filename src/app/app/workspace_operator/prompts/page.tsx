@@ -1,9 +1,10 @@
 import Link from "next/link";
-import { Separator } from "@/components/ui/separator";
+import { ArrowLeft } from "lucide-react";
 import { requireAuthenticatedUser } from "@/server/auth/require_authenticated_user";
 import { createClient } from "@/lib/supabase/server";
 import { listOperatorPrompts } from "@/server/services/operator_prompts_service";
 import { OperatorPromptsManager } from "@/components/product/operator/operator_prompts_manager";
+import { PageHeader } from "@/components/product/page_header";
 
 /**
  * Saved Operator prompts management page.
@@ -23,23 +24,20 @@ export default async function OperatorPromptsPage() {
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
-      <div className="bg-background">
-        <div className="px-6 pt-6 pb-4">
+      <PageHeader
+        eyebrow="Atlas AI"
+        title="Saved prompts"
+        description="Reusable prompts for the Workspace Operator. Private to you."
+        actions={
           <Link
             href="/app/workspace_operator"
-            className="text-xs text-muted-foreground hover:underline"
+            className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
           >
-            ← Back to history
+            <ArrowLeft className="h-3.5 w-3.5" aria-hidden="true" />
+            History
           </Link>
-          <h1 className="mt-1 text-2xl font-semibold tracking-tight text-foreground">
-            Saved prompts
-          </h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Reusable prompts for the Workspace Operator. Private to you.
-          </p>
-        </div>
-        <Separator />
-      </div>
+        }
+      />
 
       <div className="flex-1 overflow-auto">
         <div className="mx-auto max-w-4xl px-6 py-6">

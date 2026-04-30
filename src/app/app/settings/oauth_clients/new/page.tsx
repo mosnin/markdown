@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { requireAuthenticatedUser } from "@/server/auth/require_authenticated_user";
-import { Separator } from "@/components/ui/separator";
+import { PageHeader } from "@/components/product/page_header";
 import { OauthClientWizard } from "./wizard";
 
 /**
@@ -24,25 +24,20 @@ export default async function NewOauthClientPage() {
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
-      <div className="bg-background px-6 pt-6 pb-4">
-        <div className="mb-3 flex items-center gap-2 text-xs text-muted-foreground">
+      <PageHeader
+        eyebrow="Developer"
+        title="Register OAuth client"
+        description="Guided setup for a new OAuth 2.1 client. You'll see the credentials once at the end — store them somewhere safe."
+        actions={
           <Link
             href="/app/settings/oauth_clients"
-            className="inline-flex items-center gap-1 hover:text-foreground"
+            className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
           >
             <ArrowLeft className="h-3.5 w-3.5" aria-hidden="true" />
-            Back to OAuth clients
+            Back
           </Link>
-        </div>
-        <h1 className="text-2xl font-semibold tracking-tight text-foreground">
-          Register OAuth client
-        </h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Guided setup for a new OAuth 2.1 client. You&apos;ll see the
-          credentials once at the end — store them somewhere safe.
-        </p>
-      </div>
-      <Separator />
+        }
+      />
 
       <div className="flex-1 overflow-auto">
         <div className="mx-auto max-w-3xl px-6 py-6">

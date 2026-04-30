@@ -10,6 +10,7 @@ import { Separator } from "@/components/ui/separator";
 import { requireAuthenticatedUser } from "@/server/auth/require_authenticated_user";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { listCredentials } from "@/server/services/webauthn_service";
+import { PageHeader } from "@/components/product/page_header";
 import { PasskeysManager } from "./passkeys_client";
 
 export const metadata = {
@@ -23,17 +24,11 @@ export default async function PasskeysPage() {
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
-      <div className="bg-background">
-        <div className="px-6 pt-6 pb-4">
-          <h1 className="text-2xl font-semibold tracking-tight text-foreground">
-            Passkeys
-          </h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Manage passkeys for passwordless sign-in.
-          </p>
-        </div>
-        <Separator />
-      </div>
+      <PageHeader
+        eyebrow="Security"
+        title="Passkeys"
+        description="Manage passkeys for passwordless sign-in."
+      />
 
       <div className="flex-1 overflow-auto">
         <div className="mx-auto max-w-2xl space-y-6 px-6 py-6">

@@ -1,12 +1,13 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
+import { ArrowLeft } from "lucide-react";
 
-import { Separator } from "@/components/ui/separator";
 import { requireAuthenticatedUser } from "@/server/auth/require_authenticated_user";
 import { createClient } from "@/lib/supabase/server";
 import { getOperatorRun } from "@/server/services/workspace_operator_runs_service";
 import { listEventsForRun } from "@/server/services/operator_run_events_service";
 import { RunReplayView } from "@/components/product/run_replay_view";
+import { PageHeader } from "@/components/product/page_header";
 import type { ToolCallEvent } from "@/lib/hooks/use_operator_events";
 
 /**
@@ -52,23 +53,20 @@ export default async function OperatorRunReplayPage({ params }: PageProps) {
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
-      <div className="bg-background">
-        <div className="px-6 pt-6 pb-4">
+      <PageHeader
+        eyebrow="Atlas AI"
+        title="Operator run replay"
+        description="Step-by-step playback of the durable event stream."
+        actions={
           <Link
             href={`/app/workspace_operator/${runId}`}
-            className="text-xs text-muted-foreground hover:underline"
+            className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
           >
-            ← Back to run summary
+            <ArrowLeft className="h-3.5 w-3.5" aria-hidden="true" />
+            Run summary
           </Link>
-          <h1 className="mt-1 text-2xl font-semibold tracking-tight text-foreground">
-            Operator run replay
-          </h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Step-by-step playback of the durable event stream.
-          </p>
-        </div>
-        <Separator />
-      </div>
+        }
+      />
 
       <div className="flex-1 overflow-hidden">
         <RunReplayView

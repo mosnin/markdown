@@ -26,6 +26,7 @@ import { WorkspaceLiveRefresh } from "@/components/product/workspace/workspace_l
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
+import { PageHeader } from "@/components/product/page_header";
 import { formatAbsoluteDate } from "@/lib/format_date";
 
 // ─── Meta row ─────────────────────────────────────────────────────────────────
@@ -215,24 +216,17 @@ export default async function SkillPage({
         protectWhileEditing
       />
 
-      {/* Header */}
-      <div className="border-b border-border bg-background px-4 pt-4 pb-4 md:px-6 md:pt-6">
-        <div className="flex items-start gap-3">
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-muted mt-0.5">
-            <Zap className="h-5 w-5 text-muted-foreground" aria-hidden="true" />
-          </div>
-          <div className="min-w-0 flex-1">
-            <h1 className="text-xl font-bold tracking-tight text-foreground truncate">{skill.name}</h1>
-            {skill.description && (
-              <p className="mt-0.5 text-sm text-muted-foreground">{skill.description}</p>
-            )}
-          </div>
-          <div className="ml-auto flex items-center gap-2 shrink-0">
+      <PageHeader
+        eyebrow="Skill"
+        title={skill.name}
+        description={skill.description ?? undefined}
+        actions={
+          <>
             <CopyAsJsonButton data={skillExportData} label="Copy JSON" />
             <SkillExportMenu skillId={skill_id} skillName={skill.name} />
-          </div>
-        </div>
-      </div>
+          </>
+        }
+      />
 
       {/* Reference context banner */}
       {refBox && (
