@@ -3,7 +3,7 @@ import { Bot, GitBranch } from "lucide-react";
 import { requireAuthenticatedUser } from "@/server/auth/require_authenticated_user";
 import { createClient } from "@/lib/supabase/server";
 import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
+import { PageHeader } from "@/components/product/page_header";
 import {
   listOperatorRuns,
   type OperatorRunStatus,
@@ -104,22 +104,11 @@ export default async function OperatorRunsPage() {
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
-      {/* Header */}
-      <div className="border-b border-border bg-background px-4 pt-4 pb-4 md:px-6 md:pt-6">
-        <div className="flex items-center gap-2.5">
-          <Bot className="h-5 w-5 shrink-0 text-muted-foreground" aria-hidden="true" />
-          <div>
-            <h1 className="text-xl font-bold tracking-tight text-foreground">
-              Operator runs
-            </h1>
-            <p className="text-xs text-muted-foreground">
-              Recent Workspace Operator invocations across all your workspaces.
-            </p>
-          </div>
-        </div>
-      </div>
-
-      <Separator />
+      <PageHeader
+        eyebrow="Atlas AI"
+        title="Operator runs"
+        description="Recent Workspace Operator invocations across all your workspaces."
+      />
 
       <div className="flex-1 overflow-auto">
         <div className="mx-auto w-full max-w-4xl px-6 py-6">

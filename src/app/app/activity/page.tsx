@@ -1,7 +1,7 @@
 import { requireAuthenticatedUser } from "@/server/auth/require_authenticated_user";
 import { createClient } from "@/lib/supabase/server";
 import { getActivityFeed, getUnreadCount, markAsRead } from "@/server/services/activity_feed_service";
-import { Separator } from "@/components/ui/separator";
+import { PageHeader } from "@/components/product/page_header";
 import { ActivityFeedClient } from "./activity_feed_client";
 
 /**
@@ -23,18 +23,11 @@ export default async function ActivityPage() {
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
-      {/* Page header */}
-      <div className="bg-background">
-        <div className="px-6 pt-6 pb-4">
-          <h1 className="text-2xl font-semibold tracking-tight text-foreground">
-            Activity
-          </h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            What happened in your workspace while you were away.
-          </p>
-        </div>
-        <Separator />
-      </div>
+      <PageHeader
+        eyebrow="Workspace"
+        title="Activity"
+        description="What happened in your workspace while you were away."
+      />
 
       {/* Feed */}
       <div className="flex-1 overflow-hidden">

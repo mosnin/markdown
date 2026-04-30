@@ -1,10 +1,10 @@
-import { Separator } from "@/components/ui/separator";
 import { requireAuthenticatedUser } from "@/server/auth/require_authenticated_user";
 import { createClient } from "@/lib/supabase/server";
 import { getNotificationPrefs } from "@/server/services/operator_notifications_service";
 import { listApiKeysForUser } from "@/server/services/operator_api_keys_service";
 import { OperatorNotificationPrefsCard } from "@/components/product/operator/operator_notification_prefs";
 import { OperatorApiKeysManager } from "@/components/product/operator/operator_api_keys_manager";
+import { PageHeader } from "@/components/product/page_header";
 
 /**
  * Operator preferences settings page.
@@ -31,18 +31,11 @@ export default async function OperatorPreferencesPage() {
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
-      <div className="bg-background">
-        <div className="px-6 pt-6 pb-4">
-          <h1 className="text-2xl font-semibold tracking-tight text-foreground">
-            Operator preferences
-          </h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Notification preferences and REST API keys for the Workspace
-            Operator.
-          </p>
-        </div>
-        <Separator />
-      </div>
+      <PageHeader
+        eyebrow="Settings"
+        title="Operator preferences"
+        description="Notification preferences and REST API keys for the Workspace Operator."
+      />
 
       <div className="flex-1 overflow-auto">
         <div className="mx-auto flex max-w-3xl flex-col gap-6 px-6 py-6">

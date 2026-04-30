@@ -16,6 +16,7 @@ import {
   CardTitle,
   CardDescription,
 } from "@/components/ui/card";
+import { PageHeader } from "@/components/product/page_header";
 
 /**
  * Workspace analytics & content health dashboard.
@@ -44,18 +45,11 @@ export default async function AnalyticsPage() {
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
-      {/* Page header */}
-      <div className="bg-background">
-        <div className="px-6 pt-6 pb-4">
-          <h1 className="text-2xl font-semibold tracking-tight text-foreground">
-            Analytics
-          </h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Workspace health, search analytics, and content metrics
-          </p>
-        </div>
-        <Separator />
-      </div>
+      <PageHeader
+        eyebrow="Workspace"
+        title="Analytics"
+        description="Workspace health, search analytics, and content metrics."
+      />
 
       <ScrollArea className="flex-1">
         <div className="mx-auto max-w-4xl space-y-6 px-6 py-6">

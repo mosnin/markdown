@@ -8,6 +8,7 @@ import {
 } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { PageHeader } from "@/components/product/page_header";
 import { ConnectionsPanel } from "@/components/product/connections_panel";
 import { requireAuthenticatedUser } from "@/server/auth/require_authenticated_user";
 import { createClient } from "@/lib/supabase/server";
@@ -139,18 +140,11 @@ export default async function SettingsPage() {
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
-      {/* Page header */}
-      <div className="bg-background">
-        <div className="px-6 pt-6 pb-4">
-          <h1 className="text-2xl font-semibold tracking-tight text-foreground">
-            Settings
-          </h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Manage your account, preferences, and integrations.
-          </p>
-        </div>
-        <Separator />
-      </div>
+      <PageHeader
+        eyebrow="Account"
+        title="Settings"
+        description="Manage your account, preferences, and integrations."
+      />
 
       <div className="flex flex-1 overflow-hidden">
         {/* Settings navigation moved into the main sidebar. When the user

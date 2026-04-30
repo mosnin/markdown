@@ -1,6 +1,5 @@
 import { Suspense } from "react";
 import Link from "next/link";
-import Image from "next/image";
 import { BookOpen, Box, FileText, Inbox, Network } from "lucide-react";
 import { requireAuthenticatedUser } from "@/server/auth/require_authenticated_user";
 import { createClient } from "@/lib/supabase/server";
@@ -18,6 +17,7 @@ import { CreateBoxDialog } from "@/components/product/create/create_box_dialog";
 import { OnboardingCallout } from "@/components/product/onboarding_callout";
 import { QuickStartPanel } from "@/components/product/quick_start_panel";
 import { OnboardingMilestoneBar } from "@/components/product/onboarding_milestone_bar";
+import { PageHeader } from "@/components/product/page_header";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
@@ -96,26 +96,11 @@ export default async function AppHomePage() {
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
-      {/* Workspace header */}
-      <div className="flex items-center justify-between border-b border-border px-6 py-4">
-        <div className="flex items-center gap-4">
-          <div className="flex items-center gap-2">
-            <Image src="/logo-symbol-dark.png" alt="Poggle" width={28} height={28} className="rounded dark:hidden" />
-            <Image src="/logo-symbol-light.png" alt="Poggle" width={28} height={28} className="rounded hidden dark:block" />
-            <Image src="/logo-text-black.png" alt="Poggle" width={70} height={24} className="dark:hidden" />
-            <Image src="/logo-text-white.png" alt="Poggle" width={70} height={24} className="hidden dark:block" />
-          </div>
-          <div className="h-6 w-px bg-border" />
-          <div>
-            <p className="text-xs text-muted-foreground">Workspace</p>
-            <h1 className="text-lg font-semibold tracking-tight text-foreground">
-              {ctx.workspace.name}
-            </h1>
-          </div>
-        </div>
-        {/* Header action slot intentionally empty — the canonical
-            "New box" button lives next to the Boxes section below. */}
-      </div>
+      <PageHeader
+        eyebrow="Workspace"
+        title={ctx.workspace.name}
+        description="A snapshot of your knowledge — boxes, notes, connections, and pending review."
+      />
 
       <ScrollArea className="flex-1">
         <div className="mx-auto max-w-3xl space-y-8 px-6 py-6">

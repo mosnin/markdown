@@ -1,7 +1,7 @@
 import { requireAuthenticatedUser } from "@/server/auth/require_authenticated_user";
 import { createClient } from "@/lib/supabase/server";
 import { getNotificationPreferences } from "@/server/services/activity_feed_service";
-import { Separator } from "@/components/ui/separator";
+import { PageHeader } from "@/components/product/page_header";
 import { NotificationPreferencesClient } from "./notification_preferences_client";
 
 /**
@@ -22,18 +22,11 @@ export default async function NotificationPreferencesPage() {
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
-      {/* Page header */}
-      <div className="bg-background">
-        <div className="px-6 pt-6 pb-4">
-          <h1 className="text-2xl font-semibold tracking-tight text-foreground">
-            Notification Preferences
-          </h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Choose which events appear in your activity feed.
-          </p>
-        </div>
-        <Separator />
-      </div>
+      <PageHeader
+        eyebrow="Settings"
+        title="Notification preferences"
+        description="Choose which events appear in your activity feed."
+      />
 
       {/* Preferences form */}
       <div className="flex-1 overflow-auto">

@@ -1,10 +1,11 @@
-import { Separator } from "@/components/ui/separator";
+import { Button } from "@/components/ui/button";
 import { requireAuthenticatedUser } from "@/server/auth/require_authenticated_user";
 import { createClient } from "@/lib/supabase/server";
 import { listOperatorRuns } from "@/server/services/workspace_operator_runs_service";
 import { OperatorHistoryTable } from "@/components/product/operator/operator_history_table";
 import { OperatorNewRunButton } from "@/components/product/operator/operator_new_run_button";
 import { PogAgentIntro } from "@/components/product/pog_agent_intro";
+import { PageHeader } from "@/components/product/page_header";
 import {
   expandStatusFilter,
   type OperatorRunStatusFilter,
@@ -78,28 +79,19 @@ export default async function WorkspaceOperatorHistoryPage({
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
-      <div className="bg-background">
-        <div className="flex items-start justify-between gap-2 px-6 pt-6 pb-4">
-          <div>
-            <h1 className="text-2xl font-semibold tracking-tight text-foreground">
-              AI
-            </h1>
-            <p className="mt-1 text-sm text-muted-foreground">
-              History of your Atlas AI runs in this workspace.
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
-            <Link
-              href="/app/workspace_operator/prompts"
-              className="rounded-full border border-border bg-background px-3 py-1 text-xs text-foreground hover:bg-muted"
-            >
+      <PageHeader
+        eyebrow="Atlas AI"
+        title="Operator runs"
+        description="History of every Atlas AI run in this workspace."
+        actions={
+          <>
+            <Button variant="outline" size="sm" render={<Link href="/app/workspace_operator/prompts" />}>
               Saved prompts
-            </Link>
+            </Button>
             <OperatorNewRunButton />
-          </div>
-        </div>
-        <Separator />
-      </div>
+          </>
+        }
+      />
 
       <div className="flex-1 overflow-auto">
         <div className="mx-auto max-w-5xl px-6 py-6">

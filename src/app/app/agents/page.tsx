@@ -10,6 +10,8 @@ import { AgentFromTemplateDialog } from "@/components/product/agents/agent_from_
 import { WorkspaceLiveRefresh } from "@/components/product/workspace/workspace_live_refresh";
 import { ActiveBranchBannerServer } from "@/components/product/active_branch_banner_server";
 import { AgentsListClient } from "@/components/product/agents/agents_list_client";
+import { PageHeader } from "@/components/product/page_header";
+import { Button } from "@/components/ui/button";
 
 // ─── Empty state ──────────────────────────────────────────────────────────────
 
@@ -52,37 +54,22 @@ export default async function AgentsPage() {
     <div className="flex h-full flex-col overflow-hidden">
       <ActiveBranchBannerServer />
       <WorkspaceLiveRefresh workspaceId={ctx.workspace.id} scope="library" />
-      {/* Header */}
-      <div className="border-b border-border bg-background px-4 pt-4 pb-4 md:px-6 md:pt-6">
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex items-center gap-2.5">
-            <Bot className="h-5 w-5 shrink-0 text-muted-foreground" aria-hidden="true" />
-            <div>
-              <h1 className="text-xl font-bold tracking-tight text-foreground">Agents</h1>
-              <p className="text-xs text-muted-foreground">
-                Workspace-level reusable agents shared across all boxes
-              </p>
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            {/*
-              Cross-workspace shortcut to the Workspace Operator run
-              history. Surfacing it here so users discover that recent
-              agent runs are inspectable rather than fire-and-forget.
-            */}
-            <Link
-              href="/app/agents/runs"
-              className="inline-flex items-center gap-1.5 rounded-md border border-border bg-background px-2.5 py-1.5 text-xs font-medium text-foreground hover:bg-accent/40 transition-colors"
-            >
-              <History className="h-3.5 w-3.5" aria-hidden="true" />
-              Recent operator runs
-            </Link>
+      <PageHeader
+        eyebrow="Library"
+        title="Agents"
+        description="Workspace-level reusable agents shared across every box."
+        actions={
+          <>
+            <Button variant="outline" size="sm" render={<Link href="/app/agents/runs" />}>
+              <History data-icon="inline-start" />
+              Recent runs
+            </Button>
             <AgentFromTemplateDialog />
             <AgentImportTrigger />
             <AgentCreateDialog forceReusable />
-          </div>
-        </div>
-      </div>
+          </>
+        }
+      />
 
       <div className="flex-1 overflow-auto">
         {agents.length === 0 ? (
