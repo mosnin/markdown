@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import {
   Bot,
   Box as BoxIcon,
@@ -57,6 +57,11 @@ export function PullTokensList({
   const [optimisticRevokes, setOptimisticRevokes] = useState<
     Record<string, string>
   >({});
+  // Snapshot "now" once per refresh cycle so the bucket boundary
+  // doesn't drift mid-render. Initialised lazily via useState so the
+  // impure `Date.now()` call doesn't run during render — refreshed
+  // by `refresh()` whenever a new list comes back from the server.
+  const [nowSnapshot, setNowSnapshot] = useState<number>(() => Date.now());
 
   const refresh = () => {
     startLoad(async () => {
@@ -65,6 +70,7 @@ export function PullTokensList({
         setRows(res.data);
         setError(null);
         setOptimisticRevokes({});
+        setNowSnapshot(Date.now());
       } else {
         setError(res.error);
         setRows([]);
@@ -75,15 +81,6 @@ export function PullTokensList({
   useEffect(() => {
     refresh();
   }, []);
-
-  // Snapshot "now" once per refresh cycle so the bucket boundary
-  // doesn't drift mid-render. Initialised lazily via useState so the
-  // impure `Date.now()` call doesn't run during render. Refreshed
-  // when `rows` change (i.e. the server list comes back).
-  const [nowSnapshot, setNowSnapshot] = useState<number>(() => Date.now());
-  useEffect(() => {
-    setNowSnapshot(Date.now());
-  }, [rows]);
 
   // Apply optimistic revokes on top of the server list, then split.
   const { activeRows, inactiveRows } = useMemo(() => {
@@ -198,7 +195,11 @@ export function PullTokensList({
               <ul className="mt-2 flex list-none flex-col gap-2">
                 {inactiveRows.map((r) => (
                   <li key={r.id}>
-                    <PullTokenRowCard row={r} onRevoke={() => undefined} />
+                    <PullTokenRowCard
+                    row={r}
+                    now={nowSnapshot}
+                    onRevoke={() => undefined}
+                  />
                   </li>
                 ))}
               </ul>
@@ -222,27 +223,22 @@ const OBJECT_ICONS = {
 
 function PullTokenRowCard({
   row,
+  now,
   onRevoke,
 }: {
   row: PullTokenRow;
+  /** "now" snapshot in epoch ms — passed down by the parent. */
+  now: number;
   onRevoke: () => void;
 }) {
-  // Snapshot "now" at mount; bucket-boundary correctness is the
-  // parent's responsibility (it re-derives on `rows` change).
-  const nowRef = useRef<number>(Date.now());
   const isRevoked = !!row.revokedAt;
-  const isExpired =
-    !isRevoked && new Date(row.expiresAt).getTime() <= nowRef.current;
+  const isExpired = !isRevoked && new Date(row.expiresAt).getTime() <= now;
   const inactive = isRevoked || isExpired;
   const Icon = OBJECT_ICONS[row.objectType] ?? Sparkles;
 
-  const expiresLabel = computeExpiresLabel(
-    row.expiresAt,
-    isRevoked,
-    nowRef.current
-  );
+  const expiresLabel = computeExpiresLabel(row.expiresAt, isRevoked, now);
   const lastRedemption = row.lastRedeemedAt
-    ? formatRelative(row.lastRedeemedAt, nowRef.current)
+    ? formatRelative(row.lastRedeemedAt, now)
     : "never used";
 
   const ua = (row.lastUserAgent ?? "").trim();
