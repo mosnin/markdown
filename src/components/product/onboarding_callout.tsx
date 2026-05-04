@@ -1,16 +1,26 @@
-import { BookOpen, Box, FileText, Layers, Link2, Search, Upload } from "lucide-react";
-import { CreateBoxDialog } from "@/components/product/create/create_box_dialog";
+import Link from "next/link";
+import {
+  ArrowRight,
+  BookOpen,
+  Box,
+  FileText,
+  Layers,
+  Link2,
+  Search,
+  Upload,
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 /**
  * First-run onboarding callout.
  *
  * Shown on the home page when the workspace has no boxes yet.
  * Explains the core mental model in product-specific language and
- * prompts the user toward their first meaningful action.
+ * prompts the user toward the guided four-step setup at /welcome/setup,
+ * which ships them a real first AI bundle in under five minutes.
  *
  * Six concepts taught: Box, Folder, Note, Guide note, Explicit links,
- * Context bundle. Three starter paths offered: blank box, template box,
- * and import guide.
+ * Context bundle.
  *
  * Server component — no client state needed.
  */
@@ -60,10 +70,10 @@ export function OnboardingCallout() {
       {/* Heading */}
       <div className="border-b border-border px-6 py-5">
         <h2 className="text-base font-semibold text-foreground">
-          Welcome to Context Store
+          Welcome to Poggle
         </h2>
         <p className="mt-1 text-sm text-muted-foreground">
-          Context Store is a structured context workspace for humans and AI
+          Poggle is a structured context workspace for humans and AI
           agents. Content is organized around a clear information hierarchy.
         </p>
       </div>
@@ -90,27 +100,37 @@ export function OnboardingCallout() {
         </div>
       </div>
 
-      {/* Starter actions */}
+      {/* Starter actions — funnel into the guided setup */}
       <div className="rounded-b-xl border-t border-border bg-muted/30">
-        {/* Primary CTA */}
         <div className="flex flex-col gap-4 px-6 py-5 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <p className="text-sm font-medium text-foreground">
-              Create your first box
+              Ship your first AI bundle in under five minutes
             </p>
             <p className="mt-0.5 text-xs text-muted-foreground">
-              Start blank or choose the{" "}
-              <span className="font-medium text-foreground">Project context</span>{" "}
-              template for a structured starting point with folders, guide note,
-              and core reference notes.
+              A guided four-step flow: pick a starting point, write a note,
+              bundle it for{" "}
+              <Link
+                href="/welcome/setup"
+                className="brand-underline font-medium text-foreground"
+              >
+                Claude or GPT
+              </Link>
+              , and try it. No detours.
             </p>
           </div>
           <div className="shrink-0">
-            <CreateBoxDialog />
+            <Button
+              variant="brand"
+              size="lg"
+              render={<Link href="/welcome/setup" />}
+            >
+              Start setup
+              <ArrowRight className="h-4 w-4" aria-hidden="true" />
+            </Button>
           </div>
         </div>
 
-        {/* Import hint */}
         <div className="flex items-start gap-2.5 border-t border-border px-6 py-3">
           <Upload
             className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground/60"
@@ -119,8 +139,8 @@ export function OnboardingCallout() {
           <p className="text-xs text-muted-foreground/70">
             Have existing notes?{" "}
             <span className="text-muted-foreground">
-              Create a box first, then use the Import button in the box header
-              to bring in .md files or .zip packages.
+              The setup flow includes an Obsidian / Notion import path —
+              pick &ldquo;Import&rdquo; on the first screen.
             </span>
           </p>
         </div>

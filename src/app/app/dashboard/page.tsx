@@ -190,10 +190,14 @@ export default async function AppHomePage() {
                 user types something — `defaultBoxId` falls back to the
                 first box so the action is always dispatchable. */}
             {hasBoxes && (
-              <DashboardOperatorIsland
-                defaultBoxId={boxes[0].id}
-                initialInFlightRun={initialInFlightRun}
-              />
+              <>
+                <DashboardOperatorPanel defaultBoxId={boxes[0].id} />
+                {/* Mobile-only "Show plan" affordance — surfaces the
+                    right-pane sheet after a run is dispatched. */}
+                <DashboardPlanSheetTrigger
+                  hasAnyRun={initialInFlightRun !== null}
+                />
+              </>
             )}
 
             {/* Boxes exist but no notes yet → quickstart prompt. */}
@@ -300,15 +304,14 @@ export default async function AppHomePage() {
         </ScrollArea>
       </div>
 
-      {/* Right pane (desktop) + mobile sheet — both rendered inside the
-          island so it can own the `pendingRunId` handoff. The left pane
-          mounts the composer half via the same island. */}
+      {/* Right pane (desktop) + mobile sheet — owned by the same
+          provider so the composer's "I just ran X" handoff lights up
+          the live event subscription instantly. */}
       {hasBoxes && (
-        <DashboardPlanPanelMount
-          initialInFlightRun={initialInFlightRun}
-        />
+        <DashboardPlanPanel initialInFlightRun={initialInFlightRun} />
       )}
     </div>
+    </DashboardOperatorProvider>
   );
 }
 
@@ -330,24 +333,6 @@ function RunStatusBadge({ status }: { status: string }) {
               ? "info"
               : "secondary";
   return <Badge variant={variant}>{status.replace(/_/g, " ")}</Badge>;
-}
-
-/**
- * Visual mount-point hint — the actual plan panel + sheet live inside
- * `DashboardOperatorIsland` (which the left column already renders) so
- * a single client island owns the shared state. This component is
- * intentionally minimal: it exists only to keep the JSX shape symmetric
- * (left pane / right pane) without re-mounting a second island.
- *
- * In practice `DashboardOperatorIsland` portals/positions the right
- * pane via `position: hidden lg:flex` on its `<aside>`, so no extra
- * wrapper is needed here. We render `null` to keep the right column
- * free for that aside.
- */
-function DashboardPlanPanelMount(
-  _props: { initialInFlightRun: InFlightRun | null }
-) {
-  return null;
 }
 
 // ---------------------------------------------------------------------------
