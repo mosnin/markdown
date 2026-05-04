@@ -20,6 +20,7 @@ import {
   type InFlightRun,
 } from "@/components/product/dashboard_plan_panel";
 import { DashboardOperatorPanel } from "@/components/product/dashboard_operator_panel";
+import { DashboardRunRowShimmer } from "@/components/product/dashboard_run_row_shimmer";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -161,7 +162,9 @@ export default async function AppHomePage() {
   return (
     <DashboardOperatorProvider>
     <div className="flex h-full overflow-hidden">
-      {/* Left pane — composer, recent notes, recent runs. */}
+      {/* Left pane — composer, recent notes, recent runs.
+          Fills the viewport on mobile; the right pane collapses to a
+          `<DashboardPlanSheetTrigger>` sticky button + bottom sheet. */}
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
         <PageHeader
           title={ctx.workspace.name}
@@ -170,7 +173,7 @@ export default async function AppHomePage() {
         />
 
         <ScrollArea className="flex-1">
-          <div className="mx-auto max-w-3xl space-y-8 px-6 py-8">
+          <div className="mx-auto max-w-3xl space-y-6 px-4 py-6 sm:space-y-8 sm:px-6 sm:py-8">
             {/* Onboarding milestone bar — hides when every milestone is hit. */}
             <Suspense
               fallback={
@@ -229,7 +232,7 @@ export default async function AppHomePage() {
                       Search all notes →
                     </Link>
                   </div>
-                  <ul className="flex flex-col gap-2 list-none">
+                  <ul className="flex flex-col gap-2 sm:gap-3 list-none">
                     {allNotes.map((note) => (
                       <li key={note.id}>
                         <Link
@@ -271,29 +274,41 @@ export default async function AppHomePage() {
                     All runs →
                   </Link>
                 </div>
-                <ul className="flex flex-col gap-2 list-none">
+                <ul className="flex flex-col gap-2 sm:gap-3 list-none">
                   {recentRunRows.map((run) => (
                     <li key={run.id}>
                       <Link
                         href={`/app/workspace_operator/${run.id}`}
                         className="block transition-colors hover:bg-accent/40 rounded-lg"
                       >
-                        <Card size="sm" className="hover:shadow-xs">
-                          <div className="flex items-center justify-between gap-3 px-4">
-                            <p className="min-w-0 flex-1 truncate text-sm text-foreground">
-                              {run.prompt}
-                            </p>
-                            <div className="flex shrink-0 items-center gap-2">
-                              <RunStatusBadge status={run.status} />
-                              <span className="text-[11px] tabular-nums text-muted-foreground">
-                                {formatRelativeDateShort(
-                                  run.created_at,
-                                  nowIso
-                                )}
-                              </span>
+                        {/* `DashboardRunRowShimmer` is a thin client wrapper
+                            that paints `.brand-shimmer` on the row when the
+                            run completed within the last 5 seconds — the
+                            "this just landed" arrival moment. It only
+                            contributes the class; the Card structure is
+                            unchanged. */}
+                        <DashboardRunRowShimmer
+                          status={run.status}
+                          createdAtIso={run.created_at}
+                          className="rounded-lg"
+                        >
+                          <Card size="sm" className="hover:shadow-xs">
+                            <div className="flex items-center justify-between gap-3 px-4">
+                              <p className="min-w-0 flex-1 truncate text-sm text-foreground">
+                                {run.prompt}
+                              </p>
+                              <div className="flex shrink-0 items-center gap-2">
+                                <RunStatusBadge status={run.status} />
+                                <span className="text-[11px] tabular-nums text-muted-foreground">
+                                  {formatRelativeDateShort(
+                                    run.created_at,
+                                    nowIso
+                                  )}
+                                </span>
+                              </div>
                             </div>
-                          </div>
-                        </Card>
+                          </Card>
+                        </DashboardRunRowShimmer>
                       </Link>
                     </li>
                   ))}
@@ -374,7 +389,7 @@ function LegacyDashboard({
       />
 
       <ScrollArea className="flex-1">
-        <div className="mx-auto max-w-3xl space-y-8 px-6 py-8">
+        <div className="mx-auto max-w-3xl space-y-6 px-4 py-6 sm:space-y-8 sm:px-6 sm:py-8">
           <Suspense
             fallback={
               <div className="animate-pulse h-10 rounded-lg bg-muted/20" />
@@ -414,7 +429,7 @@ function LegacyDashboard({
                     Search all notes →
                   </Link>
                 </div>
-                <ul className="flex flex-col gap-2 list-none">
+                <ul className="flex flex-col gap-2 sm:gap-3 list-none">
                   {allNotes.map((note) => (
                     <li key={note.id}>
                       <Link href={`/app/notes/${note.id}`} className="block">

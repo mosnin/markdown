@@ -66,9 +66,10 @@ const concepts = [
 
 export function OnboardingCallout() {
   return (
-    <div className="rounded-xl border border-border bg-card">
-      {/* Heading */}
-      <div className="border-b border-border px-6 py-5">
+    <div className="rounded-lg border border-border bg-card">
+      {/* Heading — tighter horizontal padding on mobile so the welcome
+          paragraph still has room to breathe at 375px. */}
+      <div className="border-b border-border px-4 py-5 sm:px-6">
         <h2 className="text-base font-semibold text-foreground">
           Welcome to Poggle
         </h2>
@@ -78,12 +79,14 @@ export function OnboardingCallout() {
         </p>
       </div>
 
-      {/* Mental model */}
-      <div className="px-6 py-5">
-        <p className="mb-4 text-xs font-medium uppercase tracking-wider text-muted-foreground/70">
+      {/* Mental model — stacked single column on mobile (concepts are
+          dense; one column reads cleaner than a cramped two-column grid
+          at narrow widths), 2-col at md, 3-col at lg. */}
+      <div className="px-4 py-5 sm:px-6">
+        <p className="mb-4 text-overline text-muted-foreground/70">
           The information hierarchy
         </p>
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {concepts.map(({ icon: Icon, term, description }) => (
             <div key={term} className="flex gap-3">
               <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-border bg-muted text-muted-foreground">
@@ -100,9 +103,10 @@ export function OnboardingCallout() {
         </div>
       </div>
 
-      {/* Starter actions — funnel into the guided setup */}
-      <div className="rounded-b-xl border-t border-border bg-muted/30">
-        <div className="flex flex-col gap-4 px-6 py-5 sm:flex-row sm:items-center sm:justify-between">
+      {/* Starter actions — funnel into the guided setup. Mobile: stack
+          message + full-width 44px primary CTA. Desktop: inline. */}
+      <div className="rounded-b-lg border-t border-border bg-muted/30">
+        <div className="flex flex-col gap-4 px-4 py-5 sm:flex-row sm:items-center sm:justify-between sm:px-6">
           <div>
             <p className="text-sm font-medium text-foreground">
               Ship your first AI bundle in under five minutes
@@ -124,6 +128,7 @@ export function OnboardingCallout() {
               variant="brand"
               size="lg"
               render={<Link href="/welcome/setup" />}
+              className="h-11 w-full sm:w-auto"
             >
               Start setup
               <ArrowRight className="h-4 w-4" aria-hidden="true" />
@@ -131,7 +136,7 @@ export function OnboardingCallout() {
           </div>
         </div>
 
-        <div className="flex items-start gap-2.5 border-t border-border px-6 py-3">
+        <div className="flex items-start gap-2.5 border-t border-border px-4 py-3 sm:px-6">
           <Upload
             className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground/60"
             aria-hidden="true"

@@ -12,8 +12,13 @@ interface OnboardingMilestoneBarProps {
 }
 
 export function OnboardingMilestoneBar(_props: OnboardingMilestoneBarProps) {
+  // Note: this used to be a milestone-chip checklist; it has since been
+  // replaced by a single focused welcome card. If we ever bring chips
+  // back, the row should be `flex snap-x snap-mandatory overflow-x-auto`
+  // with each chip `min-w-[140px]` so it scrolls cleanly on a 375px
+  // viewport (per Move 4 mobile spec).
   return (
-    <div className="flex items-center justify-center rounded-lg border border-dashed border-border/60 px-6 py-8 text-center">
+    <div className="flex items-center justify-center rounded-lg border border-dashed border-border/60 px-4 py-6 text-center sm:px-6 sm:py-8">
       <div>
         <p className="text-sm font-medium text-foreground">
           Ask Atlas AI to get started.

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
@@ -13,6 +13,7 @@ import {
   Network,
   Plus,
   Puzzle,
+  Search,
   X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -163,41 +164,58 @@ export function MobileSidebar({
             </div>
           </div>
 
-          {/* Primary nav — 44px tap targets */}
+          {/* Primary nav — 44px tap targets.
+              The first row is "Search" — the mobile entry point to the
+              command palette now that the topbar pill is hidden on
+              phones. Dispatches the same `command-palette:open` event
+              the desktop pill uses, then closes the drawer so the
+              palette opens cleanly without a stacked overlay. */}
           <nav aria-label="Primary navigation" className="px-2 pt-3 pb-1">
             <ul className="flex flex-col gap-0.5 list-none">
-              {primaryNav.map((item) => {
-                const isActive = pathname === item.href;
-                const Icon = item.icon;
-                return (
-                  <li key={item.href}>
-                    <Link
-                      href={item.href}
-                      onClick={close}
-                      className={cn(
-                        "flex h-11 items-center gap-2.5 rounded-md px-2.5 text-[14px] transition-colors",
-                        "hover:bg-accent/60 hover:text-foreground",
-                        isActive
-                          ? "bg-accent text-foreground font-medium"
-                          : "text-muted-foreground",
-                        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:ring-offset-1 focus-visible:ring-offset-background"
-                      )}
-                      aria-current={isActive ? "page" : undefined}
-                    >
-                      <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
-                      {item.label}
-                      {item.href === "/app/proposals" && pendingProposalsCount > 0 && (
-                        <span
-                          className="ml-auto inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-md border border-transparent bg-brand px-1.5 text-[11px] font-medium text-brand-foreground"
-                          aria-label={`${pendingProposalsCount} pending`}
-                        >
-                          {pendingProposalsCount > 99 ? "99+" : pendingProposalsCount}
-                        </span>
-                      )}
-                    </Link>
-                  </li>
-                );
-              })}
+              <li>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (typeof window !== "undefined") {
+                      window.dispatchEvent(
+                        new CustomEvent("command-palette:open"),
+                      );
+                    }
+                    close();
+                  }}
+                  aria-keyshortcuts="Meta+K Control+K"
+                  className={cn(
+                    "flex h-11 w-full items-center gap-2.5 rounded-md px-2.5 text-left text-[14px] transition-colors",
+                    "text-muted-foreground hover:bg-accent/60 hover:text-foreground",
+                    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:ring-offset-1 focus-visible:ring-offset-background",
+                  )}
+                >
+                  <Search className="h-4 w-4 shrink-0" aria-hidden="true" />
+                  Search
+                  <kbd
+                    className="ml-auto inline-flex h-5 shrink-0 items-center rounded border border-border bg-muted px-1.5 py-0.5 text-[11px] text-muted-foreground"
+                    aria-hidden="true"
+                  >
+                    ⌘K
+                  </kbd>
+                </button>
+              </li>
+              {primaryNav.map((item) => (
+                <li key={item.href}>
+                  <MobileNavRow
+                    href={item.href}
+                    label={item.label}
+                    icon={item.icon}
+                    isActive={pathname === item.href}
+                    onNavigate={close}
+                    pendingProposalsCount={
+                      item.href === "/app/proposals"
+                        ? pendingProposalsCount
+                        : 0
+                    }
+                  />
+                </li>
+              ))}
             </ul>
           </nav>
 
@@ -253,5 +271,64 @@ export function MobileSidebar({
         </SheetContent>
       </Sheet>
     </>
+  );
+}
+
+/**
+ * Single primary-nav row for the mobile drawer. Mirrors the desktop
+ * `NavItem` arrival shimmer: when `isActive` flips false→true the row
+ * paints `.brand-shimmer-rail` for ~600ms, then drops the class so it
+ * doesn't keep rendering the rail on subsequent re-renders.
+ */
+function MobileNavRow({
+  href,
+  label,
+  icon: Icon,
+  isActive,
+  onNavigate,
+  pendingProposalsCount,
+}: {
+  href: string;
+  label: string;
+  icon: React.ElementType;
+  isActive: boolean;
+  onNavigate: () => void;
+  pendingProposalsCount: number;
+}) {
+  const [shimmer, setShimmer] = useState(false);
+
+  useEffect(() => {
+    if (!isActive) return;
+    setShimmer(true);
+    const t = window.setTimeout(() => setShimmer(false), 600);
+    return () => window.clearTimeout(t);
+  }, [isActive]);
+
+  return (
+    <Link
+      href={href}
+      onClick={onNavigate}
+      className={cn(
+        "flex h-11 items-center gap-2.5 rounded-md px-2.5 text-[14px] transition-colors",
+        "hover:bg-accent/60 hover:text-foreground",
+        isActive
+          ? "bg-accent text-foreground font-medium"
+          : "text-muted-foreground",
+        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:ring-offset-1 focus-visible:ring-offset-background",
+        isActive && shimmer && "brand-shimmer-rail"
+      )}
+      aria-current={isActive ? "page" : undefined}
+    >
+      <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
+      {label}
+      {pendingProposalsCount > 0 && (
+        <span
+          className="ml-auto inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-md border border-transparent bg-brand px-1.5 text-[11px] font-medium text-brand-foreground"
+          aria-label={`${pendingProposalsCount} pending`}
+        >
+          {pendingProposalsCount > 99 ? "99+" : pendingProposalsCount}
+        </span>
+      )}
+    </Link>
   );
 }

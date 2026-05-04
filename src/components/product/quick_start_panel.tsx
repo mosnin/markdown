@@ -76,9 +76,12 @@ export function QuickStartPanel({ firstBox }: QuickStartPanelProps) {
   }, []);
 
   return (
-    <div className="rounded-xl border border-border bg-card">
-      <div className="flex items-center justify-between border-b border-border px-6 py-4">
-        <div>
+    <div className="rounded-lg border border-border bg-card">
+      {/* Header — title row stacks on mobile so the "Open box" link
+          doesn't compress the description into one word. Goes inline
+          at sm+ where width is plentiful. */}
+      <div className="flex flex-col gap-2 border-b border-border px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:gap-3 sm:px-6">
+        <div className="min-w-0">
           <h2 className="text-sm font-semibold text-foreground">Get started</h2>
           <p className="mt-0.5 text-xs text-muted-foreground">
             Your boxes are ready — here are three ways to start populating them.
@@ -86,7 +89,7 @@ export function QuickStartPanel({ firstBox }: QuickStartPanelProps) {
         </div>
         <Link
           href={`/app/boxes/${firstBox.id}`}
-          className="flex shrink-0 items-center gap-1 text-xs text-muted-foreground transition-fast hover:text-foreground"
+          className="flex h-11 shrink-0 items-center gap-1 text-xs text-muted-foreground transition-fast hover:text-foreground sm:h-auto"
           aria-label={`Open box ${firstBox.name}`}
         >
           Open {firstBox.name}
@@ -94,9 +97,11 @@ export function QuickStartPanel({ firstBox }: QuickStartPanelProps) {
         </Link>
       </div>
 
-      {/* In-flight setup banner — only when localStorage says we are mid-flow. */}
+      {/* In-flight setup banner — only when localStorage says we are mid-flow.
+          Stacks on mobile (continue-setup CTA below the message) so the
+          primary action gets a 44px-tall, full-width tap target. */}
       {setupStep !== null && (
-        <div className="flex items-center justify-between gap-3 border-b border-border bg-brand/10 px-6 py-3">
+        <div className="flex flex-col gap-3 border-b border-border bg-brand/10 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-6">
           <div className="flex items-start gap-2">
             <Sparkles
               className="mt-0.5 h-4 w-4 shrink-0 text-brand"
@@ -116,6 +121,7 @@ export function QuickStartPanel({ firstBox }: QuickStartPanelProps) {
             variant="brand"
             size="sm"
             render={<Link href="/welcome/setup" />}
+            className="h-11 w-full sm:h-auto sm:w-auto"
           >
             Continue setup
             <ArrowRight className="h-3 w-3" aria-hidden="true" />
@@ -123,9 +129,18 @@ export function QuickStartPanel({ firstBox }: QuickStartPanelProps) {
         </div>
       )}
 
-      <ul className="flex flex-col divide-y divide-border" role="list">
+      {/* Starter actions — single column on mobile (stacked rows divided
+          by hairlines), 3-column grid at md+ where horizontal real-estate
+          is cheap and we want the actions to read as parallel options. */}
+      <ul
+        className="flex flex-col divide-y divide-border md:grid md:grid-cols-3 md:divide-x md:divide-y-0"
+        role="list"
+      >
         {STARTER_ACTIONS.map(({ icon: Icon, iconClassName, title, description }) => (
-          <li key={title} className="flex items-start gap-3 px-6 py-4">
+          <li
+            key={title}
+            className="flex items-start gap-3 px-4 py-4 sm:px-6"
+          >
             <Icon
               className={`mt-0.5 h-4 w-4 shrink-0 ${iconClassName}`}
               aria-hidden="true"

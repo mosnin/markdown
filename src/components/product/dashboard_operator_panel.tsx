@@ -85,13 +85,14 @@ export function DashboardOperatorPanel({
   return (
     <section
       aria-label="Workspace operator composer"
-      className="rounded-xl border border-border bg-card p-4 sm:p-5"
+      className="rounded-lg border border-border bg-card p-4 sm:p-5"
     >
       <Textarea
         value={prompt}
         onChange={(e) => setPrompt(e.target.value)}
         placeholder="Ask Poggle to organize, find, or build…"
-        className="min-h-32 resize-none border-0 bg-transparent p-0 text-[15px] leading-relaxed shadow-none focus-visible:ring-0 focus-visible:border-0"
+        // Tighter min-height on mobile (don't waste vertical), full height on sm+.
+        className="min-h-24 sm:min-h-32 resize-none border-0 bg-transparent p-0 text-[15px] leading-relaxed shadow-none focus-visible:ring-0 focus-visible:border-0"
         onKeyDown={(e) => {
           // Cmd/Ctrl+Enter to submit — matches every other composer in the app.
           if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
@@ -103,7 +104,16 @@ export function DashboardOperatorPanel({
         aria-label="Ask Poggle"
       />
 
-      <div className="mt-4 flex flex-wrap items-center gap-2">
+      {/* Quick prompts — horizontally-scrollable snap row on mobile, wraps to
+          a flex-wrap grid at md+. The negative margin + matching padding lets
+          chips bleed to the edge on small screens so the rightmost ones hint
+          at horizontal overflow. */}
+      <div
+        className={
+          "mt-4 -mx-1 flex snap-x gap-2 overflow-x-auto px-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden " +
+          "md:mx-0 md:flex-wrap md:items-center md:overflow-visible md:px-0"
+        }
+      >
         {QUICK_PROMPTS.map((chip) => (
           <Tooltip key={chip.label}>
             <TooltipTrigger
@@ -114,6 +124,9 @@ export function DashboardOperatorPanel({
                   type="button"
                   onClick={() => setPrompt(chip.prompt)}
                   disabled={isPending}
+                  // 44px tap target on mobile — matches shell guidance — and
+                  // snaps into view as the user drags through suggestions.
+                  className="h-11 shrink-0 snap-start md:h-8 md:shrink"
                 />
               }
             >
@@ -124,11 +137,15 @@ export function DashboardOperatorPanel({
         ))}
       </div>
 
-      <div className="mt-4 flex items-center justify-between gap-3">
+      {/* Run row — stacks on mobile (full-width Run), inlines at sm+. The
+          "Saved prompts" link is secondary; on mobile it sits below the
+          primary action so the brand-yellow Run anchors the composer. */}
+      <div className="mt-4 flex flex-col-reverse gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
         <Button
           variant="ghost"
           size="lg"
           render={<Link href="/app/workspace_operator/prompts" />}
+          className="h-11 w-full justify-center sm:w-auto sm:justify-start"
         >
           Saved prompts
           <ArrowRight aria-hidden="true" />
@@ -140,6 +157,7 @@ export function DashboardOperatorPanel({
           onClick={submit}
           disabled={!canRun}
           aria-label="Run operator"
+          className="h-11 w-full sm:w-auto"
         >
           {isPending ? (
             <>

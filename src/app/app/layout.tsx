@@ -14,6 +14,7 @@ import { ActivityBell } from "@/components/product/activity_bell";
 import { LegalStickyFooter } from "@/components/legal/legal_modal";
 import { CommandPaletteProviderLoader } from "@/components/product/command_palette_provider_loader";
 import { CommandPaletteTopbarPill } from "@/components/product/command_palette_topbar_pill";
+import { HotkeyProvider } from "@/components/product/hotkey_provider";
 import { ToastProvider } from "@/components/product/toast_provider";
 
 /**
@@ -97,10 +98,16 @@ export default async function AppLayout({
 
       {/* Main content column — flex column filling remaining width */}
       <div className="flex flex-1 flex-col overflow-hidden min-w-0">
-        {/* ── Top bar ────────────────────────────────────────────────────────── */}
-        <header className="flex h-12 shrink-0 items-center gap-3 border-b border-border bg-background px-3 md:px-4">
+        {/* ── Top bar ──────────────────────────────────────────────────────────
+            Mobile-first: pinned to the top of the column via `sticky top-0`
+            so the hamburger + workspace name remain reachable while the
+            page scrolls underneath. Single line, 48px tall (≤56px per
+            mobile spec). On md+ the bar still occupies the same first
+            row of the flex column — `sticky` is a no-op there because
+            the column itself doesn't scroll. */}
+        <header className="sticky top-0 z-30 flex h-12 shrink-0 items-center gap-3 border-b border-border bg-background px-3 md:px-4">
           {/* Mobile: hamburger + workspace name */}
-          <div className="flex items-center gap-2 md:hidden">
+          <div className="flex min-w-0 items-center gap-2 md:hidden">
             <MobileShellSidebar
               userEmail={userEmail}
               workspaceName={workspaceName}
@@ -114,20 +121,16 @@ export default async function AppLayout({
             </span>
           </div>
 
-          {/* Mobile: icon-only command-palette trigger pushed to the right */}
-          <div className="ml-auto md:hidden">
-            <CommandPaletteTopbarPill variant="icon" />
-          </div>
-
           {/* Desktop: breadcrumb area (left, intrinsic width) */}
           <div className="hidden md:flex md:items-center md:min-w-0 md:shrink">
             <AppBreadcrumbs />
           </div>
 
-          {/* Desktop: command-palette pill — flex-1 centered between
-              breadcrumbs and toolbar so it reads as the obvious entry
-              point to anywhere in the app. */}
-          <div className="hidden md:flex md:flex-1 md:items-center md:justify-center md:px-4">
+          {/* Command-palette pill — hidden on phones (<sm); the menu
+              drawer's "Search" row is the mobile entry point so the
+              topbar stays single-line and the workspace name has room
+              to breathe at 375px. */}
+          <div className="ml-auto hidden sm:flex sm:flex-1 sm:items-center sm:justify-center sm:px-4">
             <CommandPaletteTopbarPill variant="pill" />
           </div>
 
@@ -168,6 +171,12 @@ export default async function AppLayout({
 
       {/* Global Cmd/Ctrl+K command palette — renders a portal dialog */}
       <CommandPaletteProviderLoader />
+
+      {/* Global keyboard chord runtime + cheatsheet Sheet (Move 1, Half A).
+          Listens for `g h`, `c n`, `?`, etc. on `window` and dispatches the
+          right router push or opens the cheatsheet. Single mount so every
+          /app route inherits the bindings without re-registering. */}
+      <HotkeyProvider />
     </div>
     </ToastProvider>
   );

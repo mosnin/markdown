@@ -88,13 +88,17 @@ export function NoteStub({
         )}
       </div>
 
-      {/* Excerpt */}
+      {/* Excerpt — 2 lines at 375px, 3 at sm+ where there's room. */}
       {excerpt && (
-        <p className="line-clamp-2 text-xs text-muted-foreground">{excerpt}</p>
+        <p className="line-clamp-2 text-xs text-muted-foreground sm:line-clamp-3">
+          {excerpt}
+        </p>
       )}
 
-      {/* Footer */}
-      <div className="flex items-center gap-3">
+      {/* Footer — wraps onto a second line on narrow widths so the
+          updated-at timestamp never gets pushed off-screen by a long
+          tag row. Tags also wrap inside their inner container. */}
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
         {updatedAt && (
           <div className="flex items-center gap-1 text-xs text-muted-foreground/70">
             <Clock className="h-3 w-3" />
@@ -102,9 +106,9 @@ export function NoteStub({
           </div>
         )}
         {tags.length > 0 && (
-          <div className="flex items-center gap-1">
-            <Tag className="h-3 w-3 text-muted-foreground/60" />
-            <div className="flex gap-1">
+          <div className="flex min-w-0 items-center gap-1">
+            <Tag className="h-3 w-3 shrink-0 text-muted-foreground/60" />
+            <div className="flex flex-wrap gap-1">
               {tags.slice(0, 3).map((tag) => (
                 <Badge
                   key={tag}
