@@ -13,6 +13,7 @@ import { getNoteById } from "@/server/repositories/note_repository";
 import { EntityChip } from "@/components/product/entity_chip";
 import type { EntityChipType } from "@/components/product/entity_chip";
 import { EntityMergeDialog } from "@/components/product/entity_merge_dialog";
+import { PageHeader } from "@/components/product/page_header";
 
 export default async function EntityPage({ params }: { params: Promise<{ entity_id: string }> }) {
   const { entity_id } = await params;

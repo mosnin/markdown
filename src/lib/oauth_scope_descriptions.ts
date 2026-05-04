@@ -50,7 +50,7 @@ export interface ScopeDescription {
   /** Whether the scope can result in any mutation (direct or proposed). */
   writeCapable: boolean;
   /** shadcn/ui Badge variant name. */
-  badgeVariant: "success" | "warning" | "error" | "info";
+  badgeVariant: "success" | "warning" | "destructive" | "info";
 }
 
 export const SCOPE_DESCRIPTIONS: Record<OAuthCapabilityScope, ScopeDescription> = {
@@ -102,7 +102,7 @@ export const SCOPE_DESCRIPTIONS: Record<OAuthCapabilityScope, ScopeDescription> 
     group: "generate",
     tier: "generate",
     writeCapable: true,
-    badgeVariant: "error",
+    badgeVariant: "destructive",
   },
   "context:branch": {
     scope: "context:branch",
@@ -148,7 +148,7 @@ export function describeScope(
   group: ScopeGroup | "narrow";
   tier: ScopeRiskTier | "narrow";
   writeCapable: boolean;
-  badgeVariant: "success" | "warning" | "error" | "info";
+  badgeVariant: "success" | "warning" | "destructive" | "info";
 } {
   if (isCapabilityScope(scope)) {
     const desc = SCOPE_DESCRIPTIONS[scope];

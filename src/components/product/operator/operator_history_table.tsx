@@ -458,10 +458,10 @@ function StatusBadge({
 }) {
   // Map status → badge variant — keeps the visual language consistent
   // with the panel's status pills.
-  let variant: "default" | "success" | "warning" | "error" | "secondary" | "info" =
+  let variant: "default" | "success" | "warning" | "destructive" | "secondary" | "info" =
     "secondary";
   if (status === "completed") variant = "success";
-  else if (status === "failed") variant = "error";
+  else if (status === "failed") variant = "destructive";
   else if (status === "cancelled") variant = "warning";
   else if (status === "executing" || status === "planning") variant = "info";
   else if (status === "awaiting_approval") variant = "warning";
