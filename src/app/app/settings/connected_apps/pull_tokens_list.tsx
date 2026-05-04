@@ -77,13 +77,12 @@ export function PullTokensList({
   }, []);
 
   // Snapshot "now" once per refresh cycle so the bucket boundary
-  // doesn't drift mid-render. Refreshed when `rows` change (i.e. the
-  // server list comes back) — the user can also click the parent
-  // "OAuth apps" tab and back to force a re-render.
-  const nowRef = useRef<number>(Date.now());
-  // Refresh the snapshot when the server list refreshes.
+  // doesn't drift mid-render. Initialised lazily via useState so the
+  // impure `Date.now()` call doesn't run during render. Refreshed
+  // when `rows` change (i.e. the server list comes back).
+  const [nowSnapshot, setNowSnapshot] = useState<number>(() => Date.now());
   useEffect(() => {
-    nowRef.current = Date.now();
+    setNowSnapshot(Date.now());
   }, [rows]);
 
   // Apply optimistic revokes on top of the server list, then split.
@@ -93,14 +92,13 @@ export function PullTokensList({
         ? { ...r, revokedAt: optimisticRevokes[r.id] }
         : r
     );
-    const ts = nowRef.current;
     const isActive = (r: PullTokenRow) =>
-      !r.revokedAt && new Date(r.expiresAt).getTime() > ts;
+      !r.revokedAt && new Date(r.expiresAt).getTime() > nowSnapshot;
     return {
       activeRows: m.filter(isActive),
       inactiveRows: m.filter((r) => !isActive(r)),
     };
-  }, [rows, optimisticRevokes]);
+  }, [rows, optimisticRevokes, nowSnapshot]);
 
   useEffect(() => {
     onActiveCountChange?.(activeRows.length);
@@ -170,7 +168,11 @@ export function PullTokensList({
             <ul className="flex list-none flex-col gap-2">
               {activeRows.map((r) => (
                 <li key={r.id}>
-                  <PullTokenRowCard row={r} onRevoke={() => onRevoke(r)} />
+                  <PullTokenRowCard
+                    row={r}
+                    now={nowSnapshot}
+                    onRevoke={() => onRevoke(r)}
+                  />
                 </li>
               ))}
             </ul>
