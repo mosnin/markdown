@@ -182,6 +182,54 @@ export function auditBundleRead(
   return write(supabase, workspaceId, actorId, "note", noteId, "bundle.read", metadata);
 }
 
+/**
+ * Pull-token redemption — fired by the `/p/n/[token]` route on every
+ * successful bundle delivery (read or write proposal). Recorded as a
+ * user-actor event because the issuing user is the authority that
+ * minted the token.
+ */
+export function auditBundlePulled(
+  supabase: SupabaseClient,
+  workspaceId: string,
+  userId: string,
+  noteId: string,
+  metadata: {
+    token_id: string | null;
+    object_type: string;
+    object_id: string;
+    user_agent: string | null;
+    mode: "read" | "write";
+  }
+): Promise<void> {
+  return write(supabase, workspaceId, userId, "note", noteId, "bundle.pulled", metadata);
+}
+
+/**
+ * Failed pull-token redemption — fired when a request hits the route
+ * with a token that's expired, revoked, unknown, or has hit
+ * max_redemptions. We don't always know the issuing user; in that case
+ * a synthetic "system" actor is used via writeConnection.
+ */
+export function auditBundlePulledInvalid(
+  supabase: SupabaseClient,
+  workspaceId: string | null,
+  metadata: {
+    token_prefix: string | null;
+    user_agent: string | null;
+    reason: string;
+  }
+): Promise<void> {
+  return writeConnection(
+    supabase,
+    workspaceId ?? "00000000-0000-0000-0000-000000000000",
+    "pull_token",
+    "pull_token",
+    "pull_token",
+    "bundle.pulled_invalid",
+    metadata
+  );
+}
+
 /** Bundle assembled and read by an external connection (actor_type = 'connection'). */
 export function auditBundleReadByConnection(
   supabase: SupabaseClient,
