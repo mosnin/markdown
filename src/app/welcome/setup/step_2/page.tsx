@@ -1,6 +1,12 @@
 "use client";
 
-import { type FormEvent, useEffect, useState, useTransition } from "react";
+import {
+  type ChangeEvent,
+  type FormEvent,
+  useEffect,
+  useState,
+  useTransition,
+} from "react";
 import { useRouter } from "next/navigation";
 import { ArrowRight, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -163,7 +169,9 @@ export default function StepTwoPage() {
               <Input
                 id="setup-note-title"
                 value={title}
-                onChange={(e) => setTitle(e.target.value)}
+                onChange={(e: ChangeEvent<HTMLInputElement>) =>
+                  setTitle(e.target.value)
+                }
                 placeholder="Give the note a clear title"
                 autoComplete="off"
                 disabled={pending}
@@ -179,7 +187,9 @@ export default function StepTwoPage() {
               <Textarea
                 id="setup-note-body"
                 value={body}
-                onChange={(e) => setBody(e.target.value)}
+                onChange={(e: ChangeEvent<HTMLTextAreaElement>) =>
+                  setBody(e.target.value)
+                }
                 rows={14}
                 className="font-mono text-xs leading-relaxed"
                 placeholder="Markdown is supported. Anything goes."
