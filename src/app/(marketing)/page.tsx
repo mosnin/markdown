@@ -12,6 +12,7 @@ import {
   Package,
 } from "lucide-react";
 import { HeroSection } from "@/components/marketing/hero";
+import { LiveAgentDemo } from "@/components/marketing/live_agent_demo";
 import * as PricingCard from "@/components/ui/pricing-card";
 import { Button } from "@/components/ui/button";
 import {
@@ -169,6 +170,22 @@ export default async function HomePage() {
     <div className="min-h-screen bg-background">
       {/* ── Hero ──────────────────────────────────────────────────────────────── */}
       <HeroSection />
+
+      {/* ── Try it (live agent demo) ─────────────────────────────────────────── */}
+      <section className="border-t border-border bg-muted/30 px-6 py-24">
+        <div className="mx-auto max-w-3xl">
+          <div className="mb-10 max-w-2xl">
+            <p className="text-overline text-brand">Try it</p>
+            <h2 className="mt-3 text-4xl font-semibold tracking-tight text-foreground sm:text-5xl">
+              See how Poggle answers, before you sign up.
+            </h2>
+            <p className="mt-4 text-base leading-relaxed text-muted-foreground">
+              A real agent run against synthetic data. Your turn in 30 seconds.
+            </p>
+          </div>
+          <LiveAgentDemo />
+        </div>
+      </section>
 
       {/* ── Organize ──────────────────────────────────────────────────────────── */}
       <section className="border-t border-border px-6 py-24">
