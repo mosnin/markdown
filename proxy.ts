@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { refreshSession } from "@/lib/supabase/proxy";
+import { observeRouteLatency } from "@/lib/perf/instrumentation";
 
 // ─── Nonce-based Content Security Policy ─────────────────────────────────────
 //
@@ -68,6 +69,13 @@ function buildCsp(nonce: string): string {
 export default async function proxy(
   request: NextRequest,
 ): Promise<NextResponse> {
+  // Stamp the start so we can record route-class latency at the bottom of
+  // this function. We measure the whole proxy duration (which includes
+  // the Supabase session refresh) rather than just request-bytes-in to
+  // request-bytes-out — this is the closest proxy of TTFB available
+  // without an end-to-end span. See `src/lib/perf/instrumentation.ts`.
+  const perfStart = Date.now();
+
   const nonce = Buffer.from(crypto.randomUUID()).toString("base64");
   const csp = buildCsp(nonce);
 
@@ -82,6 +90,16 @@ export default async function proxy(
 
   // Set CSP on the outgoing response so browsers enforce the policy.
   response.headers.set("Content-Security-Policy", csp);
+
+  // Record route-class latency. PII-free — we pass only the pathname,
+  // and `observeRouteLatency` strips it down to a route-class label
+  // before anything is buffered. Fire-and-forget; never block the
+  // response on telemetry.
+  try {
+    observeRouteLatency(request.nextUrl.pathname, Date.now() - perfStart);
+  } catch {
+    // Telemetry must never fail a request.
+  }
 
   return response;
 }

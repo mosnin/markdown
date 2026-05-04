@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { Activity, ExternalLink } from "lucide-react";
+import { Activity, AlertTriangle, ExternalLink, Inbox } from "lucide-react";
 
 import { requireAuthenticatedUser } from "@/server/auth/require_authenticated_user";
 import { canAdmin } from "@/server/auth/require_role";
@@ -14,6 +14,10 @@ import {
   getPerfTelemetrySnapshot,
   type RouteClassObservation,
 } from "@/server/services/perf_telemetry_service";
+import {
+  listUnresolvedPerfAlerts,
+  type PerfAlertRow,
+} from "@/server/services/perf_alert_query_service";
 
 import { PageHeader } from "@/components/product/page_header";
 import {
@@ -29,6 +33,8 @@ import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
 
+import { resolvePerfAlertFormAction } from "./actions";
+
 /**
  * Live performance dashboard — admin-only.
  *
@@ -37,9 +43,10 @@ import { cn } from "@/lib/utils";
  * class, the bundle-size table, the background-worker SLA card, and a
  * "How budgets work" explainer linking to the canonical doc.
  *
- * The numeric source today is the stub in `perf_telemetry_service.ts`.
- * See the comment block in that file for the production telemetry
- * plumbing plan.
+ * Numbers are read from `perf_route_observations` and
+ * `perf_bundle_snapshots` (migration `20260504000001_perf_telemetry.sql`).
+ * The page renders even when those tables are empty — the empty-state
+ * card explains that telemetry will appear within 24 h of first traffic.
  */
 export default async function AdminPerformancePage() {
   const ctx = await requireAuthenticatedUser();
@@ -48,7 +55,10 @@ export default async function AdminPerformancePage() {
     redirect("/app");
   }
 
-  const snapshot = await getPerfTelemetrySnapshot();
+  const [snapshot, alerts] = await Promise.all([
+    getPerfTelemetrySnapshot(),
+    listUnresolvedPerfAlerts(),
+  ]);
 
   const generatedAtLabel = new Intl.DateTimeFormat("en-US", {
     dateStyle: "medium",
@@ -77,13 +87,20 @@ export default async function AdminPerformancePage() {
             <span className="font-mono tabular-nums">{generatedAtLabel} UTC</span>.
           </p>
 
+          {/* ── Active alerts ──────────────────────────────────────── */}
+          <ActiveAlertsCard alerts={alerts} />
+
+          {/* ── Empty state when no telemetry has arrived ──────────── */}
+          {!snapshot.hasData ? <EmptyTelemetryCard /> : null}
+
           {/* ── Route-class table with sparklines ───────────────────── */}
           <Card>
             <CardHeader>
               <CardTitle>Route-class latency</CardTitle>
               <CardDescription>
-                Primary-metric p50 / p95 / p99 against the documented budget. Green is at
-                or under budget, amber is up to 20% over, red is a CI-blocking regression.
+                Primary-metric p50 / p95 / p99 against the documented budget over the
+                last 24 h. Green is at or under budget, amber is up to 20% over, red is
+                a CI-blocking regression.
               </CardDescription>
             </CardHeader>
             <Separator />
@@ -116,7 +133,8 @@ export default async function AdminPerformancePage() {
               <CardHeader>
                 <CardTitle>Bundle sizes</CardTitle>
                 <CardDescription>
-                  Current chunk sizes against the soft / hard cap from the doc.
+                  Latest chunk sizes from the most recent CI run, against the soft /
+                  hard cap from the doc.
                 </CardDescription>
               </CardHeader>
               <Separator />
@@ -170,6 +188,7 @@ export default async function AdminPerformancePage() {
                 <CardTitle>Background workers</CardTitle>
                 <CardDescription>
                   Class H — embedding, diff, webhook delivery, retention, KG extraction.
+                  Trailing 24 h.
                 </CardDescription>
               </CardHeader>
               <Separator />
@@ -232,13 +251,20 @@ export default async function AdminPerformancePage() {
                 regression line; CI blocks merge.
               </p>
               <p>
-                Numbers above are stubbed today. The production feed will compose Sentry
-                tracing (server spans), Vercel Analytics (client web vitals), and the
-                internal worker-runs table (Class H) — see the comment block in{" "}
+                Latency numbers are computed from{" "}
                 <code className="font-mono text-xs text-foreground">
-                  src/server/services/perf_telemetry_service.ts
-                </code>
-                .
+                  perf_route_observations
+                </code>{" "}
+                (sampled at 1% in production, 100% in dev) over the last 24 h. Bundle
+                numbers come from{" "}
+                <code className="font-mono text-xs text-foreground">
+                  perf_bundle_snapshots
+                </code>{" "}
+                — populated by{" "}
+                <code className="font-mono text-xs text-foreground">
+                  scripts/bench/check_bundle.ts --persist
+                </code>{" "}
+                in CI.
               </p>
               <div>
                 <Button
@@ -265,6 +291,105 @@ export default async function AdminPerformancePage() {
 }
 
 // ─── Sub-components ─────────────────────────────────────────────────────────
+
+function ActiveAlertsCard({ alerts }: { alerts: PerfAlertRow[] }) {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Active alerts</CardTitle>
+        <CardDescription>
+          Route-class p95 regressions raised over the last hour. Resolve a row once
+          the underlying issue has been investigated; the alerter will not re-fire
+          for the same class within 6 h.
+        </CardDescription>
+      </CardHeader>
+      <Separator />
+      <CardContent className={cn("px-0", alerts.length === 0 ? "py-6" : "py-0")}>
+        {alerts.length === 0 ? (
+          <div className="flex items-start gap-3 px-5">
+            <Inbox className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+            <div className="text-sm text-muted-foreground">
+              No active alerts. All route classes are within budget over the last hour.
+            </div>
+          </div>
+        ) : (
+          <ul className="divide-y divide-border">
+            {alerts.map((alert) => (
+              <li
+                key={alert.id}
+                className="flex items-start justify-between gap-4 px-5 py-3"
+              >
+                <div className="flex min-w-0 flex-1 items-start gap-3">
+                  <AlertTriangle
+                    className="mt-0.5 size-4 shrink-0 text-destructive"
+                    aria-hidden="true"
+                  />
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="inline-flex h-5 w-5 items-center justify-center rounded-md border border-border text-[10px] font-semibold text-muted-foreground">
+                        {alert.routeClass}
+                      </span>
+                      <span className="text-sm font-medium text-foreground">
+                        {routeClassBudgets[alert.routeClass].label}
+                      </span>
+                      <span className="font-mono text-xs tabular-nums text-destructive">
+                        p95 {formatMs(alert.observedP95Ms)}
+                      </span>
+                      <span className="font-mono text-xs tabular-nums text-muted-foreground">
+                        / {formatMs(alert.budgetP95Ms)}
+                      </span>
+                    </div>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Raised {formatRelative(alert.raisedAt)} —{" "}
+                      <span className="font-mono">{alert.reason}</span>
+                    </p>
+                  </div>
+                </div>
+                <form action={resolvePerfAlertFormAction} className="shrink-0">
+                  <input type="hidden" name="alertId" value={alert.id} />
+                  <Button type="submit" variant="outline" size="sm">
+                    Mark resolved
+                  </Button>
+                </form>
+              </li>
+            ))}
+          </ul>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function EmptyTelemetryCard() {
+  return (
+    <Card>
+      <CardContent className="flex items-start gap-3 px-5 py-6">
+        <Activity className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+        <div className="space-y-1">
+          <p className="text-sm font-medium text-foreground">No telemetry yet</p>
+          <p className="text-sm text-muted-foreground">
+            Telemetry will appear within 24 h of first traffic. The dashboard renders
+            zeroes for any class without samples — that&apos;s expected on a fresh
+            environment.
+          </p>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+/** "5 min ago" / "2 h ago" — relative format for alert raised-at. */
+function formatRelative(iso: string): string {
+  const ms = Date.now() - new Date(iso).getTime();
+  if (ms < 0) return "just now";
+  const mins = Math.round(ms / 60000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins} min ago`;
+  const hours = Math.round(mins / 60);
+  if (hours < 24) return `${hours} h ago`;
+  const days = Math.round(hours / 24);
+  return `${days} d ago`;
+}
 
 function RouteClassRow({ row }: { row: RouteClassObservation }) {
   const budget = routeClassBudgets[row.id].latency;

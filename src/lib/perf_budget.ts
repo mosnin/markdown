@@ -261,3 +261,60 @@ export function classifyBundle(
   if (observedKb <= cap.hard) return "warn";
   return "fail";
 }
+
+/**
+ * Classify a request pathname into a route class (A–H).
+ *
+ * This is the ONE place that knows the route → class mapping, so the
+ * dashboard, the CI gate, the instrumentation hook and the alert service
+ * never disagree.
+ *
+ * Intentionally PII-free: only the pathname is inspected, never query
+ * params or user ids. Unknown paths default to 'C' (app shell) so they
+ * still count toward a budget — silently dropping samples is worse than
+ * miscounting one class.
+ */
+export function classifyRoute(pathname: string): RouteClassId {
+  // Strip query / fragment if a caller forgot to.
+  const path = pathname.split(/[?#]/, 1)[0] ?? pathname;
+
+  // API / MCP — must come before /app/** so /api/v1/notes doesn't fall
+  // into one of the app classes.
+  if (path.startsWith("/api/v1") || path.startsWith("/api/mcp")) return "G";
+
+  // Auth surfaces — sign-in, OAuth, password reset, capture intake,
+  // share landing, welcome, invite acceptance.
+  if (
+    /^\/(sign_in|reset-password|oauth|capture|share|welcome|invite|u\b)/.test(
+      path,
+    )
+  ) {
+    return "B";
+  }
+
+  // App detail pages — segments that include an entity id after the type.
+  // We treat anything with an extra path segment after `/app/<type>/`
+  // as a detail page. Order matters: detail before list.
+  if (
+    /^\/app\/(notes|files|agents|boxes|skills|folders|runs|workflows|branches|proposals)\/[^/]+/.test(
+      path,
+    )
+  ) {
+    return "E";
+  }
+
+  // App list pages — /app/<type> with no further segment.
+  if (
+    /^\/app\/(skills|agents|workflows|branches|proposals|audit|activity|insights|notes|files|boxes|folders|runs)$/.test(
+      path,
+    )
+  ) {
+    return "D";
+  }
+
+  // App shell — /app and /app/admin/*.
+  if (path === "/app" || path.startsWith("/app")) return "C";
+
+  // Marketing — everything else (root, /pricing, /docs, marketing pages).
+  return "A";
+}

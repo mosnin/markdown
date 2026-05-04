@@ -4,61 +4,18 @@
  * Returns the current observed p50/p95/p99 numbers per route class plus the
  * latest 7-day trend per class plus the most recent bundle measurements.
  *
- * --------------------------------------------------------------------------
- * Production telemetry plumbing (not yet wired)
- * --------------------------------------------------------------------------
+ * Source of truth: the `perf_route_observations` and `perf_bundle_snapshots`
+ * tables (migration `20260504000001_perf_telemetry.sql`). The dashboard
+ * trailing-window is fixed at 24 h to match the doc's measurement
+ * methodology. The 7-day trend sparkline is rendered from a per-day p95
+ * computed off the same table.
  *
- * Today this is a deterministic stub so the admin dashboard renders
- * meaningful numbers in dev and on staging. The real implementation will
- * compose three sources:
+ * Failure-mode contract: this service NEVER throws. If a query fails
+ * (network blip, missing service-role key on a preview branch, brand-new
+ * empty tables) we return zeroed observations and the dashboard renders
+ * the empty-state nudge. Admins see a page, never a stack trace.
  *
- *   1. **Sentry tracing API** (`https://sentry.io/api/0/.../events-stats/`)
- *      — primary source for server-render TTFB, server-action latency,
- *      and span-level p50/p95/p99 across a rolling window. We tag every
- *      span with `route_class` (one of A–H) at instrumentation time
- *      (`src/instrumentation.ts`); the server query is a single
- *      `groupBy=route_class` aggregation.
- *
- *   2. **Vercel Analytics export** — primary source for client web vitals
- *      (LCP, INP, CLS) and TTFB at the edge. The `pages` payload arrives
- *      as a per-route JSON; we map each route to its class via
- *      `routeClassFor(pathname)` (helper to be added next to this file).
- *
- *   3. **Internal worker metrics table** (`worker_runs` in Supabase, fed
- *      by Inngest step instrumentation) — for Class H jobs. The dashboard
- *      reads p95 duration per `worker_kind` over the last 24h.
- *
- * Production shape we will return (kept identical to the stub so the UI
- * doesn't change when we flip the feed):
- *
- *   ```ts
- *   interface PerfTelemetrySnapshot {
- *     generatedAt: string;          // ISO timestamp, "as of"
- *     window: "24h" | "7d" | "28d"; // which rolling window was used
- *     routeClasses: RouteClassObservation[];
- *     workers: WorkerObservation[];
- *     bundles: BundleObservation[];
- *   }
- *   ```
- *
- * Caching: production calls Sentry / Vercel Analytics on a 5-minute swr
- * via `unstable_cache` keyed on workspace_id (no PII in the response, so
- * this is shareable across admins).
- *
- * Failure mode: if any source 5xxs, the service returns the last good
- * snapshot from `perf_snapshots` (a small table we'll create in
- * `supabase/migrations`) with a `stale: true` flag the dashboard surfaces
- * inline. The admin sees data, not a broken page.
- *
- * Open questions to flag in the rollout PR:
- *
- *   - Do we keep the Sentry SDK pull (server-side) or push to Sentry's
- *     Stats API (client-side)? Server-side is simpler but rate-limited.
- *   - Should the dashboard window be configurable (24h / 7d / 28d) or
- *     fixed at 7d to match the doc's measurement methodology?
- *   - Do we surface per-route observations (not just per-class) in a
- *     drill-down? Worth its own ticket — the dashboard stays per-class
- *     in v1 to keep the page legible.
+ * No PII is read or returned — observations are already route-class only.
  */
 
 import {
@@ -68,6 +25,7 @@ import {
   workerSlas,
   globalBundleBudgets,
 } from "@/lib/perf_budget";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 /** A single percentile observation for a route class. */
 export interface RouteClassObservation {
@@ -79,9 +37,12 @@ export interface RouteClassObservation {
   observedMs: { p50: number; p95: number; p99: number };
   /**
    * Last 7 daily p95 samples (oldest first), for the sparkline. Numbers
-   * are in milliseconds. Production: rolling-window query against Sentry.
+   * are in milliseconds. Days with no data are zeroed — the sparkline
+   * renders a flat line, which is the right signal in the empty case.
    */
   trendP95Ms: number[];
+  /** Number of underlying samples in the trailing-24h window. */
+  sampleCount: number;
 }
 
 /** Per-worker observation — Class H break-down. */
@@ -107,6 +68,8 @@ export interface PerfTelemetrySnapshot {
   generatedAt: string;
   /** Rolling window the numbers reflect. */
   window: "24h" | "7d" | "28d";
+  /** True when no observation rows exist yet for the window. */
+  hasData: boolean;
   /** Per route-class observations, in canonical order A → H. */
   routeClasses: RouteClassObservation[];
   /** Class-H workers, one row per named job. */
@@ -115,130 +78,272 @@ export interface PerfTelemetrySnapshot {
   bundles: BundleObservation[];
 }
 
+interface RouteObservationRow {
+  recorded_at: string;
+  route_class: string;
+  p50_ms: number;
+  p95_ms: number;
+  p99_ms: number;
+  sample_count: number;
+}
+
+interface BundleSnapshotRow {
+  recorded_at: string;
+  bundle_id: string;
+  gzipped_kb: number;
+  raw_kb: number;
+}
+
+const TWENTY_FOUR_HOURS_MS = 24 * 60 * 60 * 1000;
+const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
+
 /**
- * Stub: returns plausible numbers within ±20% of the documented budgets so
- * the admin dashboard is meaningful before the real telemetry is wired.
- * Numbers are deterministic per route class — re-renders don't churn the
- * UI mid-debug.
+ * Build the snapshot. Always resolves; the only async work is the two
+ * Supabase reads, both of which are caught and degraded to empty data.
  */
 export async function getPerfTelemetrySnapshot(): Promise<PerfTelemetrySnapshot> {
-  // Use a fixed reference timestamp (start of day, UTC) so server / client
-  // renders match for the dev case. Production will use Date.now().
-  const now = new Date();
-  const generatedAt = now.toISOString();
+  const generatedAt = new Date().toISOString();
 
-  const routeClasses: RouteClassObservation[] = routeClassList.map((cls) => {
-    // Per-class deterministic offsets, ranging from -15% to +18% of the
-    // budget at p95. Spread across green / amber territory; one class
-    // (E — detail pages) intentionally lands amber so the colour coding
-    // is visible in the demo.
-    const offsetByClass: Record<RouteClassId, number> = {
-      A: -0.10, // 10% under budget
-      B: -0.05, // 5% under
-      C: +0.04, // 4% over (still ok — within budget? no, it's over but <20%)
-      D: -0.08,
-      E: +0.16, // 16% over — amber/warn
-      F: -0.12,
-      G: -0.03,
-      H: +0.06,
-    };
-    const offset = offsetByClass[cls.id];
-    const p95 = round(cls.latency.p95 * (1 + offset));
-    const p50 = round(cls.latency.p50 * (1 + offset * 0.7));
-    const p99 = round(cls.latency.p99 * (1 + offset * 0.5));
+  const [routeRows, bundleRows] = await Promise.all([
+    readRouteObservations(),
+    readBundleSnapshots(),
+  ]);
 
-    return {
-      id: cls.id,
-      label: cls.label,
-      primaryMetric: cls.primaryMetric,
-      observedMs: { p50, p95, p99 },
-      trendP95Ms: makeTrend(cls.latency.p95, offset, cls.id),
-    };
-  });
+  const routeClasses = buildRouteClassObservations(routeRows);
+  const workers = buildWorkerObservations(routeRows);
+  const bundles = buildBundleObservations(bundleRows);
 
-  const workers: WorkerObservation[] = workerSlas.map((w, i) => {
-    // Mostly green with one amber (webhook delivery) so the SLA card
-    // colour-codes meaningfully.
-    const offsets = [-0.10, -0.05, +0.18, -0.20, +0.02];
-    const offset = offsets[i % offsets.length];
-    return {
-      id: w.id,
-      label: w.label,
-      observedP95Ms: round(w.p95Ms * (1 + offset)),
-      budgetP95Ms: w.p95Ms,
-      sla: w.sla,
-    };
-  });
-
-  const bundles: BundleObservation[] = globalBundleBudgets.map((b, i) => {
-    const offsets = [-0.05, +0.08, +0.30, -0.10]; // shell warn-band, per-page hard-fail
-    const offset = offsets[i % offsets.length];
-    const observedKb = Math.max(1, round(b.cap.soft * (1 + offset)));
-    return {
-      id: b.id,
-      label: b.label,
-      observedKb,
-      softCapKb: b.cap.soft,
-      hardCapKb: b.cap.hard,
-    };
-  });
+  const hasData = routeRows.length > 0;
 
   return {
     generatedAt,
-    window: "7d",
+    window: "24h",
+    hasData,
     routeClasses,
     workers,
     bundles,
   };
 }
 
+// ─── Reads ─────────────────────────────────────────────────────────────────
+
+async function readRouteObservations(): Promise<RouteObservationRow[]> {
+  if (!process.env.SUPABASE_SERVICE_ROLE_KEY) return [];
+  try {
+    const admin = createAdminClient();
+    const sevenDaysAgo = new Date(Date.now() - SEVEN_DAYS_MS).toISOString();
+    const { data, error } = await admin
+      .from("perf_route_observations")
+      .select("recorded_at, route_class, p50_ms, p95_ms, p99_ms, sample_count")
+      .gte("recorded_at", sevenDaysAgo)
+      .order("recorded_at", { ascending: false })
+      .limit(5_000);
+    if (error) return [];
+    return (data ?? []) as RouteObservationRow[];
+  } catch {
+    return [];
+  }
+}
+
+async function readBundleSnapshots(): Promise<BundleSnapshotRow[]> {
+  if (!process.env.SUPABASE_SERVICE_ROLE_KEY) return [];
+  try {
+    const admin = createAdminClient();
+    const { data, error } = await admin
+      .from("perf_bundle_snapshots")
+      .select("recorded_at, bundle_id, gzipped_kb, raw_kb")
+      .order("recorded_at", { ascending: false })
+      .limit(500);
+    if (error) return [];
+    return (data ?? []) as BundleSnapshotRow[];
+  } catch {
+    return [];
+  }
+}
+
+// ─── Builders ──────────────────────────────────────────────────────────────
+
+function buildRouteClassObservations(
+  rows: RouteObservationRow[],
+): RouteClassObservation[] {
+  const cutoff24h = Date.now() - TWENTY_FOUR_HOURS_MS;
+  const last24h = rows.filter(
+    (r) => new Date(r.recorded_at).getTime() >= cutoff24h,
+  );
+
+  return routeClassList.map((cls) => {
+    const classRows24h = last24h.filter((r) => r.route_class === cls.id);
+    const observedMs = aggregateRows(classRows24h);
+    const sampleCount = classRows24h.reduce(
+      (acc, r) => acc + r.sample_count,
+      0,
+    );
+    const trendP95Ms = buildSevenDayTrend(rows, cls.id);
+    return {
+      id: cls.id,
+      label: cls.label,
+      primaryMetric: cls.primaryMetric,
+      observedMs,
+      trendP95Ms,
+      sampleCount,
+    };
+  });
+}
+
 /**
- * Build a 7-point trend that wiggles around the budget. Deterministic per
- * class so the sparkline doesn't churn between requests. The latest point
- * matches the observation's p95 exactly so the dashboard's "latest dot"
- * lines up with the table number.
+ * Aggregate a set of pre-aggregated observations into one p50/p95/p99.
+ *
+ * Each row carries a precomputed percentile *over its own buffer*. A
+ * mathematically clean roll-up would re-derive percentiles from raw
+ * samples, but we don't store them (PII / volume). The pragmatic
+ * approach: weight by sample_count when averaging p50/p99 (rough
+ * indicator), and take the MAX p95 across rows in the window — that's the
+ * "worst recent minute", which is what the dashboard / alert layer
+ * actually needs to fire on. See `docs/performance_budget_v1.md`.
  */
-function makeTrend(
-  budgetMs: number,
-  finalOffset: number,
+function aggregateRows(rows: RouteObservationRow[]): {
+  p50: number;
+  p95: number;
+  p99: number;
+} {
+  if (rows.length === 0) return { p50: 0, p95: 0, p99: 0 };
+  let totalSamples = 0;
+  let weightedP50 = 0;
+  let weightedP99 = 0;
+  let maxP95 = 0;
+  for (const row of rows) {
+    totalSamples += row.sample_count;
+    weightedP50 += row.p50_ms * row.sample_count;
+    weightedP99 += row.p99_ms * row.sample_count;
+    if (row.p95_ms > maxP95) maxP95 = row.p95_ms;
+  }
+  return {
+    p50: totalSamples > 0 ? Math.round(weightedP50 / totalSamples) : 0,
+    p95: Math.round(maxP95),
+    p99: totalSamples > 0 ? Math.round(weightedP99 / totalSamples) : 0,
+  };
+}
+
+/**
+ * Build a 7-point per-day p95 series for the sparkline. Bucket boundaries
+ * are end-of-day UTC; the most recent bucket is "today". Days with no
+ * data yield 0 (rendered as a flat line).
+ */
+function buildSevenDayTrend(
+  rows: RouteObservationRow[],
   classId: RouteClassId,
 ): number[] {
-  // Seven days, oldest first. Use a small per-class phase offset to make
-  // each sparkline visually distinct.
-  const phase = classId.charCodeAt(0); // 65..72
-  const points: number[] = [];
-  for (let day = 0; day < 7; day++) {
-    if (day === 6) {
-      // Final point matches the observed p95 exactly.
-      points.push(round(budgetMs * (1 + finalOffset)));
-      continue;
+  const out: number[] = [];
+  const now = Date.now();
+  for (let day = 6; day >= 0; day--) {
+    const bucketStart = now - (day + 1) * 24 * 60 * 60 * 1000;
+    const bucketEnd = now - day * 24 * 60 * 60 * 1000;
+    let maxP95 = 0;
+    for (const row of rows) {
+      if (row.route_class !== classId) continue;
+      const t = new Date(row.recorded_at).getTime();
+      if (t < bucketStart || t >= bucketEnd) continue;
+      if (row.p95_ms > maxP95) maxP95 = row.p95_ms;
     }
-    // Wiggle ±10% around budget with a class-specific phase.
-    const wiggle = Math.sin((day + phase) * 0.9) * 0.1;
-    points.push(round(budgetMs * (1 + wiggle)));
+    out.push(Math.round(maxP95));
   }
-  return points;
-}
-
-function round(n: number): number {
-  // Round to 1 ms for legibility — sub-ms precision is noise at this layer.
-  return Math.round(n);
+  return out;
 }
 
 /**
- * Production-only helper sketch (commented intentionally — not used today).
+ * Build worker observations. Class H workers don't yet have per-worker
+ * instrumentation in this milestone — they roll up under the H route
+ * class for now. We surface the H aggregate against each named worker's
+ * documented SLA so the SLA card stays populated, and flag a TODO in
+ * the comment for the next milestone (named-job spans).
  *
- * ```ts
- * function routeClassFor(pathname: string): RouteClassId {
- *   if (pathname.startsWith("/(marketing)") || pathname === "/") return "A";
- *   if (/^\/(sign_in|reset-password|oauth|capture|share|welcome|invite)/.test(pathname)) return "B";
- *   if (pathname === "/app") return "C";
- *   if (/^\/app\/(skills|agents|workflows|branches|proposals|audit|activity|insights)$/.test(pathname)) return "D";
- *   if (/^\/app\/(notes|files|agents|boxes|skills|folders|runs)\//.test(pathname)) return "E";
- *   if (pathname.startsWith("/api/v1")) return "G";
- *   // Server-action class (F) is per-span, not per-route — see
- *   // `instrumentation.ts` for span tagging.
- *   return "C"; // default to shell so we never miscount
- * }
- * ```
+ * If we have NO Class-H data at all (pre-traffic), each row reports 0 ms,
+ * which the dashboard renders as the empty-state.
  */
+function buildWorkerObservations(
+  rows: RouteObservationRow[],
+): WorkerObservation[] {
+  const cutoff = Date.now() - TWENTY_FOUR_HOURS_MS;
+  const hRows = rows.filter(
+    (r) =>
+      r.route_class === "H" &&
+      new Date(r.recorded_at).getTime() >= cutoff,
+  );
+  const aggregate = aggregateRows(hRows);
+  return workerSlas.map((w) => ({
+    id: w.id,
+    label: w.label,
+    observedP95Ms: aggregate.p95,
+    budgetP95Ms: w.p95Ms,
+    sla: w.sla,
+  }));
+}
+
+function buildBundleObservations(
+  rows: BundleSnapshotRow[],
+): BundleObservation[] {
+  // Take the most recent row per bundle id. The query already orders by
+  // recorded_at desc so the first-seen entry per id is the latest.
+  const latest = new Map<string, BundleSnapshotRow>();
+  for (const row of rows) {
+    if (!latest.has(row.bundle_id)) latest.set(row.bundle_id, row);
+  }
+  return globalBundleBudgets.map((b) => {
+    const row = latest.get(b.id);
+    return {
+      id: b.id,
+      label: b.label,
+      observedKb: row ? Math.round(row.gzipped_kb) : 0,
+      softCapKb: b.cap.soft,
+      hardCapKb: b.cap.hard,
+    };
+  });
+}
+
+// ─── Internal: rollup for the alert service ────────────────────────────────
+
+/**
+ * Compute the trailing p95 per route class over the last `windowMs`
+ * milliseconds. Used by `perf_alert_service.ts`. Returns an entry per
+ * class even if there are no samples (p95 = 0, sampleCount = 0).
+ */
+export async function computeTrailingP95ByClass(
+  windowMs: number,
+): Promise<
+  Array<{
+    routeClass: RouteClassId;
+    p95Ms: number;
+    sampleCount: number;
+  }>
+> {
+  if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    return routeClassList.map((c) => ({
+      routeClass: c.id,
+      p95Ms: 0,
+      sampleCount: 0,
+    }));
+  }
+  let rows: RouteObservationRow[] = [];
+  try {
+    const admin = createAdminClient();
+    const cutoff = new Date(Date.now() - windowMs).toISOString();
+    const { data, error } = await admin
+      .from("perf_route_observations")
+      .select("recorded_at, route_class, p50_ms, p95_ms, p99_ms, sample_count")
+      .gte("recorded_at", cutoff)
+      .limit(5_000);
+    if (error) {
+      rows = [];
+    } else {
+      rows = (data ?? []) as RouteObservationRow[];
+    }
+  } catch {
+    rows = [];
+  }
+  return routeClassList.map((cls) => {
+    const subset = rows.filter((r) => r.route_class === cls.id);
+    const agg = aggregateRows(subset);
+    const sampleCount = subset.reduce((acc, r) => acc + r.sample_count, 0);
+    return { routeClass: cls.id, p95Ms: agg.p95, sampleCount };
+  });
+}

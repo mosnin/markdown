@@ -11,6 +11,7 @@ import { executeNoteTrigger } from "./execute_note_trigger";
 import { executeScheduledTriggers } from "./execute_scheduled_triggers";
 import { clearStuckTriggerRuns } from "./clear_stuck_trigger_runs";
 import { executeWorkflow } from "./execute_workflow";
+import { checkPerfAlertsFunction } from "./check_perf_alerts";
 
 export const allFunctions = [
   executeManualTrigger,
@@ -18,6 +19,7 @@ export const allFunctions = [
   executeScheduledTriggers,
   clearStuckTriggerRuns,
   executeWorkflow,
+  checkPerfAlertsFunction,
 ];
 
 export {
@@ -26,5 +28,6 @@ export {
   executeScheduledTriggers,
   clearStuckTriggerRuns,
   executeWorkflow,
+  checkPerfAlertsFunction,
 };
 export { runAgentExecution } from "./run_agent_execution";
