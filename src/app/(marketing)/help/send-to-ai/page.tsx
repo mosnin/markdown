@@ -22,16 +22,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-
-// NOTE: Source-of-truth strings for the popover (Agent B) live in
-// `src/lib/send_to_ai_format.ts`. That file does not exist on this branch —
-// it lands with the popover slice. Once merged, replace the inline copy below
-// with imports from that module so the popover and this walkthrough never
-// drift. Keys we expect to consume:
-//   - MCP_CONFIG_JSON       (string, full config block)
-//   - PULL_LINK_TEMPLATE    (string, e.g. https://poggle.app/p/n/{token}.md)
-//   - BASH_ONELINER         (string)
-//   - TTL_PRESETS           (array, see TTL table below)
+import { formatBashOneLiner } from "@/lib/send_to_ai_format";
 
 export const metadata: Metadata = {
   title: "Send context to your AI — Poggle",
@@ -39,7 +30,11 @@ export const metadata: Metadata = {
     "Bring your Poggle notes into Claude, Cursor, ChatGPT, or any AI tool in one paste. Three transports — MCP, pull links, and a bash one-liner — with audit and revoke baked in.",
 };
 
-// ─── Anchored MCP config (static; replace with import once available) ─────────
+// MCP_CONFIG_JSON, PULL_LINK_EXAMPLE, and TTL_PRESETS are documentation-
+// specific to this walkthrough and intentionally stay inline. The bash
+// one-liner reuses `formatBashOneLiner` from the popover's shared module
+// (src/lib/send_to_ai_format.ts) so the example string can never drift
+// from what the popover actually emits.
 const MCP_CONFIG_JSON = `{
   "mcpServers": {
     "poggle": {
@@ -54,7 +49,7 @@ const MCP_CONFIG_JSON = `{
 
 const PULL_LINK_EXAMPLE = "https://poggle.app/p/n/{token}.md";
 
-const BASH_ONELINER = `curl -s 'https://poggle.app/p/n/{token}.md' | head -c 50000`;
+const BASH_ONELINER = formatBashOneLiner(PULL_LINK_EXAMPLE);
 
 // ─── Small primitives kept local to keep the page self-contained ─────────────
 
