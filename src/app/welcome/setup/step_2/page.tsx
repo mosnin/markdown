@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { type FormEvent, useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowRight, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -106,7 +106,7 @@ export default function StepTwoPage() {
     setBody(seed.body);
   }, [router]);
 
-  function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+  function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!boxId) return;
     startTransition(async () => {

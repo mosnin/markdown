@@ -1,4 +1,4 @@
-import { Suspense } from "react";
+import { Suspense, type ComponentProps } from "react";
 import Link from "next/link";
 import { requireAuthenticatedUser } from "@/server/auth/require_authenticated_user";
 import { createClient } from "@/lib/supabase/server";
@@ -320,7 +320,7 @@ export default async function AppHomePage() {
  * pill mapping used in `operator_history_table.tsx`.
  */
 function RunStatusBadge({ status }: { status: string }) {
-  const variant: React.ComponentProps<typeof Badge>["variant"] =
+  const variant: ComponentProps<typeof Badge>["variant"] =
     status === "completed"
       ? "success"
       : status === "failed"
