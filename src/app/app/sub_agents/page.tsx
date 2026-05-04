@@ -1,5 +1,8 @@
+// Soft-archived behind the `advanced_surfaces` feature flag (Move 4):
+// default-tier users are redirected to /app; enterprise admins keep access.
 import { Workflow } from "lucide-react";
 import { requireAuthenticatedUser } from "@/server/auth/require_authenticated_user";
+import { requireAdvancedSurfaces } from "@/server/auth/require_role";
 import { createClient } from "@/lib/supabase/server";
 import { listRecentInvocationsByWorkspace } from "@/server/repositories/subagent_invocation_repository";
 import { PageHeader } from "@/components/product/page_header";
@@ -7,6 +10,7 @@ import { SubagentInvocationRow } from "@/components/product/subagent_invocation_
 
 export default async function SubagentsPage() {
   const ctx = await requireAuthenticatedUser();
+  await requireAdvancedSurfaces(ctx);
   const supabase = await createClient();
   const invocations = await listRecentInvocationsByWorkspace(
     supabase,

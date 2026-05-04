@@ -1,8 +1,10 @@
+// Soft-archived behind the `advanced_surfaces` feature flag (Move 4):
+// default-tier users are redirected to /app; enterprise admins keep access.
 import { requireAuthenticatedUser } from "@/server/auth/require_authenticated_user";
 import { createClient } from "@/lib/supabase/server";
 import { listDraftBranches, listBranchHeads } from "@/server/services/branch_service";
 import { getRetentionPolicy } from "@/server/services/branch_lifecycle_service";
-import { canAdmin } from "@/server/auth/require_role";
+import { canAdmin, requireAdvancedSurfaces } from "@/server/auth/require_role";
 import { PageHeader } from "@/components/product/page_header";
 import { BranchesClient } from "./branches_client";
 import { PurgeOverlaysPanel } from "./purge_overlays_panel";
@@ -21,6 +23,7 @@ import { PurgeOverlaysPanel } from "./purge_overlays_panel";
  */
 export default async function BranchesPage() {
   const ctx = await requireAuthenticatedUser();
+  await requireAdvancedSurfaces(ctx);
   const supabase = await createClient();
   const branches = await listDraftBranches(supabase, ctx.workspace.id);
 

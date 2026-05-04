@@ -1,7 +1,10 @@
+// Soft-archived behind the `advanced_surfaces` feature flag (Move 4):
+// default-tier users are redirected to /app; enterprise admins keep access.
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft, GitFork } from "lucide-react";
 import { requireAuthenticatedUser } from "@/server/auth/require_authenticated_user";
+import { requireAdvancedSurfaces } from "@/server/auth/require_role";
 import { createClient } from "@/lib/supabase/server";
 import { getWorkflowById } from "@/server/repositories/workflow_repository";
 import { listWorkflowRunsForWorkflow } from "@/server/repositories/workflow_run_repository";
@@ -15,6 +18,7 @@ interface RunsPageProps {
 export default async function WorkflowRunsPage({ params }: RunsPageProps) {
   const { workflow_id } = await params;
   const ctx = await requireAuthenticatedUser();
+  await requireAdvancedSurfaces(ctx);
   const supabase = await createClient();
 
   const workflow = await getWorkflowById(supabase, workflow_id);

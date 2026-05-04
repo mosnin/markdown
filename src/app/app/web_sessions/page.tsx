@@ -1,5 +1,8 @@
+// Soft-archived behind the `advanced_surfaces` feature flag (Move 4):
+// default-tier users are redirected to /app; enterprise admins keep access.
 import { Globe } from "lucide-react";
 import { requireAuthenticatedUser } from "@/server/auth/require_authenticated_user";
+import { requireAdvancedSurfaces } from "@/server/auth/require_role";
 import { createClient } from "@/lib/supabase/server";
 import { listSessionsByWorkspace } from "@/server/repositories/browsing_session_repository";
 import { PageHeader } from "@/components/product/page_header";
@@ -8,6 +11,7 @@ import { WebBudgetCard } from "@/components/product/shell/web_budget_card";
 
 export default async function WebSessionsPage() {
   const ctx = await requireAuthenticatedUser();
+  await requireAdvancedSurfaces(ctx);
   const supabase = await createClient();
   const sessions = await listSessionsByWorkspace(supabase, ctx.workspace.id, {
     limit: 50,

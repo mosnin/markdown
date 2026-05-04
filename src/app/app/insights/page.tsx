@@ -1,5 +1,8 @@
+// Soft-archived behind the `advanced_surfaces` feature flag (Move 4):
+// default-tier users are redirected to /app; enterprise admins keep access.
 import { Lightbulb } from "lucide-react";
 import { requireAuthenticatedUser } from "@/server/auth/require_authenticated_user";
+import { requireAdvancedSurfaces } from "@/server/auth/require_role";
 import { createClient } from "@/lib/supabase/server";
 import { listInsightsByWorkspace } from "@/server/repositories/insight_repository";
 import { InsightsList } from "@/components/product/insights_list";
@@ -9,6 +12,7 @@ import { EmptyState } from "@/components/product/empty_state";
 
 export default async function InsightsPage() {
   const ctx = await requireAuthenticatedUser();
+  await requireAdvancedSurfaces(ctx);
   const supabase = await createClient();
   const insights = await listInsightsByWorkspace(supabase, ctx.workspace.id, { limit: 500 });
 

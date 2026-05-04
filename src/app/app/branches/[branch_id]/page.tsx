@@ -1,7 +1,10 @@
+// Soft-archived behind the `advanced_surfaces` feature flag (Move 4):
+// default-tier users are redirected to /app; enterprise admins keep access.
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { requireAuthenticatedUser } from "@/server/auth/require_authenticated_user";
+import { requireAdvancedSurfaces } from "@/server/auth/require_role";
 import { createClient } from "@/lib/supabase/server";
 import { getDraftBranch } from "@/server/services/branch_service";
 import { getBranchDiff } from "@/server/services/branch_diff_service";
@@ -29,6 +32,7 @@ export default async function BranchDetailPage({
 }) {
   const { branch_id } = await params;
   const ctx = await requireAuthenticatedUser();
+  await requireAdvancedSurfaces(ctx);
   const supabase = await createClient();
 
   const branch = await getDraftBranch(supabase, branch_id);

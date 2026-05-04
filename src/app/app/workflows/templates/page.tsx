@@ -1,6 +1,9 @@
+// Soft-archived behind the `advanced_surfaces` feature flag (Move 4):
+// default-tier users are redirected to /app; enterprise admins keep access.
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { requireAuthenticatedUser } from "@/server/auth/require_authenticated_user";
+import { requireAdvancedSurfaces } from "@/server/auth/require_role";
 import { PageHeader } from "@/components/product/page_header";
 import { WorkflowTemplateCard } from "@/components/product/workflows/workflow_template_card";
 import { WORKFLOW_TEMPLATES } from "@/server/domain/workflow_templates";
@@ -9,7 +12,8 @@ export default async function WorkflowTemplatesPage() {
   // Require auth up front — the "Use template" action also requires it, but
   // guarding the page keeps unauthenticated users from ever reaching the
   // gallery.
-  await requireAuthenticatedUser();
+  const ctx = await requireAuthenticatedUser();
+  await requireAdvancedSurfaces(ctx);
 
   return (
     <div className="flex h-full flex-col overflow-hidden">

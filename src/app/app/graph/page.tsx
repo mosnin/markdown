@@ -1,5 +1,8 @@
+// Soft-archived behind the `advanced_surfaces` feature flag (Move 4):
+// default-tier users are redirected to /app; enterprise admins keep access.
 import { Network } from "lucide-react";
 import { requireAuthenticatedUser } from "@/server/auth/require_authenticated_user";
+import { requireAdvancedSurfaces } from "@/server/auth/require_role";
 import { createClient } from "@/lib/supabase/server";
 import { listEntitiesByWorkspace } from "@/server/repositories/entity_repository";
 import { listEdgesByWorkspace } from "@/server/repositories/entity_edge_repository";
@@ -10,6 +13,7 @@ import { EmptyState } from "@/components/product/empty_state";
 
 export default async function GraphPage() {
   const ctx = await requireAuthenticatedUser();
+  await requireAdvancedSurfaces(ctx);
   const supabase = await createClient();
   const [entities, edges] = await Promise.all([
     listEntitiesByWorkspace(supabase, ctx.workspace.id, { limit: 500 }),

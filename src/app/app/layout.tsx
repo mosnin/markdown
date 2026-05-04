@@ -13,6 +13,7 @@ import { OperatorPanelTrigger } from "@/components/product/operator/operator_pan
 import { ActivityBell } from "@/components/product/activity_bell";
 import { LegalStickyFooter } from "@/components/legal/legal_modal";
 import { CommandPaletteProviderLoader } from "@/components/product/command_palette_provider_loader";
+import { CommandPaletteTopbarPill } from "@/components/product/command_palette_topbar_pill";
 import { ToastProvider } from "@/components/product/toast_provider";
 
 /**
@@ -113,14 +114,26 @@ export default async function AppLayout({
             </span>
           </div>
 
-          {/* Desktop: breadcrumb area (left) */}
-          <div className="hidden md:flex md:flex-1 md:items-center md:min-w-0">
+          {/* Mobile: icon-only command-palette trigger pushed to the right */}
+          <div className="ml-auto md:hidden">
+            <CommandPaletteTopbarPill variant="icon" />
+          </div>
+
+          {/* Desktop: breadcrumb area (left, intrinsic width) */}
+          <div className="hidden md:flex md:items-center md:min-w-0 md:shrink">
             <AppBreadcrumbs />
+          </div>
+
+          {/* Desktop: command-palette pill — flex-1 centered between
+              breadcrumbs and toolbar so it reads as the obvious entry
+              point to anywhere in the app. */}
+          <div className="hidden md:flex md:flex-1 md:items-center md:justify-center md:px-4">
+            <CommandPaletteTopbarPill variant="pill" />
           </div>
 
           {/* Desktop: quiet operator/activity/docs/theme toolbar (right) */}
           <div
-            className="hidden md:flex md:items-center md:gap-1 md:ml-auto"
+            className="hidden md:flex md:items-center md:gap-1"
             role="toolbar"
             aria-label="User actions"
           >

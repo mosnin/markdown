@@ -15,6 +15,7 @@ import {
   Puzzle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { hasAdvancedSurfaces } from "@/lib/feature_flags";
 import { type Box as BoxType } from "@/server/domain/types/box";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -167,16 +168,28 @@ export function AppSidebar({
   const pathname = usePathname();
 
   // Flat nav — no collapsible groups. Ordered by frequency of use.
+  // "Workflows" and "Branches" are secondary surfaces gated behind the
+  // `advanced_surfaces` feature flag; default-tier users see only Skills /
+  // Agents in the Build section.
+  const advancedOn = hasAdvancedSurfaces();
+
   const buildNav = [
     { label: "Skills", href: "/app/skills", icon: Puzzle },
     { label: "Agents", href: "/app/agents", icon: Bot },
-    { label: "Workflows", href: "/app/workflows", icon: GitFork },
-    { label: "Branches", href: "/app/branches", icon: GitBranch },
+    ...(advancedOn
+      ? [
+          { label: "Workflows", href: "/app/workflows", icon: GitFork },
+          { label: "Branches", href: "/app/branches", icon: GitBranch },
+        ]
+      : []),
   ];
 
-  const exploreNav = [
-    { label: "Knowledge Graph", href: "/app/graph", icon: Network },
-  ];
+  // Knowledge Graph is the only Explore item today, so when the flag is
+  // off the entire Explore section disappears (per spec: render the
+  // overline only if the section has at least one visible item).
+  const exploreNav = advancedOn
+    ? [{ label: "Knowledge Graph", href: "/app/graph", icon: Network }]
+    : [];
 
   // Extract the current box and note IDs from the pathname
   const boxMatch = pathname.match(/\/app\/boxes\/([^/]+)/);
@@ -248,22 +261,26 @@ export function AppSidebar({
         </ul>
       </div>
 
-      {/* Explore — flat, no collapse */}
-      <div className="px-2 pt-2 pb-1">
-        <p className={SECTION_OVERLINE}>Explore</p>
-        <ul className="mt-0.5 flex flex-col gap-0.5 list-none">
-          {exploreNav.map((item) => (
-            <li key={item.href}>
-              <NavItem
-                href={item.href}
-                icon={item.icon}
-                label={item.label}
-                isActive={pathname === item.href || pathname.startsWith(item.href + "/")}
-              />
-            </li>
-          ))}
-        </ul>
-      </div>
+      {/* Explore — flat, no collapse. Section overline only renders when
+          the section has at least one visible item (Knowledge Graph is the
+          sole entry today and is gated by `advanced_surfaces`). */}
+      {exploreNav.length > 0 && (
+        <div className="px-2 pt-2 pb-1">
+          <p className={SECTION_OVERLINE}>Explore</p>
+          <ul className="mt-0.5 flex flex-col gap-0.5 list-none">
+            {exploreNav.map((item) => (
+              <li key={item.href}>
+                <NavItem
+                  href={item.href}
+                  icon={item.icon}
+                  label={item.label}
+                  isActive={pathname === item.href || pathname.startsWith(item.href + "/")}
+                />
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {/* Recent notes */}
       {recentNotes && recentNotes.length > 0 && (

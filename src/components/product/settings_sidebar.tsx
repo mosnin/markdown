@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
+  Activity,
   AppWindow,
   ArrowLeft,
   ArrowRightLeft,
@@ -110,6 +111,12 @@ const workspaceAdminNav = [
     label: "Semantic search",
     subLabel: "Reindex vector embeddings",
     icon: Sparkles,
+  },
+  {
+    href: "/app/admin/performance",
+    label: "Performance",
+    subLabel: "Live latency, bundles, worker SLAs",
+    icon: Activity,
   },
 ];
 

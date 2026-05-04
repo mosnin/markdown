@@ -1,4 +1,6 @@
+import { redirect } from "next/navigation";
 import { type WorkspaceRole } from "@/server/domain/types/workspace";
+import { hasAdvancedSurfaces } from "@/lib/feature_flags";
 import { requireAuthenticatedUser } from "./require_authenticated_user";
 
 /**
@@ -78,4 +80,49 @@ export async function requireAdminRoleResult(): Promise<
     };
   }
   return { ok: true, ctx };
+}
+
+/**
+ * Page-render guard for the soft-archived "advanced surfaces" tier.
+ *
+ * The default product tier exposes a focused ~30-page backbone (Notes,
+ * Boxes, Agents, Bundles, Search, Settings). Secondary surfaces — branches,
+ * workflows, the knowledge graph, the standalone operator history,
+ * analytics / audit / insights / usage — live behind the
+ * `NEXT_PUBLIC_FEATURE_ADVANCED_SURFACES` env flag.
+ *
+ * This guard redirects to `/app` when the flag is off, UNLESS the caller
+ * is a workspace admin (so enterprise-tier admins always retain access
+ * even when the public tier is collapsed). Admins remain unaffected so
+ * support / account-team workflows aren't broken by a flag flip.
+ *
+ * Usage — call at the very top of the page server component, AFTER
+ * resolving the auth context:
+ *
+ * @example
+ * ```ts
+ * export default async function Page() {
+ *   const ctx = await requireAuthenticatedUser();
+ *   await requireAdvancedSurfaces(ctx);
+ *   // ...
+ * }
+ * ```
+ *
+ * Reversible in one config flip — set the env var to `true` and every
+ * gated page is reachable again.
+ */
+export async function requireAdvancedSurfaces(
+  ctx?: Awaited<ReturnType<typeof requireAuthenticatedUser>>
+): Promise<void> {
+  if (hasAdvancedSurfaces()) return;
+
+  // Resolve the auth context lazily so callers that already have it can
+  // pass it in to skip the duplicate Supabase round trip.
+  const resolved = ctx ?? (await requireAuthenticatedUser());
+
+  // Enterprise-tier admins always retain access — flag is for the public
+  // tier collapse, not an authorization boundary.
+  if (canAdmin(resolved.workspace.role)) return;
+
+  redirect("/app");
 }

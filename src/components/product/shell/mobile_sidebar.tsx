@@ -16,6 +16,7 @@ import {
   X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { hasAdvancedSurfaces } from "@/lib/feature_flags";
 import { type Box as BoxType } from "@/server/domain/types/box";
 import {
   Sheet,
@@ -36,11 +37,17 @@ import { TreeSidebar } from "@/components/product/tree_sidebar";
  * the expandable box tree.
  */
 
-const primaryNav = [
+// Backbone nav — always visible to every user.
+const BACKBONE_NAV = [
   { label: "Home", href: "/app", icon: Home },
   { label: "AI Edits", href: "/app/proposals", icon: Inbox },
   { label: "Skills", href: "/app/skills", icon: Puzzle },
   { label: "Agents", href: "/app/agents", icon: Bot },
+];
+
+// Secondary nav — gated behind the `advanced_surfaces` feature flag so
+// default-tier users see only the backbone (mirrors AppSidebar).
+const ADVANCED_NAV = [
   { label: "Workflows", href: "/app/workflows", icon: GitFork },
   { label: "Branches", href: "/app/branches", icon: GitBranch },
   { label: "Graph", href: "/app/graph", icon: Network },
@@ -65,6 +72,10 @@ export function MobileSidebar({
 }: MobileSidebarProps) {
   const [open, setOpen] = useState(false);
   const pathname = usePathname();
+
+  const primaryNav = hasAdvancedSurfaces()
+    ? [...BACKBONE_NAV, ...ADVANCED_NAV]
+    : BACKBONE_NAV;
 
   const boxMatch = pathname.match(/\/app\/boxes\/([^/]+)/);
   const noteMatch = pathname.match(/\/app\/notes\/([^/]+)/);

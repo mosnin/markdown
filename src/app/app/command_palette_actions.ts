@@ -46,6 +46,30 @@ export interface PaletteEntity {
   entity_type: string;
 }
 
+export interface PaletteBox {
+  id: string;
+  name: string;
+  slug: string;
+}
+
+export interface PaletteAgent {
+  id: string;
+  name: string;
+  description: string | null;
+}
+
+export interface PaletteBranch {
+  id: string;
+  name: string;
+  status: string;
+}
+
+export interface PaletteWorkspace {
+  id: string;
+  name: string;
+  slug: string;
+}
+
 export type PaletteResult<T> =
   | { ok: true; data: T }
   | { ok: false; error: string };
@@ -209,6 +233,245 @@ export async function searchEntitiesForPaletteAction(
     return {
       ok: false,
       error: err instanceof Error ? err.message : "Failed to search entities",
+    };
+  }
+}
+
+/**
+ * List boxes in the active workspace, optionally narrowed by a name match.
+ *
+ * Powers the "Open box…" typeahead and the deep-link sub-actions. Excludes
+ * trashed and archived boxes so the picker shows only what the user can
+ * realistically land on.
+ */
+export async function listBoxesForPaletteAction(
+  query?: string
+): Promise<PaletteResult<PaletteBox[]>> {
+  try {
+    const ctx = await requireAuthenticatedUser();
+    const supabase = await createClient();
+
+    let builder = supabase
+      .from("boxes")
+      .select("id, name, slug, status")
+      .eq("workspace_id", ctx.workspace.id)
+      .neq("status", "trashed")
+      .neq("status", "archived");
+
+    const trimmed = query?.trim();
+    if (trimmed) {
+      builder = builder.ilike("name", `%${trimmed}%`);
+    }
+
+    const { data, error } = await builder
+      .order("name", { ascending: true })
+      .limit(20);
+
+    if (error) throw error;
+
+    const rows = (data ?? []) as Array<{
+      id: string;
+      name: string;
+      slug: string;
+    }>;
+
+    return {
+      ok: true,
+      data: rows.map((r) => ({ id: r.id, name: r.name, slug: r.slug })),
+    };
+  } catch (err) {
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : "Failed to load boxes",
+    };
+  }
+}
+
+/**
+ * Search notes by title across the active workspace. Only used when the
+ * user is typing — empty queries short-circuit to keep the recent-notes
+ * group as the default surface.
+ */
+export async function searchNotesForPaletteAction(
+  query: string,
+  limit = 10
+): Promise<PaletteResult<PaletteNote[]>> {
+  try {
+    const trimmed = query.trim();
+    if (!trimmed) return { ok: true, data: [] };
+
+    const ctx = await requireAuthenticatedUser();
+    const supabase = await createClient();
+
+    const safeLimit = Math.max(1, Math.min(25, Math.floor(limit)));
+
+    const { data, error } = await supabase
+      .from("notes")
+      .select("id, title, box_id, updated_at, boxes!inner(workspace_id)")
+      .eq("boxes.workspace_id", ctx.workspace.id)
+      .neq("status", "trashed")
+      .ilike("title", `%${trimmed}%`)
+      .order("updated_at", { ascending: false })
+      .limit(safeLimit);
+
+    if (error) throw error;
+
+    const rows = (data ?? []) as Array<{
+      id: string;
+      title: string;
+      box_id: string;
+      updated_at: string;
+    }>;
+
+    return {
+      ok: true,
+      data: rows.map((r) => ({
+        id: r.id,
+        title: r.title,
+        box_id: r.box_id,
+        updated_at: r.updated_at,
+      })),
+    };
+  } catch (err) {
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : "Failed to search notes",
+    };
+  }
+}
+
+/**
+ * List reusable agents in the active workspace, optionally narrowed by
+ * a name match. Powers the "Run agent on…" typeahead so the operator
+ * panel can be primed with the chosen agent.
+ */
+export async function listAgentsForPaletteAction(
+  query?: string
+): Promise<PaletteResult<PaletteAgent[]>> {
+  try {
+    const ctx = await requireAuthenticatedUser();
+    const supabase = await createClient();
+
+    let builder = supabase
+      .from("agents")
+      .select("id, name, description")
+      .eq("workspace_id", ctx.workspace.id)
+      .eq("is_reusable", true)
+      .neq("status", "trashed");
+
+    const trimmed = query?.trim();
+    if (trimmed) {
+      builder = builder.ilike("name", `%${trimmed}%`);
+    }
+
+    const { data, error } = await builder
+      .order("name", { ascending: true })
+      .limit(15);
+
+    if (error) throw error;
+
+    const rows = (data ?? []) as Array<{
+      id: string;
+      name: string;
+      description: string | null;
+    }>;
+
+    return {
+      ok: true,
+      data: rows.map((r) => ({
+        id: r.id,
+        name: r.name,
+        description: r.description,
+      })),
+    };
+  } catch (err) {
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : "Failed to load agents",
+    };
+  }
+}
+
+/**
+ * List active draft branches in the workspace. Used for the "Promote
+ * branch" typeahead when no branch is in the current context.
+ */
+export async function listBranchesForPaletteAction(
+  query?: string
+): Promise<PaletteResult<PaletteBranch[]>> {
+  try {
+    const ctx = await requireAuthenticatedUser();
+    const supabase = await createClient();
+
+    let builder = supabase
+      .from("draft_branches")
+      .select("id, name, status")
+      .eq("workspace_id", ctx.workspace.id)
+      .eq("status", "open");
+
+    const trimmed = query?.trim();
+    if (trimmed) {
+      builder = builder.ilike("name", `%${trimmed}%`);
+    }
+
+    const { data, error } = await builder
+      .order("created_at", { ascending: false })
+      .limit(15);
+
+    if (error) throw error;
+
+    const rows = (data ?? []) as Array<{
+      id: string;
+      name: string;
+      status: string;
+    }>;
+
+    return {
+      ok: true,
+      data: rows.map((r) => ({ id: r.id, name: r.name, status: r.status })),
+    };
+  } catch (err) {
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : "Failed to load branches",
+    };
+  }
+}
+
+/**
+ * List workspaces the current user owns so the palette can offer a
+ * "Switch workspace…" action without re-fetching from a parent layout.
+ */
+export async function listWorkspacesForPaletteAction(): Promise<
+  PaletteResult<PaletteWorkspace[]>
+> {
+  try {
+    const ctx = await requireAuthenticatedUser();
+    const supabase = await createClient();
+
+    const { data, error } = await supabase
+      .from("workspaces")
+      .select("id, name, slug, status")
+      .eq("owner_id", ctx.user.id)
+      .eq("status", "active")
+      .order("created_at", { ascending: true });
+
+    if (error) throw error;
+
+    const rows = (data ?? []) as Array<{
+      id: string;
+      name: string;
+      slug: string;
+    }>;
+
+    return {
+      ok: true,
+      data: rows.map((r) => ({ id: r.id, name: r.name, slug: r.slug })),
+    };
+  } catch (err) {
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : "Failed to load workspaces",
     };
   }
 }

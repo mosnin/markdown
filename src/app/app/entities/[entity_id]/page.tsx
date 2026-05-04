@@ -1,7 +1,10 @@
+// Soft-archived behind the `advanced_surfaces` feature flag (Move 4):
+// default-tier users are redirected to /app; enterprise admins keep access.
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft, FileText, Network } from "lucide-react";
 import { requireAuthenticatedUser } from "@/server/auth/require_authenticated_user";
+import { requireAdvancedSurfaces } from "@/server/auth/require_role";
 import { createClient } from "@/lib/supabase/server";
 import { getEntityById } from "@/server/repositories/entity_repository";
 import { listMentionsByEntity } from "@/server/repositories/entity_mention_repository";
@@ -14,6 +17,7 @@ import { EntityMergeDialog } from "@/components/product/entity_merge_dialog";
 export default async function EntityPage({ params }: { params: Promise<{ entity_id: string }> }) {
   const { entity_id } = await params;
   const ctx = await requireAuthenticatedUser();
+  await requireAdvancedSurfaces(ctx);
   const supabase = await createClient();
 
   const entity = await getEntityById(supabase, entity_id);

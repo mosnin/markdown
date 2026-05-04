@@ -1,5 +1,9 @@
+// Soft-archived behind the `advanced_surfaces` feature flag (Move 4):
+// only the standalone /workspace_operator history view is gated — nested
+// run / replay / live / prompts pages stay reachable so deep links survive.
 import { Button } from "@/components/ui/button";
 import { requireAuthenticatedUser } from "@/server/auth/require_authenticated_user";
+import { requireAdvancedSurfaces } from "@/server/auth/require_role";
 import { createClient } from "@/lib/supabase/server";
 import { listOperatorRuns } from "@/server/services/workspace_operator_runs_service";
 import { OperatorHistoryTable } from "@/components/product/operator/operator_history_table";
@@ -54,6 +58,7 @@ export default async function WorkspaceOperatorHistoryPage({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const ctx = await requireAuthenticatedUser();
+  await requireAdvancedSurfaces(ctx);
   const supabase = await createClient();
 
   const sp = await searchParams;
