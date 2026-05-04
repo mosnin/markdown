@@ -5,6 +5,16 @@ on:
     branches: [main, master]
   pull_request:
     branches: [main, master]
+    types: [opened, synchronize, reopened, ready_for_review]
+
+# Reusable stub env block — keep in sync with the build job below.
+# These placeholder values let `next build`, `next dev`, and the Move 5
+# visual / lhci / a11y suites run in CI without real Supabase secrets.
+env:
+  NEXT_PUBLIC_SUPABASE_URL: https://placeholder.supabase.co
+  NEXT_PUBLIC_SUPABASE_ANON_KEY: placeholder_anon_key
+  SUPABASE_SERVICE_ROLE_KEY: placeholder_service_role_key
+  NEXT_PUBLIC_APP_URL: https://placeholder.example.com
 
 jobs:
   ci:
@@ -37,9 +47,117 @@ jobs:
 
       - name: Build
         run: pnpm build
+
+  visual:
+    name: Visual regression
+    runs-on: ubuntu-latest
+    # Skip on draft PRs — visual baselines are expensive to recompute and
+    # tend to churn during work-in-progress branches. They run on
+    # `ready_for_review` and on pushes to main/master.
+    if: github.event_name == 'push' || github.event.pull_request.draft == false
+    needs: ci
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Playwright browsers
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Visual regression
+        run: pnpm test:visual
         env:
-          # Provide stub values so next build succeeds in CI without real Supabase
-          NEXT_PUBLIC_SUPABASE_URL: https://placeholder.supabase.co
-          NEXT_PUBLIC_SUPABASE_ANON_KEY: placeholder_anon_key
-          SUPABASE_SERVICE_ROLE_KEY: placeholder_service_role_key
-          NEXT_PUBLIC_APP_URL: https://placeholder.example.com
+          # When secrets aren't wired up yet, fall back to marketing-only.
+          SKIP_AUTH_VR: ${{ vars.SKIP_AUTH_VR || '0' }}
+
+      - name: Upload Playwright report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-visual-report
+          path: |
+            playwright-report
+            test-results
+          retention-days: 7
+
+  lighthouse:
+    name: Lighthouse CI
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' || github.event.pull_request.draft == false
+    needs: ci
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Lighthouse CI
+        run: pnpm test:lh
+
+      - name: Upload Lighthouse report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lighthouse-report
+          path: .lighthouseci
+          retention-days: 7
+
+  a11y:
+    name: Accessibility (axe)
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' || github.event.pull_request.draft == false
+    needs: ci
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Playwright browsers
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Accessibility scan
+        run: pnpm test:a11y
+        env:
+          SKIP_AUTH_VR: ${{ vars.SKIP_AUTH_VR || '0' }}
+
+      - name: Upload Playwright report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-a11y-report
+          path: |
+            playwright-report
+            test-results
+          retention-days: 7

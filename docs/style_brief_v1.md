@@ -138,3 +138,19 @@ tracking-wider font-semibold text-muted-foreground/70`.
 6. Mark each file you touched in your final summary.
 7. Keep diffs tight. Don't touch files outside your assigned slice unless
    strictly necessary; flag cross-cutting concerns in your summary instead.
+
+## CI gates
+
+The redesign is locked behind seven CI gates that must pass before merge:
+**typecheck**, **lint**, **unit tests**, **build**, **visual regression**,
+**Lighthouse**, and **accessibility (axe)**. The first four ship as the `ci`
+job in `.github/workflows/ci.yml`; the latter three run as parallel jobs
+(`visual`, `lighthouse`, `a11y`) that depend on `ci` and skip on draft PRs to
+save compute. Visual baselines live under `tests/visual/__screenshots__/` and
+are committed — to refresh them locally after an intentional UI change run
+`pnpm test:visual:update`, review the diff in `git status`, and commit the new
+PNGs alongside the code change. Lighthouse thresholds (`lighthouserc.json`)
+are performance ≥ 0.85, accessibility ≥ 0.95, best-practices ≥ 0.90, SEO
+≥ 0.95 on the marketing home and sign-in pages; axe asserts zero serious or
+critical WCAG 2.1 AA violations on the same routes plus the authenticated
+dashboard and admin performance page.
