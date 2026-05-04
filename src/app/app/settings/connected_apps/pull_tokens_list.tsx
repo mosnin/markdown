@@ -87,7 +87,7 @@ export function PullTokensList({
   }, [rows]);
 
   // Apply optimistic revokes on top of the server list, then split.
-  const { merged, activeRows, inactiveRows } = useMemo(() => {
+  const { activeRows, inactiveRows } = useMemo(() => {
     const m: PullTokenRow[] = (rows ?? []).map((r) =>
       optimisticRevokes[r.id]
         ? { ...r, revokedAt: optimisticRevokes[r.id] }
@@ -97,12 +97,10 @@ export function PullTokensList({
     const isActive = (r: PullTokenRow) =>
       !r.revokedAt && new Date(r.expiresAt).getTime() > ts;
     return {
-      merged: m,
       activeRows: m.filter(isActive),
       inactiveRows: m.filter((r) => !isActive(r)),
     };
   }, [rows, optimisticRevokes]);
-  void merged;
 
   useEffect(() => {
     onActiveCountChange?.(activeRows.length);

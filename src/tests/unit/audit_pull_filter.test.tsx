@@ -24,15 +24,21 @@ vi.mock("@/lib/supabase/server", () => ({
   createClient: vi.fn(() => Promise.resolve({})),
 }));
 
-const { fakeListWorkspaceAuditEvents } = vi.hoisted(() => ({
+const { fakeListWorkspaceAuditEvents } = vi.hoisted(() => {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  fakeListWorkspaceAuditEvents: vi.fn(async (..._args: any[]) => ({
+  const fn: (...args: any[]) => Promise<{
+    events: never[];
+    limit: number;
+    page: number;
+    total_fetched: number;
+  }> = async () => ({
     events: [],
     limit: 50,
     page: 1,
     total_fetched: 0,
-  })),
-}));
+  });
+  return { fakeListWorkspaceAuditEvents: vi.fn(fn) };
+});
 
 vi.mock("@/server/services/audit_view_service", async () => {
   const actual = await vi.importActual<
