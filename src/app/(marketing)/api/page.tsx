@@ -10,6 +10,7 @@ import {
   Cpu,
   Layers,
   Lock,
+  Link2,
 } from "lucide-react";
 import { PageHeroSection } from "@/components/marketing/hero";
 import { Button } from "@/components/ui/button";
@@ -114,6 +115,35 @@ export default function ApiPage() {
         description="The REST API is the canonical way to read and write. MCP is an adapter that lets AI agents use the same API natively."
         ctaPrimary={{ label: "Get API access", href: "/sign_in" }}
       />
+
+      {/* Pull links — for one-off context handoff */}
+      <section className="mx-auto w-full max-w-5xl px-6 pt-20">
+        <SectionHeading>Pull links — for one-off context handoff</SectionHeading>
+        <div className="grid grid-cols-1 gap-5 lg:grid-cols-[auto_1fr] lg:items-start">
+          <div className="flex h-9 w-9 items-center justify-center rounded-md border border-border bg-muted/40">
+            <Link2 className="h-4.5 w-4.5 text-muted-foreground" aria-hidden="true" />
+          </div>
+          <div className="max-w-2xl space-y-3 text-base leading-relaxed text-muted-foreground">
+            <p>
+              Not every model speaks MCP, and not every task is worth a full
+              integration. A pull link is a short, expiring URL that any AI
+              tool can fetch — paste it into Claude Web, ChatGPT, Gemini, or
+              the bash tool inside Claude Code, and the model reads the file
+              itself.
+            </p>
+            <p>
+              Tokens are hashed at rest, scoped to a single object, capped at
+              24 hours, and revocable instantly. Edits, when enabled, queue as
+              proposals for human approval — not direct writes.
+            </p>
+            <p>
+              <Link href="/help/send-to-ai" className="brand-underline">
+                Walk through Send to AI →
+              </Link>
+            </p>
+          </div>
+        </div>
+      </section>
 
       {/* REST API section */}
       <section className="mx-auto w-full max-w-5xl px-6 py-20">

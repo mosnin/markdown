@@ -44,6 +44,7 @@ export async function listAuditEventsByWorkspace(
     object_type,
     object_id,
     event_type,
+    event_types,
     actor_type,
     limit = 100,
     offset = 0,
@@ -51,6 +52,12 @@ export async function listAuditEventsByWorkspace(
     object_type?: string;
     object_id?: string;
     event_type?: string;
+    /**
+     * Match any one of the listed event types (`event_type IN (...)`).
+     * Mutually exclusive with `event_type`; if both are supplied
+     * the singular `event_type` wins.
+     */
+    event_types?: readonly string[];
     actor_type?: ActorType;
     limit?: number;
     offset?: number;
@@ -64,6 +71,8 @@ export async function listAuditEventsByWorkspace(
   if (object_type) query = query.eq("object_type", object_type);
   if (object_id) query = query.eq("object_id", object_id);
   if (event_type) query = query.eq("event_type", event_type);
+  else if (event_types && event_types.length > 0)
+    query = query.in("event_type", event_types as string[]);
   if (actor_type) query = query.eq("actor_type", actor_type);
 
   const { data, error } = await query

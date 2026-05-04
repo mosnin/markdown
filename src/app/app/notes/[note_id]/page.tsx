@@ -52,6 +52,7 @@ import { GeneratedNoteBanner } from "@/components/product/generated_note_banner"
 import { NoteAiReadinessBadge } from "@/components/product/notes/note_ai_readiness_badge";
 import { NoteMetadataChecklist } from "@/components/product/notes/note_metadata_checklist";
 import { NoteBundleExportButton } from "@/components/product/notes/note_bundle_export_button";
+import { SendToAiPopover } from "@/components/product/send_to_ai_popover";
 import { RetrievalPrioritySlider, ReadHintSelector } from "@/components/product/notes/note_retrieval_editor";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -765,6 +766,11 @@ export default async function NotePage({
             <SaveAsTemplateButton noteId={note_id} noteTitle={note.title} />
             <NoteImportButton noteId={note_id} noteTitle={note.title} />
             <NoteExportMenu noteId={note_id} noteTitle={note.title} />
+            <SendToAiPopover
+              objectType="note"
+              objectId={note.id}
+              objectName={note.title}
+            />
             <ShareNoteButton noteId={note.id} />
           </div>
         </div>

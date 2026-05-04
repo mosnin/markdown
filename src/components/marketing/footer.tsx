@@ -18,6 +18,7 @@ const LINKS = {
   Resources: [
     { href: "https://docs.poggle.app", label: "Documentation" },
     { href: "/api", label: "API & MCP" },
+    { href: "/help/send-to-ai", label: "Send to AI" },
     { href: "/portability", label: "Import & Export" },
     { href: "/help", label: "Help Center" },
   ],

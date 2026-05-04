@@ -1,12 +1,13 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { RefreshCw, Filter, User, Bot, ChevronDown } from "lucide-react";
+import { RefreshCw, Filter, User, Bot, ChevronDown, Link2 } from "lucide-react";
 import { Spinner } from "@/components/ui/spinner";
 import { cn } from "@/lib/utils";
 import { type AuditEvent } from "@/server/domain/types/audit_event";
 import { type ActorType } from "@/server/domain/constants/audit_constants";
 import { AUDIT_OBJECT_TYPES } from "@/server/services/audit_view_service";
+import { PULL_TOKEN_AUDIT_EVENT_TYPES } from "@/server/services/pull_token_service";
 import { fetchAuditEventsAction } from "@/app/app/audit/actions";
 
 /**
@@ -17,9 +18,28 @@ import { fetchAuditEventsAction } from "@/app/app/audit/actions";
  * pagination via "load more".
  */
 
+/**
+ * Extra filter overlay applied on top of the user-driven filters.
+ *
+ * Today the only callsite is the "Pull links" chip — it sets
+ * `eventTypes: PULL_TOKEN_AUDIT_EVENT_TYPES`. The shape is kept
+ * generic so additional chips (e.g. "Imports", "Web actions") can
+ * be added later without churning the prop API.
+ */
+export interface AuditPanelExtraFilter {
+  eventTypes?: readonly string[];
+}
+
 interface AuditPanelProps {
   initialEvents: AuditEvent[];
   workspaceId: string;
+  /**
+   * Optional pre-applied filter that the toolbar surfaces as a
+   * removable chip. When set, `initialEvents` are expected to have
+   * been fetched server-side with the same filter — we don't refetch
+   * on mount.
+   */
+  extraFilter?: AuditPanelExtraFilter;
 }
 
 const ACTOR_LABEL: Record<string, string> = {
@@ -53,7 +73,34 @@ const EVENT_LABEL: Record<string, string> = {
   "connection.rotated": "Token rotated",
   "note_link.created": "Link created",
   "note_link.deleted": "Link deleted",
+  "bundle.pulled": "Pull link redeemed",
+  "bundle.pulled_invalid": "Pull link invalid",
 };
+
+/**
+ * Extract a one-word UA label (e.g. "Claude", "curl", "Cursor") from a
+ * raw user-agent string for the per-row badge on pull-token events.
+ * Returns null when no UA can be identified — the badge is then
+ * suppressed entirely rather than rendered with a placeholder.
+ */
+function uaPrefixLabel(metadata: Record<string, unknown> | null | undefined): string | null {
+  if (!metadata || typeof metadata !== "object") return null;
+  const raw = (metadata as Record<string, unknown>).user_agent;
+  if (typeof raw !== "string") return null;
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+  // Take chars before the first "/", " ", or "(" — whichever comes first.
+  const match = /^([^\s/(]+)/.exec(trimmed);
+  if (!match) return null;
+  const word = match[1];
+  // 16 chars is plenty for "ClaudeDesktop", "Cursor-Code", etc.
+  return word.length > 16 ? `${word.slice(0, 16)}…` : word;
+}
+
+const PULL_LINK_EVENT_TYPES = [...PULL_TOKEN_AUDIT_EVENT_TYPES] as const;
+function isPullLinkEvent(eventType: string): boolean {
+  return (PULL_LINK_EVENT_TYPES as readonly string[]).includes(eventType);
+}
 
 function formatTimestamp(dateStr: string): string {
   const d = new Date(dateStr);
@@ -80,6 +127,9 @@ function eventTypeLabel(eventType: string): string {
 function EventRow({ event }: { event: AuditEvent }) {
   const [expanded, setExpanded] = useState(false);
   const hasPayload = event.metadata && Object.keys(event.metadata).length > 0;
+  const uaLabel = isPullLinkEvent(event.event_type)
+    ? uaPrefixLabel(event.metadata)
+    : null;
 
   return (
     <div className="border-b border-border last:border-0">
@@ -103,6 +153,19 @@ function EventRow({ event }: { event: AuditEvent }) {
               <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
                 {event.object_type}
               </span>
+              {uaLabel && (
+                <span
+                  data-testid="ua-badge"
+                  className="rounded-full border border-border bg-card px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground"
+                  title={
+                    typeof event.metadata?.user_agent === "string"
+                      ? event.metadata.user_agent
+                      : undefined
+                  }
+                >
+                  {uaLabel}
+                </span>
+              )}
             </div>
             <div className="mt-1 flex items-center gap-2 text-[11px] text-muted-foreground/70">
               <span>{formatTimestamp(event.created_at)}</span>
@@ -136,18 +199,41 @@ function EventRow({ event }: { event: AuditEvent }) {
   );
 }
 
-export function AuditPanel({ initialEvents, workspaceId }: AuditPanelProps) {
+export function AuditPanel({
+  initialEvents,
+  workspaceId,
+  extraFilter,
+}: AuditPanelProps) {
   const [events, setEvents] = useState<AuditEvent[]>(initialEvents);
   const [actorFilter, setActorFilter] = useState<ActorType | "">("");
   const [objectFilter, setObjectFilter] = useState<string>("");
+  const [pullLinksOnly, setPullLinksOnly] = useState<boolean>(
+    Boolean(
+      extraFilter?.eventTypes?.length &&
+        extraFilter.eventTypes.every((t) => isPullLinkEvent(t))
+    )
+  );
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(initialEvents.length === 50);
   const [isPending, startTransition] = useTransition();
   const [showFilters, setShowFilters] = useState(false);
 
-  function reload(opts: { actor?: ActorType | ""; object?: string; reset?: boolean }) {
+  function effectiveEventTypes(pull: boolean): readonly string[] | undefined {
+    if (pull) return PULL_LINK_EVENT_TYPES;
+    if (extraFilter?.eventTypes && extraFilter.eventTypes.length > 0)
+      return extraFilter.eventTypes;
+    return undefined;
+  }
+
+  function reload(opts: {
+    actor?: ActorType | "";
+    object?: string;
+    pull?: boolean;
+    reset?: boolean;
+  }) {
     const actor = opts.actor !== undefined ? opts.actor : actorFilter;
     const object = opts.object !== undefined ? opts.object : objectFilter;
+    const pull = opts.pull !== undefined ? opts.pull : pullLinksOnly;
     const nextPage = opts.reset ? 1 : page;
 
     startTransition(async () => {
@@ -155,6 +241,7 @@ export function AuditPanel({ initialEvents, workspaceId }: AuditPanelProps) {
         workspaceId,
         actor_type: actor || undefined,
         object_type: object || undefined,
+        event_types: effectiveEventTypes(pull),
         page: nextPage,
       });
 
@@ -176,6 +263,12 @@ export function AuditPanel({ initialEvents, workspaceId }: AuditPanelProps) {
     reload({ actor, object, reset: true });
   }
 
+  function togglePullLinks() {
+    const next = !pullLinksOnly;
+    setPullLinksOnly(next);
+    reload({ pull: next, reset: true });
+  }
+
   function loadMore() {
     const next = page + 1;
     setPage(next);
@@ -184,6 +277,7 @@ export function AuditPanel({ initialEvents, workspaceId }: AuditPanelProps) {
         workspaceId,
         actor_type: actorFilter || undefined,
         object_type: objectFilter || undefined,
+        event_types: effectiveEventTypes(pullLinksOnly),
         page: next,
       });
 
@@ -223,6 +317,21 @@ export function AuditPanel({ initialEvents, workspaceId }: AuditPanelProps) {
           {(actorFilter || objectFilter) && (
             <span className="ml-0.5 rounded-full bg-primary w-1.5 h-1.5" />
           )}
+        </button>
+
+        <button
+          onClick={togglePullLinks}
+          aria-pressed={pullLinksOnly}
+          data-testid="pull-links-chip"
+          className={cn(
+            "flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition-fast",
+            pullLinksOnly
+              ? "border-brand/40 bg-brand/10 text-foreground"
+              : "border-border text-muted-foreground hover:text-foreground hover:bg-accent"
+          )}
+        >
+          <Link2 className="h-3.5 w-3.5" />
+          Pull links
         </button>
 
         {(actorFilter || objectFilter) && (

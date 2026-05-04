@@ -4,6 +4,7 @@ import { Activity, AlertTriangle, ExternalLink, Inbox } from "lucide-react";
 
 import { requireAuthenticatedUser } from "@/server/auth/require_authenticated_user";
 import { canAdmin } from "@/server/auth/require_role";
+import { createClient } from "@/lib/supabase/server";
 import {
   classifyBundle,
   classifyLatency,
@@ -18,6 +19,10 @@ import {
   listUnresolvedPerfAlerts,
   type PerfAlertRow,
 } from "@/server/services/perf_alert_query_service";
+import {
+  getPullTokenActivitySummary,
+  type PullTokenActivitySummary,
+} from "@/server/services/pull_token_service";
 
 import { PageHeader } from "@/components/product/page_header";
 import {
@@ -55,9 +60,15 @@ export default async function AdminPerformancePage() {
     redirect("/app");
   }
 
-  const [snapshot, alerts] = await Promise.all([
+  const supabase = await createClient();
+  const [snapshot, alerts, pullActivity] = await Promise.all([
     getPerfTelemetrySnapshot(),
     listUnresolvedPerfAlerts(),
+    // Pull-token activity is best-effort; the tile renders an empty
+    // state if the service throws (e.g. before the migration lands).
+    getPullTokenActivitySummary(supabase, ctx.workspace.id).catch(
+      () => null as PullTokenActivitySummary | null
+    ),
   ]);
 
   const generatedAtLabel = new Intl.DateTimeFormat("en-US", {
@@ -229,6 +240,9 @@ export default async function AdminPerformancePage() {
             </Card>
           </div>
 
+          {/* ── Pull-token activity (read-only tile) ──────────────────── */}
+          <PullTokenActivityTile activity={pullActivity} />
+
           {/* ── How budgets work ────────────────────────────────────── */}
           <Card>
             <CardHeader>
@@ -355,6 +369,83 @@ function ActiveAlertsCard({ alerts }: { alerts: PerfAlertRow[] }) {
             ))}
           </ul>
         )}
+      </CardContent>
+    </Card>
+  );
+}
+
+/**
+ * Small read-only tile summarising pull-token activity over the last
+ * 24 hours. Lives near the bottom of the perf dashboard so it never
+ * competes with the route-class table for attention.
+ *
+ * Renders a "No data yet" caption when the service is not yet
+ * available — Agent A's `getPullTokenActivitySummary` is wrapped in
+ * `.catch(() => null)` at the page level for that reason.
+ */
+function PullTokenActivityTile({
+  activity,
+}: {
+  activity: PullTokenActivitySummary | null;
+}) {
+  if (!activity) {
+    return (
+      <Card size="sm">
+        <CardHeader>
+          <CardTitle>Pull-token activity (24 h)</CardTitle>
+          <CardDescription>
+            Live counts of bundle reads, write proposals, and active tokens
+            across the workspace.
+          </CardDescription>
+        </CardHeader>
+        <Separator />
+        <CardContent className="px-5 py-4 text-sm text-muted-foreground">
+          No data yet.
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <Card size="sm">
+      <CardHeader>
+        <CardTitle>Pull-token activity (24 h)</CardTitle>
+        <CardDescription>
+          Bundle reads, write proposals, and active tokens across the workspace.
+        </CardDescription>
+      </CardHeader>
+      <Separator />
+      <CardContent className="space-y-2 px-5 py-4">
+        <p className="font-mono text-sm tabular-nums text-foreground">
+          <span className="font-semibold">{activity.reads}</span>
+          <span className="text-muted-foreground"> reads · </span>
+          <span className="font-semibold">{activity.writes}</span>
+          <span className="text-muted-foreground"> writes</span>
+        </p>
+        <p className="font-mono text-sm tabular-nums text-foreground">
+          <span className="font-semibold">{activity.activeTokens}</span>
+          <span className="text-muted-foreground"> active tokens</span>
+        </p>
+        <p className="font-mono text-sm tabular-nums">
+          <span
+            className={cn(
+              "font-semibold",
+              activity.invalidAttempts > 0 ? "text-warning" : "text-foreground"
+            )}
+          >
+            {activity.invalidAttempts}
+          </span>
+          <span className="text-muted-foreground"> invalid attempts</span>
+        </p>
+        <div className="pt-1">
+          <Link
+            href="/app/audit?filter=pull_links"
+            className="inline-flex items-center gap-1 text-xs text-muted-foreground transition-colors hover:text-foreground"
+          >
+            View all
+            <ExternalLink className="size-3" aria-hidden="true" />
+          </Link>
+        </div>
       </CardContent>
     </Card>
   );

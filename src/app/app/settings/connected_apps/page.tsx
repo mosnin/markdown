@@ -2,26 +2,21 @@ import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { requireAuthenticatedUser } from "@/server/auth/require_authenticated_user";
 import { PageHeader } from "@/components/product/page_header";
-import { ConnectedAppsList } from "./connected_apps_list";
+import { ConnectedAppsTabs } from "./connected_apps_tabs";
 
 /**
- * User-facing OAuth grants management.
+ * User-facing OAuth grants management + Send-to-AI pull-link management.
  *
- * Lists every app the signed-in user has ever consented to, across
- * every workspace they can see. The list is fetched by the client
- * component via `listConnectedAppsDetailAction` so the page renders
- * instantly with the shell and the data streams in — the initial
- * payload stays small (no DB calls at render time).
+ * Two tabs:
+ *   * **OAuth apps** — every app the signed-in user has consented to,
+ *     across every workspace they can see (existing surface).
+ *   * **Pull links** — short-lived pull-tokens issued via Send to AI.
+ *     Active count badged on the tab; full list with bucketed
+ *     active / expired-or-revoked sections inside.
  *
- * Per-row, the user can:
- *   - Expand to see every scope with its plain-English description.
- *   - Revoke the grant (server action → revokes tokens + stamps
- *     consent.revoked_at + audit event).
- *
- * The raw underlying action is wrapped so ownership is verified
- * inline: the caller must own the consent being revoked. The page
- * itself only guards session presence; the server action enforces
- * role + ownership.
+ * Both surfaces stream their data in via server actions on mount,
+ * so the page shell paints instantly. Page-level guard is session
+ * presence; per-action ownership + role checks live in the actions.
  */
 export default async function ConnectedAppsPage() {
   await requireAuthenticatedUser();
@@ -30,7 +25,7 @@ export default async function ConnectedAppsPage() {
     <div className="flex h-full flex-col overflow-hidden">
       <PageHeader
         title="Connected apps"
-        description="OAuth apps you've authorized to access your workspaces. Revoke any app to immediately invalidate every live token it holds."
+        description="OAuth apps you've authorized and short-lived pull links you've issued for AI agents. Revoke either to invalidate access immediately."
         actions={
           <Link
             href="/app/settings"
@@ -44,7 +39,7 @@ export default async function ConnectedAppsPage() {
 
       <div className="flex-1 overflow-auto">
         <div className="mx-auto max-w-3xl space-y-6 px-6 py-6">
-          <ConnectedAppsList />
+          <ConnectedAppsTabs />
         </div>
       </div>
     </div>

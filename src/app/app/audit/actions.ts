@@ -14,6 +14,8 @@ interface FetchAuditEventsInput {
   actor_type?: ActorType;
   object_type?: string;
   event_type?: string;
+  /** `event_type IN (...)` filter, used by the Pull-links chip. */
+  event_types?: readonly string[];
   page?: number;
   limit?: number;
 }
@@ -35,6 +37,7 @@ export async function fetchAuditEventsAction(
       actor_type: input.actor_type,
       object_type: input.object_type,
       event_type: input.event_type,
+      event_types: input.event_types,
       page: input.page,
       limit: input.limit ?? 50,
     });

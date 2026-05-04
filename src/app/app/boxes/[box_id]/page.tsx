@@ -58,6 +58,7 @@ import { BoxChatPanel } from "@/components/product/boxes/box_chat_panel";
 import { WorkspaceLiveRefresh } from "@/components/product/workspace/workspace_live_refresh";
 import { ActiveBranchBannerServer } from "@/components/product/active_branch_banner_server";
 import { ShareBoxButton } from "@/components/product/share_box_button";
+import { SendToAiPopover } from "@/components/product/send_to_ai_popover";
 import { BoxPublicToggle } from "@/components/product/boxes/box_public_toggle";
 import { PageHeader } from "@/components/product/page_header";
 import { type Folder as FolderType } from "@/server/domain/types/folder";
@@ -424,6 +425,26 @@ export default async function BoxPage({
                 Templates
               </Link>
               <BoxPublicToggle boxId={box.id} initialIsPublic={box.is_public} />
+              {/*
+                Send-to-AI: in v1 only `note` objects are supported by the
+                pull-token service, so the box surface routes to its
+                guide note. Boxes without a guide note get a subtle hint
+                instead of a non-functional trigger.
+              */}
+              {guideNote ? (
+                <SendToAiPopover
+                  objectType="note"
+                  objectId={guideNote.id}
+                  objectName={guideNote.title || box.name}
+                />
+              ) : (
+                <span
+                  className="hidden text-[11px] italic text-muted-foreground md:inline"
+                  title="Set a guide note on this box to enable Send to AI"
+                >
+                  Set a guide note to send this box to your AI
+                </span>
+              )}
               <ShareBoxButton boxId={box.id} />
               <BoxLifecycleMenu
                 boxId={box.id}

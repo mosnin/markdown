@@ -3,6 +3,7 @@ import { Archive, Bot, ChevronRight, History, Trash2 } from "lucide-react";
 import { PageHeader } from "@/components/product/page_header";
 import { AgentExportMenu } from "@/components/product/export_menu";
 import { CopyAsJsonButton } from "@/components/product/copy_as_json_button";
+import { SendToAiPopover } from "@/components/product/send_to_ai_popover";
 import Link from "next/link";
 import { requireAuthenticatedUser } from "@/server/auth/require_authenticated_user";
 import { createClient } from "@/lib/supabase/server";
@@ -377,6 +378,16 @@ export default async function AgentPage({
             <>
               <CopyAsJsonButton data={agentExportData} label="Copy JSON" />
               <AgentExportMenu agentId={agent_id} agentName={agent.name} />
+              {/*
+                Send-to-AI: agents have no descriptor-note id in v1.
+                The trigger renders disabled with a "Coming soon"
+                tooltip until pull-token coverage expands.
+              */}
+              <SendToAiPopover
+                objectType="agent"
+                objectId={agent_id}
+                objectName={agent.name}
+              />
               <Link
                 href="?tab=trust"
                 aria-label="Version history"

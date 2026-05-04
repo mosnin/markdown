@@ -14,6 +14,7 @@ import { listFoldersByBox } from "@/server/repositories/folder_repository";
 import { ReferenceContextBanner } from "@/components/product/reference_context_banner";
 import { SkillExportMenu } from "@/components/product/export_menu";
 import { CopyAsJsonButton } from "@/components/product/copy_as_json_button";
+import { SendToAiPopover } from "@/components/product/send_to_ai_popover";
 import { ObjectTrustHeader } from "@/components/product/object_trust_header";
 import { MachineProvenancePanel } from "@/components/product/machine_provenance_panel";
 import { SkillHistoryPanel, SkillLifecycleControls } from "@/components/product/skills/skill_trust_panels";
@@ -225,6 +226,17 @@ export default async function SkillPage({
           <>
             <CopyAsJsonButton data={skillExportData} label="Copy JSON" />
             <SkillExportMenu skillId={skill_id} skillName={skill.name} />
+            {/*
+              Send-to-AI: skills have no "main descriptor note id" to
+              point at in v1, so the trigger renders as the disabled
+              "Coming soon — note bundles only in v1" affordance until
+              the pull-token service grows skill support.
+            */}
+            <SendToAiPopover
+              objectType="skill"
+              objectId={skill_id}
+              objectName={skill.name}
+            />
           </>
         }
       />

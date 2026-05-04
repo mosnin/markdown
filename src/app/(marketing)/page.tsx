@@ -184,6 +184,13 @@ export default async function HomePage() {
             </p>
           </div>
           <LiveAgentDemo />
+          <p className="mt-8 text-sm text-muted-foreground">
+            Want this in your own AI? Send any Poggle context to Claude,
+            Cursor, or ChatGPT in one paste.{" "}
+            <Link href="/help/send-to-ai" className="brand-underline">
+              Show me how →
+            </Link>
+          </p>
         </div>
       </section>
 

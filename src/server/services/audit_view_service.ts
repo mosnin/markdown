@@ -17,6 +17,13 @@ export interface AuditFilter {
   actor_type?: ActorType;
   object_type?: string;
   event_type?: string;
+  /**
+   * Match any of the listed event types. Mutually exclusive with
+   * `event_type`; supplying both keeps `event_type` (single match).
+   * Used by the audit page to apply a "Pull links" chip that filters
+   * to the small known set of pull-token event types.
+   */
+  event_types?: readonly string[];
   limit?: number;
   page?: number;
 }
@@ -67,6 +74,7 @@ export async function listWorkspaceAuditEvents(
     actor_type: filter.actor_type,
     object_type: filter.object_type,
     event_type: filter.event_type,
+    event_types: filter.event_types,
     limit,
     offset,
   });

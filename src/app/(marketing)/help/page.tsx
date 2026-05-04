@@ -16,6 +16,7 @@ import {
   Network,
   Puzzle,
   Rocket,
+  Send,
   ShieldCheck,
   Sparkles,
   Terminal,
@@ -89,6 +90,12 @@ const SECTIONS: Section[] = [
     description:
       "Everything you need to script Poggle, ship MCP tools, and wire it into the rest of your stack.",
     links: [
+      {
+        label: "Send context to your AI",
+        href: "/help/send-to-ai",
+        body: "Bring your Poggle notes into Claude, Cursor, ChatGPT — any AI tool — in one paste.",
+        icon: Send,
+      },
       {
         label: "REST API v1 reference",
         href: "/api",
