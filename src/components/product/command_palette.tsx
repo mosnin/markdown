@@ -758,6 +758,12 @@ export function CommandPalette({
                 label="Open trust & security"
               />
               <PaletteItem
+                value="goto:performance"
+                onSelect={() => navigate("/app/admin/performance")}
+                icon={Activity}
+                label="Open performance dashboard"
+              />
+              <PaletteItem
                 value="goto:web-sessions"
                 onSelect={() => navigate("/app/web_sessions")}
                 icon={Globe}
