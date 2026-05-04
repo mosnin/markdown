@@ -3,6 +3,37 @@ import { getRequestContext } from "@/server/auth/get_request_context";
 import { AuthPanel } from "./sign_in_form";
 import Link from "next/link";
 import { Check } from "lucide-react";
+import { PoggleMark } from "@/components/marketing/poggle_mark";
+
+/**
+ * Inverted variant for the dark left panel — wordmark in white, the
+ * symbol still brand-yellow so the mark stays recognisable across the
+ * brand/mono boundary.
+ */
+function PoggleMarkInverted() {
+  return (
+    <span className="inline-flex items-center gap-2 leading-none">
+      <span
+        className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-[5px] border border-[oklch(0.78_0.18_88)] bg-brand text-brand-foreground"
+        aria-hidden="true"
+      >
+        <svg
+          viewBox="0 0 24 24"
+          fill="none"
+          xmlns="http://www.w3.org/2000/svg"
+          className="h-[58%] w-[58%]"
+          aria-hidden="true"
+        >
+          <rect x="4" y="4" width="14" height="14" rx="2.5" stroke="currentColor" strokeWidth="1.6" opacity="0.45" />
+          <rect x="7" y="7" width="14" height="14" rx="2.5" fill="currentColor" opacity="0.95" />
+        </svg>
+      </span>
+      <span className="text-base font-semibold tracking-tight text-background [font-feature-settings:'cv11','ss01','ss03']">
+        Poggle
+      </span>
+    </span>
+  );
+}
 
 export const metadata = {
   title: "Sign in — Poggle",
@@ -46,15 +77,10 @@ export default async function SignInPage({
             "radial-gradient(900px 600px at 12% 14%, color-mix(in oklch, var(--brand) 7%, transparent), transparent 60%)",
         }}
       >
-        {/* Brand mark */}
-        <Link href="/" className="relative flex items-center gap-2.5">
-          <span
-            aria-hidden="true"
-            className="block h-5 w-5 rounded-[3px] bg-brand"
-          />
-          <span className="text-sm font-semibold tracking-tight text-background">
-            Poggle
-          </span>
+        {/* Brand mark — uses the canonical PoggleMark in `mono` surface
+            so the wordmark sits white on near-black left panel. */}
+        <Link href="/" className="relative inline-flex">
+          <PoggleMarkInverted />
         </Link>
 
         {/* Center content */}
@@ -106,14 +132,8 @@ export default async function SignInPage({
         <div className="w-full max-w-sm space-y-7">
           {/* Mobile logo */}
           <div className="flex justify-center lg:hidden">
-            <Link href="/" className="flex items-center gap-2.5">
-              <span
-                aria-hidden="true"
-                className="block h-5 w-5 rounded-[3px] bg-brand"
-              />
-              <span className="text-sm font-semibold tracking-tight text-foreground">
-                Poggle
-              </span>
+            <Link href="/" aria-label="Poggle home">
+              <PoggleMark size="md" />
             </Link>
           </div>
 

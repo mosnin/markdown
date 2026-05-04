@@ -475,6 +475,46 @@
     box-shadow: inset 0 -1px 0 0 var(--border-default);
   }
 
+  /* ── Signature motion: brand underline ink ───────────────────────────
+   *
+   * The product's defining microinteraction. A 2px brand-yellow line
+   * draws from left → right under the element on hover and on focus,
+   * with a confident 220ms ease-out curve. Used on marketing nav links,
+   * footer columns, in-page links, breadcrumb segments, and any text
+   * affordance where we want the user to feel the "click is allowed"
+   * before they click.
+   *
+   * Implementation: a single inset background-image that's animated by
+   * width % so it draws rather than fades. Keep it at 2px so it doesn't
+   * shout; the brand is the spark, never the wash. Honors prefers-
+   * reduced-motion by skipping the draw and going straight to filled.
+   */
+  .brand-underline {
+    background-image: linear-gradient(to right, var(--brand), var(--brand));
+    background-position: 0% 100%;
+    background-repeat: no-repeat;
+    background-size: 0% 2px;
+    transition: background-size 220ms cubic-bezier(0.2, 0, 0, 1);
+    padding-bottom: 2px;
+  }
+
+  .brand-underline:hover,
+  .brand-underline:focus-visible,
+  .brand-underline[data-active="true"] {
+    background-size: 100% 2px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .brand-underline {
+      transition: none;
+    }
+    .brand-underline:hover,
+    .brand-underline:focus-visible,
+    .brand-underline[data-active="true"] {
+      background-size: 100% 2px;
+    }
+  }
+
   /* ── Marketing-only soft brand glow (used on hero CTAs sparingly) ─── */
   .brand-glow {
     box-shadow:

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { PoggleMark } from "@/components/marketing/poggle_mark";
 
 const LINKS = {
   Product: [
@@ -20,12 +21,11 @@ const LINKS = {
     { href: "/portability", label: "Import & Export" },
     { href: "/help", label: "Help Center" },
   ],
-  Legal: [
-    { href: "/terms", label: "Terms of Service" },
+  Trust: [
+    { href: "/trust", label: "Trust & Security" },
     { href: "/privacy", label: "Privacy Policy" },
-    { href: "/cookies", label: "Cookie Policy" },
+    { href: "/terms", label: "Terms of Service" },
     { href: "/acceptable-use", label: "Acceptable Use" },
-    { href: "/refund-policy", label: "Refund Policy" },
     { href: "/dmca", label: "DMCA" },
   ],
 };
@@ -39,19 +39,13 @@ export function MarketingFooter() {
           <div className="col-span-2 sm:col-span-3 md:col-span-1">
             <Link
               href="/"
-              className="inline-flex items-center gap-2"
+              className="rounded-md transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:ring-offset-1 focus-visible:ring-offset-background"
               aria-label="Poggle home"
             >
-              <span
-                aria-hidden
-                className="inline-block size-4 rounded-[3px] bg-brand"
-              />
-              <span className="text-[15px] font-semibold tracking-tight text-foreground">
-                Poggle
-              </span>
+              <PoggleMark size="sm" />
             </Link>
-            <p className="mt-4 max-w-[220px] text-sm leading-relaxed text-muted-foreground">
-              A markdown-native context operating system for humans and AI.
+            <p className="mt-4 max-w-[240px] text-sm leading-relaxed text-muted-foreground">
+              The context layer for engineers building with AI. Markdown-native, branch-aware, MCP-ready.
             </p>
           </div>
 
@@ -66,7 +60,7 @@ export function MarketingFooter() {
                   <li key={link.href}>
                     <Link
                       href={link.href}
-                      className="text-sm text-muted-foreground transition-colors hover:text-foreground"
+                      className="brand-underline text-sm text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:ring-offset-2 focus-visible:ring-offset-background rounded-sm"
                     >
                       {link.label}
                     </Link>

@@ -30,7 +30,7 @@ export function HeroSection() {
 					transition={{ duration: 0.5, ease: [0.2, 0, 0, 1] }}
 					className="flex flex-col items-center gap-7 text-center"
 				>
-					{/* H1 — three words. The poster. */}
+					{/* H1 — the poster. Names the feeling, not the architecture. */}
 					<h1
 						className={cn(
 							"max-w-3xl text-balance",
@@ -39,16 +39,17 @@ export function HeroSection() {
 							"leading-[1.04]",
 						)}
 					>
-						Knowledge,
+						The context layer
 						<br />
-						organized.
+						for AI engineers.
 					</h1>
 
-					{/* Supporting paragraph — the engineer-words */}
+					{/* Supporting paragraph — speaks to one customer: the engineer
+					    shipping with Claude / GPT / Cursor / Copilot every day. */}
 					<p className="max-w-xl text-balance text-base leading-relaxed text-muted-foreground sm:text-lg">
-						A structured context store for the work you do with AI. Notes,
-						files, skills, and agents — gathered into focused boxes, ready
-						to bundle and deliver clean context to any model.
+						Stop pasting the same architecture notes into every chat. Poggle
+						is a markdown-native, branch-aware context store with first-class
+						MCP, version history, and clean bundles your model actually reads.
 					</p>
 
 					{/* CTAs — full-width on small screens, side-by-side on sm+ */}
@@ -59,20 +60,20 @@ export function HeroSection() {
 							className="w-full sm:w-auto"
 							render={<Link href="/sign_in" />}
 						>
-							Get started
+							Start free
 						</Button>
 						<Button
 							size="lg"
 							variant="ghost"
 							className="w-full sm:w-auto"
-							render={<Link href="/features" />}
+							render={<Link href="/api" />}
 						>
-							See how it works
+							Read the API docs →
 						</Button>
 					</div>
 
 					<p className="text-xs text-muted-foreground/70">
-						No credit card. Import from Obsidian in minutes.
+						MCP-ready · Plain markdown · No credit card to start
 					</p>
 				</motion.div>
 

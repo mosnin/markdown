@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { MenuToggleIcon } from '@/components/ui/menu-toggle-icon';
+import { PoggleMark } from '@/components/marketing/poggle_mark';
 import { createPortal } from 'react-dom';
 
 type NavLink = { title: string; href: string };
@@ -45,27 +46,22 @@ export function MarketingHeader() {
 				<div className="flex items-center gap-8">
 					<Link
 						href="/"
-						className="flex items-center gap-2 rounded-md px-1 py-1 transition-colors hover:opacity-90"
+						className="rounded-md px-1 py-1 transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:ring-offset-1 focus-visible:ring-offset-background"
 						aria-label="Poggle home"
 					>
-						<span
-							aria-hidden
-							className="inline-block size-4 rounded-[3px] bg-brand"
-						/>
-						<span className="text-[15px] font-semibold tracking-tight text-foreground">
-							Poggle
-						</span>
+						<PoggleMark size="sm" />
 					</Link>
 
-					{/* Center nav */}
-					<ul className="hidden items-center gap-1 md:flex">
+					{/* Center nav — signature brand-underline draws on hover */}
+					<ul className="hidden items-center gap-5 md:flex">
 						{NAV_LINKS.map((link) => (
 							<li key={link.href}>
 								<Link
 									href={link.href}
 									className={cn(
-										'rounded-md px-3 py-1.5 text-sm text-muted-foreground',
+										'brand-underline rounded-sm py-1 text-sm text-muted-foreground',
 										'transition-colors hover:text-foreground',
+										'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:ring-offset-2 focus-visible:ring-offset-background',
 									)}
 								>
 									{link.title}

@@ -94,6 +94,12 @@ const workspaceAdminNav = [
     icon: Users,
   },
   {
+    href: "/app/settings/workspace/sso",
+    label: "Enterprise SSO",
+    subLabel: "SAML, OIDC, SCIM provisioning",
+    icon: Building2,
+  },
+  {
     href: "/app/settings/workspace/branch_retention",
     label: "Branch retention",
     subLabel: "Auto-discard idle branches",
