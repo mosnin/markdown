@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useEffect, useState } from "react";
 import {
   Bell,
   Bot,
@@ -41,6 +42,39 @@ const NAV_ROW_ACTIVE = "bg-accent text-foreground font-medium";
 const SECTION_OVERLINE =
   "text-overline text-muted-foreground/70 px-2.5 py-1.5";
 
+// ─── Arrival shimmer hook ─────────────────────────────────────────────────────
+//
+// Returns `true` for ~600ms after `isActive` flips false→true so the active
+// nav row can paint a one-shot brand-yellow rail (`.brand-shimmer-rail`) on
+// arrival. Once the timer expires the class is dropped so subsequent
+// re-renders don't keep the rail painted. Honors prefers-reduced-motion via
+// the CSS utility itself — the rail still paints transparent so we don't
+// special-case it here.
+//
+// Implementation note: we detect the false→true transition during render
+// using the React-recommended "adjusting state during a prop change"
+// pattern (https://react.dev/reference/react/useState#storing-information-
+// from-previous-renders). This avoids calling setState synchronously inside
+// an effect, which the React 19 lint flags as a cascading-render hazard.
+// The effect only schedules the *clear* timer.
+function useArrivalShimmer(isActive: boolean): boolean {
+  const [prevActive, setPrevActive] = useState(isActive);
+  const [shimmer, setShimmer] = useState(isActive);
+
+  if (isActive !== prevActive) {
+    setPrevActive(isActive);
+    setShimmer(isActive);
+  }
+
+  useEffect(() => {
+    if (!shimmer) return;
+    const t = window.setTimeout(() => setShimmer(false), 600);
+    return () => window.clearTimeout(t);
+  }, [shimmer]);
+
+  return shimmer;
+}
+
 // ─── Nav item ─────────────────────────────────────────────────────────────────
 
 function NavItem({
@@ -56,6 +90,7 @@ function NavItem({
   isActive: boolean;
   shortcut?: string;
 }) {
+  const shimmer = useArrivalShimmer(isActive);
   return (
     <Tooltip>
       <TooltipTrigger
@@ -65,7 +100,8 @@ function NavItem({
             aria-current={isActive ? "page" : undefined}
             className={cn(
               NAV_ROW_BASE,
-              isActive ? NAV_ROW_ACTIVE : NAV_ROW_INACTIVE
+              isActive ? NAV_ROW_ACTIVE : NAV_ROW_INACTIVE,
+              isActive && shimmer && "brand-shimmer-rail"
             )}
           />
         }
@@ -103,6 +139,7 @@ function NavItemWithBadge({
   isActive: boolean;
   badge: number;
 }) {
+  const shimmer = useArrivalShimmer(isActive);
   return (
     <Tooltip>
       <TooltipTrigger
@@ -112,7 +149,8 @@ function NavItemWithBadge({
             aria-current={isActive ? "page" : undefined}
             className={cn(
               NAV_ROW_BASE,
-              isActive ? NAV_ROW_ACTIVE : NAV_ROW_INACTIVE
+              isActive ? NAV_ROW_ACTIVE : NAV_ROW_INACTIVE,
+              isActive && shimmer && "brand-shimmer-rail"
             )}
           />
         }

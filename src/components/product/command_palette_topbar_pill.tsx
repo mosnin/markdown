@@ -62,6 +62,9 @@ export function CommandPaletteTopbarPill({
         "text-[12.5px] text-muted-foreground transition-colors",
         "hover:border-border-strong hover:bg-accent hover:text-foreground",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:ring-offset-1 focus-visible:ring-offset-background",
+        // Signature 1px brand draw on hover/focus — the pill is the
+        // marquee command-palette affordance and earns the brand spark.
+        "brand-underline-tight",
       )}
     >
       <Search className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />

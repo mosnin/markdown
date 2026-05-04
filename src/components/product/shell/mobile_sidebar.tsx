@@ -295,14 +295,23 @@ function MobileNavRow({
   onNavigate: () => void;
   pendingProposalsCount: number;
 }) {
-  const [shimmer, setShimmer] = useState(false);
+  // Detect the false→true transition during render (React-recommended
+  // pattern) so we never call setState synchronously inside an effect —
+  // the React 19 lint flags that as a cascading-render hazard. The
+  // effect below only schedules the *clear* timer.
+  const [prevActive, setPrevActive] = useState(isActive);
+  const [shimmer, setShimmer] = useState(isActive);
+
+  if (isActive !== prevActive) {
+    setPrevActive(isActive);
+    setShimmer(isActive);
+  }
 
   useEffect(() => {
-    if (!isActive) return;
-    setShimmer(true);
+    if (!shimmer) return;
     const t = window.setTimeout(() => setShimmer(false), 600);
     return () => window.clearTimeout(t);
-  }, [isActive]);
+  }, [shimmer]);
 
   return (
     <Link
