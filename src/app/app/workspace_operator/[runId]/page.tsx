@@ -7,6 +7,7 @@ import { getOperatorRun } from "@/server/services/workspace_operator_runs_servic
 import { listRunArtifacts } from "@/server/services/operator_artifacts_service";
 import { OperatorRunDetail } from "@/components/product/operator/operator_run_detail";
 import { OperatorRunDiff } from "@/components/product/operator/operator_run_diff";
+import { OperatorPlanSheet } from "@/components/product/operator/operator_plan_sheet";
 import { PageHeader } from "@/components/product/page_header";
 
 /**
@@ -68,6 +69,11 @@ export default async function OperatorRunDetailPage({ params }: PageProps) {
           <OperatorRunDiff artifacts={artifacts} />
         </div>
       </div>
+
+      {/* Mobile-only bottom-sheet plan/diff. Hidden on `lg:` where the
+          plan/diff continues to live as a desktop right-rail; the sheet
+          self-hides when the run reaches a terminal state. */}
+      <OperatorPlanSheet run={{ id: run.id, status: run.status }} />
     </div>
   );
 }
