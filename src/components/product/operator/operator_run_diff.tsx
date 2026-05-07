@@ -1,6 +1,8 @@
 import Link from "next/link";
+import { FileText } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { EmptyState } from "@/components/product/empty_state";
 import { createClient } from "@/lib/supabase/server";
 import { getNoteById } from "@/server/repositories/note_repository";
 import type { RunArtifact } from "@/server/services/operator_artifacts_service";
@@ -46,9 +48,12 @@ export function OperatorRunDiffView({
           <CardTitle>Summary of what changed</CardTitle>
         </CardHeader>
         <CardContent>
-          <p className="text-xs text-muted-foreground">
-            This run did not produce any artifacts.
-          </p>
+          <EmptyState
+            icon={<FileText />}
+            title="No artifacts"
+            description="This run did not produce any notes."
+            size="sm"
+          />
         </CardContent>
       </Card>
     );
@@ -58,7 +63,7 @@ export function OperatorRunDiffView({
     <Card>
       <CardHeader>
         <CardTitle>Summary of what changed</CardTitle>
-        <p className="text-xs text-muted-foreground">
+        <p className="text-[13px] text-muted-foreground">
           {resolved.length} note{resolved.length === 1 ? "" : "s"} created by
           this run. Greyed-out entries have been rolled back.
         </p>
@@ -78,7 +83,7 @@ function ArtifactRow({ artifact }: { artifact: ResolvedArtifact }) {
     <div
       data-rolled-back={isDeleted ? "true" : "false"}
       className={
-        "rounded-lg border border-border p-3 " +
+        "min-h-11 rounded-md border border-border p-3 " +
         (isDeleted ? "opacity-60" : "")
       }
     >
@@ -96,12 +101,7 @@ function ArtifactRow({ artifact }: { artifact: ResolvedArtifact }) {
             {artifact.title ?? "(untitled note)"}
           </Link>
           {artifact.preview && (
-            <p
-              className={
-                "mt-1 text-xs " +
-                (isDeleted ? "text-muted-foreground" : "text-muted-foreground")
-              }
-            >
+            <p className="mt-1 text-[13px] text-muted-foreground">
               {artifact.preview}
             </p>
           )}

@@ -20,6 +20,7 @@
  */
 
 import { useMemo } from "react";
+import { Activity } from "lucide-react";
 
 import {
   useOperatorEvents,
@@ -30,6 +31,7 @@ import { EnhancedEventStream } from "@/components/product/enhanced_event_stream"
 import { LiveTokenCounter } from "@/components/product/live_token_counter";
 import { ApprovalQueue } from "@/components/product/approval_queue";
 import { SteerInput } from "@/components/product/steer_input";
+import { EmptyState } from "@/components/product/empty_state";
 
 export interface OperatorActivityPanelProps {
   runId: string | null;
@@ -60,17 +62,20 @@ export function OperatorActivityPanel({
 
   if (!runId) {
     return (
-      <div className="p-4 text-sm text-muted-foreground">
-        No active run. Start one from the operator panel.
-      </div>
+      <EmptyState
+        icon={<Activity />}
+        title="No active run"
+        description="Start one from the operator panel."
+        size="sm"
+      />
     );
   }
 
   return (
-    <div className="flex flex-col h-full min-h-0 gap-2">
+    <div className="flex h-full min-h-0 flex-col gap-2">
       {/* Header — token counter + run id */}
-      <div className="flex items-center justify-between px-3 py-2 border-b">
-        <div className="text-xs font-mono text-muted-foreground truncate">
+      <div className="flex items-center justify-between border-b border-border px-3 py-2">
+        <div className="truncate font-mono text-[12px] text-muted-foreground">
           run {runId.slice(0, 8)}…
         </div>
         <LiveTokenCounter
@@ -86,12 +91,12 @@ export function OperatorActivityPanel({
       <ApprovalQueue runId={runId} />
 
       {/* Event stream — fills available space */}
-      <div className="flex-1 min-h-0 overflow-hidden">
+      <div className="min-h-0 flex-1 overflow-hidden">
         <EnhancedEventStream events={visibleEvents} autoScroll />
       </div>
 
       {/* Steer input — disabled when run is not active */}
-      <div className="border-t p-2">
+      <div className="border-t border-border p-2">
         <SteerInput runId={runId} enabled={runIsActive} />
       </div>
     </div>

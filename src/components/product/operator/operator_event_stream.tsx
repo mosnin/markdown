@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { ArrowDown, FileText, Search, Sparkles, Wrench } from "lucide-react";
 
+import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { OperatorProgressEvent } from "@/app/app/workspace_operator/types";
 
@@ -16,16 +17,16 @@ interface OperatorEventStreamProps {
 function eventIcon(type: OperatorProgressEvent["type"]) {
   switch (type) {
     case "plan_ready":
-      return <Sparkles className="h-3.5 w-3.5 text-amber-500" aria-hidden="true" />;
+      return <Sparkles className="h-3.5 w-3.5 text-brand" aria-hidden="true" />;
     case "step_start":
     case "step_complete":
-      return <Search className="h-3.5 w-3.5 text-blue-500" aria-hidden="true" />;
+      return <Search className="h-3.5 w-3.5 text-info" aria-hidden="true" />;
     case "tool_call":
-      return <Wrench className="h-3.5 w-3.5 text-purple-500" aria-hidden="true" />;
+      return <Wrench className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />;
     case "note_drafted":
-      return <FileText className="h-3.5 w-3.5 text-green-500" aria-hidden="true" />;
+      return <FileText className="h-3.5 w-3.5 text-success" aria-hidden="true" />;
     case "completed":
-      return <Sparkles className="h-3.5 w-3.5 text-green-500" aria-hidden="true" />;
+      return <Sparkles className="h-3.5 w-3.5 text-success" aria-hidden="true" />;
     case "failed":
       return <Sparkles className="h-3.5 w-3.5 text-destructive" aria-hidden="true" />;
     default:
@@ -103,7 +104,7 @@ export function OperatorEventStream({
         ref={scrollRef}
         onScroll={onScroll}
         className={cn(
-          "font-mono text-xs rounded-lg border border-border/60 bg-muted/30 p-3",
+          "font-mono text-xs rounded-lg border border-border bg-muted/30 p-3",
           contain && "flex-1 overflow-y-auto",
         )}
         role="log"
@@ -111,8 +112,8 @@ export function OperatorEventStream({
         aria-live="polite"
       >
         {events.length === 0 ? (
-          <div className="flex h-full min-h-[120px] items-center justify-center text-muted-foreground/70">
-            <span className="text-[11px]">
+          <div className="flex h-full min-h-[120px] items-center justify-center text-muted-foreground">
+            <span className="text-xs">
               Waiting for events…
             </span>
           </div>
@@ -125,18 +126,18 @@ export function OperatorEventStream({
                 // a last-resort tiebreaker for duplicate sub-ms events.
                 key={`${evt.timestamp}-${evt.type}-${evt.step_index ?? "x"}-${i}`}
                 className={cn(
-                  "flex items-start gap-2 rounded px-1.5 py-1",
+                  "flex items-start gap-2 rounded-md px-1.5 py-1",
                   evt.type === "failed" &&
                     "bg-destructive/5 text-destructive",
                   evt.type === "completed" &&
-                    "bg-green-500/5 text-green-700 dark:text-green-400",
+                    "bg-success/5 text-success",
                 )}
               >
-                <span className="shrink-0 select-none text-[10px] tabular-nums text-muted-foreground/70">
+                <span className="shrink-0 select-none text-[11px] tabular-nums text-muted-foreground">
                   {formatTime(evt.timestamp)}
                 </span>
                 <span className="mt-0.5 shrink-0">{eventIcon(evt.type)}</span>
-                <span className="min-w-0 flex-1 break-words text-foreground/90">
+                <span className="min-w-0 flex-1 break-words text-foreground">
                   {eventLabel(evt)}
                 </span>
               </li>
@@ -147,20 +148,17 @@ export function OperatorEventStream({
       </div>
 
       {!pinnedToBottom && events.length > 0 && (
-        <button
+        <Button
           type="button"
+          variant="outline"
+          size="pill"
           onClick={jumpToBottom}
-          className={cn(
-            "absolute bottom-3 right-3 inline-flex items-center gap-1 rounded-full",
-            "border border-border bg-background/95 px-2.5 py-1 text-[11px] shadow-sm",
-            "text-foreground hover:bg-accent hover:text-accent-foreground",
-            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-          )}
+          className="absolute bottom-3 right-3 bg-background/95"
           aria-label="Jump to latest event"
         >
           <ArrowDown className="h-3 w-3" aria-hidden="true" />
           Latest
-        </button>
+        </Button>
       )}
     </div>
   );

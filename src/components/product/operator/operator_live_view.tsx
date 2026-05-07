@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 
+import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import {
   useOperatorEvents,
@@ -19,6 +20,27 @@ import { EnhancedEventStream } from "@/components/product/enhanced_event_stream"
 import { LiveTokenCounter } from "@/components/product/live_token_counter";
 import { SteerInput } from "@/components/product/steer_input";
 import { OperatorActivityPanel } from "@/components/product/operator/operator_activity_panel";
+
+type StatusBadgeVariant =
+  | "default"
+  | "success"
+  | "warning"
+  | "destructive"
+  | "secondary"
+  | "info"
+  | "brand";
+
+function statusBadgeVariant(
+  status: WorkspaceOperatorRunRow["status"]
+): StatusBadgeVariant {
+  if (status === "completed") return "success";
+  if (status === "failed") return "destructive";
+  if (status === "cancelled") return "warning";
+  if (status === "executing") return "brand";
+  if (status === "planning") return "info";
+  if (status === "awaiting_approval") return "warning";
+  return "secondary";
+}
 
 // ---------------------------------------------------------------------------
 // Props
@@ -98,7 +120,7 @@ export function OperatorLiveView({
         <div className="flex items-center gap-4 px-6 pt-4 pb-3">
           <Link
             href="/app/workspace_operator"
-            className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:underline"
+            className="inline-flex min-h-11 items-center gap-1 text-[13px] text-muted-foreground hover:text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-sm"
           >
             <ArrowLeft className="h-3 w-3" aria-hidden="true" />
             Back to run history
@@ -110,10 +132,11 @@ export function OperatorLiveView({
             >
               {promptPreview}
             </div>
-            <div className="mt-0.5 flex items-center gap-2 text-[11px] text-muted-foreground">
+            <div className="mt-1 flex items-center gap-2 text-[12px] text-muted-foreground">
               <span className="font-mono">run {runId.slice(0, 8)}…</span>
-              <span aria-hidden="true">·</span>
-              <span className="uppercase tracking-wide">{initialRun.status}</span>
+              <Badge variant={statusBadgeVariant(initialRun.status)}>
+                {initialRun.status.replace(/_/g, " ")}
+              </Badge>
             </div>
           </div>
           <div className="shrink-0">
@@ -134,7 +157,7 @@ export function OperatorLiveView({
         {/* LEFT — persona / config / memory */}
         <aside className="flex min-h-0 flex-col overflow-y-auto border-r border-border">
           <section className="flex flex-col gap-2 px-4 pt-4 pb-3">
-            <h2 className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+            <h2 className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/70">
               Persona
             </h2>
             <PersonaSelector
@@ -145,7 +168,7 @@ export function OperatorLiveView({
               }}
               disabled
             />
-            <p className="text-[11px] text-muted-foreground">
+            <p className="text-[12px] text-muted-foreground">
               Persona is locked once the run has started.
             </p>
           </section>
@@ -153,10 +176,10 @@ export function OperatorLiveView({
           <Separator />
 
           <section className="flex flex-col gap-2 px-4 pt-4 pb-3">
-            <h2 className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+            <h2 className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/70">
               Run config
             </h2>
-            <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5 text-xs">
+            <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5 text-[13px]">
               <dt className="text-muted-foreground">Mode</dt>
               <dd className="font-mono text-foreground">{initialRun.mode}</dd>
               <dt className="text-muted-foreground">Model</dt>
@@ -177,7 +200,7 @@ export function OperatorLiveView({
           <Separator />
 
           <section className="flex min-h-0 flex-1 flex-col gap-2 px-4 pt-4 pb-4">
-            <h2 className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+            <h2 className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/70">
               Memory
             </h2>
             <div className="min-h-0 flex-1">
@@ -190,7 +213,7 @@ export function OperatorLiveView({
         <section className="flex min-h-0 min-w-0 flex-col">
           <div className="border-b border-border px-4 py-2">
             <div
-              className="truncate text-xs text-muted-foreground"
+              className="truncate text-[13px] text-muted-foreground"
               title={initialRun.prompt}
             >
               <span className="mr-1 font-semibold text-foreground">
@@ -213,7 +236,7 @@ export function OperatorLiveView({
         <aside className="flex min-h-0 flex-col border-l border-border">
           <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
             <section className="flex flex-col gap-2 px-4 pt-4 pb-3">
-              <h2 className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+              <h2 className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/70">
                 Plan
               </h2>
               <PlanView
@@ -233,7 +256,7 @@ export function OperatorLiveView({
 
           <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
             <section className="flex flex-col gap-2 px-4 pt-4 pb-4">
-              <h2 className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+              <h2 className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/70">
                 Approvals
               </h2>
               <ApprovalQueue runId={runId} />

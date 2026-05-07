@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useTransition } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import {
   CheckCircle2,
@@ -9,8 +9,10 @@ import {
   Loader2,
   ChevronRight,
   Ban,
+  History,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { EmptyState } from "@/components/product/empty_state";
 import { listSessionRunsAction } from "@/app/app/workspace_operator/sessions_actions";
 import type { WorkspaceOperatorRunRow } from "@/server/services/workspace_operator_runs_service";
 
@@ -72,9 +74,12 @@ export function OperatorSessionHistory({
 
   if (runs.length === 0) {
     return (
-      <p className="px-3 py-2 text-xs text-muted-foreground">
-        No runs in this session yet.
-      </p>
+      <EmptyState
+        icon={<History />}
+        title="No runs yet"
+        description="Runs you start in this session will appear here."
+        size="sm"
+      />
     );
   }
 
@@ -109,16 +114,16 @@ function RunHistoryRow({
   const statusIcon = () => {
     switch (run.status) {
       case "completed":
-        return <CheckCircle2 className="h-3 w-3 text-green-600 dark:text-green-400 shrink-0" aria-label="Completed" />;
+        return <CheckCircle2 className="h-3 w-3 shrink-0 text-success" aria-label="Completed" />;
       case "failed":
-        return <XCircle className="h-3 w-3 text-destructive shrink-0" aria-label="Failed" />;
+        return <XCircle className="h-3 w-3 shrink-0 text-destructive" aria-label="Failed" />;
       case "cancelled":
-        return <Ban className="h-3 w-3 text-muted-foreground shrink-0" aria-label="Cancelled" />;
+        return <Ban className="h-3 w-3 shrink-0 text-muted-foreground" aria-label="Cancelled" />;
       case "executing":
       case "planning":
-        return <Loader2 className="h-3 w-3 animate-spin text-primary shrink-0" aria-label="Running" />;
+        return <Loader2 className="h-3 w-3 shrink-0 animate-spin text-brand" aria-label="Running" />;
       default:
-        return <Clock className="h-3 w-3 text-muted-foreground shrink-0" aria-label={run.status} />;
+        return <Clock className="h-3 w-3 shrink-0 text-muted-foreground" aria-label={run.status} />;
     }
   };
 
@@ -130,7 +135,7 @@ function RunHistoryRow({
   const inner = (
     <div
       className={cn(
-        "flex items-start gap-2 px-3 py-2 text-xs transition-colors",
+        "flex min-h-11 items-start gap-2 px-3 py-2 text-[13px] transition-colors duration-150",
         isTerminal
           ? "cursor-pointer hover:bg-accent"
           : "cursor-default",
@@ -143,13 +148,13 @@ function RunHistoryRow({
         <p className={cn("truncate leading-snug", isActive ? "font-medium text-foreground" : "text-foreground/80")}>
           {truncatedPrompt}
         </p>
-        <p className="text-[10px] text-muted-foreground/60">{timeAgo}</p>
+        <p className="text-[12px] text-muted-foreground">{timeAgo}</p>
       </div>
       {isTerminal && (
         <Link
           href={`/app/workspace_operator/${run.id}`}
           onClick={(e) => e.stopPropagation()}
-          className="shrink-0 text-muted-foreground/40 hover:text-muted-foreground transition-colors"
+          className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-muted-foreground/60 transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           aria-label="View run detail"
         >
           <ChevronRight className="h-3 w-3" />

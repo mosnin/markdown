@@ -140,12 +140,12 @@ export function OperatorRunDetail({
           </div>
         </CardHeader>
         <Separator />
-        <CardContent className="grid grid-cols-2 gap-x-6 gap-y-2 text-xs sm:grid-cols-3">
+        <CardContent className="grid grid-cols-2 gap-x-6 gap-y-2 text-[13px] sm:grid-cols-3">
           <Field label="Run id">
             <button
               type="button"
               onClick={copyId}
-              className="font-mono text-foreground hover:underline"
+              className="font-mono text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-sm"
               title="Copy run id"
             >
               {run.id}
@@ -175,14 +175,14 @@ export function OperatorRunDetail({
               {planSteps.map((step) => (
                 <li
                   key={step.index}
-                  className="flex items-start gap-2 rounded-lg border border-border p-2"
+                  className="flex items-start gap-2 rounded-md border border-border p-2.5"
                 >
-                  <span className="mt-0.5 text-xs text-muted-foreground tabular-nums">
+                  <span className="mt-0.5 text-[13px] text-muted-foreground tabular-nums">
                     #{step.index + 1}
                   </span>
                   <div className="flex-1">
-                    <p className="text-foreground">{step.description}</p>
-                    <p className="mt-0.5 text-xs text-muted-foreground">
+                    <p className="text-sm text-foreground">{step.description}</p>
+                    <p className="mt-0.5 text-[13px] text-muted-foreground">
                       Tool: <span className="font-mono">{step.tool}</span>
                     </p>
                   </div>
@@ -255,7 +255,7 @@ export function OperatorRunDetail({
           {feedback && (
             <p
               className={
-                "text-xs " +
+                "text-[13px] " +
                 (feedback.type === "error"
                   ? "text-destructive"
                   : "text-muted-foreground")
@@ -282,10 +282,10 @@ function Field({
 }) {
   return (
     <div className="flex flex-col gap-0.5">
-      <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
+      <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/70">
         {label}
       </span>
-      <span className="text-xs text-foreground">{children}</span>
+      <span className="text-[13px] text-foreground">{children}</span>
     </div>
   );
 }
@@ -295,12 +295,19 @@ function StatusBadge({
 }: {
   status: WorkspaceOperatorRunRow["status"];
 }) {
-  let variant: "default" | "success" | "warning" | "destructive" | "secondary" | "info" =
-    "secondary";
+  let variant:
+    | "default"
+    | "success"
+    | "warning"
+    | "destructive"
+    | "secondary"
+    | "info"
+    | "brand" = "secondary";
   if (status === "completed") variant = "success";
   else if (status === "failed") variant = "destructive";
   else if (status === "cancelled") variant = "warning";
-  else if (status === "executing" || status === "planning") variant = "info";
+  else if (status === "executing") variant = "brand";
+  else if (status === "planning") variant = "info";
   else if (status === "awaiting_approval") variant = "warning";
   return <Badge variant={variant}>{status.replace(/_/g, " ")}</Badge>;
 }
