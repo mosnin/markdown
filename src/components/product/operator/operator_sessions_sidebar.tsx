@@ -1,3 +1,4 @@
+// DEPRECATED: use OperatorSessionsDrawer instead. Removed from primary mount in <commit-sha>.
 "use client";
 
 import { useState, useEffect, useTransition } from "react";

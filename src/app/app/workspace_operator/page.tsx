@@ -8,6 +8,7 @@ import { createClient } from "@/lib/supabase/server";
 import { listOperatorRuns } from "@/server/services/workspace_operator_runs_service";
 import { OperatorHistoryTable } from "@/components/product/operator/operator_history_table";
 import { OperatorNewRunButton } from "@/components/product/operator/operator_new_run_button";
+import { OperatorSessionsDrawer } from "@/components/product/operator/operator_sessions_drawer";
 import { PogAgentIntro } from "@/components/product/pog_agent_intro";
 import { PageHeader } from "@/components/product/page_header";
 import {
@@ -89,6 +90,7 @@ export default async function WorkspaceOperatorHistoryPage({
         description="History of every Poggle run in this workspace."
         actions={
           <>
+            <OperatorSessionsDrawer />
             <Button variant="outline" size="sm" render={<Link href="/app/workspace_operator/prompts" />}>
               Saved prompts
             </Button>

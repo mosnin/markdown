@@ -8,6 +8,7 @@ import { listRunArtifacts } from "@/server/services/operator_artifacts_service";
 import { OperatorRunDetail } from "@/components/product/operator/operator_run_detail";
 import { OperatorRunDiff } from "@/components/product/operator/operator_run_diff";
 import { OperatorPlanSheet } from "@/components/product/operator/operator_plan_sheet";
+import { OperatorSessionsDrawer } from "@/components/product/operator/operator_sessions_drawer";
 import { PageHeader } from "@/components/product/page_header";
 
 /**
@@ -49,6 +50,7 @@ export default async function OperatorRunDetailPage({ params }: PageProps) {
               <ArrowLeft className="h-3.5 w-3.5" aria-hidden="true" />
               History
             </Link>
+            <OperatorSessionsDrawer activeSessionId={run.session_id ?? null} />
             <Link
               href={`/app/workspace_operator/${runId}/replay`}
               className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
