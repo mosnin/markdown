@@ -1,4 +1,9 @@
 import { type SupabaseClient } from "@supabase/supabase-js";
+import {
+  searchCacheKey,
+  getCachedSearch,
+  setCachedSearch,
+} from "@/lib/search_query_cache";
 
 /**
  * Workspace-wide cross-type search.
@@ -61,6 +66,57 @@ export interface WorkspaceSearchHit {
   rank: number;
   /** Canonical app route for this hit. */
   href: string;
+  /**
+   * Note kind ('note' | 'guide' | 'bundle') for note hits; null for
+   * non-note object types. Surfaced so the UI can render kind facets
+   * and badges without re-querying.
+   */
+  kind: "note" | "guide" | "bundle" | null;
+  /**
+   * Tag list for hits that carry tags (notes, files, skills, agents);
+   * empty array for object types that have no tags column. Surfaced
+   * so the UI can render tag facets and chips without re-querying.
+   */
+  tags: string[];
+}
+
+/**
+ * Facet filters applied as Postgres WHERE clauses *before* ranking.
+ *
+ *   - boxIds      — restrict to hits inside one of these boxes
+ *                   (workspace-scoped boxes themselves are still
+ *                   surfaced when their own id is in the set).
+ *   - dateRange   — ISO date strings filtered against `updated_at`.
+ *                   `from` is inclusive (>=); `to` is inclusive (<=).
+ *   - kinds       — restrict notes to one of 'note' | 'guide' | 'bundle'.
+ *                   Non-note object types are unaffected — the kind
+ *                   facet is a note-level concept, so files/skills/
+ *                   agents/folders/boxes are excluded entirely when
+ *                   `kinds` is set.
+ *   - tags        — any-match (OR) against the `tags` text[] column on
+ *                   notes, files, skills, and agents. Tables without a
+ *                   tags column (folders, boxes) are excluded entirely
+ *                   when `tags` is set.
+ *
+ * An empty array / undefined means "no filter on this facet". When the
+ * combination would return zero rows, `searchWorkspace` returns an
+ * empty array — it does NOT relax the filter.
+ */
+export interface SearchFacets {
+  boxIds?: string[];
+  dateRange?: { from?: string; to?: string };
+  kinds?: Array<"note" | "guide" | "bundle">;
+  tags?: string[];
+}
+
+/**
+ * Per-result-set facet counts, used by the UI to render checkbox
+ * counts ("Boxes (12)", "Tag: roadmap (4)", etc.).
+ */
+export interface SearchFacetCounts {
+  byBox: Array<{ id: string; name: string; count: number }>;
+  byKind: Record<"note" | "guide" | "bundle", number>;
+  byTag: Array<{ tag: string; count: number }>;
 }
 
 const MAX_PER_TYPE = 12;
@@ -107,6 +163,20 @@ export async function searchWorkspace(
     limitPerType?: number;
     branchId?: string | null;
     branchScope?: BranchScope;
+    /**
+     * Optional facet filters. Applied as additional WHERE clauses
+     * *before* per-table ranking. Empty / undefined = no filter.
+     */
+    facets?: SearchFacets;
+    /**
+     * Authenticated user id. When provided, results are cached for
+     * 60s in the hot-query cache (`src/lib/search_query_cache.ts`)
+     * keyed per-(workspace, user). The userId segment is required
+     * for cache participation: branch overlay and role-based
+     * filtering can produce per-user results, so we must never
+     * serve one user's cached hits to another.
+     */
+    userId?: string;
   } = {}
 ): Promise<WorkspaceSearchHit[]> {
   const q = rawQuery.trim();
@@ -120,6 +190,25 @@ export async function searchWorkspace(
     return [];
   }
 
+  // Hot-query cache lookup. Only participate when a userId is
+  // available — keying by user is a privacy guard, not an
+  // optimisation. Branch + scope are folded into the facets-portion
+  // of the key so a query repeated against the same branch returns
+  // the cached set, while crossing branches misses (correctly).
+  const cacheKey =
+    opts.userId
+      ? searchCacheKey(workspaceId, opts.userId, q, {
+          facets: opts.facets ?? null,
+          branchId: opts.branchId ?? null,
+          branchScope: opts.branchScope ?? null,
+          limitPerType: opts.limitPerType ?? null,
+        })
+      : null;
+  if (cacheKey) {
+    const hit = await getCachedSearch<WorkspaceSearchHit[]>(cacheKey);
+    if (hit) return hit;
+  }
+
   const perType = opts.limitPerType ?? MAX_PER_TYPE;
   const like = `%${q.replace(/[%_]/g, "\\$&")}%`;
   // PostgREST plfts (plainto_tsquery) value — escape parens / colons so
@@ -127,6 +216,15 @@ export async function searchWorkspace(
   const ftsQ = q.replace(/[():&|!<>]/g, " ").trim();
   const branchId = opts.branchId ?? null;
   const branchScope = opts.branchScope;
+  const facets = opts.facets ?? {};
+  const facetBoxIds = facets.boxIds && facets.boxIds.length > 0
+    ? facets.boxIds : null;
+  const facetKinds = facets.kinds && facets.kinds.length > 0
+    ? facets.kinds : null;
+  const facetTags = facets.tags && facets.tags.length > 0
+    ? facets.tags : null;
+  const facetFrom = facets.dateRange?.from;
+  const facetTo = facets.dateRange?.to;
 
   const boxMap = opts.boxMap
     ?? (await loadBoxMap(supabase, workspaceId));
@@ -176,76 +274,183 @@ export async function searchWorkspace(
     return q.is("branch_id", null);
   };
 
+  /**
+   * Apply the box / date-range facets uniformly. Box and date-range
+   * apply to every table that has matching columns (notes, files,
+   * skills, agents, folders, boxes — all have box_id except boxes
+   * itself, which we handle by matching `id` instead). The kind +
+   * tags facets are table-specific and applied at the per-query call
+   * site below.
+   *
+   * `withBoxIdCol` lets us swap `box_id` for `id` on the `boxes`
+   * table without duplicating the helper.
+   */
+  const applyFacets = <Q>(
+    query: Q,
+    opts: { boxIdCol?: "box_id" | "id" } = {}
+  ): Q => {
+    type Filterable = {
+      in: (c: string, v: readonly unknown[]) => Q;
+      gte: (c: string, v: unknown) => Q;
+      lte: (c: string, v: unknown) => Q;
+    };
+    const q = query as unknown as Filterable;
+    const boxCol = opts.boxIdCol ?? "box_id";
+    let out: Q = query;
+    if (facetBoxIds) {
+      out = (out as unknown as Filterable).in(boxCol, facetBoxIds);
+    }
+    if (facetFrom) {
+      out = (out as unknown as Filterable).gte("updated_at", facetFrom);
+    }
+    if (facetTo) {
+      out = (out as unknown as Filterable).lte("updated_at", facetTo);
+    }
+    // reference q so unused-var checks don't fire if both date bounds
+    // are absent and box facet is also absent.
+    void q;
+    return out;
+  };
+
+  /**
+   * Apply the tag facet (any-match) using the PostgREST `overlaps`
+   * (`ov`) operator on a text[] column. Empty `facetTags` is a no-op.
+   */
+  const applyTagFacet = <Q>(query: Q): Q => {
+    type Filterable = {
+      overlaps: (c: string, v: readonly string[]) => Q;
+    };
+    if (!facetTags) return query;
+    return (query as unknown as Filterable).overlaps("tags", facetTags);
+  };
+
+  // Tags are only present on notes / files / skills / agents.
+  // Folders + boxes have no tags column, so a tag facet excludes them
+  // entirely. Likewise the kind facet is a notes-only concept; when
+  // set we drop non-note types from the result mix.
+  const tagsExcludeNonTagged = facetTags !== null;
+  const kindsExcludeNonNote = facetKinds !== null;
+  // Files / skills / agents are not affected by `kind` (which is
+  // notes-only), so a kind facet also drops them.
+  const skipFiles = kindsExcludeNonNote;
+  const skipSkills = kindsExcludeNonNote;
+  const skipAgents = kindsExcludeNonNote;
+  const skipFolders = tagsExcludeNonTagged || kindsExcludeNonNote;
+  const skipBoxes = tagsExcludeNonTagged || kindsExcludeNonNote;
+
+  const emptyRows: Promise<Array<Record<string, unknown>>> = Promise.resolve([]);
+
+  // Per-table kind filter for notes. Postgres `kind` column lives on
+  // `notes`; when `facetKinds` is non-null we restrict to that set.
+  const applyNoteKind = <Q>(query: Q): Q => {
+    type Filterable = { in: (c: string, v: readonly unknown[]) => Q };
+    if (!facetKinds) return query;
+    return (query as unknown as Filterable).in("kind", facetKinds);
+  };
+
   const [notes, files, skills, agents, folders, boxes] = await Promise.all([
     // Notes: name + body (notes still use ILIKE — notes FTS is handled
     // by the dedicated search_notes RPC; this cross-type surface keeps
     // the simpler approach for now).
-    applyBranch(
-      supabase
-        .from("notes")
-        .select("id, title, summary, markdown_content, box_id, path_cache, status, updated_at, branch_id")
-        .eq("workspace_id", workspaceId)
-        .neq("status", "trashed")
+    applyTagFacet(
+      applyNoteKind(
+        applyFacets(
+          applyBranch(
+            supabase
+              .from("notes")
+              .select("id, title, summary, markdown_content, box_id, path_cache, status, updated_at, branch_id, kind, tags")
+              .eq("workspace_id", workspaceId)
+              .neq("status", "trashed")
+          )
+        )
+      )
     )
       .or(`title.ilike.${like},markdown_content.ilike.${like}`)
       .limit(perType)
       .then((r) => r.data ?? []),
 
     // Files: FTS via search_vector (name A, description B, source_content C)
-    applyBranch(
-      supabase
-        .from("files")
-        .select("id, name, box_id, path_cache, source_content, description, status, updated_at, branch_id")
-        .eq("workspace_id", workspaceId)
-        .neq("status", "trashed")
-    )
-      .or(`name.ilike.${like},search_vector.plfts.${ftsQ}`)
-      .limit(perType)
-      .then((r) => r.data ?? []),
+    skipFiles
+      ? emptyRows
+      : applyTagFacet(
+          applyFacets(
+            applyBranch(
+              supabase
+                .from("files")
+                .select("id, name, box_id, path_cache, source_content, description, status, updated_at, branch_id, tags")
+                .eq("workspace_id", workspaceId)
+                .neq("status", "trashed")
+            )
+          )
+        )
+          .or(`name.ilike.${like},search_vector.plfts.${ftsQ}`)
+          .limit(perType)
+          .then((r) => r.data ?? []),
 
     // Skills: FTS via search_vector (name+tags A, description B, source_content C)
-    applyBranch(
-      supabase
-        .from("skills")
-        .select("id, name, box_id, path_cache, source_content, description, status, updated_at, is_reusable, branch_id")
-        .eq("workspace_id", workspaceId)
-        .neq("status", "trashed")
-    )
-      .or(`name.ilike.${like},search_vector.plfts.${ftsQ}`)
-      .limit(perType)
-      .then((r) => r.data ?? []),
+    skipSkills
+      ? emptyRows
+      : applyTagFacet(
+          applyFacets(
+            applyBranch(
+              supabase
+                .from("skills")
+                .select("id, name, box_id, path_cache, source_content, description, status, updated_at, is_reusable, branch_id, tags")
+                .eq("workspace_id", workspaceId)
+                .neq("status", "trashed")
+            )
+          )
+        )
+          .or(`name.ilike.${like},search_vector.plfts.${ftsQ}`)
+          .limit(perType)
+          .then((r) => r.data ?? []),
 
     // Agents: FTS via search_vector (name+tags A, description+system_prompt B, source_content C)
-    applyBranch(
-      supabase
-        .from("agents")
-        .select("id, name, box_id, path_cache, source_content, description, system_prompt, status, updated_at, is_reusable, branch_id")
-        .eq("workspace_id", workspaceId)
-        .neq("status", "trashed")
-    )
-      .or(`name.ilike.${like},search_vector.plfts.${ftsQ}`)
-      .limit(perType)
-      .then((r) => r.data ?? []),
+    skipAgents
+      ? emptyRows
+      : applyTagFacet(
+          applyFacets(
+            applyBranch(
+              supabase
+                .from("agents")
+                .select("id, name, box_id, path_cache, source_content, description, system_prompt, status, updated_at, is_reusable, branch_id, tags")
+                .eq("workspace_id", workspaceId)
+                .neq("status", "trashed")
+            )
+          )
+        )
+          .or(`name.ilike.${like},search_vector.plfts.${ftsQ}`)
+          .limit(perType)
+          .then((r) => r.data ?? []),
 
-    applyBranch(
-      supabase
-        .from("folders")
-        .select("id, name, box_id, path_cache, description, status, updated_at, branch_id")
-        .eq("workspace_id", workspaceId)
-        .neq("status", "trashed")
-    )
-      .or(`name.ilike.${like},description.ilike.${like}`)
-      .limit(perType)
-      .then((r) => r.data ?? []),
+    skipFolders
+      ? emptyRows
+      : applyFacets(
+          applyBranch(
+            supabase
+              .from("folders")
+              .select("id, name, box_id, path_cache, description, status, updated_at, branch_id")
+              .eq("workspace_id", workspaceId)
+              .neq("status", "trashed")
+          )
+        )
+          .or(`name.ilike.${like},description.ilike.${like}`)
+          .limit(perType)
+          .then((r) => r.data ?? []),
 
-    supabase
-      .from("boxes")
-      .select("id, name, description, status, updated_at")
-      .eq("workspace_id", workspaceId)
-      .neq("status", "trashed")
-      .or(`name.ilike.${like},description.ilike.${like}`)
-      .limit(perType)
-      .then((r) => r.data ?? []),
+    skipBoxes
+      ? emptyRows
+      : applyFacets(
+          supabase
+            .from("boxes")
+            .select("id, name, description, status, updated_at")
+            .eq("workspace_id", workspaceId)
+            .neq("status", "trashed"),
+          { boxIdCol: "id" }
+        )
+          .or(`name.ilike.${like},description.ilike.${like}`)
+          .limit(perType)
+          .then((r) => r.data ?? []),
   ]);
 
   // Pending-op overlay: when a branch is active, drop rows the branch
@@ -277,6 +482,8 @@ export async function searchWorkspace(
       snippet: clampSnippet(n.summary ?? n.markdown_content),
       status: n.status,
       updatedAt: n.updated_at,
+      kind: (n.kind ?? "note") as "note" | "guide" | "bundle",
+      tags: n.tags ?? [],
       rank,
       href: `/app/notes/${n.id}`,
     });
@@ -295,6 +502,8 @@ export async function searchWorkspace(
       snippet: clampSnippet(f.description ?? f.source_content),
       status: f.status,
       updatedAt: f.updated_at,
+      kind: null,
+      tags: f.tags ?? [],
       rank,
       href: `/app/files/${f.id}`,
     });
@@ -313,6 +522,8 @@ export async function searchWorkspace(
       snippet: clampSnippet(s.description ?? s.source_content),
       status: s.status,
       updatedAt: s.updated_at,
+      kind: null,
+      tags: s.tags ?? [],
       rank,
       href: `/app/skills/${s.id}`,
     });
@@ -332,6 +543,8 @@ export async function searchWorkspace(
       snippet: clampSnippet(a.description ?? a.source_content ?? a.system_prompt),
       status: a.status,
       updatedAt: a.updated_at,
+      kind: null,
+      tags: a.tags ?? [],
       rank,
       href: `/app/agents/${a.id}`,
     });
@@ -350,6 +563,8 @@ export async function searchWorkspace(
       snippet: clampSnippet(fl.description),
       status: fl.status,
       updatedAt: fl.updated_at,
+      kind: null,
+      tags: [],
       rank,
       href: `/app/folders/${fl.id}`,
     });
@@ -367,6 +582,8 @@ export async function searchWorkspace(
       snippet: clampSnippet(b.description),
       status: b.status,
       updatedAt: b.updated_at,
+      kind: null,
+      tags: [],
       rank,
       href: `/app/boxes/${b.id}`,
     });
@@ -376,6 +593,11 @@ export async function searchWorkspace(
     if (a.rank !== b.rank) return b.rank - a.rank;
     return b.updatedAt.localeCompare(a.updatedAt);
   });
+
+  // Fire-and-forget cache write; never blocks the caller.
+  if (cacheKey) {
+    void setCachedSearch(cacheKey, hits);
+  }
 
   return hits;
 }

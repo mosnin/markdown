@@ -1,6 +1,7 @@
 import { type SupabaseClient } from "@supabase/supabase-js";
 import { createHash } from "node:crypto";
 import { logger } from "@/lib/logger";
+import { expandQuery } from "@/server/services/search_query_expansion_service";
 
 /**
  * Embedding service — vector-based semantic search for notes.
@@ -247,10 +248,17 @@ export async function hybridSearch(
 ): Promise<HybridSearchResult[]> {
   const limit = opts.limit ?? 20;
 
+  // Query expansion (B2): canonical form drives the vector leg (the
+  // embedding model already handles paraphrase), while ALL variants
+  // OR-join the FTS leg so synonyms / abbreviations / plurals widen
+  // keyword recall. The canonical form is always variants[0], so the
+  // user's literal phrasing keeps priority in keyword scoring.
+  const { canonical, variants } = expandQuery(query);
+
   // Run both searches in parallel.
   const [semanticResults, keywordResults] = await Promise.all([
-    semanticSearch(supabase, workspaceId, query, { limit, branchId: opts.branchId }),
-    fetchKeywordResults(supabase, workspaceId, query, limit),
+    semanticSearch(supabase, workspaceId, canonical, { limit, branchId: opts.branchId }),
+    fetchKeywordResults(supabase, workspaceId, variants, limit),
   ]);
 
   // Build a map of note_id → best scores from each source, tracking
@@ -344,17 +352,24 @@ interface KeywordHit {
  * Fetch keyword search results scoped to a workspace. Uses the
  * workspace_search_service's cross-type search but filters to notes
  * only, then normalizes to a lightweight shape for hybrid ranking.
+ *
+ * Accepts an array of query variants (from `expandQuery`) and OR-joins
+ * them across `title.ilike` / `markdown_content.ilike` so synonyms
+ * and pluralizations broaden recall. variants[0] is the canonical
+ * form and is what scoring keys off (a hit on the canonical phrasing
+ * outranks a hit on a synonym variant).
  */
 async function fetchKeywordResults(
   supabase: SupabaseClient,
   workspaceId: string,
-  query: string,
+  variants: string[],
   limit: number
 ): Promise<KeywordHit[]> {
-  const q = query.trim();
-  if (!q) return [];
+  // Trim + drop blanks; bail if nothing usable remains.
+  const trimmed = variants.map((v) => v.trim()).filter((v) => v.length > 0);
+  if (trimmed.length === 0) return [];
 
-  const like = `%${q.replace(/[%_]/g, "\\$&")}%`;
+  const canonical = trimmed[0];
 
   // `notes` has no `workspace_id` column; workspace membership is
   // inherited via `notes.box_id → boxes.workspace_id`. Fetch the box
@@ -367,14 +382,28 @@ async function fetchKeywordResults(
   const boxIds = (boxes ?? []).map((b: { id: string }) => b.id);
   if (boxIds.length === 0) return [];
 
+  // Build a single PostgREST `or(...)` clause that matches any variant
+  // against either column. Escape `%` and `_` so user input can't act
+  // as wildcards; commas are stripped because PostgREST uses them as
+  // the or-clause separator.
+  const orClauses: string[] = [];
+  for (const v of trimmed) {
+    const safe = v.replace(/[%_]/g, "\\$&").replace(/,/g, " ");
+    const like = `%${safe}%`;
+    orClauses.push(`title.ilike.${like}`);
+    orClauses.push(`markdown_content.ilike.${like}`);
+  }
+
   const { data } = await supabase
     .from("notes")
     .select("id, title, summary, markdown_content, status, updated_at")
     .in("box_id", boxIds)
     .neq("status", "trashed")
     .is("branch_id", null)
-    .or(`title.ilike.${like},markdown_content.ilike.${like}`)
+    .or(orClauses.join(","))
     .limit(limit);
+
+  const canonicalLower = canonical.toLowerCase();
 
   return (data ?? []).map((n: {
     id: string;
@@ -385,6 +414,12 @@ async function fetchKeywordResults(
     id: n.id,
     title: n.title,
     snippet: clampSnippet(n.summary ?? n.markdown_content),
-    rank: n.title.toLowerCase().includes(q.toLowerCase()) ? 10 : 1,
+    // Score: canonical title hit > any title hit > body-only hit. This
+    // keeps the user's literal phrasing ranked above synonym-only hits.
+    rank: n.title.toLowerCase().includes(canonicalLower)
+      ? 10
+      : trimmed.some((v) => n.title.toLowerCase().includes(v.toLowerCase()))
+        ? 5
+        : 1,
   }));
 }

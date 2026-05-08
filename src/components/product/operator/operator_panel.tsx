@@ -1,42 +1,24 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
-import Link from "next/link";
 import {
-  Bot,
-  Play,
-  CheckCircle2,
-  XCircle,
-  ArrowRight,
-  RotateCcw,
-  Sparkles,
-  BadgeAlert,
-  Save,
-  Maximize2,
-  PanelLeftClose,
-  PanelLeft,
-  Layers,
-  Quote,
-  Zap,
-  ArrowUp,
-  BookOpen,
-} from "lucide-react";
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useTransition,
+} from "react";
+import { Bot, PanelLeft, PanelLeftClose } from "lucide-react";
 
-import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   Sheet,
   SheetContent,
+  SheetDescription,
   SheetHeader,
   SheetTitle,
-  SheetDescription,
 } from "@/components/ui/sheet";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Textarea } from "@/components/ui/textarea";
-import { Input } from "@/components/ui/input";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { Separator } from "@/components/ui/separator";
-import { Spinner } from "@/components/ui/spinner";
 import {
   Dialog,
   DialogContent,
@@ -45,40 +27,65 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { PageHeader } from "@/components/product/page_header";
+import { OperatorSessionsSidebar } from "@/components/product/operator/operator_sessions_sidebar";
+import { OperatorComposer } from "@/components/product/operator/operator_composer";
+import {
+  OperatorTranscript,
+  type QuotaExceededState,
+} from "@/components/product/operator/operator_transcript";
+import { OperatorPlanRail } from "@/components/product/operator/operator_plan_rail";
+import { OperatorSteerBar } from "@/components/product/operator/operator_steer_bar";
 
 import { useOperatorProgress } from "@/lib/hooks/use_operator_run";
-import { OperatorActivityPanel } from "@/components/product/operator/operator_activity_panel";
-import { OperatorSessionsSidebar } from "@/components/product/operator/operator_sessions_sidebar";
-import { OperatorSessionHistory } from "@/components/product/operator/operator_session_history";
 import type { OperatorSession } from "@/server/services/operator_sessions_service";
 import {
-  requestOperatorPlanAction,
   approveAndExecuteAction,
-  runWorkspaceOperatorAction,
   cancelRunAction,
-  retryRunAction,
   listSavedPromptsAction,
+  requestOperatorPlanAction,
+  retryRunAction,
+  runWorkspaceOperatorAction,
   saveOperatorPromptAction,
   type ActionErrorQuotaExceeded,
 } from "@/app/app/workspace_operator/actions";
 import { loadOperatorQuotaAction } from "@/app/app/workspace_operator/quota_actions";
-import type {
-  OperatorPlanStep,
-  OperatorRunPhase,
-  OperatorProgressEvent,
-  SavedOperatorPrompt,
-  OperatorModel,
-} from "@/app/app/workspace_operator/types";
 import {
-  OPERATOR_MODELS,
   DEFAULT_OPERATOR_MODEL,
-  estimateOperatorRunCost,
-  formatOperatorCostUsd,
+  OPERATOR_MODELS,
+  type OperatorModel,
+  type OperatorPlanStep,
+  type OperatorRunPhase,
+  type SavedOperatorPrompt,
 } from "@/app/app/workspace_operator/types";
 import type { WorkspacePlan } from "@/server/services/subscription_service";
 
 // ---------------------------------------------------------------------------
-// Props
+// Operator panel — orchestrator
+//
+// Owns all run-state, server-action calls, and the live progress
+// subscription. Delegates rendering to four focused sub-components:
+//
+//   - OperatorComposer       — input + chip rail + send (idle phase)
+//   - OperatorTranscript     — message scrollback + plan + activity panel
+//   - OperatorPlanRail       — right-side plan/diff rail (mode="page" only)
+//   - OperatorSteerBar       — cancel / approve / retry controls
+//
+// Layout:
+//   - mode="page" (mounted at /app)        →  PageHeader + sessions sidebar
+//                                             + transcript + composer + plan rail
+//   - mode="sheet" (mounted by trigger)    →  right-side Sheet drawer with
+//                                             sessions sidebar + transcript
+//                                             + composer (no plan rail; the
+//                                             sheet is already narrow)
+//
+// Behaviors preserved verbatim:
+//   - Streaming events via useOperatorProgress + per-event step updates
+//   - Approvals: requestOperatorPlanAction → approveAndExecuteAction
+//   - Branch awareness: branchId returned from server actions
+//   - Autosave drafts via per-workspace localStorage prompt history
+//   - Keyboard: Cmd/Ctrl+K focus, Esc cancel, ↑/↓ recall, Cmd/Ctrl+↵ submit
+//   - Quota gating (preload + structured `quota_exceeded` action error)
 // ---------------------------------------------------------------------------
 
 interface OperatorPanelProps {
@@ -89,65 +96,8 @@ interface OperatorPanelProps {
   defaultBoxId?: string;
 }
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-const TOOL_BADGE_STYLES: Record<string, string> = {
-  hybrid_search: "bg-blue-500/10 text-blue-600 dark:text-blue-400",
-  draft_note: "bg-green-500/10 text-green-600 dark:text-green-400",
-  analysis: "bg-purple-500/10 text-purple-600 dark:text-purple-400",
-};
-
-function toolBadgeClass(tool: string): string {
-  return TOOL_BADGE_STYLES[tool] ?? "bg-muted text-muted-foreground";
-}
-
-function stepStatusIcon(status: OperatorPlanStep["status"]) {
-  switch (status) {
-    case "completed":
-      return (
-        <CheckCircle2
-          className="h-4 w-4 shrink-0 text-green-600 dark:text-green-400"
-          aria-label="Completed"
-        />
-      );
-    case "in_progress":
-      return <Spinner size={16} />;
-    case "failed":
-      return (
-        <XCircle
-          className="h-4 w-4 shrink-0 text-destructive"
-          aria-label="Failed"
-        />
-      );
-    case "pending":
-    default:
-      return (
-        <div
-          className="h-4 w-4 shrink-0 rounded-full border-2 border-muted-foreground/30"
-          aria-label="Pending"
-        />
-      );
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Component
-// ---------------------------------------------------------------------------
-
 const MAX_PROMPT_LENGTH = 4000;
-
-/** UI-facing slice of a structured quota-exceeded error — the panel
- *  persists this so its `quota_exceeded` phase can show tier / reset
- *  messaging without re-fetching. */
-interface QuotaExceededState {
-  tier: WorkspacePlan;
-  limit: number | null;
-  used: number;
-  resetsAt: string;
-  message: string;
-}
+const LIVE_LOG_TAIL = 8;
 
 /** Proactive pre-check snapshot used to disable the submit button. */
 interface QuotaPreview {
@@ -165,7 +115,7 @@ export function OperatorPanel({
   onOpenChange = () => {},
   defaultBoxId,
 }: OperatorPanelProps) {
-  // -- state -----------------------------------------------------------------
+  // -- core state ------------------------------------------------------------
   const [phase, setPhase] = useState<OperatorRunPhase>("idle");
   const [prompt, setPrompt] = useState("");
   const [runId, setRunId] = useState<string | null>(null);
@@ -182,11 +132,12 @@ export function OperatorPanel({
     useState<QuotaExceededState | null>(null);
   const [quotaPreview, setQuotaPreview] = useState<QuotaPreview | null>(null);
 
-  // Wave 2 — model picker, saved prompts, save dialog, cancel-in-flight.
+  // Wave 2 — model picker, saved prompts, dialogs, in-flight cancellation.
   const [selectedModel, setSelectedModel] = useState<OperatorModel>(
     DEFAULT_OPERATOR_MODEL
   );
   const [savedPrompts, setSavedPrompts] = useState<SavedOperatorPrompt[]>([]);
+  const [savedPromptsOpen, setSavedPromptsOpen] = useState(false);
   const [saveDialogOpen, setSaveDialogOpen] = useState(false);
   const [saveName, setSaveName] = useState("");
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -208,19 +159,11 @@ export function OperatorPanel({
   const [sessionHistoryRefreshKey, setSessionHistoryRefreshKey] = useState(0);
   const [showSessionsSidebar, setShowSessionsSidebar] = useState(true);
 
-  // Prompt-history recall state. `historyIndex === -1` means "not recalling"
-  // (the textarea contents are user-typed, not a recalled entry). Any other
-  // value is a 0-based index into `promptHistory` (most-recent first).
+  // Prompt-history recall state. -1 means "not recalling".
   const [promptHistory, setPromptHistory] = useState<string[]>([]);
   const [historyIndex, setHistoryIndex] = useState<number>(-1);
 
-  // Subscribe to live progress broadcast channel for any non-terminal phase
-  // where the agent may still be pushing events. We still only *have* a runId
-  // once planning returns — the hook no-ops when runId is null, so the list
-  // stays empty in phases like "idle" / "quota_exceeded" / "failed".
-  //
-  // The hook also auto-tears down when `runId` changes to null (e.g. on
-  // panel close via reset()) — see `use_operator_run.ts`.
+  // -- live progress subscription -------------------------------------------
   const isActivePhase =
     phase === "planning" ||
     phase === "awaiting_approval" ||
@@ -229,19 +172,16 @@ export function OperatorPanel({
   const eventsEndRef = useRef<HTMLDivElement>(null);
   const promptTextareaRef = useRef<HTMLTextAreaElement>(null);
 
-  // Last N live events to render in the little log beneath the plan / steps.
-  const LIVE_LOG_TAIL = 8;
   const liveTail = useMemo(
     () => progressEvents.slice(-LIVE_LOG_TAIL),
     [progressEvents]
   );
 
   // -- quota preload ---------------------------------------------------------
-  // Load the current quota when the panel opens so the submit button can
-  // be preemptively disabled at limit with a tooltip. Re-fetch after a
-  // completed run so a user who was at 4/5 sees the reflected 5/5.
+  // Mode "page" is always-on; mode "sheet" only fetches once the sheet opens.
+  const quotaActive = mode === "page" || open;
   useEffect(() => {
-    if (!open) return;
+    if (!quotaActive) return;
     let cancelled = false;
     loadOperatorQuotaAction().then((res) => {
       if (cancelled || !res.ok || !res.quota) return;
@@ -260,12 +200,10 @@ export function OperatorPanel({
     return () => {
       cancelled = true;
     };
-  }, [open, phase]);
+  }, [quotaActive, phase]);
 
-  // Load saved prompts when the panel opens. Errors here are non-fatal —
-  // the dropdown just shows nothing and the user can still type free-form.
   useEffect(() => {
-    if (!open) return;
+    if (!quotaActive) return;
     let cancelled = false;
     listSavedPromptsAction().then((res) => {
       if (cancelled || !res.ok) return;
@@ -274,13 +212,11 @@ export function OperatorPanel({
     return () => {
       cancelled = true;
     };
-  }, [open]);
+  }, [quotaActive]);
 
-  // Pick up a prompt stashed in sessionStorage by the "Try an example"
-  // chips on the history page. Consumed once per open so re-opening an
-  // idle panel doesn't overwrite the user's in-progress text.
+  // Pick up a pending prompt stashed by the "Try an example" chips.
   useEffect(() => {
-    if (!open || typeof window === "undefined") return;
+    if (!quotaActive || typeof window === "undefined") return;
     try {
       const pending = window.sessionStorage.getItem("poggle:pending-prompt");
       if (pending) {
@@ -290,51 +226,42 @@ export function OperatorPanel({
     } catch {
       // sessionStorage blocked — nothing to pick up.
     }
-  }, [open]);
+  }, [quotaActive]);
 
   // -- derived ---------------------------------------------------------------
   const boxId = defaultBoxId ?? "";
 
-  // Prompt-history key is scoped by boxId (the panel's closest workspace
-  // discriminator available here); the trigger forwards the active
-  // workspace's box so prompts don't bleed across workspaces on a shared
-  // device.
+  // Per-workspace prompt-history key.
   const promptHistoryKey = boxId
     ? `${PROMPT_HISTORY_KEY_PREFIX}${boxId}`
     : null;
 
-  // Load prompt history from localStorage once per workspace scope.
   useEffect(() => {
-    if (!open || !promptHistoryKey || typeof window === "undefined") return;
+    if (!quotaActive || !promptHistoryKey || typeof window === "undefined") return;
     const loaded = loadPromptHistory(window.localStorage, promptHistoryKey);
     setPromptHistory(loaded);
-  }, [open, promptHistoryKey]);
+  }, [quotaActive, promptHistoryKey]);
 
-  // Tear down the progress subscription when the panel closes. We do this
-  // by clearing runId — the `useOperatorProgress` hook keys off runId and
-  // removes its Supabase channel when runId transitions to null. We keep
-  // the run otherwise viable (no reset of prompt/steps) so reopening the
-  // panel mid-run later would still benefit from a manual refresh.
+  // Tear down progress subscription when sheet closes after terminal phase.
   useEffect(() => {
     if (open) return;
     if (phase === "completed" || phase === "failed" || phase === "cancelled") {
-      // Terminal state — it's fine to drop runId entirely on close.
       setRunId(null);
     }
   }, [open, phase]);
 
-  // Pro/Business may opt into the bigger model. Free is locked to mini.
-  const canUseLargeModel =
+  // Pro/Business may opt into the bigger model. (Currently informational —
+  // wired through to model changers in a follow-up.) Free is locked to mini.
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const _canUseLargeModel =
     quotaPreview?.tier === "pro" || quotaPreview?.tier === "business";
 
-  // -- effects ---------------------------------------------------------------
-
-  // Scroll event log to bottom when new events arrive.
+  // Scroll the events tail into view when new events arrive.
   useEffect(() => {
     eventsEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [progressEvents.length]);
 
-  // Update step statuses from realtime progress events.
+  // Update step statuses from live progress events.
   useEffect(() => {
     if (phase !== "executing" || progressEvents.length === 0) return;
 
@@ -357,7 +284,6 @@ export function OperatorPanel({
     }
 
     if (latest.type === "failed") {
-      // Mark any in-progress step as failed.
       setSteps((prev) =>
         prev.map((s) =>
           s.status === "in_progress" ? { ...s, status: "failed" } : s
@@ -400,10 +326,7 @@ export function OperatorPanel({
 
     const submittedPrompt = decoratePrompt(prompt.trim(), { requireCitations });
 
-    // Auto mode — skip the plan/approve gate and go straight from prompt
-    // to execution. The plan phase is valuable for complex requests but is
-    // pure ceremony for simple one-shot prompts; power users opt into
-    // auto mode to cut the round-trip.
+    // Auto mode — skip plan/approve and dispatch immediately.
     if (autoMode) {
       setPhase("executing");
       startExecTransition(async () => {
@@ -549,13 +472,7 @@ export function OperatorPanel({
 
   /**
    * Real cancel — signals the Modal-side agent to stop via cancelRunAction.
-   *
-   * Optimistically transitions to "cancelled" after the action returns.
-   * The Python operator polls cancellation_requested_at and writes the
-   * final status; the panel's state is just a UI hint until then.
-   *
-   * If we have no runId yet (e.g. action hasn't returned the dispatch id),
-   * fall back to a local-only reset — there's nothing server-side to stop.
+   * If we have no runId yet, fall back to a local-only reset.
    */
   function handleCancel() {
     if (!runId) {
@@ -573,7 +490,6 @@ export function OperatorPanel({
         }
         setPhase("cancelled");
         setCancelling(false);
-        // Brief beat so the user sees the "cancelled" state, then reset.
         setTimeout(reset, 1200);
       })
       .catch((err: unknown) => {
@@ -584,9 +500,7 @@ export function OperatorPanel({
 
   /**
    * Retry a failed run — mints a new runs row server-side via retryRunAction
-   * and re-enters the planning/executing phase. The panel reseeds prompt +
-   * model + branch from the new row so the user can also edit before
-   * re-approving (when the original mode was "execute" or "plan").
+   * and re-enters the planning/executing phase.
    */
   function handleRetry() {
     if (!runId) {
@@ -602,7 +516,6 @@ export function OperatorPanel({
           setRetrying(false);
           return;
         }
-        // Reseed from the new run row.
         setRunId(res.data.newRunId);
         setBranchId(res.data.branchId);
         setPrompt(res.data.prompt);
@@ -617,10 +530,6 @@ export function OperatorPanel({
         setSummary("");
         setResult(null);
         setRetrying(false);
-        // For plan/execute modes: drop back to idle so the user can re-plan.
-        // For full mode: kick off a fresh plan automatically. Without
-        // auto-dispatch we'd silently strand the new run id; explicit
-        // re-plan keeps quota gating + audit consistent.
         if (res.data.mode === "full" || res.data.mode === "plan") {
           setPhase("idle");
         } else {
@@ -640,29 +549,20 @@ export function OperatorPanel({
   }
 
   // -- keyboard shortcuts ----------------------------------------------------
-
-  // Cancel is only meaningful while the run is still in-flight server-side
-  // (planning or executing). `awaiting_approval` hasn't dispatched anything
-  // yet — Esc there would nuke local state, which reset() already handles.
-  const isCancellable =
-    phase === "planning" || phase === "executing";
+  const isCancellable = phase === "planning" || phase === "executing";
 
   const handleCancelRef = useRef(handleCancel);
   const handleGeneratePlanRef = useRef(handleGeneratePlan);
   handleCancelRef.current = handleCancel;
   handleGeneratePlanRef.current = handleGeneratePlan;
 
-  // Global Cmd/Ctrl+K: focus the prompt textarea, opening the panel if it
-  // isn't already. This mirrors common "focus search" shortcuts and keeps
-  // the panel reachable from anywhere in the app when the trigger is
-  // mounted at the layout root.
+  // Cmd/Ctrl+K — focus the prompt textarea, opening the sheet if needed.
   useEffect(() => {
     function onGlobalKeyDown(e: KeyboardEvent) {
       const modifier = e.metaKey || e.ctrlKey;
       if (modifier && (e.key === "k" || e.key === "K")) {
         e.preventDefault();
-        if (!open) onOpenChange(true);
-        // Defer focus until the sheet mounts the textarea.
+        if (mode === "sheet" && !open) onOpenChange(true);
         setTimeout(() => {
           promptTextareaRef.current?.focus();
         }, 0);
@@ -670,39 +570,25 @@ export function OperatorPanel({
     }
     window.addEventListener("keydown", onGlobalKeyDown);
     return () => window.removeEventListener("keydown", onGlobalKeyDown);
-  }, [open, onOpenChange]);
+  }, [open, onOpenChange, mode]);
 
-  // Esc while a cancellable run is running: send cancel. Only active when
-  // the panel is open so it doesn't stomp on other "Esc" handlers elsewhere
-  // in the app.
+  // Esc while cancellable run is running.
   useEffect(() => {
-    if (!open) return;
+    if (mode === "sheet" && !open) return;
     function onEsc(e: KeyboardEvent) {
       if (e.key !== "Escape") return;
       if (!isCancellable) return;
       if (cancelling) return;
-      // Only intercept when the Sheet is the focused surface — a nested
-      // Dialog (e.g. save-template) should get its own Esc.
       if (saveDialogOpen) return;
       e.preventDefault();
       handleCancelRef.current();
     }
     window.addEventListener("keydown", onEsc);
     return () => window.removeEventListener("keydown", onEsc);
-  }, [open, isCancellable, cancelling, saveDialogOpen]);
+  }, [open, isCancellable, cancelling, saveDialogOpen, mode]);
 
   /**
-   * Textarea keydown — supports three shortcuts:
-   *
-   *   - Cmd/Ctrl+Enter   → submit (same as clicking Generate Plan)
-   *   - Up (at start)    → recall previous prompt in history
-   *   - Down (at start)  → recall next prompt (or clear back to empty)
-   *   - Esc              → clear recall and return to an empty textarea
-   *
-   * Up/Down only intercept when the cursor is at position 0 AND either the
-   * textarea is empty OR the user is currently viewing a recalled entry.
-   * Without those guards, Up/Down would break vertical line navigation
-   * inside a multi-line user-typed prompt.
+   * Textarea keydown — Cmd/Ctrl+Enter submit, Up/Down history recall, Esc clears.
    */
   const handlePromptKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -756,6 +642,7 @@ export function OperatorPanel({
     if (!id) return;
     const found = savedPrompts.find((p) => p.id === id);
     if (!found) return;
+    setSavedPromptsOpen(false);
     const variables = extractPromptVariables(found.prompt);
     if (variables.length === 0) {
       setPrompt(found.prompt.slice(0, MAX_PROMPT_LENGTH));
@@ -803,498 +690,6 @@ export function OperatorPanel({
     });
   }
 
-  // -- render helpers --------------------------------------------------------
-
-  const [savedPromptsOpen, setSavedPromptsOpen] = useState(false);
-
-  function renderIdle() {
-    return (
-      <div className="flex flex-1 flex-col overflow-hidden">
-        {/* Session history — keep existing code, unchanged */}
-        {activeSessionId && (
-          <div className="flex flex-col gap-1 p-4 pb-0">
-            <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60">
-              This session
-            </p>
-            <div className="rounded-md border border-border overflow-hidden">
-              <OperatorSessionHistory
-                sessionId={activeSessionId}
-                activeRunId={runId}
-                refreshKey={sessionHistoryRefreshKey}
-              />
-            </div>
-          </div>
-        )}
-
-        {/* Spacer that pushes composer to bottom */}
-        <div className="flex-1" />
-
-        {/* Composer area */}
-        <div className="flex flex-col gap-2 border-t border-border p-4">
-          {/* Context chips */}
-          <div className="flex items-center gap-2 flex-wrap">
-            {/* Collection chip — shows defaultBoxId if set */}
-            {defaultBoxId && (
-              <span className="inline-flex items-center gap-1 rounded-full border border-border bg-muted/50 px-2.5 py-0.5 text-[11px] text-muted-foreground">
-                <Layers className="h-3 w-3" />
-                Collection
-              </span>
-            )}
-            {/* Citations toggle chip */}
-            <button
-              type="button"
-              onClick={() => setRequireCitations((v) => !v)}
-              className={cn(
-                "inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-[11px] transition-colors",
-                requireCitations
-                  ? "border-primary/40 bg-primary/10 text-primary"
-                  : "border-border bg-muted/50 text-muted-foreground hover:text-foreground"
-              )}
-            >
-              <Quote className="h-3 w-3" />
-              Cite sources
-            </button>
-            {/* Auto-run chip */}
-            <button
-              type="button"
-              onClick={() => setAutoMode((v) => !v)}
-              className={cn(
-                "inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-[11px] transition-colors",
-                autoMode
-                  ? "border-primary/40 bg-primary/10 text-primary"
-                  : "border-border bg-muted/50 text-muted-foreground hover:text-foreground"
-              )}
-            >
-              <Zap className="h-3 w-3" />
-              Auto run
-            </button>
-            {/* Templates chip — only shown when saved prompts exist */}
-            {savedPrompts.length > 0 && (
-              <div className="relative">
-                <button
-                  type="button"
-                  onClick={() => setSavedPromptsOpen((v) => !v)}
-                  className={cn(
-                    "inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-[11px] transition-colors",
-                    savedPromptsOpen
-                      ? "border-primary/40 bg-primary/10 text-primary"
-                      : "border-border bg-muted/50 text-muted-foreground hover:text-foreground"
-                  )}
-                  aria-label="Templates"
-                >
-                  <BookOpen className="h-3 w-3" />
-                  Templates
-                </button>
-                {savedPromptsOpen && (
-                  <div className="absolute bottom-full left-0 mb-1 z-10 min-w-[200px] rounded-md border border-border bg-background shadow-md">
-                    <div className="flex flex-col py-1">
-                      {savedPrompts.map((p) => (
-                        <button
-                          key={p.id}
-                          type="button"
-                          onClick={() => {
-                            handleSelectSavedPrompt(p.id);
-                            setSavedPromptsOpen(false);
-                          }}
-                          className="px-3 py-1.5 text-left text-xs text-foreground hover:bg-accent truncate"
-                        >
-                          {p.name}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-            {/* Save as template button */}
-            <button
-              type="button"
-              onClick={handleOpenSaveDialog}
-              disabled={!prompt.trim()}
-              className="inline-flex items-center gap-1 rounded-full border border-border bg-muted/50 px-2.5 py-0.5 text-[11px] text-muted-foreground transition-colors hover:text-foreground disabled:opacity-40 disabled:cursor-not-allowed"
-              aria-label="Save as template"
-            >
-              <Save className="h-3 w-3" />
-              Save
-            </button>
-          </div>
-
-          {/* Textarea */}
-          <div className="relative">
-            <Textarea
-              id="operator-prompt"
-              ref={promptTextareaRef}
-              placeholder="Research, write, or organize your notes..."
-              value={prompt}
-              onChange={(e) => {
-                if (historyIndex !== -1) setHistoryIndex(-1);
-                setPrompt(e.target.value.slice(0, MAX_PROMPT_LENGTH));
-              }}
-              onKeyDown={handlePromptKeyDown}
-              maxLength={MAX_PROMPT_LENGTH}
-              className="min-h-[80px] resize-none pr-16 text-sm"
-              aria-describedby="operator-prompt-shortcuts"
-            />
-            {/* Send button — overlaid bottom-right of textarea */}
-            <Button
-              size="sm"
-              disabled={
-                !prompt.trim() ||
-                !boxId ||
-                isPlanPending ||
-                isExecPending ||
-                (quotaPreview !== null && !quotaPreview.allowed)
-              }
-              onClick={handleGeneratePlan}
-              className="absolute bottom-2 right-2 h-7 w-7 p-0"
-              title={
-                quotaPreview !== null && !quotaPreview.allowed
-                  ? `You've used all ${quotaPreview.limit ?? "∞"} Operator runs on the ${quotaPreview.tier} tier this month. Resets on ${formatResetDate(quotaPreview.resetsAt)}.`
-                  : autoMode ? "Run now" : "Generate plan"
-              }
-            >
-              <ArrowUp className="h-3.5 w-3.5" />
-            </Button>
-          </div>
-
-          {/* Bottom metadata row */}
-          <div className="flex items-center justify-between">
-            <p id="operator-prompt-shortcuts" className="text-[10px] text-muted-foreground/60">
-              {autoMode ? "↵ runs immediately" : "↵ generates a plan to review"}
-            </p>
-            {quotaPreview && !quotaPreview.allowed && (
-              <p className="text-[10px] text-destructive">Quota reached</p>
-            )}
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  function renderQuotaExceeded() {
-    const q = quotaExceeded;
-    if (!q) return null;
-    const tierLabel =
-      q.tier === "business"
-        ? "Business"
-        : q.tier === "pro"
-          ? "Pro"
-          : "Free";
-    const canUpgrade = q.tier !== "business";
-    return (
-      <div className="flex flex-1 flex-col items-center justify-center gap-4 p-4 text-center">
-        <BadgeAlert
-          className="h-10 w-10 text-amber-600 dark:text-amber-400"
-          aria-hidden="true"
-        />
-        <div className="flex flex-col gap-1">
-          <p className="text-sm font-medium text-foreground">
-            {q.limit == null
-              ? `You've reached your Operator limit on the ${tierLabel} tier this month.`
-              : `You've used all ${q.limit} Operator runs on the ${tierLabel} tier this month.`}
-          </p>
-          <p className="text-xs text-muted-foreground">
-            Resets on {formatResetDate(q.resetsAt)}.
-          </p>
-        </div>
-
-        <div className="flex items-center gap-2">
-          {canUpgrade && (
-            <Button render={<Link href="/app/settings#settings-billing" />}>
-              <ArrowRight className="h-4 w-4" aria-hidden="true" />
-              Upgrade plan
-            </Button>
-          )}
-          <Button variant="outline" onClick={reset}>
-            <RotateCcw className="h-4 w-4" aria-hidden="true" />
-            Close
-          </Button>
-        </div>
-      </div>
-    );
-  }
-
-  function renderPlanning() {
-    return (
-      <div className="flex flex-1 flex-col items-center justify-center gap-3 p-4">
-        <Spinner size={24} />
-        <p className="text-sm text-muted-foreground">Generating plan...</p>
-      </div>
-    );
-  }
-
-  function renderAwaitingApproval() {
-    return (
-      <div className="flex flex-1 flex-col gap-4 overflow-hidden p-4">
-        {summary && (
-          <p className="text-sm text-muted-foreground">{summary}</p>
-        )}
-
-        {liveTail.length > 0 && (
-          <ul
-            className="flex flex-col gap-0.5 rounded-md border border-border bg-muted/30 p-2"
-            aria-label="Live operator events"
-          >
-            {liveTail.map((evt, i) => (
-              <li
-                // Event stream is append-only; timestamp + type + step_index
-                // uniquely identify each event, with `i` as a tiebreaker.
-                key={`tail-${evt.timestamp}-${evt.type}-${evt.step_index ?? "x"}-${i}`}
-                className="flex items-start gap-2 text-[10px] text-muted-foreground"
-              >
-                <span className="shrink-0 tabular-nums">
-                  {new Date(evt.timestamp).toLocaleTimeString()}
-                </span>
-                <span className="truncate">{formatEventDetail(evt)}</span>
-              </li>
-            ))}
-          </ul>
-        )}
-
-        <Separator />
-
-        <ScrollArea className="flex-1 -mx-4 px-4">
-          <ol className="flex flex-col gap-2" aria-label="Plan steps">
-            {steps.map((step) => (
-              <li
-                key={step.index}
-                className="flex items-start gap-2 rounded-md border border-border bg-muted/30 p-2.5"
-              >
-                <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-muted text-[10px] font-semibold text-muted-foreground">
-                  {step.index + 1}
-                </span>
-                <div className="flex min-w-0 flex-1 flex-col gap-1">
-                  <input
-                    type="text"
-                    value={step.description}
-                    onChange={(e) =>
-                      handleStepDescriptionChange(step.index, e.target.value)
-                    }
-                    className="w-full bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground focus:underline"
-                    aria-label={`Step ${step.index + 1} description`}
-                  />
-                  <Badge
-                    variant="outline"
-                    className={cn("w-fit text-[10px]", toolBadgeClass(step.tool))}
-                  >
-                    {step.tool}
-                  </Badge>
-                </div>
-              </li>
-            ))}
-          </ol>
-        </ScrollArea>
-
-        <div className="flex flex-col gap-2">
-          <p
-            className="text-xs text-muted-foreground"
-            title="Worst-case estimate. Actual cost is usually lower because cached prompt tokens are billed at ~25% of the list rate and many steps complete in fewer than 500 output tokens."
-          >
-            Estimated max cost:{" "}
-            <span className="font-medium tabular-nums text-foreground">
-              {formatOperatorCostUsd(
-                estimateOperatorRunCost(
-                  prompt.length,
-                  steps.length,
-                  selectedModel
-                )
-              )}
-            </span>{" "}
-            ({selectedModel})
-          </p>
-          <div className="flex items-center gap-2">
-            {runId && (
-              <Button
-                variant="outline"
-                size="sm"
-                render={<Link href={`/app/workspace_operator/live/${runId}`} />}
-              >
-                <Maximize2 className="h-4 w-4" aria-hidden="true" />
-                Open full view
-              </Button>
-            )}
-            <Button
-              onClick={handleApproveAndRun}
-              disabled={isExecPending || steps.length === 0}
-            >
-              <Play className="h-4 w-4" aria-hidden="true" />
-              Approve &amp; Run
-            </Button>
-            <Button
-              variant="outline"
-              onClick={handleCancel}
-              disabled={cancelling}
-            >
-              {cancelling ? "Cancelling..." : "Cancel"}
-            </Button>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  function renderExecuting() {
-    return (
-      <div className="flex flex-1 flex-col gap-4 overflow-hidden p-4">
-        {/* Step progress */}
-        <ol className="flex flex-col gap-1.5" aria-label="Execution progress">
-          {steps.map((step) => (
-            <li key={step.index} className="flex items-center gap-2 text-sm">
-              {stepStatusIcon(step.status)}
-              <span
-                className={cn(
-                  "truncate",
-                  step.status === "completed" && "text-muted-foreground line-through"
-                )}
-              >
-                {step.description}
-              </span>
-            </li>
-          ))}
-        </ol>
-
-        <Separator />
-
-        {/* V3 activity panel — rich tool-call cards + live token counter +
-            inline approval queue + mid-run steer input. Subscribes to the
-            rich `event` broadcast emitted by the Python StreamingOperatorHooks.
-            The legacy `progressEvents` stream still drives the status-chip
-            animations above but its raw log is superseded by this panel. */}
-        <div className="flex-1 -mx-4 min-h-0">
-          <OperatorActivityPanel
-            runId={runId}
-            runIsActive={isActivePhase}
-          />
-        </div>
-        <div ref={eventsEndRef} />
-
-        <div className="flex items-center gap-2 self-start">
-          {runId && (
-            <Button
-              variant="outline"
-              size="sm"
-              render={<Link href={`/app/workspace_operator/live/${runId}`} />}
-            >
-              <Maximize2 className="h-4 w-4" aria-hidden="true" />
-              Open full view
-            </Button>
-          )}
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleCancel}
-            disabled={cancelling}
-          >
-            {cancelling ? "Cancelling..." : "Cancel run"}
-          </Button>
-        </div>
-      </div>
-    );
-  }
-
-  function renderCompleted() {
-    return (
-      <div className="flex flex-1 flex-col items-center justify-center gap-4 p-4 text-center">
-        <CheckCircle2 className="h-10 w-10 text-green-600 dark:text-green-400" />
-        <div className="flex flex-col gap-1">
-          <p className="text-sm font-medium text-foreground">
-            Operator completed successfully
-          </p>
-          {result && (
-            <p className="text-xs text-muted-foreground">
-              {result.notes_created.length} note
-              {result.notes_created.length !== 1 ? "s" : ""} drafted
-              {" / "}
-              {result.tool_calls} tool call
-              {result.tool_calls !== 1 ? "s" : ""}
-            </p>
-          )}
-        </div>
-
-        <div className="flex items-center gap-2">
-          {branchId && (
-            <Button render={<Link href={`/app/branches/${branchId}`} />}>
-              <ArrowRight className="h-4 w-4" aria-hidden="true" />
-              Review Branch
-            </Button>
-          )}
-          <Button variant="outline" onClick={reset}>
-            <RotateCcw className="h-4 w-4" aria-hidden="true" />
-            Run Again
-          </Button>
-        </div>
-      </div>
-    );
-  }
-
-  function renderFailed() {
-    return (
-      <div className="flex flex-1 flex-col items-center justify-center gap-4 p-4 text-center">
-        <XCircle className="h-10 w-10 text-destructive" />
-        <div className="flex flex-col gap-1">
-          <p className="text-sm font-medium text-foreground">
-            Operator run failed
-          </p>
-          {error && (
-            <p className="text-xs text-destructive/80">{error}</p>
-          )}
-        </div>
-
-        <div className="flex items-center gap-2">
-          {runId && (
-            <Button onClick={handleRetry} disabled={retrying}>
-              <RotateCcw className="h-4 w-4" aria-hidden="true" />
-              {retrying ? "Retrying..." : "Retry"}
-            </Button>
-          )}
-          <Button variant="outline" onClick={reset}>
-            Start over
-          </Button>
-        </div>
-      </div>
-    );
-  }
-
-  function renderCancelled() {
-    return (
-      <div className="flex flex-1 flex-col items-center justify-center gap-4 p-4 text-center">
-        <XCircle className="h-10 w-10 text-amber-500" />
-        <p className="text-sm font-medium text-foreground">Run cancelled</p>
-        <Button variant="outline" onClick={reset}>
-          <RotateCcw className="h-4 w-4" aria-hidden="true" />
-          Start over
-        </Button>
-      </div>
-    );
-  }
-
-  // -- body selector ---------------------------------------------------------
-
-  function renderBody() {
-    switch (phase) {
-      case "idle":
-        return renderIdle();
-      case "planning":
-        return renderPlanning();
-      case "awaiting_approval":
-        return renderAwaitingApproval();
-      case "executing":
-        return renderExecuting();
-      case "completed":
-        return renderCompleted();
-      case "failed":
-        return renderFailed();
-      case "cancelled":
-        return renderCancelled();
-      case "quota_exceeded":
-        return renderQuotaExceeded();
-      default:
-        return renderIdle();
-    }
-  }
-
-  // -- main render -----------------------------------------------------------
-
   function handleSelectSession(session: OperatorSession) {
     setActiveSessionId(session.id);
     reset();
@@ -1305,35 +700,124 @@ export function OperatorPanel({
     reset();
   }
 
+  // -- composer props --------------------------------------------------------
+  const quotaDisabled = quotaPreview !== null && !quotaPreview.allowed;
+  const quotaTitle = quotaDisabled
+    ? `You've used all ${quotaPreview?.limit ?? "∞"} Operator runs on the ${quotaPreview!.tier} tier this month. Resets on ${formatResetDate(quotaPreview!.resetsAt)}.`
+    : null;
+
+  const composer = (
+    <OperatorComposer
+      prompt={prompt}
+      onPromptChange={setPrompt}
+      onPromptKeyDown={handlePromptKeyDown}
+      onResetHistoryIndex={() => {
+        if (historyIndex !== -1) setHistoryIndex(-1);
+      }}
+      onSend={handleGeneratePlan}
+      textareaRef={promptTextareaRef}
+      hasBox={Boolean(boxId)}
+      isPlanPending={isPlanPending}
+      isExecPending={isExecPending}
+      quotaDisabled={quotaDisabled}
+      quotaTitle={quotaTitle}
+      defaultBoxId={defaultBoxId}
+      requireCitations={requireCitations}
+      onToggleCitations={() => setRequireCitations((v) => !v)}
+      autoMode={autoMode}
+      onToggleAutoMode={() => setAutoMode((v) => !v)}
+      savedPrompts={savedPrompts}
+      savedPromptsOpen={savedPromptsOpen}
+      onToggleSavedPrompts={() => setSavedPromptsOpen((v) => !v)}
+      onSelectSavedPrompt={handleSelectSavedPrompt}
+      onOpenSaveDialog={handleOpenSaveDialog}
+      quotaReached={quotaDisabled}
+      shortcutHint={
+        autoMode ? "↵ runs immediately" : "↵ generates a plan to review"
+      }
+      maxPromptLength={MAX_PROMPT_LENGTH}
+    />
+  );
+
+  const transcriptFor = (variant: "sheet" | "page") => (
+    <OperatorTranscript
+      phase={phase}
+      prompt={prompt}
+      steps={steps}
+      summary={summary}
+      error={error}
+      result={result}
+      runId={runId}
+      branchId={branchId}
+      selectedModel={selectedModel}
+      liveTail={liveTail}
+      isExecPending={isExecPending}
+      cancelling={cancelling}
+      retrying={retrying}
+      isActivePhase={isActivePhase}
+      activeSessionId={activeSessionId}
+      sessionHistoryRefreshKey={sessionHistoryRefreshKey}
+      quotaExceeded={quotaExceeded}
+      // Page mode hands action buttons to the SteerBar below so the
+      // transcript stays clean. Sheet mode keeps them inline because
+      // the drawer is too narrow for a separate steer-bar row.
+      hideInlineActions={variant === "page"}
+      onStepDescriptionChange={handleStepDescriptionChange}
+      onApproveAndRun={handleApproveAndRun}
+      onCancel={handleCancel}
+      onRetry={handleRetry}
+      onReset={reset}
+      eventsEndRef={eventsEndRef}
+      formatResetDate={formatResetDate}
+    />
+  );
+
+  const steerBar =
+    mode === "page" ? (
+      <OperatorSteerBar
+        phase={phase}
+        runId={runId}
+        isExecPending={isExecPending}
+        cancelling={cancelling}
+        retrying={retrying}
+        hasSteps={steps.length > 0}
+        onApproveAndRun={handleApproveAndRun}
+        onCancel={handleCancel}
+        onRetry={handleRetry}
+        onReset={reset}
+      />
+    ) : null;
+
+  // -- render ---------------------------------------------------------------
   return (
     <>
       {mode === "page" ? (
-        <div className="flex h-full flex-col">
-          {/* ── Header (page mode) ──────────────────────────────────────── */}
-          <div className="flex flex-row items-center gap-2 px-4 py-3 border-b border-border">
-            <button
-              type="button"
-              onClick={() => setShowSessionsSidebar((v) => !v)}
-              className="shrink-0 rounded-md p-1 text-muted-foreground hover:text-foreground hover:bg-accent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              aria-label={showSessionsSidebar ? "Hide sessions" : "Show sessions"}
-              title={showSessionsSidebar ? "Hide sessions" : "Show sessions"}
-            >
-              {showSessionsSidebar ? (
-                <PanelLeftClose className="h-4 w-4" />
-              ) : (
-                <PanelLeft className="h-4 w-4" />
-              )}
-            </button>
-            <h1 className="flex items-center gap-2 text-base font-semibold">
-              <Bot className="h-4 w-4" aria-hidden="true" />
-              AI
-            </h1>
-          </div>
+        <div className="flex h-full flex-col overflow-hidden">
+          <PageHeader
+            title="AI"
+            description="Your AI for research, writing, and organizing your notes."
+            actions={
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                onClick={() => setShowSessionsSidebar((v) => !v)}
+                aria-label={
+                  showSessionsSidebar ? "Hide sessions" : "Show sessions"
+                }
+                title={showSessionsSidebar ? "Hide sessions" : "Show sessions"}
+              >
+                {showSessionsSidebar ? (
+                  <PanelLeftClose className="h-4 w-4" aria-hidden="true" />
+                ) : (
+                  <PanelLeft className="h-4 w-4" aria-hidden="true" />
+                )}
+              </Button>
+            }
+          />
 
-          {/* ── Two-column layout ─────────────────────────────────────────── */}
           <div className="flex flex-1 overflow-hidden">
             {showSessionsSidebar && (
-              <div className="w-[180px] shrink-0 overflow-hidden">
+              <div className="hidden w-[200px] shrink-0 overflow-hidden border-r border-border md:block">
                 <OperatorSessionsSidebar
                   activeSessionId={activeSessionId}
                   onSelectSession={handleSelectSession}
@@ -1341,9 +825,19 @@ export function OperatorPanel({
                 />
               </div>
             )}
-            <div className="flex flex-1 min-w-0 flex-col overflow-hidden">
-              {renderBody()}
+
+            <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+              {transcriptFor("page")}
+              {steerBar}
+              {phase === "idle" && composer}
             </div>
+
+            <OperatorPlanRail
+              runId={runId}
+              phase={phase}
+              prompt={prompt}
+              steps={steps}
+            />
           </div>
         </div>
       ) : (
@@ -1353,21 +847,22 @@ export function OperatorPanel({
             className="flex w-full flex-col p-0 sm:max-w-[680px]"
             aria-describedby="operator-panel-desc"
           >
-            {/* ── Header ────────────────────────────────────────────────────── */}
-            <SheetHeader className="flex-row items-center gap-2 px-4 py-3 border-b border-border">
-              <button
-                type="button"
+            <SheetHeader className="flex-row items-center gap-2 border-b border-border px-4 py-3">
+              <Button
+                variant="ghost"
+                size="icon-sm"
                 onClick={() => setShowSessionsSidebar((v) => !v)}
-                className="shrink-0 rounded-md p-1 text-muted-foreground hover:text-foreground hover:bg-accent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                aria-label={showSessionsSidebar ? "Hide sessions" : "Show sessions"}
+                aria-label={
+                  showSessionsSidebar ? "Hide sessions" : "Show sessions"
+                }
                 title={showSessionsSidebar ? "Hide sessions" : "Show sessions"}
               >
                 {showSessionsSidebar ? (
-                  <PanelLeftClose className="h-4 w-4" />
+                  <PanelLeftClose className="h-4 w-4" aria-hidden="true" />
                 ) : (
-                  <PanelLeft className="h-4 w-4" />
+                  <PanelLeft className="h-4 w-4" aria-hidden="true" />
                 )}
-              </button>
+              </Button>
               <SheetTitle className="flex items-center gap-2 text-base">
                 <Bot className="h-4 w-4" aria-hidden="true" />
                 AI
@@ -1377,10 +872,9 @@ export function OperatorPanel({
               </SheetDescription>
             </SheetHeader>
 
-            {/* ── Two-column layout ─────────────────────────────────────────── */}
             <div className="flex flex-1 overflow-hidden">
               {showSessionsSidebar && (
-                <div className="w-[180px] shrink-0 overflow-hidden">
+                <div className="w-[180px] shrink-0 overflow-hidden border-r border-border">
                   <OperatorSessionsSidebar
                     activeSessionId={activeSessionId}
                     onSelectSession={handleSelectSession}
@@ -1388,14 +882,16 @@ export function OperatorPanel({
                   />
                 </div>
               )}
-              <div className="flex flex-1 min-w-0 flex-col overflow-hidden">
-                {renderBody()}
+              <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+                {transcriptFor("sheet")}
+                {phase === "idle" && composer}
               </div>
             </div>
           </SheetContent>
         </Sheet>
       )}
 
+      {/* Saved-prompt variable substitution dialog. */}
       <Dialog
         open={varsDialog !== null}
         onOpenChange={(next) => {
@@ -1407,8 +903,9 @@ export function OperatorPanel({
             <DialogTitle>Fill in prompt variables</DialogTitle>
             <DialogDescription>
               This saved prompt has {varsDialog?.variables.length ?? 0}{" "}
-              placeholder{(varsDialog?.variables.length ?? 0) === 1 ? "" : "s"}.
-              Fill them in to customise the prompt.
+              placeholder
+              {(varsDialog?.variables.length ?? 0) === 1 ? "" : "s"}. Fill them
+              in to customise the prompt.
             </DialogDescription>
           </DialogHeader>
           <div className="flex flex-col gap-3">
@@ -1448,6 +945,7 @@ export function OperatorPanel({
         </DialogContent>
       </Dialog>
 
+      {/* Save-as-template dialog. */}
       <Dialog open={saveDialogOpen} onOpenChange={setSaveDialogOpen}>
         <DialogContent>
           <DialogHeader>
@@ -1470,15 +968,10 @@ export function OperatorPanel({
               placeholder="e.g. Weekly competitive brief"
               maxLength={80}
             />
-            {saveError && (
-              <p className="text-xs text-destructive">{saveError}</p>
-            )}
+            {saveError && <p className="text-xs text-destructive">{saveError}</p>}
           </div>
           <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setSaveDialogOpen(false)}
-            >
+            <Button variant="outline" onClick={() => setSaveDialogOpen(false)}>
               Cancel
             </Button>
             <Button
@@ -1617,13 +1110,8 @@ export function savePromptHistory(
 
 /**
  * Narrow a raw action error to the structured quota-exceeded shape.
- * Actions can surface either a plain string or a structured object
- * (see `ActionErrorQuotaExceeded`); anything shaped like the latter
- * routes the UI into the quota_exceeded phase.
  */
-function isQuotaError(
-  err: unknown
-): err is ActionErrorQuotaExceeded {
+function isQuotaError(err: unknown): err is ActionErrorQuotaExceeded {
   return (
     typeof err === "object" &&
     err !== null &&
@@ -1632,9 +1120,7 @@ function isQuotaError(
 }
 
 /**
- * Coerce an `ActionResult` error (string | structured) into a flat string
- * suitable for `setError`. Quota errors carry a `.message`; plain string
- * errors pass through verbatim.
+ * Coerce an `ActionResult` error (string | structured) into a flat string.
  */
 export function actionErrorToString(
   err: string | ActionErrorQuotaExceeded | undefined | null,
@@ -1655,26 +1141,5 @@ function formatResetDate(iso: string): string {
     });
   } catch {
     return iso;
-  }
-}
-
-function formatEventDetail(evt: OperatorProgressEvent): string {
-  switch (evt.type) {
-    case "plan_ready":
-      return "Plan ready";
-    case "step_start":
-      return `Starting step ${(evt.step_index ?? 0) + 1}${evt.detail ? `: ${evt.detail}` : ""}`;
-    case "step_complete":
-      return `Completed step ${(evt.step_index ?? 0) + 1}${evt.detail ? `: ${evt.detail}` : ""}`;
-    case "tool_call":
-      return `Tool call${evt.detail ? `: ${evt.detail}` : ""}`;
-    case "note_drafted":
-      return `Note drafted${evt.detail ? `: ${evt.detail}` : ""}`;
-    case "completed":
-      return "Run completed";
-    case "failed":
-      return `Failed${evt.detail ? `: ${evt.detail}` : ""}`;
-    default:
-      return evt.detail ?? evt.type;
   }
 }

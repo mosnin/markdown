@@ -1,5 +1,6 @@
 export * from "./operator_activity_panel";
 export * from "./operator_api_keys_manager";
+export * from "./operator_composer";
 export * from "./operator_event_stream";
 export * from "./operator_history_table";
 export * from "./operator_live_view";
@@ -7,6 +8,9 @@ export * from "./operator_new_run_button";
 export * from "./operator_notification_prefs";
 export * from "./operator_panel";
 export * from "./operator_panel_trigger";
+export * from "./operator_plan_rail";
 export * from "./operator_prompts_manager";
 export * from "./operator_run_detail";
 export * from "./operator_run_diff";
+export * from "./operator_steer_bar";
+export * from "./operator_transcript";
