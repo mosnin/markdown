@@ -6,6 +6,7 @@ import { Bot, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { AttachToBoxTrigger } from "@/components/product/attach_to_box_trigger";
 import { AgentTypeBadge } from "@/components/product/agents/agent_type_badge";
+import { PageStagger, StaggerItem } from "@/components/product/page_transition";
 
 type Agent = {
   id: string;
@@ -39,7 +40,7 @@ export function AgentsListClient({
       {/* Tag filter bar */}
       {allTags.length > 0 && (
         <div className="flex flex-wrap items-center gap-1.5 px-6 py-3 border-b border-border">
-          <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground/60 mr-1">
+          <span className="text-overline mr-1">
             Filter
           </span>
           {allTags.map((tag) => (
@@ -47,7 +48,7 @@ export function AgentsListClient({
               key={tag}
               onClick={() => setActiveTag(activeTag === tag ? null : tag)}
               className={cn(
-                "rounded-full px-2.5 py-0.5 text-xs transition-colors",
+                "rounded-md px-2.5 py-0.5 text-xs transition-colors",
                 activeTag === tag
                   ? "bg-violet-500/20 text-violet-700 dark:text-violet-300 border border-violet-500/30"
                   : "bg-muted text-muted-foreground hover:bg-muted/80 border border-transparent"
@@ -71,7 +72,7 @@ export function AgentsListClient({
       {/* Grid */}
       <div className="mx-auto w-full max-w-7xl px-6 py-6">
         <div className="mb-3 flex items-center justify-between">
-          <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground/70">
+          <p className="text-overline text-muted-foreground">
             {filtered.length} agent{filtered.length === 1 ? "" : "s"}
             {activeTag && (
               <span className="ml-1 normal-case text-muted-foreground/50">
@@ -80,11 +81,13 @@ export function AgentsListClient({
             )}
           </p>
         </div>
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+        <PageStagger className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {filtered.map((agent) => (
-            <AgentCard key={agent.id} agent={agent} boxes={boxes} />
+            <StaggerItem key={agent.id}>
+              <AgentCard agent={agent} boxes={boxes} />
+            </StaggerItem>
           ))}
-        </div>
+        </PageStagger>
         {filtered.length === 0 && activeTag && (
           <p className="py-8 text-center text-sm text-muted-foreground">
             No agents tagged &ldquo;{activeTag}&rdquo;.{" "}
@@ -105,7 +108,7 @@ function AgentCard({ agent, boxes }: { agent: Agent; boxes: Box[] }) {
         href={`/app/agents/${agent.id}`}
         className={cn(
           "flex flex-col gap-1.5 rounded-lg border border-border bg-card p-4",
-          "transition-colors duration-150 hover:bg-accent/40",
+          "transition-[border-color,box-shadow] duration-150 hover:border-strong hover:shadow-sm",
           "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         )}
       >

@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import {
-  Bot,
   Play,
   CheckCircle2,
   XCircle,
@@ -46,6 +45,9 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 
+import * as m from "motion/react-m";
+import { AnimatePresence } from "motion/react";
+import { fadeRise } from "@/lib/motion";
 import { useOperatorProgress } from "@/lib/hooks/use_operator_run";
 import { OperatorActivityPanel } from "@/components/product/operator/operator_activity_panel";
 import { OperatorSessionsSidebar } from "@/components/product/operator/operator_sessions_sidebar";
@@ -932,7 +934,7 @@ export function OperatorPanel({
               }}
               onKeyDown={handlePromptKeyDown}
               maxLength={MAX_PROMPT_LENGTH}
-              className="min-h-[80px] resize-none pr-16 text-sm"
+              className="min-h-[80px] resize-none pr-16 text-sm rounded-md"
               aria-describedby="operator-prompt-shortcuts"
             />
             {/* Send button — overlaid bottom-right of textarea */}
@@ -1055,33 +1057,39 @@ export function OperatorPanel({
 
         <ScrollArea className="flex-1 -mx-4 px-4">
           <ol className="flex flex-col gap-2" aria-label="Plan steps">
-            {steps.map((step) => (
-              <li
-                key={step.index}
-                className="flex items-start gap-2 rounded-md border border-border bg-muted/30 p-2.5"
-              >
-                <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-muted text-[10px] font-semibold text-muted-foreground">
-                  {step.index + 1}
-                </span>
-                <div className="flex min-w-0 flex-1 flex-col gap-1">
-                  <input
-                    type="text"
-                    value={step.description}
-                    onChange={(e) =>
-                      handleStepDescriptionChange(step.index, e.target.value)
-                    }
-                    className="w-full bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground focus:underline"
-                    aria-label={`Step ${step.index + 1} description`}
-                  />
-                  <Badge
-                    variant="outline"
-                    className={cn("w-fit text-[10px]", toolBadgeClass(step.tool))}
-                  >
-                    {step.tool}
-                  </Badge>
-                </div>
-              </li>
-            ))}
+            <AnimatePresence initial={false}>
+              {steps.map((step) => (
+                <m.li
+                  key={step.index}
+                  variants={fadeRise}
+                  initial="hidden"
+                  animate="visible"
+                  exit="exit"
+                  className="flex items-start gap-2 rounded-md border border-border bg-muted/30 p-2.5"
+                >
+                  <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-muted text-[10px] font-semibold text-muted-foreground">
+                    {step.index + 1}
+                  </span>
+                  <div className="flex min-w-0 flex-1 flex-col gap-1">
+                    <input
+                      type="text"
+                      value={step.description}
+                      onChange={(e) =>
+                        handleStepDescriptionChange(step.index, e.target.value)
+                      }
+                      className="w-full bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground focus:underline"
+                      aria-label={`Step ${step.index + 1} description`}
+                    />
+                    <Badge
+                      variant="outline"
+                      className={cn("w-fit rounded-sm text-[10px]", toolBadgeClass(step.tool))}
+                    >
+                      {step.tool}
+                    </Badge>
+                  </div>
+                </m.li>
+              ))}
+            </AnimatePresence>
           </ol>
         </ScrollArea>
 
@@ -1138,19 +1146,28 @@ export function OperatorPanel({
       <div className="flex flex-1 flex-col gap-4 overflow-hidden p-4">
         {/* Step progress */}
         <ol className="flex flex-col gap-1.5" aria-label="Execution progress">
-          {steps.map((step) => (
-            <li key={step.index} className="flex items-center gap-2 text-sm">
-              {stepStatusIcon(step.status)}
-              <span
-                className={cn(
-                  "truncate",
-                  step.status === "completed" && "text-muted-foreground line-through"
-                )}
+          <AnimatePresence initial={false}>
+            {steps.map((step) => (
+              <m.li
+                key={step.index}
+                variants={fadeRise}
+                initial="hidden"
+                animate="visible"
+                exit="exit"
+                className="flex items-center gap-2 text-sm"
               >
-                {step.description}
-              </span>
-            </li>
-          ))}
+                {stepStatusIcon(step.status)}
+                <span
+                  className={cn(
+                    "truncate",
+                    step.status === "completed" && "text-muted-foreground line-through"
+                  )}
+                >
+                  {step.description}
+                </span>
+              </m.li>
+            ))}
+          </AnimatePresence>
         </ol>
 
         <Separator />
@@ -1325,7 +1342,7 @@ export function OperatorPanel({
               )}
             </button>
             <h1 className="flex items-center gap-2 text-base font-semibold">
-              <Bot className="h-4 w-4" aria-hidden="true" />
+              <Sparkles className="h-4 w-4 text-iris" aria-hidden="true" />
               AI
             </h1>
           </div>
@@ -1369,7 +1386,7 @@ export function OperatorPanel({
                 )}
               </button>
               <SheetTitle className="flex items-center gap-2 text-base">
-                <Bot className="h-4 w-4" aria-hidden="true" />
+                <Sparkles className="h-4 w-4 text-iris" aria-hidden="true" />
                 AI
               </SheetTitle>
               <SheetDescription id="operator-panel-desc" className="sr-only">

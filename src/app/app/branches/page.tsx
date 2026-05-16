@@ -3,9 +3,9 @@ import { createClient } from "@/lib/supabase/server";
 import { listDraftBranches, listBranchHeads } from "@/server/services/branch_service";
 import { getRetentionPolicy } from "@/server/services/branch_lifecycle_service";
 import { canAdmin } from "@/server/auth/require_role";
-import { PageHeader } from "@/components/product/page_header";
 import { BranchesClient } from "./branches_client";
 import { PurgeOverlaysPanel } from "./purge_overlays_panel";
+import { BranchesPageHeader } from "./branches_page_header";
 
 /**
  * Draft branches management page.
@@ -83,10 +83,7 @@ export default async function BranchesPage() {
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
-      <PageHeader
-        title="Draft branches"
-        description="Safe exploratory editing for notes, files, skills, and agents. Every change you make on a branch stays off main until you promote it. Discard to throw the branch away — main is untouched either way."
-      />
+      <BranchesPageHeader />
       <div className="flex-1 overflow-auto">
         <div className="mx-auto max-w-3xl px-4 py-6 md:px-6">
           <BranchesClient

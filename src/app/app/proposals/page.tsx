@@ -9,6 +9,7 @@ import { ProposalsPanel } from "@/components/product/proposals_panel";
 import { EmptyState } from "@/components/product/empty_state";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
+import { PageTransition } from "@/components/product/page_transition";
 import type { Connection } from "@/server/domain/types/connection";
 import type { WriteProposal } from "@/server/domain/types/write_proposal";
 import type { CurrentObjectSnapshot } from "@/server/services/write_proposal_service";
@@ -60,7 +61,7 @@ export default async function ProposalsPage() {
   const pendingCount = allProposals.filter((p) => p.status === "pending").length;
 
   return (
-    <div className="flex h-full flex-col overflow-hidden">
+    <PageTransition className="flex h-full flex-col overflow-hidden">
       <PageHeader
         title="AI Edits"
         description="Review AI-proposed changes to your workspace content before they are applied."
@@ -93,6 +94,6 @@ export default async function ProposalsPage() {
           )}
         </div>
       </ScrollArea>
-    </div>
+    </PageTransition>
   );
 }

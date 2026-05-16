@@ -17,6 +17,7 @@ import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { PageStagger, StaggerItem } from "@/components/product/page_transition";
 import {
   Dialog,
   DialogContent,
@@ -143,13 +144,13 @@ export function BranchesClient({
         <EmptyState canWrite={canWrite} onNew={() => setCreateOpen(true)} />
       ) : (
         <section>
-          <h2 className="mb-2 px-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+          <h2 className="mb-2 px-1 text-overline">
             Open branches
-            <span className="ml-2 text-[10px] font-normal">{openBranches.length}</span>
+            <span className="ml-2 font-normal normal-case">{openBranches.length}</span>
           </h2>
-          <ul className="flex flex-col gap-2 list-none">
+          <PageStagger className="flex flex-col gap-2">
             {openBranches.map((b) => (
-              <li key={b.id}>
+              <StaggerItem key={b.id}>
                 <BranchRow
                   row={b}
                   active={activeBranchId === b.id}
@@ -165,25 +166,25 @@ export function BranchesClient({
                   onPromote={() => setPromoteId(b.id)}
                   onDiscard={() => setDiscardId(b.id)}
                 />
-              </li>
+              </StaggerItem>
             ))}
-          </ul>
+          </PageStagger>
         </section>
       )}
 
       {closedBranches.length > 0 && (
         <section>
-          <h2 className="mb-2 px-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+          <h2 className="mb-2 px-1 text-overline">
             Closed
-            <span className="ml-2 text-[10px] font-normal">{closedBranches.length}</span>
+            <span className="ml-2 font-normal normal-case">{closedBranches.length}</span>
           </h2>
-          <ul className="flex flex-col gap-2 list-none">
+          <PageStagger className="flex flex-col gap-2">
             {closedBranches.map((b) => (
-              <li key={b.id}>
+              <StaggerItem key={b.id}>
                 <BranchRow row={b} active={false} canWrite={false} presentUsers={[]} />
-              </li>
+              </StaggerItem>
             ))}
-          </ul>
+          </PageStagger>
         </section>
       )}
 
@@ -301,8 +302,11 @@ function BranchRow({
   return (
     <div
       className={cn(
-        "flex items-start gap-3 rounded-lg border px-4 py-3 transition-fast",
-        active ? "border-ring bg-accent/40" : "border-border bg-card"
+        "flex items-start gap-3 rounded-lg border px-4 py-3",
+        "transition-[border-color,box-shadow] duration-150",
+        active
+          ? "border-ring bg-accent/40"
+          : "border-border bg-card hover:border-strong hover:shadow-sm"
       )}
     >
       <GitBranch className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
@@ -405,16 +409,18 @@ function BranchRow({
 
 function EmptyState({ canWrite, onNew }: { canWrite: boolean; onNew: () => void }) {
   return (
-    <div className="rounded-lg border border-dashed border-border bg-card/50 px-6 py-10 text-center">
-      <GitBranch className="mx-auto mb-3 h-6 w-6 text-muted-foreground/40" aria-hidden="true" />
-      <p className="text-sm font-medium text-foreground">No open branches</p>
-      <p className="mx-auto mt-1 max-w-md text-xs text-muted-foreground">
-        Branches let you make exploratory edits to notes, files,
-        skills, and agents that never touch main until you promote them.
-        Discard if the experiment doesn&apos;t work.
-      </p>
+    <div className="flex flex-col items-center justify-center py-24 gap-4 text-center">
+      <div className="rounded-lg border border-border p-3">
+        <GitBranch className="h-5 w-5 text-muted-foreground" aria-hidden="true" />
+      </div>
+      <div>
+        <p className="text-sm font-medium">No open branches</p>
+        <p className="text-sm text-muted-foreground mt-1">
+          Branches let you make exploratory edits that never touch main until you promote them.
+        </p>
+      </div>
       {canWrite && (
-        <Button size="sm" className="mt-4" onClick={onNew}>
+        <Button size="sm" variant="secondary" onClick={onNew}>
           <Plus className="h-3.5 w-3.5 mr-1" aria-hidden="true" />
           New branch
         </Button>

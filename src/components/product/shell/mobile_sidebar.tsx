@@ -15,6 +15,8 @@ import {
   Puzzle,
   X,
 } from "lucide-react";
+import * as m from "motion/react-m";
+import { slideRight } from "@/lib/motion";
 import { cn } from "@/lib/utils";
 import { type Box as BoxType } from "@/server/domain/types/box";
 import {
@@ -99,6 +101,12 @@ export function MobileSidebar({
           showCloseButton={false}
           className="w-72 p-0 bg-sidebar text-sidebar-foreground flex flex-col gap-0"
         >
+          <m.div
+            className="flex flex-col flex-1 overflow-hidden"
+            variants={slideRight}
+            initial="hidden"
+            animate="visible"
+          >
           {/* Header */}
           <SheetHeader className="flex-row items-center justify-between border-b border-sidebar-border px-4 py-3">
             <SheetTitle className="sr-only">Navigation</SheetTitle>
@@ -230,6 +238,7 @@ export function MobileSidebar({
             isSettingsActive={pathname === "/app/settings"}
             onNavigate={close}
           />
+          </m.div>
         </SheetContent>
       </Sheet>
     </>

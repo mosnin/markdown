@@ -19,7 +19,9 @@ import {
   Alert01Icon,
   Home01Icon,
 } from "hugeicons-react";
+import * as m from "motion/react-m";
 import { cn } from "@/lib/utils";
+import { staggerContainer, listItemProps } from "@/lib/motion";
 import { type Box as BoxType } from "@/server/domain/types/box";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
@@ -60,13 +62,13 @@ function NavItem({
               "flex items-center gap-2.5 rounded-md px-2.5 py-2 text-sm transition-fast",
               "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
               isActive
-                ? "bg-accent text-foreground font-medium"
-                : "text-foreground/60 hover:text-foreground hover:bg-accent/60"
+                ? "bg-sidebar-accent text-sidebar-foreground font-medium"
+                : "text-foreground/60 hover:text-foreground hover:bg-sidebar-accent/60"
             )}
           />
         }
       >
-        <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
+        <Icon className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
         <span className="truncate">{label}</span>
         {shortcut && (
           <kbd
@@ -110,13 +112,13 @@ function NavItemWithBadge({
               "flex items-center gap-2.5 rounded-md px-2.5 py-2 text-sm transition-fast",
               "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
               isActive
-                ? "bg-accent text-foreground font-medium"
-                : "text-foreground/60 hover:text-foreground hover:bg-accent/60"
+                ? "bg-sidebar-accent text-sidebar-foreground font-medium"
+                : "text-foreground/60 hover:text-foreground hover:bg-sidebar-accent/60"
             )}
           />
         }
       >
-        <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
+        <Icon className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
         <span className="truncate">{label}</span>
         {badge > 0 && (
           <span
@@ -193,8 +195,8 @@ export function AppSidebar({
     <aside
       aria-label="Sidebar navigation"
       className={cn(
-        "flex h-full w-60 shrink-0 flex-col",
-        "bg-white dark:bg-background border-r border-border/40"
+        "flex h-full w-56 shrink-0 flex-col",
+        "bg-sidebar border-r border-sidebar-border"
       )}
     >
       {/* Workspace switcher — multi-workspace dropdown with Create action */}
@@ -216,16 +218,21 @@ export function AppSidebar({
       {/* Navigation */}
       <div className="px-2 pt-1 pb-1">
         <nav aria-label="Primary navigation">
-          <ul className="flex flex-col gap-0.5 list-none">
-            <li>
+          <m.ul
+            className="flex flex-col gap-0.5 list-none"
+            variants={staggerContainer(0.03)}
+            initial="hidden"
+            animate="visible"
+          >
+            <m.li {...listItemProps}>
               <NavItem
                 href="/app"
                 icon={Home01Icon}
                 label="Home"
                 isActive={pathname === "/app"}
               />
-            </li>
-            <li>
+            </m.li>
+            <m.li {...listItemProps}>
               <NavItemWithBadge
                 href="/app/proposals"
                 icon={Alert01Icon}
@@ -233,8 +240,8 @@ export function AppSidebar({
                 isActive={pathname === "/app/proposals" || pathname.startsWith("/app/proposals/")}
                 badge={pendingProposalsCount}
               />
-            </li>
-          </ul>
+            </m.li>
+          </m.ul>
         </nav>
       </div>
 
@@ -245,7 +252,7 @@ export function AppSidebar({
         <button
           type="button"
           onClick={() => setBuildOpen((prev) => !prev)}
-          className="flex w-full items-center gap-1 px-2.5 py-1.5 text-[10px] font-medium uppercase tracking-wider text-muted-foreground/60 hover:text-foreground transition-colors"
+          className="flex w-full items-center gap-1 px-2.5 py-1.5 text-overline hover:text-foreground transition-colors"
         >
           {buildOpen ? (
             <ChevronDown className="h-3 w-3 shrink-0" aria-hidden="true" />
@@ -255,18 +262,23 @@ export function AppSidebar({
           Build
         </button>
         {buildOpen && (
-          <ul className="flex flex-col gap-0.5 list-none">
+          <m.ul
+            className="flex flex-col gap-0.5 list-none"
+            variants={staggerContainer(0.03)}
+            initial="hidden"
+            animate="visible"
+          >
             {buildNav.map((item) => (
-              <li key={item.href}>
+              <m.li key={item.href} {...listItemProps}>
                 <NavItem
                   href={item.href}
                   icon={item.icon}
                   label={item.label}
                   isActive={pathname === item.href || pathname.startsWith(item.href + "/")}
                 />
-              </li>
+              </m.li>
             ))}
-          </ul>
+          </m.ul>
         )}
       </div>
 
@@ -275,7 +287,7 @@ export function AppSidebar({
         <button
           type="button"
           onClick={() => setExploreOpen((prev) => !prev)}
-          className="flex w-full items-center gap-1 px-2.5 py-1.5 text-[10px] font-medium uppercase tracking-wider text-muted-foreground/60 hover:text-foreground transition-colors"
+          className="flex w-full items-center gap-1 px-2.5 py-1.5 text-overline hover:text-foreground transition-colors"
         >
           {exploreOpen ? (
             <ChevronDown className="h-3 w-3 shrink-0" aria-hidden="true" />
@@ -285,18 +297,23 @@ export function AppSidebar({
           Explore
         </button>
         {exploreOpen && (
-          <ul className="flex flex-col gap-0.5 list-none">
+          <m.ul
+            className="flex flex-col gap-0.5 list-none"
+            variants={staggerContainer(0.03)}
+            initial="hidden"
+            animate="visible"
+          >
             {exploreNav.map((item) => (
-              <li key={item.href}>
+              <m.li key={item.href} {...listItemProps}>
                 <NavItem
                   href={item.href}
                   icon={item.icon}
                   label={item.label}
                   isActive={pathname === item.href || pathname.startsWith(item.href + "/")}
                 />
-              </li>
+              </m.li>
             ))}
-          </ul>
+          </m.ul>
         )}
       </div>
 
@@ -306,7 +323,7 @@ export function AppSidebar({
       {recentNotes && recentNotes.length > 0 && (
         <>
           <div className="px-3 pt-3 pb-1">
-            <p className="mb-1 text-[10px] font-medium uppercase tracking-wider text-muted-foreground/60">
+            <p className="mb-1 text-overline">
               Recent
             </p>
             <div className="space-y-0.5">

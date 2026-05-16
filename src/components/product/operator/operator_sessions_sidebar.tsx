@@ -87,9 +87,9 @@ export function OperatorSessionsSidebar({
   }
 
   return (
-    <div className="flex h-full flex-col border-r border-border bg-sidebar">
+    <div className="flex h-full flex-col border-r border-sidebar-border bg-sidebar">
       {/* Header */}
-      <div className="flex items-center justify-between px-3 py-3 border-b border-border">
+      <div className="flex items-center justify-between px-3 py-3 border-b border-sidebar-border">
         <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
           Sessions
         </span>
@@ -209,8 +209,8 @@ function SessionRow({
     return (
       <div
         className={cn(
-          "flex items-center gap-1 px-2 py-1.5",
-          isActive && "bg-accent"
+          "flex items-center gap-1 rounded-md h-8 px-2 mx-1",
+          isActive && "bg-sidebar-accent"
         )}
       >
         <input
@@ -252,9 +252,9 @@ function SessionRow({
   return (
     <div
       className={cn(
-        "group relative flex cursor-pointer items-start gap-2 px-2 py-2 transition-colors",
-        "hover:bg-accent",
-        isActive && "bg-accent"
+        "group relative flex cursor-pointer items-center gap-2 rounded-md h-8 px-2 mx-1 transition-colors",
+        "hover:bg-sidebar-accent/60",
+        isActive && "bg-sidebar-accent"
       )}
       onClick={onSelect}
       onMouseEnter={() => setShowActions(true)}

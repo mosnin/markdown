@@ -3,6 +3,7 @@
 import { usePathname } from "next/navigation";
 import Link from "next/link";
 import { ChevronRight } from "lucide-react";
+import * as m from "motion/react-m";
 import { cn } from "@/lib/utils";
 
 /**
@@ -90,7 +91,12 @@ export function AppBreadcrumbs() {
   }
 
   return (
-    <nav aria-label="Breadcrumb">
+    <m.nav
+      aria-label="Breadcrumb"
+      initial={{ opacity: 0, y: -2 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.14, ease: [0.2, 0, 0, 1] }}
+    >
       <ol className="flex items-center gap-1 text-sm list-none" role="list">
         {crumbs.map((crumb, i) => {
           const isLast = i === crumbs.length - 1;
@@ -98,13 +104,13 @@ export function AppBreadcrumbs() {
             <li key={crumb.href} className="flex items-center gap-1">
               {i > 0 && (
                 <ChevronRight
-                  className="h-3.5 w-3.5 text-muted-foreground shrink-0"
+                  className="h-3 w-3 text-muted-foreground/50 shrink-0"
                   aria-hidden="true"
                 />
               )}
               {isLast ? (
                 <span
-                  className="font-medium text-foreground truncate max-w-[200px]"
+                  className="text-sm font-medium text-foreground truncate max-w-[200px]"
                   aria-current="page"
                 >
                   {crumb.label}
@@ -113,7 +119,7 @@ export function AppBreadcrumbs() {
                 <Link
                   href={crumb.href}
                   className={cn(
-                    "text-muted-foreground hover:text-foreground transition-colors truncate max-w-[160px]",
+                    "text-sm text-muted-foreground hover:text-foreground transition-colors truncate max-w-[160px]",
                     "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded"
                   )}
                 >
@@ -124,6 +130,6 @@ export function AppBreadcrumbs() {
           );
         })}
       </ol>
-    </nav>
+    </m.nav>
   );
 }

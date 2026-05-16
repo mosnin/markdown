@@ -10,9 +10,11 @@ export function ConversationHomeClient({
   defaultBoxId,
 }: ConversationHomeClientProps) {
   return (
-    <OperatorPanel
-      mode="page"
-      defaultBoxId={defaultBoxId ?? undefined}
-    />
+    <div className="flex flex-col h-full">
+      <OperatorPanel
+        mode="page"
+        defaultBoxId={defaultBoxId ?? undefined}
+      />
+    </div>
   );
 }

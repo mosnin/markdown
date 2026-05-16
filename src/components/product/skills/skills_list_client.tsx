@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Zap, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { AttachToBoxTrigger } from "@/components/product/attach_to_box_trigger";
+import { PageStagger, StaggerItem } from "@/components/product/page_transition";
 
 type Skill = {
   id: string;
@@ -37,7 +38,7 @@ export function SkillsListClient({
       {/* Tag filter bar */}
       {allTags.length > 0 && (
         <div className="flex flex-wrap items-center gap-1.5 px-6 py-3 border-b border-border">
-          <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground/60 mr-1">
+          <span className="text-overline mr-1">
             Filter
           </span>
           {allTags.map((tag) => (
@@ -45,7 +46,7 @@ export function SkillsListClient({
               key={tag}
               onClick={() => setActiveTag(activeTag === tag ? null : tag)}
               className={cn(
-                "rounded-full px-2.5 py-0.5 text-xs transition-colors",
+                "rounded-md px-2.5 py-0.5 text-xs transition-colors",
                 activeTag === tag
                   ? "bg-violet-500/20 text-violet-700 dark:text-violet-300 border border-violet-500/30"
                   : "bg-muted text-muted-foreground hover:bg-muted/80 border border-transparent"
@@ -69,7 +70,7 @@ export function SkillsListClient({
       {/* Grid */}
       <div className="mx-auto w-full max-w-7xl px-6 py-6">
         <div className="mb-3 flex items-center justify-between">
-          <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground/70">
+          <p className="text-overline text-muted-foreground">
             {filtered.length} skill{filtered.length === 1 ? "" : "s"}
             {activeTag && (
               <span className="ml-1 normal-case text-muted-foreground/50">
@@ -78,11 +79,13 @@ export function SkillsListClient({
             )}
           </p>
         </div>
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+        <PageStagger className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {filtered.map((skill) => (
-            <SkillCard key={skill.id} skill={skill} boxes={boxes} />
+            <StaggerItem key={skill.id}>
+              <SkillCard skill={skill} boxes={boxes} />
+            </StaggerItem>
           ))}
-        </div>
+        </PageStagger>
         {filtered.length === 0 && activeTag && (
           <p className="py-8 text-center text-sm text-muted-foreground">
             No skills tagged &ldquo;{activeTag}&rdquo;.{" "}
@@ -109,14 +112,14 @@ function SkillCard({ skill, boxes }: { skill: Skill; boxes: Box[] }) {
         href={`/app/skills/${skill.id}`}
         className={cn(
           "flex flex-col gap-1.5 rounded-lg border border-border bg-card p-4",
-          "transition-colors duration-150 hover:bg-accent/40",
+          "transition-[border-color,box-shadow] duration-150 hover:border-strong hover:shadow-sm",
           "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         )}
       >
         <div className="flex items-center gap-2">
           <Zap className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
           <span className="text-sm font-medium text-foreground truncate">{skill.name}</span>
-          <span className="ml-auto shrink-0 rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+          <span className="ml-auto shrink-0 rounded-md bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
             {skill.canonical_format}
           </span>
         </div>

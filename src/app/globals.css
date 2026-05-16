@@ -5,30 +5,28 @@
 /* ─── Theme variant ─────────────────────────────────────────────────────── */
 @custom-variant dark (&:is(.dark *));
 
-/* ─── Primary accent: yellow (#FFDE21) ──────────────────────────────────── */
+/* ─── Brand accent: Iris (sophisticated indigo) ─────────────────────────── */
 /*
- * The app's primary accent used to be violet. Every utility class using the
- * Tailwind v4 violet scale (text-violet-600, bg-violet-500, border-violet-400,
- * etc.) plus every in-CSS reference (glass button, blur blobs, pricing,
- * sign-in, workspace list) now renders yellow because the `--color-violet-*`
- * tokens are overridden here with a yellow oklch ramp centered on #FFDE21.
+ * Quiet Power enterprise overhaul: every Tailwind v4 violet utility
+ * (text-violet-600, bg-violet-500, etc.) now renders as restrained iris
+ * indigo instead of yellow. The accent is used surgically — focus rings,
+ * links, AI sparkle — never for primary buttons (flat black/white).
  *
- * The scale below was derived from #FFDE21 → oklch(0.912 0.177 99.4). The
- * lighter stops hold hue/saturation near the center; darker stops drift
- * toward a warm amber/brown so text and shadow usages stay readable.
+ * Ramp anchored on oklch(0.50 0.17 265). Chroma held high in mid-stops
+ * for confident interactive states; drifts toward deep navy at dark end.
  */
 @theme {
-  --color-violet-50:  oklch(0.985 0.030 99);
-  --color-violet-100: oklch(0.970 0.060 99);
-  --color-violet-200: oklch(0.955 0.100 99);
-  --color-violet-300: oklch(0.940 0.140 99);
-  --color-violet-400: oklch(0.925 0.165 99);
-  --color-violet-500: oklch(0.912 0.177 99);
-  --color-violet-600: oklch(0.830 0.170 92);
-  --color-violet-700: oklch(0.700 0.155 85);
-  --color-violet-800: oklch(0.560 0.125 78);
-  --color-violet-900: oklch(0.430 0.095 75);
-  --color-violet-950: oklch(0.320 0.070 72);
+  --color-violet-50:  oklch(0.97 0.020 265);
+  --color-violet-100: oklch(0.94 0.040 265);
+  --color-violet-200: oklch(0.88 0.075 265);
+  --color-violet-300: oklch(0.78 0.115 265);
+  --color-violet-400: oklch(0.68 0.150 265);
+  --color-violet-500: oklch(0.58 0.165 265);
+  --color-violet-600: oklch(0.50 0.170 265);
+  --color-violet-700: oklch(0.42 0.155 266);
+  --color-violet-800: oklch(0.34 0.130 266);
+  --color-violet-900: oklch(0.26 0.100 266);
+  --color-violet-950: oklch(0.18 0.070 266);
 }
 
 /* ─── Design tokens (mapped to Tailwind utilities) ──────────────────────── */
@@ -65,6 +63,7 @@
   --color-success: var(--success);
   --color-warning: var(--warning);
   --color-info: var(--info);
+  --color-iris: var(--iris);
 
   /* Surface tokens */
   --color-surface-base: var(--surface-base);
@@ -89,35 +88,39 @@
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 
-  /* Radius scale */
+  /* Radius scale — enterprise: sharper corners */
   --radius-none: 0;
   --radius-xs: 0.25rem;    /* 4px  — tight chip/badge */
-  --radius-sm: 0.375rem;   /* 6px  — input, small card */
-  --radius-md: 0.5rem;     /* 8px  — card, panel */
-  --radius-lg: 0.75rem;    /* 12px — modal, sheet */
-  --radius-xl: 1rem;       /* 16px — large card */
-  --radius-2xl: 1.5rem;    /* 24px — extra large card, hero sections */
-  --radius-full: 9999px;   /* pill */
+  --radius-sm: 0.375rem;   /* 6px  — input, small card, button */
+  --radius-md: 0.5rem;     /* 8px  — card, panel, dropdown, button */
+  --radius-lg: 0.625rem;   /* 10px — modal, sheet */
+  --radius-xl: 0.875rem;   /* 14px — large card */
+  --radius-2xl: 1.25rem;   /* 20px — hero sections */
+  --radius-full: 9999px;   /* pill — avatars and count badges only */
 
-  /* Shadow scale */
-  --shadow-xs: 0 1px 2px 0 rgb(0 0 0 / 0.04);
-  --shadow-sm: 0 1px 3px 0 rgb(0 0 0 / 0.08), 0 1px 2px -1px rgb(0 0 0 / 0.06);
-  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.08), 0 2px 4px -2px rgb(0 0 0 / 0.06);
-  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.08), 0 4px 6px -4px rgb(0 0 0 / 0.05);
-  --shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.08), 0 8px 10px -6px rgb(0 0 0 / 0.04);
+  /* Shadow scale — surgical depth */
+  --shadow-xs: 0 1px 1px 0 rgb(0 0 0 / 0.04);
+  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05), 0 1px 1px -1px rgb(0 0 0 / 0.04);
+  --shadow-md: 0 4px 8px -2px rgb(0 0 0 / 0.06), 0 2px 4px -2px rgb(0 0 0 / 0.04);
+  --shadow-lg: 0 12px 20px -6px rgb(0 0 0 / 0.08), 0 4px 8px -4px rgb(0 0 0 / 0.05);
+  --shadow-xl: 0 24px 40px -10px rgb(0 0 0 / 0.10), 0 10px 16px -8px rgb(0 0 0 / 0.06);
+  --shadow-ring: 0 0 0 1px var(--border-default);
+  --shadow-ring-strong: 0 0 0 1px var(--border-strong);
 
-  /* Motion timing */
+  /* Motion timing — snappy enterprise curves */
   --duration-instant: 80ms;
-  --duration-fast: 150ms;
+  --duration-fast: 140ms;
   --duration-normal: 200ms;
-  --duration-slow: 300ms;
-  --duration-deliberate: 500ms;
-  --duration-page: 300ms;
-  --duration-skeleton: 1.5s;
+  --duration-slow: 280ms;
+  --duration-deliberate: 420ms;
+  --duration-page: 240ms;
+  --duration-skeleton: 1.4s;
 
   --ease-standard: cubic-bezier(0.2, 0, 0, 1);
   --ease-enter: cubic-bezier(0, 0, 0.2, 1);
   --ease-exit: cubic-bezier(0.4, 0, 1, 1);
+  --ease-emphasized: cubic-bezier(0.32, 0.72, 0, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
 
   /* Z-index layer system */
   --z-base: 0;
@@ -131,10 +134,10 @@
   --z-command: 700;
 
   /* Layout dimensions */
-  --sidebar-width: 15rem;       /* 240px — w-60 */
+  --sidebar-width: 14rem;       /* 224px — w-56 */
   --topbar-height: 3rem;        /* 48px  — h-12 */
-  --panel-width-sm: 18rem;      /* 288px — context panel narrow */
-  --panel-width-md: 22rem;      /* 352px — w-72 + wiggle room */
+  --panel-width-sm: 18rem;      /* 288px */
+  --panel-width-md: 22rem;      /* 352px */
 
   /* Spacing rhythm — 4px base grid */
   --spacing-px: 1px;
@@ -153,127 +156,116 @@
   --spacing-24: 6rem;
 }
 
-/* ─── Light mode ────────────────────────────────────────────────────────── */
+/* ─── Light mode — enterprise cool neutrals ────────────────────────────── */
 :root {
-  /* shadcn color roles */
-  --background: oklch(0.99 0 0);
-  --foreground: oklch(0.13 0 0);
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.145 0 0);
   --card: oklch(1 0 0);
-  --card-foreground: oklch(0.13 0 0);
+  --card-foreground: oklch(0.145 0 0);
   --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.13 0 0);
-  --primary: oklch(0.18 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.96 0 0);
+  --popover-foreground: oklch(0.145 0 0);
+  --primary: oklch(0.145 0 0);
+  --primary-foreground: oklch(0.99 0 0);
+  --secondary: oklch(0.97 0 0);
   --secondary-foreground: oklch(0.18 0 0);
-  --muted: oklch(0.965 0 0);
+  --muted: oklch(0.975 0 0);
   --muted-foreground: oklch(0.50 0 0);
-  --accent: oklch(0.96 0 0);
+  --accent: oklch(0.97 0 0);
   --accent-foreground: oklch(0.18 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.91 0 0);
-  --input: oklch(0.91 0 0);
-  --ring: oklch(0.65 0 0);
+  --destructive: oklch(0.58 0.235 27.3);
+  --border: oklch(0.93 0.002 264);
+  --input: oklch(0.93 0.002 264);
+  --ring: oklch(0.50 0.170 265);
   --radius: 0.5rem;
 
-  /* Sidebar — pure white in light mode for clean SaaS aesthetic */
-  --sidebar: oklch(1 0 0);
-  --sidebar-foreground: oklch(0.13 0 0);
-  --sidebar-primary: oklch(0.18 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.96 0 0);
-  --sidebar-accent-foreground: oklch(0.18 0 0);
-  --sidebar-border: oklch(0.91 0 0);
-  --sidebar-ring: oklch(0.65 0 0);
+  --iris: oklch(0.50 0.170 265);
 
-  /* Status semantic colors */
-  --success: oklch(0.62 0.17 145);   /* green  */
-  --warning: oklch(0.70 0.17 60);    /* amber  */
-  --info: oklch(0.60 0.18 255);      /* blue   */
+  --sidebar: oklch(0.985 0.001 264);
+  --sidebar-foreground: oklch(0.145 0 0);
+  --sidebar-primary: oklch(0.145 0 0);
+  --sidebar-primary-foreground: oklch(0.99 0 0);
+  --sidebar-accent: oklch(0.94 0.002 264);
+  --sidebar-accent-foreground: oklch(0.145 0 0);
+  --sidebar-border: oklch(0.93 0.002 264);
+  --sidebar-ring: oklch(0.50 0.170 265);
 
-  /* Surface tokens — layered neutral surfaces */
-  --surface-base: oklch(0.99 0 0);
+  --success: oklch(0.62 0.17 145);
+  --warning: oklch(0.70 0.17 60);
+  --info: oklch(0.55 0.16 250);
+
+  --surface-base: oklch(1 0 0);
   --surface-raised: oklch(1 0 0);
   --surface-overlay: oklch(1 0 0);
-  --surface-sunken: oklch(0.965 0 0);
+  --surface-sunken: oklch(0.975 0.001 264);
 
-  /* Text hierarchy */
-  --text-primary: oklch(0.13 0 0);
+  --text-primary: oklch(0.145 0 0);
   --text-secondary: oklch(0.40 0 0);
   --text-tertiary: oklch(0.56 0 0);
   --text-placeholder: oklch(0.68 0 0);
-  --text-disabled: oklch(0.75 0 0);
-  --text-inverse: oklch(0.985 0 0);
+  --text-disabled: oklch(0.78 0 0);
+  --text-inverse: oklch(0.99 0 0);
 
-  /* Border tokens */
-  --border-subtle: oklch(0.94 0 0);
-  --border-default: oklch(0.91 0 0);
-  --border-strong: oklch(0.75 0 0);
+  --border-subtle: oklch(0.95 0.002 264);
+  --border-default: oklch(0.92 0.002 264);
+  --border-strong: oklch(0.78 0 0);
 
-  /* Brand alias tokens */
-  --color-brand: var(--primary);
-  --color-brand-subtle: var(--secondary);
+  --color-brand: var(--iris);
+  --color-brand-subtle: oklch(0.96 0.030 265);
 }
 
-/* ─── Dark mode ─────────────────────────────────────────────────────────── */
+/* ─── Dark mode — graphite + iris ───────────────────────────────────────── */
 .dark {
-  /* shadcn color roles */
-  --background: oklch(0.12 0 0);
-  --foreground: oklch(0.95 0 0);
-  --card: oklch(0.165 0 0);
-  --card-foreground: oklch(0.95 0 0);
-  --popover: oklch(0.165 0 0);
-  --popover-foreground: oklch(0.95 0 0);
-  --primary: oklch(0.90 0 0);
-  --primary-foreground: oklch(0.165 0 0);
-  --secondary: oklch(0.22 0 0);
-  --secondary-foreground: oklch(0.95 0 0);
-  --muted: oklch(0.22 0 0);
+  --background: oklch(0.115 0 0);
+  --foreground: oklch(0.96 0 0);
+  --card: oklch(0.155 0 0);
+  --card-foreground: oklch(0.96 0 0);
+  --popover: oklch(0.155 0 0);
+  --popover-foreground: oklch(0.96 0 0);
+  --primary: oklch(0.96 0 0);
+  --primary-foreground: oklch(0.145 0 0);
+  --secondary: oklch(0.205 0 0);
+  --secondary-foreground: oklch(0.96 0 0);
+  --muted: oklch(0.19 0 0);
   --muted-foreground: oklch(0.62 0 0);
-  --accent: oklch(0.22 0 0);
-  --accent-foreground: oklch(0.95 0 0);
-  --destructive: oklch(0.65 0.22 22.2);
-  --border: oklch(1 0 0 / 9%);
-  --input: oklch(1 0 0 / 12%);
-  --ring: oklch(0.50 0 0);
+  --accent: oklch(0.20 0 0);
+  --accent-foreground: oklch(0.96 0 0);
+  --destructive: oklch(0.66 0.22 22.2);
+  --border: oklch(1 0 0 / 8%);
+  --input: oklch(1 0 0 / 11%);
+  --ring: oklch(0.62 0.180 265);
+  --iris: oklch(0.62 0.180 265);
 
-  /* Sidebar */
-  --sidebar: oklch(0.155 0 0);
-  --sidebar-foreground: oklch(0.95 0 0);
-  --sidebar-primary: oklch(0.90 0 0);
+  --sidebar: oklch(0.135 0 0);
+  --sidebar-foreground: oklch(0.96 0 0);
+  --sidebar-primary: oklch(0.96 0 0);
   --sidebar-primary-foreground: oklch(0.155 0 0);
-  --sidebar-accent: oklch(0.22 0 0);
-  --sidebar-accent-foreground: oklch(0.95 0 0);
-  --sidebar-border: oklch(1 0 0 / 8%);
-  --sidebar-ring: oklch(0.50 0 0);
+  --sidebar-accent: oklch(0.20 0 0);
+  --sidebar-accent-foreground: oklch(0.96 0 0);
+  --sidebar-border: oklch(1 0 0 / 7%);
+  --sidebar-ring: oklch(0.62 0.180 265);
 
-  /* Status semantic colors — slightly brighter for dark mode legibility */
-  --success: oklch(0.70 0.18 145);
+  --success: oklch(0.72 0.18 145);
   --warning: oklch(0.78 0.17 60);
-  --info: oklch(0.68 0.17 255);
+  --info: oklch(0.68 0.17 250);
 
-  /* Surface tokens */
-  --surface-base: oklch(0.12 0 0);
-  --surface-raised: oklch(0.165 0 0);
-  --surface-overlay: oklch(0.20 0 0);
-  --surface-sunken: oklch(0.10 0 0);
+  --surface-base: oklch(0.115 0 0);
+  --surface-raised: oklch(0.155 0 0);
+  --surface-overlay: oklch(0.185 0 0);
+  --surface-sunken: oklch(0.095 0 0);
 
-  /* Text hierarchy */
-  --text-primary: oklch(0.95 0 0);
-  --text-secondary: oklch(0.72 0 0);
-  --text-tertiary: oklch(0.55 0 0);
+  --text-primary: oklch(0.96 0 0);
+  --text-secondary: oklch(0.74 0 0);
+  --text-tertiary: oklch(0.56 0 0);
   --text-placeholder: oklch(0.44 0 0);
-  --text-disabled: oklch(0.35 0 0);
-  --text-inverse: oklch(0.13 0 0);
+  --text-disabled: oklch(0.34 0 0);
+  --text-inverse: oklch(0.145 0 0);
 
-  /* Border tokens */
-  --border-subtle: oklch(1 0 0 / 6%);
-  --border-default: oklch(1 0 0 / 9%);
-  --border-strong: oklch(1 0 0 / 20%);
+  --border-subtle: oklch(1 0 0 / 5%);
+  --border-default: oklch(1 0 0 / 8%);
+  --border-strong: oklch(1 0 0 / 18%);
 
-  /* Brand alias tokens */
-  --color-brand: var(--primary);
-  --color-brand-subtle: var(--secondary);
+  --color-brand: var(--iris);
+  --color-brand-subtle: oklch(0.30 0.090 265);
 }
 
 /* ─── Base styles ───────────────────────────────────────────────────────── */
@@ -284,20 +276,25 @@
 
   html {
     @apply font-sans antialiased;
-    font-feature-settings: "cv11", "ss01";
+    font-feature-settings: "cv11", "ss01", "ss02";
     text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
 
   body {
     @apply bg-background text-foreground;
+    letter-spacing: -0.005em;
   }
 
-  /* Smooth scrolling within panels — not globally */
+  h1, h2, h3, .text-display, .text-headline, .text-title {
+    letter-spacing: -0.018em;
+  }
+
   [data-scroll-area] {
     scroll-behavior: smooth;
   }
 
-  /* Smooth focus-visible rings on all interactive elements */
   :focus-visible {
     outline: 2px solid var(--ring);
     outline-offset: 2px;
@@ -315,27 +312,28 @@
     outline-offset: 2px;
     border-radius: var(--radius-sm);
   }
+
+  ::selection {
+    background-color: color-mix(in oklch, var(--iris) 22%, transparent);
+    color: var(--foreground);
+  }
 }
 
 /* ─── Utility classes ───────────────────────────────────────────────────── */
 @layer utilities {
-  /* Surface utilities */
   .surface-base    { background-color: var(--surface-base); }
   .surface-raised  { background-color: var(--surface-raised); }
   .surface-overlay { background-color: var(--surface-overlay); }
   .surface-sunken  { background-color: var(--surface-sunken); }
 
-  /* Text hierarchy utilities */
   .text-primary-label   { color: var(--text-primary); }
   .text-secondary-label { color: var(--text-secondary); }
   .text-tertiary-label  { color: var(--text-tertiary); }
 
-  /* Border utilities */
   .border-subtle  { border-color: var(--border-subtle); }
   .border-default { border-color: var(--border-default); }
   .border-strong  { border-color: var(--border-strong); }
 
-  /* Transition presets */
   .transition-standard {
     transition-property: color, background-color, border-color, opacity, box-shadow, transform;
     transition-duration: var(--duration-normal);
@@ -343,96 +341,121 @@
   }
 
   .transition-fast {
-    transition-property: color, background-color, border-color, opacity;
+    transition-property: color, background-color, border-color, opacity, transform;
     transition-duration: var(--duration-fast);
     transition-timing-function: var(--ease-standard);
   }
 
-  /* Focus ring — consistent across interactive elements */
   .focus-ring {
     @apply outline-none ring-2 ring-ring ring-offset-2 ring-offset-background;
   }
 
-  /* ── Typography utilities ───────────────────────────────────────────────── */
+  .text-iris { color: var(--iris); }
+  .bg-iris   { background-color: var(--iris); }
+  .ring-iris { --tw-ring-color: var(--iris); }
+
+  /* Typography */
   .text-display {
-    font-size: 2.25rem;   /* 36px */
-    font-weight: 700;
-    line-height: 1.15;
+    font-size: 2.5rem;
+    font-weight: 600;
+    line-height: 1.1;
+    letter-spacing: -0.024em;
   }
 
   .text-headline {
-    font-size: 1.5rem;    /* 24px */
+    font-size: 1.625rem;
     font-weight: 600;
-    line-height: 1.3;
+    line-height: 1.25;
+    letter-spacing: -0.020em;
   }
 
   .text-title {
-    font-size: 1.125rem;  /* 18px */
+    font-size: 1.125rem;
     font-weight: 600;
     line-height: 1.4;
+    letter-spacing: -0.014em;
   }
 
   .text-body-lg {
-    font-size: 1rem;      /* 16px */
+    font-size: 1rem;
     font-weight: 400;
-    line-height: 1.5;
+    line-height: 1.55;
   }
 
   .text-body {
-    font-size: 0.875rem;  /* 14px */
+    font-size: 0.875rem;
     font-weight: 400;
-    line-height: 1.5;
+    line-height: 1.55;
   }
 
   .text-caption {
-    font-size: 0.75rem;   /* 12px */
+    font-size: 0.75rem;
     font-weight: 400;
     line-height: 1.5;
   }
 
   .text-overline {
-    font-size: 0.6875rem; /* 11px */
+    font-size: 0.6875rem;
     font-weight: 600;
     line-height: 1.5;
     text-transform: uppercase;
-    letter-spacing: 0.1em;
+    letter-spacing: 0.08em;
+    color: var(--text-tertiary);
   }
 
-  /* ── Layout utilities ───────────────────────────────────────────────────── */
+  .text-mono {
+    font-family: var(--font-mono);
+    font-feature-settings: "ss01", "ss02";
+  }
+
+  /* Layout */
   .page-container {
-    max-width: 1280px;    /* screen-xl */
+    max-width: 1280px;
     margin-left: auto;
     margin-right: auto;
-    padding-left: 1.5rem; /* px-6 */
+    padding-left: 1.5rem;
     padding-right: 1.5rem;
   }
 
   .page-content {
-    max-width: 64rem;     /* max-w-5xl = 1024px but keeping closer to 5xl */
+    max-width: 64rem;
     margin-left: auto;
     margin-right: auto;
-    padding-left: 1.5rem; /* px-6 */
+    padding-left: 1.5rem;
     padding-right: 1.5rem;
   }
 
-  /* ── Skeleton loading state ─────────────────────────────────────────────── */
+  .page-narrow {
+    max-width: 42rem;
+    margin-left: auto;
+    margin-right: auto;
+    padding-left: 1.5rem;
+    padding-right: 1.5rem;
+  }
+
   .skeleton {
-    @apply animate-pulse bg-muted rounded;
+    @apply animate-pulse bg-muted rounded-sm;
+  }
+
+  .hairline {
+    border-bottom: 1px solid var(--border-subtle);
+  }
+
+  .grid-bg-dots {
+    background-image: radial-gradient(circle, var(--border-default) 1px, transparent 1px);
+    background-size: 20px 20px;
   }
 }
 
-/* ─── Animated blur blob background (hero) ─────────────────────────────── */
-/* Used by src/components/ui/animated-blur-blob-background.tsx behind the
-   marketing home page hero. Scoped to .wrapper so it never leaks into
-   other surfaces. */
+/* ─── Marketing hero blob — restrained iris glow ──────────────────────── */
 :root {
-  --blur-blob-color: color-mix(in oklch, var(--color-violet-600) 55%, transparent);
-  --blur-blob-color-2: color-mix(in oklch, var(--color-fuchsia-500) 45%, transparent);
-  --blur-blob-color-3: color-mix(in oklch, var(--color-cyan-400) 50%, transparent);
-  --blur-1-size: clamp(400px, 60vw, 60vw);
-  --blur-2-size: clamp(300px, 40vw, 40vw);
-  --blur-3-size: clamp(100px, 10vw, 10vw);
-  --blur-amount: clamp(40px, 5vw, 90px);
+  --blur-blob-color: color-mix(in oklch, var(--color-violet-600) 35%, transparent);
+  --blur-blob-color-2: color-mix(in oklch, var(--color-violet-400) 20%, transparent);
+  --blur-blob-color-3: color-mix(in oklch, var(--color-violet-700) 25%, transparent);
+  --blur-1-size: clamp(420px, 55vw, 60vw);
+  --blur-2-size: clamp(280px, 38vw, 40vw);
+  --blur-3-size: clamp(120px, 12vw, 12vw);
+  --blur-amount: clamp(50px, 6vw, 100px);
 }
 
 .wrapper {
@@ -459,7 +482,7 @@
   background: var(--blur-blob-color);
   margin-left: calc(var(--blur-1-size) / -2);
   margin-top: calc(var(--blur-1-size) / -2);
-  opacity: 0.55;
+  opacity: 0.45;
 }
 
 .wrapper > .blur:nth-child(2) {
@@ -468,7 +491,7 @@
   background: var(--blur-blob-color-2);
   margin-left: calc(var(--blur-2-size) / -2);
   margin-top: calc(var(--blur-2-size) / -2);
-  opacity: 0.45;
+  opacity: 0.35;
 }
 
 .wrapper > .blur:nth-child(3) {
@@ -477,189 +500,11 @@
   background: var(--blur-blob-color-3);
   margin-left: calc(var(--blur-3-size) / -2);
   margin-top: calc(var(--blur-3-size) / -2);
-  opacity: 0.6;
+  opacity: 0.5;
 }
 
 @media (prefers-reduced-motion: reduce) {
   .wrapper > .blur {
     animation: none !important;
   }
-}
-
-/* ─── Glass button (primary button style) ──────────────────────────────── */
-/* Used by src/components/ui/glass-button.tsx and applied as the default
-   variant of the shared <Button> component via the .glass-button class
-   alone. Works on a single <button> element — the wrap + shadow layers in
-   the original GlassButton component are optional and only wire up when
-   you render the composite <GlassButton /> directly. */
-
-.glass-button-wrap {
-  position: relative;
-  display: inline-block;
-  --glass-shadow-color: color-mix(in oklch, var(--color-violet-600) 60%, transparent);
-}
-
-.glass-button-shadow {
-  position: absolute;
-  inset: 0;
-  z-index: -1;
-  box-shadow:
-    0 1px 1px color-mix(in oklch, var(--color-violet-600) 20%, transparent),
-    0 10px 30px -8px var(--glass-shadow-color);
-  opacity: 0.9;
-  transition: opacity 200ms ease, transform 200ms ease;
-  pointer-events: none;
-}
-
-.glass-button-wrap:hover .glass-button-shadow {
-  opacity: 1;
-  transform: translateY(1px);
-}
-
-/*
- * Core glass button surface.
- *
- * The primary <Button> in the app applies this class alone (no wrap, no
- * shadow div) so every existing <Button variant="default"> in the repo
- * becomes a glass button without restructuring the DOM.
- *
- * Layering from back to front:
- *   background       — violet gradient base
- *   ::before         — bright inner highlight on the top edge
- *   ::after          — subtle sheen across the top half
- *   box-shadow       — inner highlight + bottom inner shadow + outer drop
- */
-.glass-button {
-  position: relative;
-  isolation: isolate;
-  border-radius: 9999px;
-  border: 1px solid color-mix(in oklch, var(--color-violet-700) 60%, transparent);
-  /* Yellow primary needs dark text for contrast. Uses a warm near-black that
-     still reads against the bright yellow gradient in both modes. */
-  color: oklch(0.25 0.03 80);
-  background:
-    linear-gradient(
-      180deg,
-      color-mix(in oklch, var(--color-violet-500) 100%, transparent) 0%,
-      color-mix(in oklch, var(--color-violet-700) 100%, transparent) 100%
-    );
-  box-shadow:
-    inset 0 1px 0 0 color-mix(in oklch, white 55%, transparent),
-    inset 0 -2px 4px -1px color-mix(in oklch, var(--color-violet-900) 45%, transparent),
-    0 1px 2px 0 color-mix(in oklch, var(--color-violet-900) 25%, transparent),
-    0 6px 18px -6px color-mix(in oklch, var(--color-violet-600) 55%, transparent);
-  transition:
-    transform 120ms ease,
-    box-shadow 200ms ease,
-    background 200ms ease,
-    border-color 200ms ease;
-  cursor: pointer;
-  overflow: hidden;
-}
-
-.glass-button::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  background: linear-gradient(
-    180deg,
-    color-mix(in oklch, white 35%, transparent) 0%,
-    color-mix(in oklch, white 0%, transparent) 55%
-  );
-  pointer-events: none;
-  mix-blend-mode: screen;
-}
-
-.glass-button::after {
-  content: "";
-  position: absolute;
-  inset: 1px;
-  border-radius: inherit;
-  background: linear-gradient(
-    180deg,
-    color-mix(in oklch, white 12%, transparent) 0%,
-    transparent 45%
-  );
-  pointer-events: none;
-}
-
-.glass-button:hover {
-  background:
-    linear-gradient(
-      180deg,
-      color-mix(in oklch, var(--color-violet-400) 100%, transparent) 0%,
-      color-mix(in oklch, var(--color-violet-600) 100%, transparent) 100%
-    );
-  box-shadow:
-    inset 0 1px 0 0 color-mix(in oklch, white 65%, transparent),
-    inset 0 -2px 4px -1px color-mix(in oklch, var(--color-violet-900) 40%, transparent),
-    0 2px 4px 0 color-mix(in oklch, var(--color-violet-900) 30%, transparent),
-    0 10px 24px -6px color-mix(in oklch, var(--color-violet-600) 70%, transparent);
-}
-
-.glass-button:active {
-  transform: translateY(1px);
-  box-shadow:
-    inset 0 1px 0 0 color-mix(in oklch, white 40%, transparent),
-    inset 0 2px 6px 0 color-mix(in oklch, var(--color-violet-900) 55%, transparent),
-    0 1px 2px 0 color-mix(in oklch, var(--color-violet-900) 25%, transparent);
-}
-
-.glass-button:focus-visible {
-  outline: 2px solid color-mix(in oklch, var(--color-violet-400) 80%, transparent);
-  outline-offset: 2px;
-}
-
-.glass-button:disabled,
-.glass-button[aria-disabled="true"] {
-  opacity: 0.55;
-  cursor: not-allowed;
-}
-
-.glass-button-text {
-  position: relative;
-  z-index: 1;
-  /* Subtle upward white highlight on the dark text — reinforces the
-     glass look without reducing contrast. */
-  text-shadow: 0 1px 0 color-mix(in oklch, white 35%, transparent);
-}
-
-/* Dark mode tuning — the violet-500/700 gradient is already readable on
-   dark surfaces, but the highlight + shadow intensities are adjusted so
-   the button retains presence without overpowering the dark palette. */
-.dark .glass-button {
-  border-color: color-mix(in oklch, var(--color-violet-400) 45%, transparent);
-  background:
-    linear-gradient(
-      180deg,
-      color-mix(in oklch, var(--color-violet-400) 100%, transparent) 0%,
-      color-mix(in oklch, var(--color-violet-700) 100%, transparent) 100%
-    );
-  box-shadow:
-    inset 0 1px 0 0 color-mix(in oklch, white 40%, transparent),
-    inset 0 -2px 4px -1px color-mix(in oklch, black 35%, transparent),
-    0 1px 2px 0 color-mix(in oklch, black 50%, transparent),
-    0 8px 22px -6px color-mix(in oklch, var(--color-violet-600) 65%, transparent);
-}
-
-.dark .glass-button:hover {
-  background:
-    linear-gradient(
-      180deg,
-      color-mix(in oklch, var(--color-violet-300) 100%, transparent) 0%,
-      color-mix(in oklch, var(--color-violet-600) 100%, transparent) 100%
-    );
-  box-shadow:
-    inset 0 1px 0 0 color-mix(in oklch, white 50%, transparent),
-    inset 0 -2px 4px -1px color-mix(in oklch, black 30%, transparent),
-    0 2px 4px 0 color-mix(in oklch, black 55%, transparent),
-    0 12px 28px -6px color-mix(in oklch, var(--color-violet-500) 75%, transparent);
-}
-
-.dark .glass-button-shadow {
-  --glass-shadow-color: color-mix(in oklch, var(--color-violet-500) 55%, transparent);
-  box-shadow:
-    0 1px 1px color-mix(in oklch, black 35%, transparent),
-    0 10px 30px -8px var(--glass-shadow-color);
 }

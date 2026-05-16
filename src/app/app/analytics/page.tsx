@@ -16,6 +16,7 @@ import {
   CardTitle,
   CardDescription,
 } from "@/components/ui/card";
+import { PageTransition } from "@/components/product/page_transition";
 
 /**
  * Workspace analytics & content health dashboard.
@@ -43,7 +44,7 @@ export default async function AnalyticsPage() {
   );
 
   return (
-    <div className="flex h-full flex-col overflow-hidden">
+    <PageTransition className="flex h-full flex-col overflow-hidden">
       {/* Page header */}
       <div className="bg-background">
         <div className="px-6 pt-6 pb-4">
@@ -80,7 +81,7 @@ export default async function AnalyticsPage() {
           {/* ── Contributors ──────────────────────────────────── */}
           <Card>
             <CardHeader className="px-6 pt-6 pb-4">
-              <CardTitle className="text-base font-semibold">
+              <CardTitle className="text-title font-semibold tracking-tight">
                 Top contributors (last 7 days)
               </CardTitle>
               <CardDescription className="text-sm text-muted-foreground">
@@ -122,7 +123,7 @@ export default async function AnalyticsPage() {
           {/* ── Search analytics ──────────────────────────────── */}
           <Card>
             <CardHeader className="px-6 pt-6 pb-4">
-              <CardTitle className="text-base font-semibold">
+              <CardTitle className="text-title font-semibold tracking-tight">
                 Top search queries (last 30 days)
               </CardTitle>
             </CardHeader>
@@ -158,7 +159,7 @@ export default async function AnalyticsPage() {
           {/* ── Busiest boxes ─────────────────────────────────── */}
           <Card>
             <CardHeader className="px-6 pt-6 pb-4">
-              <CardTitle className="text-base font-semibold">
+              <CardTitle className="text-title font-semibold tracking-tight">
                 Busiest boxes
               </CardTitle>
               <CardDescription className="text-sm text-muted-foreground">
@@ -195,7 +196,7 @@ export default async function AnalyticsPage() {
           {/* ── Content health: orphaned notes ────────────────── */}
           <Card>
             <CardHeader className="px-6 pt-6 pb-4">
-              <CardTitle className="text-base font-semibold">
+              <CardTitle className="text-title font-semibold tracking-tight">
                 Orphaned notes
               </CardTitle>
               <CardDescription className="text-sm text-muted-foreground">
@@ -243,7 +244,7 @@ export default async function AnalyticsPage() {
           {/* ── Content health: stale notes ───────────────────── */}
           <Card>
             <CardHeader className="px-6 pt-6 pb-4">
-              <CardTitle className="text-base font-semibold">
+              <CardTitle className="text-title font-semibold tracking-tight">
                 Stale notes
               </CardTitle>
               <CardDescription className="text-sm text-muted-foreground">
@@ -285,7 +286,7 @@ export default async function AnalyticsPage() {
           {/* ── Content health: empty folders ─────────────────── */}
           <Card>
             <CardHeader className="px-6 pt-6 pb-4">
-              <CardTitle className="text-base font-semibold">
+              <CardTitle className="text-title font-semibold tracking-tight">
                 Empty folders
               </CardTitle>
               <CardDescription className="text-sm text-muted-foreground">
@@ -319,7 +320,7 @@ export default async function AnalyticsPage() {
           </Card>
         </div>
       </ScrollArea>
-    </div>
+    </PageTransition>
   );
 }
 

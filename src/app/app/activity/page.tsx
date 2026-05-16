@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getActivityFeed, getUnreadCount, markAsRead } from "@/server/services/activity_feed_service";
 import { Separator } from "@/components/ui/separator";
 import { ActivityFeedClient } from "./activity_feed_client";
+import { PageTransition } from "@/components/product/page_transition";
 
 /**
  * Activity feed page.
@@ -22,7 +23,7 @@ export default async function ActivityPage() {
   ]);
 
   return (
-    <div className="flex h-full flex-col overflow-hidden">
+    <PageTransition className="flex h-full flex-col overflow-hidden">
       {/* Page header */}
       <div className="bg-background">
         <div className="px-6 pt-6 pb-4">
@@ -43,6 +44,6 @@ export default async function ActivityPage() {
           initialHasMore={feedResult.has_more}
         />
       </div>
-    </div>
+    </PageTransition>
   );
 }

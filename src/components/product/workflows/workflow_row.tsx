@@ -37,7 +37,7 @@ export function WorkflowRow({
     <div
       className={cn(
         "group flex items-center gap-3 rounded-lg border border-border bg-card px-4 py-3",
-        "transition-colors hover:border-ring/50 hover:bg-accent/40"
+        "transition-[border-color,box-shadow] duration-150 hover:border-strong hover:shadow-sm"
       )}
     >
       <GitFork

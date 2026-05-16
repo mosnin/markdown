@@ -3,9 +3,11 @@ import { GitFork, LayoutTemplate } from "lucide-react";
 import { requireAuthenticatedUser } from "@/server/auth/require_authenticated_user";
 import { createClient } from "@/lib/supabase/server";
 import { listWorkflowsByWorkspace } from "@/server/repositories/workflow_repository";
-import { PageHeader } from "@/components/product/page_header";
 import { WorkflowRow } from "@/components/product/workflows/workflow_row";
 import { CreateWorkflowButton } from "@/components/product/create/create_workflow_button";
+import { WorkflowsPageHeader } from "@/components/product/workflows/workflows_page_header";
+import { PageStagger, StaggerItem } from "@/components/product/page_transition";
+import { buttonVariants } from "@/components/ui/button";
 
 export default async function WorkflowsPage() {
   const ctx = await requireAuthenticatedUser();
@@ -44,14 +46,11 @@ export default async function WorkflowsPage() {
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
-      <PageHeader
-        title="Workflows"
-        description="Visual builder for multi-step agent flows. Chain sub-agents, web tools, and transformations into reusable pipelines."
-      />
+      <WorkflowsPageHeader />
       <div className="flex-1 overflow-auto">
         <div className="mx-auto max-w-3xl space-y-4 px-4 py-6 md:px-6">
           <div className="flex items-center justify-between">
-            <p className="text-xs text-muted-foreground">
+            <p className="text-overline text-muted-foreground">
               {workflows.length}{" "}
               {workflows.length === 1 ? "workflow" : "workflows"}
             </p>
@@ -68,26 +67,30 @@ export default async function WorkflowsPage() {
           </div>
 
           {workflows.length === 0 ? (
-            <div className="rounded-lg border border-dashed border-border bg-card/50 px-6 py-12 text-center">
-              <GitFork
-                className="mx-auto mb-3 h-6 w-6 text-muted-foreground/40"
-                aria-hidden="true"
-              />
-              <p className="text-sm font-medium text-foreground">
-                No workflows yet
-              </p>
-              <p className="mx-auto mt-1 max-w-md text-xs text-muted-foreground">
-                Workflows let you design multi-step agent flows visually. Create
-                your first workflow to chain sub-agents, web tools, and
-                transformations.
-              </p>
+            <div className="flex flex-col items-center justify-center py-24 gap-4 text-center">
+              <div className="rounded-lg border border-border p-3">
+                <GitFork className="h-5 w-5 text-muted-foreground" aria-hidden="true" />
+              </div>
+              <div>
+                <p className="text-sm font-medium">No workflows yet</p>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Design multi-step agent flows visually. Chain sub-agents, web tools,
+                  and transformations.
+                </p>
+              </div>
+              <Link
+                href="/app/workflows/templates"
+                className={buttonVariants({ variant: "secondary", size: "sm" })}
+              >
+                Browse templates
+              </Link>
             </div>
           ) : (
-            <ul className="flex flex-col gap-2 list-none">
+            <PageStagger className="flex flex-col gap-2">
               {workflows.map((w) => {
                 const latest = latestRuns.get(w.id);
                 return (
-                  <li key={w.id}>
+                  <StaggerItem key={w.id}>
                     <WorkflowRow
                       workflow={w}
                       latestRunStatus={
@@ -101,10 +104,10 @@ export default async function WorkflowsPage() {
                       }
                       latestRunAt={latest?.started_at ?? null}
                     />
-                  </li>
+                  </StaggerItem>
                 );
               })}
-            </ul>
+            </PageStagger>
           )}
         </div>
       </div>

@@ -3,6 +3,7 @@ import { GeistSans } from "geist/font/sans";
 import { GeistMono } from "geist/font/mono";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ThemeProvider } from "@/components/product/theme_provider";
+import { MotionProvider } from "@/components/product/motion_provider";
 import { ServiceWorkerRegister } from "@/components/product/sw_register";
 import "./globals.css";
 
@@ -28,12 +29,12 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#7c3aed",
+  themeColor: "#0a0a0a",
   width: "device-width",
   initialScale: 1,
-  maximumScale: 5, // allow user zoom; do NOT lock viewport
+  maximumScale: 5,
   userScalable: true,
-  viewportFit: "cover", // edge-to-edge on notched devices
+  viewportFit: "cover",
 };
 
 export default function RootLayout({
@@ -54,8 +55,10 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
-          {/* Base UI TooltipProvider uses `delay` not `delayDuration` */}
-          <TooltipProvider delay={400}>{children}</TooltipProvider>
+          <MotionProvider>
+            {/* Base UI TooltipProvider uses `delay` not `delayDuration` */}
+            <TooltipProvider delay={400}>{children}</TooltipProvider>
+          </MotionProvider>
           <ServiceWorkerRegister />
         </ThemeProvider>
       </body>

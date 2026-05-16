@@ -45,6 +45,7 @@ import {
   getWorkspaceUsageForMonth,
   sumOperatorUsage,
 } from "@/server/services/workspace_operator_usage_service";
+import { PageTransition } from "@/components/product/page_transition";
 
 // Settings section nav is rendered by SettingsSidebar (see
 // src/components/product/settings_sidebar.tsx). Keeping the sections
@@ -138,7 +139,7 @@ export default async function SettingsPage() {
     | undefined;
 
   return (
-    <div className="flex h-full flex-col overflow-hidden">
+    <PageTransition className="flex h-full flex-col overflow-hidden">
       {/* Page header */}
       <div className="bg-background">
         <div className="px-6 pt-6 pb-4">
@@ -304,6 +305,6 @@ export default async function SettingsPage() {
           </div>
         </ScrollArea>
       </div>
-    </div>
+    </PageTransition>
   );
 }
