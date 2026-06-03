@@ -9,6 +9,12 @@ import type { ReactNode } from "react";
  * appears in both contexts.
  *
  * Do NOT inline legal copy in pages. Always import from this file.
+ *
+ * NOTE (legal): The copy in the *_content.tsx files is standard SaaS
+ * boilerplate intended for a soft launch. It is NOT a substitute for legal
+ * advice and has not been reviewed by counsel. Have the company's counsel
+ * review and tailor these documents (especially governing law, arbitration,
+ * data-transfer, refund, and DMCA-agent details) before relying on them.
  */
 
 export const LEGAL_LAST_UPDATED = "April 12, 2026";
