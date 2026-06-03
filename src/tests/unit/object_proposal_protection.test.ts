@@ -17,7 +17,29 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 vi.mock("@/server/repositories/write_proposal_repository");
 vi.mock("@/server/services/audit_service");
 
-import { createProposal } from "@/server/services/write_proposal_service";
+// Quota enforcement has its own suite (proposal_quota_service.test.ts).
+// Stub it to "allowed" so these object permission/scope tests aren't gated
+// by the paywall.
+vi.mock("@/server/services/proposal_quota_service", async (importActual) => {
+  const actual =
+    await importActual<typeof import("@/server/services/proposal_quota_service")>();
+  return {
+    ...actual,
+    checkProposalQuota: vi.fn().mockResolvedValue({
+      tier: "free",
+      limit: 20,
+      used: 0,
+      allowed: true,
+      resetsAt: new Date("2099-01-01T00:00:00Z"),
+    }),
+  };
+});
+
+import {
+  createProposal,
+  isQuotaExceeded,
+} from "@/server/services/write_proposal_service";
+import type { WriteProposal } from "@/server/domain/types/write_proposal";
 import * as proposalRepo from "@/server/repositories/write_proposal_repository";
 import * as auditService from "@/server/services/audit_service";
 import { PERMISSION_MODE } from "@/server/domain/constants/connection_constants";
@@ -96,6 +118,19 @@ function makeProposal(overrides: Partial<Record<string, unknown>> = {}) {
   };
 }
 
+/**
+ * Narrow `createProposal`'s union return to a `WriteProposal`, failing the
+ * test if the paywall short-circuited (quota is stubbed to allowed above).
+ */
+function asProposal(
+  result: Awaited<ReturnType<typeof createProposal>>
+): WriteProposal {
+  if (isQuotaExceeded(result)) {
+    throw new Error("Expected a proposal but got quota_exceeded");
+  }
+  return result;
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(auditService.auditWriteProposalCreated).mockReturnValue(undefined as never);
@@ -127,7 +162,7 @@ describe("object proposal — permission checks", () => {
       target_object_id: SKILL_ID,
       proposed_content: "# new",
     });
-    expect(result.proposal_type).toBe("update_skill");
+    expect(asProposal(result).proposal_type).toBe("update_skill");
   });
 
   it("allows generate_in_allowed_folders to propose an object update", async () => {
@@ -139,7 +174,7 @@ describe("object proposal — permission checks", () => {
       target_object_id: SKILL_ID,
       proposed_content: "# new",
     });
-    expect(result.proposal_type).toBe("update_skill");
+    expect(asProposal(result).proposal_type).toBe("update_skill");
   });
 });
 
@@ -163,11 +198,13 @@ describe("object proposal — box-local scope", () => {
     const ctx = makeCtx(PERMISSION_MODE.PROPOSE_WRITES, [BOX_ID]);
     const adminClient = makeAdminClient(makeObjectRow({ box_id: BOX_ID, is_reusable: false }));
 
-    const result = await createProposal(adminClient, ctx, {
-      proposal_type: "update_skill",
-      target_object_id: SKILL_ID,
-      proposed_content: "# new",
-    });
+    const result = asProposal(
+      await createProposal(adminClient, ctx, {
+        proposal_type: "update_skill",
+        target_object_id: SKILL_ID,
+        proposed_content: "# new",
+      })
+    );
     expect(result.target_object_id ?? result.proposal_type).toBeTruthy();
   });
 });
@@ -187,7 +224,7 @@ describe("object proposal — reusable shared object scope", () => {
       target_object_id: SKILL_ID,
       proposed_content: "# new content for shared skill",
     });
-    expect(result.proposal_type).toBe("update_skill");
+    expect(asProposal(result).proposal_type).toBe("update_skill");
   });
 
   it("allows reusable agent even when connection has no matching box scope", async () => {
@@ -204,7 +241,7 @@ describe("object proposal — reusable shared object scope", () => {
       target_object_id: AGENT_ID,
       proposed_content: "# new agent",
     });
-    expect(result.proposal_type).toBe("update_agent");
+    expect(asProposal(result).proposal_type).toBe("update_agent");
   });
 });
 

@@ -32,6 +32,11 @@ import {
   abortChangeSet,
   recordChangeSetItem,
 } from "@/server/services/change_set_service";
+import {
+  checkProposalQuota,
+  quotaExceeded,
+  type QuotaExceededResult,
+} from "@/server/services/proposal_quota_service";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -191,14 +196,34 @@ async function resolveObjectWithPermission(
  *   - box-local objects must be in an allowed box
  *   - target_object_version_id is captured at submission time
  *   - reusable shared skills/agents: proposal-only (no direct generation)
+ *
+ * Plan paywall:
+ *   - Write proposals are the core metered action of the Poggle loop. This
+ *     function is the single gate covering BOTH the MCP path
+ *     (`create_write_proposal`) and the in-app `/api/v1/write_proposals`
+ *     path. When the workspace has exhausted its per-tier, per-period
+ *     allowance it returns a typed `QuotaExceededResult`
+ *     (`{ ok: false, code: "quota_exceeded", limit, used, upgradeUrl }`)
+ *     INSTEAD OF throwing. The under-limit success shape is unchanged
+ *     (still a `WriteProposal`), so callers narrow with `isQuotaExceeded`
+ *     / a `"code" in result` check before using the proposal.
  */
 export async function createProposal(
   adminClient: SupabaseClient,
   ctx: ConnectionRequestContext,
   input: CreateProposalInput
-): Promise<WriteProposal> {
+): Promise<WriteProposal | QuotaExceededResult> {
   if (!canPropose(ctx.connection.permission_mode)) {
     throw new Error("Connection does not have write proposal permission");
+  }
+
+  // ── Plan paywall ──────────────────────────────────────────────────────────
+  // Enforce the per-tier, per-billing-period write-proposal cap before any
+  // ownership lookups or inserts. Returning (not throwing) keeps the MCP and
+  // in-app callers able to surface a clean "upgrade" response.
+  const quota = await checkProposalQuota(adminClient, ctx.workspaceId);
+  if (!quota.allowed) {
+    return quotaExceeded(quota);
   }
 
   const { proposal_type } = input;
@@ -1000,4 +1025,6 @@ export async function checkAndMarkConflicted(
 // ─── Re-export for convenience ────────────────────────────────────────────────
 
 export type { WriteProposal };
+export type { QuotaExceededResult };
+export { isQuotaExceeded } from "@/server/services/proposal_quota_service";
 export { getBoxById };

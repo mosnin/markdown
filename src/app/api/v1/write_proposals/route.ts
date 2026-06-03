@@ -10,6 +10,7 @@ import {
 import { createAdminClient } from "@/lib/supabase/admin";
 import {
   createProposal,
+  isQuotaExceeded,
   listProposalsForConnection,
 } from "@/server/services/write_proposal_service";
 import { auditMcp } from "@/server/services/audit_service";
@@ -21,6 +22,7 @@ import {
   E_BAD_REQUEST,
   E_INTERNAL,
   E_RATE_LIMITED,
+  E_QUOTA_EXCEEDED,
   E_INSUFFICIENT_SCOPE,
   E_FORBIDDEN_ROLE,
   E_BRANCH_TARGETING_NOT_ALLOWED,
@@ -221,6 +223,17 @@ export const POST = withApiHandler(async (request: NextRequest) => {
             ...sharedFields,
           }
     );
+
+    // Plan paywall — the workspace exhausted its per-period proposal
+    // allowance. Surface as 402 with limit/used/upgrade_url; no proposal
+    // was created.
+    if (isQuotaExceeded(proposal)) {
+      return E_QUOTA_EXCEEDED({
+        limit: proposal.limit,
+        used: proposal.used,
+        upgradeUrl: proposal.upgradeUrl,
+      });
+    }
 
     // Audit the user-attributed MCP event alongside the
     // connection-attributed event the service wrote. For OAuth this

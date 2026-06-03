@@ -988,7 +988,7 @@ async function dispatchTool(
     case "create_write_proposal": {
       // Import lazily so this huge service is only loaded for clients
       // that actually call it.
-      const { createProposal } = await import("@/server/services/write_proposal_service");
+      const { createProposal, isQuotaExceeded } = await import("@/server/services/write_proposal_service");
       // Proposals were originally designed for connection-auth callers.
       // We synthesize the equivalent context from the OAuth identity:
       // the workspace, the acting user, and an OAuth-specific actor
@@ -1102,6 +1102,17 @@ async function dispatchTool(
           proposed_tags: proposalInput.proposed_tags ?? null,
           rationale: proposalInput.rationale ?? null,
         });
+
+        // Plan paywall — the workspace exhausted its per-period proposal
+        // allowance. Abort the change set (nothing was written) and surface
+        // a clear upgrade error to the agent.
+        if (isQuotaExceeded(proposal)) {
+          await abortChangeSet(admin, cs.id, "quota_exceeded").catch(() => {});
+          throw toolError(
+            -32004,
+            `Plan limit reached: ${proposal.used}/${proposal.limit} write proposals used this billing period. Upgrade at ${proposal.upgradeUrl} to continue.`
+          );
+        }
 
         await recordChangeSetItem(admin, {
           change_set_id: cs.id,

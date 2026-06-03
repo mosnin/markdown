@@ -72,6 +72,37 @@ export const E_RATE_LIMITED = (retryAfterSeconds: number) =>
   );
 
 /**
+ * 402 Payment Required — the workspace has hit a plan limit (e.g. the
+ * per-period write-proposal cap). The body carries the `limit`, current
+ * `used` count, and an `upgrade_url` so the caller can render an upgrade
+ * prompt. This is the API surface for the service-layer paywall enforced in
+ * `createProposal`; it is intentionally distinct from `rate_limited` (429),
+ * which is a transient throttle, not a billing boundary.
+ */
+export function E_QUOTA_EXCEEDED(opts: {
+  message?: string;
+  limit: number;
+  used: number;
+  upgradeUrl: string;
+}): Response {
+  const body: ApiError & {
+    limit: number;
+    used: number;
+    upgrade_url: string;
+  } = {
+    error_code: "quota_exceeded",
+    message:
+      opts.message ??
+      `Plan limit reached (${opts.used}/${opts.limit}). Upgrade to continue.`,
+    request_id: randomUUID(),
+    limit: opts.limit,
+    used: opts.used,
+    upgrade_url: opts.upgradeUrl,
+  };
+  return Response.json(body, { status: 402 });
+}
+
+/**
  * 401 with WWW-Authenticate: Bearer error="insufficient_scope"; used by
  * every `/api/v1/**` route handler when an OAuth token is missing the
  * capability scope the route requires. The `scope` parameter advertises

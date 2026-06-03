@@ -16,10 +16,30 @@ vi.mock("@/server/repositories/folder_repository");
 vi.mock("@/server/repositories/write_proposal_repository");
 vi.mock("@/server/services/audit_service");
 
+// Quota enforcement has its own suite (proposal_quota_service.test.ts).
+// Here we stub it to "allowed" so these permission/ownership tests stay
+// focused on the proposal logic and aren't gated by the paywall.
+vi.mock("@/server/services/proposal_quota_service", async (importActual) => {
+  const actual =
+    await importActual<typeof import("@/server/services/proposal_quota_service")>();
+  return {
+    ...actual,
+    checkProposalQuota: vi.fn().mockResolvedValue({
+      tier: "free",
+      limit: 20,
+      used: 0,
+      allowed: true,
+      resetsAt: new Date("2099-01-01T00:00:00Z"),
+    }),
+  };
+});
+
 import {
   createProposal,
   approveProposal,
   rejectProposal,
+  isQuotaExceeded,
+  type WriteProposal,
 } from "@/server/services/write_proposal_service";
 import * as noteRepo from "@/server/repositories/note_repository";
 import * as folderRepo from "@/server/repositories/folder_repository";
@@ -84,6 +104,20 @@ function makeProposal(overrides: Record<string, unknown> = {}) {
   };
 }
 
+/**
+ * Narrow `createProposal`'s union return to a `WriteProposal`, failing the
+ * test if the paywall short-circuited (which it must not here — quota is
+ * stubbed to allowed above).
+ */
+function asProposal(
+  result: Awaited<ReturnType<typeof createProposal>>
+): WriteProposal {
+  if (isQuotaExceeded(result)) {
+    throw new Error("Expected a proposal but got quota_exceeded");
+  }
+  return result;
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(auditService.auditWriteProposalCreated).mockReturnValue(undefined as never);
@@ -116,7 +150,7 @@ describe("createProposal — permission checks", () => {
       proposal_type: "update_note",
       target_note_id: NOTE_ID,
     });
-    expect(result.proposal_type).toBe("update_note");
+    expect(asProposal(result).proposal_type).toBe("update_note");
   });
 
   it("allows generate_in_allowed_folders permission for create_note", async () => {
@@ -130,7 +164,7 @@ describe("createProposal — permission checks", () => {
       proposal_type: "create_note",
       target_folder_id: FOLDER_ID,
     });
-    expect(result.proposal_type).toBe("create_note");
+    expect(asProposal(result).proposal_type).toBe("create_note");
   });
 });
 
