@@ -212,7 +212,7 @@ describe("email_digest_service — sendDigestBatch", () => {
       subject: string;
       html: string;
     };
-    expect(body.from).toBe("Context Store <digest@mail.example.com>");
+    expect(body.from).toBe("Poggle <digest@mail.example.com>");
     expect(body.to[0]).toMatch(/@example\.com$/);
     expect(body.subject).toContain("daily digest");
   });

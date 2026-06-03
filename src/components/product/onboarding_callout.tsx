@@ -60,10 +60,10 @@ export function OnboardingCallout() {
       {/* Heading */}
       <div className="border-b border-border px-6 py-5">
         <h2 className="text-base font-semibold text-foreground">
-          Welcome to Context Store
+          Welcome to Poggle
         </h2>
         <p className="mt-1 text-sm text-muted-foreground">
-          Context Store is a structured context workspace for humans and AI
+          Poggle is a structured context workspace for humans and AI
           agents. Content is organized around a clear information hierarchy.
         </p>
       </div>

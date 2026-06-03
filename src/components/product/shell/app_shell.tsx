@@ -64,7 +64,7 @@ export function AppShell({
           <div className="flex items-center gap-2 min-w-0">
             <div className="h-4 w-4 shrink-0 rounded-sm bg-foreground" aria-hidden="true" />
             <span className="text-sm font-semibold tracking-tight truncate">
-              {workspaceName ?? "Context Store"}
+              {workspaceName ?? "Poggle"}
             </span>
           </div>
         </div>

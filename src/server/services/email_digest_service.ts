@@ -358,7 +358,7 @@ function buildEmailHtml(
 ): { subject: string; html: string; text: string } {
   const period = cadence === "daily" ? "day" : "week";
   const totalEvents = summaries.reduce((sum, s) => sum + s.total, 0);
-  const subject = `Your Context Store ${cadence} digest — ${totalEvents} update${
+  const subject = `Your Poggle ${cadence} digest — ${totalEvents} update${
     totalEvents === 1 ? "" : "s"
   }`;
 
@@ -419,7 +419,7 @@ function buildEmailHtml(
 </body></html>`;
 
   const textLines = [
-    `Your ${cadence} Context Store digest`,
+    `Your ${cadence} Poggle digest`,
     ``,
     ...summaries.flatMap((s) => {
       const safeWorkspaceName = sanitizeMetadataTitle(s.workspace_name);
@@ -452,7 +452,7 @@ async function sendDigestEmail(
       Authorization: `Bearer ${apiKey}`,
     },
     body: JSON.stringify({
-      from: `Context Store <digest@${fromDomain}>`,
+      from: `Poggle <digest@${fromDomain}>`,
       to: [email],
       subject,
       html,

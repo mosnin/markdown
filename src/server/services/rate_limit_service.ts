@@ -60,6 +60,14 @@ export interface RateLimitOptions {
   limit: number;
   /** Window size in seconds. */
   windowSeconds: number;
+  /**
+   * When true, a backend (DB) error DENIES the request instead of failing
+   * open. Reserve for the most abuse-sensitive public endpoints (dynamic
+   * client registration, token issuance) so a sustained backend outage can't
+   * silently remove their rate limiting. Defaults to false (fail-open) so rate
+   * limiting stays a pure defense-in-depth layer on burst / user-authed paths.
+   */
+  failClosed?: boolean;
 }
 
 export interface RateLimitResult {
@@ -134,7 +142,7 @@ export async function checkRateLimit(
       // A concurrent insert will collide on the unique index; fall
       // through to the update path below for that case.
       if (insErr && !/duplicate key|23505/i.test(insErr.message)) {
-        return allow(bucketKey, options.limit, options.limit - 1, 0);
+        return failOpenOrClosed(bucketKey, options);
       }
       if (!insErr) {
         return allow(bucketKey, options.limit, options.limit - 1, 0);
@@ -157,7 +165,7 @@ export async function checkRateLimit(
           "[rate_limit_service] dup-key refetch returned null; failing open",
           { bucketKey, windowStart: windowStartIso }
         );
-        return allow(bucketKey, options.limit, options.limit - 1, 0);
+        return failOpenOrClosed(bucketKey, options);
       }
       return await incrementAndCheck(
         supabase,
@@ -178,8 +186,9 @@ export async function checkRateLimit(
       windowStart
     );
   } catch {
-    // Fail-open on any DB error — see rationale above.
-    return allow(bucketKey, options.limit, options.limit - 1, 0);
+    // Fail-open on any DB error — see rationale above — unless the bucket opts
+    // into fail-closed (deny) via `failClosed`.
+    return failOpenOrClosed(bucketKey, options);
   }
 }
 
@@ -218,6 +227,26 @@ async function incrementAndCheck(
   };
 }
 
+/**
+ * Error-path result: DENY when the bucket opted into `failClosed`, otherwise
+ * fall open (the historical default). Centralises the choice so every DB-error
+ * branch in `checkRateLimit` behaves consistently.
+ */
+function failOpenOrClosed(bucketKey: string, options: RateLimitOptions): RateLimitResult {
+  if (options.failClosed) {
+    return {
+      allowed: false,
+      remaining: 0,
+      // Keep the lockout short — a backend blip is usually transient, so don't
+      // deny a legitimate caller for a whole window.
+      retryAfterSeconds: Math.min(options.windowSeconds, 5),
+      bucketKey,
+      limit: options.limit,
+    };
+  }
+  return allow(bucketKey, options.limit, options.limit - 1, 0);
+}
+
 function allow(
   bucketKey: string,
   limit: number,
@@ -240,8 +269,10 @@ function retryAfterSeconds(windowStart: Date, windowSeconds: number): number {
 
 // ─── Pre-configured buckets ─────────────────────────────────────────────────
 
-export const REGISTRATION_LIMIT: RateLimitOptions = { limit: 3, windowSeconds: 60 * 60 };
-export const TOKEN_LIMIT: RateLimitOptions = { limit: 30, windowSeconds: 60 };
+// register + token are the most abuse-sensitive public OAuth endpoints, so they
+// fail CLOSED on a backend outage (deny) instead of silently removing the limit.
+export const REGISTRATION_LIMIT: RateLimitOptions = { limit: 3, windowSeconds: 60 * 60, failClosed: true };
+export const TOKEN_LIMIT: RateLimitOptions = { limit: 30, windowSeconds: 60, failClosed: true };
 export const AUTHORIZE_LIMIT: RateLimitOptions = { limit: 10, windowSeconds: 60 };
 export const REVOKE_LIMIT: RateLimitOptions = { limit: 30, windowSeconds: 60 };
 
