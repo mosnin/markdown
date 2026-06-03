@@ -88,8 +88,8 @@
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
   /* Brand fonts — swap these two values to flip the hero ↔ title/logo mapping */
-  --font-display: var(--font-space-grotesk);  /* logo wordmark + title/heading text */
-  --font-hero: var(--font-share-tech-mono);   /* hero headlines */
+  --font-display: var(--font-share-tech-mono);  /* logo wordmark + title/heading text */
+  --font-hero: var(--font-space-grotesk);       /* hero headlines */
 
   /* Radius scale — enterprise: sharper corners */
   --radius-none: 0;

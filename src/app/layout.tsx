@@ -10,8 +10,8 @@ import { getCanonicalBaseUrl } from "@/lib/canonical_url";
 import "./globals.css";
 
 // Brand display fonts, self-hosted via next/font (CSP-safe — a Google Fonts
-// @import would be blocked by the strict font-src/style-src CSP). Space Grotesk
-// drives the logo wordmark + all title/heading text; Share Tech Mono drives the
+// @import would be blocked by the strict font-src/style-src CSP). Share Tech Mono
+// drives the logo wordmark + all title/heading text; Space Grotesk drives the
 // hero. To flip the mapping, swap the two --font-* values in globals.css.
 const spaceGrotesk = Space_Grotesk({
   subsets: ["latin"],
