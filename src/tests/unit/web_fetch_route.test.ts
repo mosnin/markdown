@@ -61,9 +61,30 @@ describe("ssrfCheck", () => {
   it("rejects .internal hosts", () => {
     expect(ssrfCheck("http://api.internal/").ok).toBe(false);
   });
+  it("rejects integer/hex/octal IPv4 forms of loopback", () => {
+    // Node's URL parser normalizes these to 127.0.0.1 before hostname read.
+    expect(ssrfCheck("http://2130706433/").ok).toBe(false); // decimal
+    expect(ssrfCheck("http://0x7f000001/").ok).toBe(false); // hex
+    expect(ssrfCheck("http://0177.0.0.1/").ok).toBe(false); // octal first octet
+  });
+  it("rejects IPv4-mapped IPv6 to cloud metadata (dotted form)", () => {
+    expect(ssrfCheck("http://[::ffff:169.254.169.254]/latest/meta-data/").ok).toBe(false);
+  });
+  it("rejects IPv4-mapped IPv6 to cloud metadata (hex form)", () => {
+    // ::ffff:a9fe:a9fe == 169.254.169.254
+    expect(ssrfCheck("http://[::ffff:a9fe:a9fe]/").ok).toBe(false);
+  });
+  it("rejects IPv4-mapped IPv6 to loopback (hex form)", () => {
+    // ::ffff:7f00:1 == 127.0.0.1
+    expect(ssrfCheck("http://[::ffff:7f00:1]/").ok).toBe(false);
+  });
   it("allows public hostnames", () => {
     expect(ssrfCheck("https://example.com/path").ok).toBe(true);
     expect(ssrfCheck("https://www.wikipedia.org/").ok).toBe(true);
+  });
+  it("allows a public IPv4-mapped IPv6 address", () => {
+    // ::ffff:8.8.8.8 is a public address and must NOT be over-blocked.
+    expect(ssrfCheck("http://[::ffff:8.8.8.8]/").ok).toBe(true);
   });
 });
 
