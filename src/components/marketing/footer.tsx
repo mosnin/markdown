@@ -3,24 +3,14 @@ import Image from "next/image";
 
 const LINKS = {
   Product: [
-    { href: "/features", label: "Features" },
-    { href: "/notes-and-files", label: "Notes & Files" },
-    { href: "/skills-and-agents", label: "Skills & Agents" },
-    { href: "/connections", label: "Connections" },
+    { href: "/how-it-works", label: "How It Works" },
     { href: "/pricing", label: "Pricing" },
+    { href: "/sign_in", label: "Sign In" },
   ],
   Developers: [
     { href: "https://docs.poggle.app", label: "Documentation" },
-    { href: "/api", label: "API & MCP" },
-    { href: "/portability", label: "Import & Export" },
-    { href: "/changelog", label: "Changelog" },
   ],
-  Company: [
-    { href: "/about", label: "About" },
-    { href: "/how-it-works", label: "How It Works" },
-    { href: "/blog", label: "Blog" },
-    { href: "/help", label: "Help Center" },
-  ],
+  // Legal pages are owned by another agent — keep every route reachable here.
   Legal: [
     { href: "/terms", label: "Terms of Service" },
     { href: "/privacy", label: "Privacy Policy" },
@@ -35,7 +25,7 @@ export function MarketingFooter() {
   return (
     <footer className="border-t border-border/50 bg-background">
       <div className="mx-auto max-w-6xl px-6 py-14">
-        <div className="grid grid-cols-2 gap-10 sm:grid-cols-3 md:grid-cols-5">
+        <div className="grid grid-cols-2 gap-10 sm:grid-cols-3 md:grid-cols-4">
           {/* Brand column */}
           <div className="col-span-2 sm:col-span-3 md:col-span-1">
             <div className="flex items-center gap-2.5">
@@ -44,15 +34,15 @@ export function MarketingFooter() {
               <Image src="/logo-text-black.png" alt="Poggle" width={64} height={22} className="dark:hidden" />
               <Image src="/logo-text-white.png" alt="Poggle" width={64} height={22} className="hidden dark:block" />
             </div>
-            <p className="mt-4 max-w-[200px] text-xs leading-relaxed text-muted-foreground">
-              A markdown-native context operating system for humans and AI.
+            <p className="mt-4 max-w-[220px] text-xs leading-relaxed text-muted-foreground">
+              The governed context layer for AI agents. They propose, you approve.
             </p>
           </div>
 
           {/* Link columns */}
           {Object.entries(LINKS).map(([group, links]) => (
             <div key={group}>
-              <p className="mb-3 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground/70">
+              <p className="text-overline mb-3 text-muted-foreground/70">
                 {group}
               </p>
               <ul className="space-y-2.5">

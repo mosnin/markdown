@@ -3,13 +3,16 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowRight, Check, Minus, CheckCircle2, Users, Briefcase, Building2 } from "lucide-react";
 import { PageHeroSection } from "@/components/marketing/hero";
+import { UpgradeButton } from "@/components/marketing/upgrade_button";
 import * as PricingCard from "@/components/ui/pricing-card";
 import { Button } from "@/components/ui/button";
+
+const SALES_MAILTO = "mailto:hello@poggle.app?subject=Poggle%20Team%20plan";
 
 export const metadata: Metadata = {
   title: "Pricing — Poggle",
   description:
-    "Start free, upgrade when you're ready. Simple, transparent pricing for individuals and teams.",
+    "Start free, upgrade when you're ready. Simple, transparent pricing for governing AI agents on your context.",
 };
 
 const PLANS = [
@@ -20,15 +23,15 @@ const PLANS = [
     period: null as string | null,
     annual: null as string | null,
     badge: null as string | null,
-    description: "For individuals getting started with structured knowledge.",
+    description: "For trying the trust gate with your first agent.",
     cta: "Get started free",
     href: "/sign_in",
     variant: "outline" as const,
     features: [
-      "100 notes & files",
+      "1 agent connection",
       "3 boxes",
-      "Skills & agents",
-      "Tree & graph views",
+      "MCP read access",
+      "Proposal review & approval",
       "7-day version history",
       "Community support",
     ],
@@ -40,18 +43,17 @@ const PLANS = [
     period: "/month",
     annual: "$9",
     badge: "Popular",
-    description: "For power users who need unlimited knowledge and AI context.",
+    description: "For teams running agents on real context.",
     cta: "Start 14-day trial",
     href: "/sign_in",
     variant: "default" as const,
     features: [
-      "Unlimited everything",
-      "Unlimited boxes",
-      "Full graph & tree views",
-      "Context bundles",
+      "Unlimited agents & boxes",
+      "Scoped MCP access",
+      "Proposal review & approval",
       "Full version history",
       "Diff viewer & rollback",
-      "REST API & MCP access",
+      "Append-only audit log",
       "Priority support",
     ],
   },
@@ -62,9 +64,9 @@ const PLANS = [
     period: "/month",
     annual: "$29",
     badge: null as string | null,
-    description: "For teams that share context and build on each other's knowledge.",
+    description: "Shared, governed context for the whole org.",
     cta: "Contact sales",
-    href: "/contact",
+    href: SALES_MAILTO,
     variant: "outline" as const,
     features: [
       "Everything in Pro",
@@ -81,31 +83,29 @@ const PLANS = [
 
 const COMPARISON = [
   {
-    category: "Notes & Organization",
+    category: "Agents & Context",
     rows: [
-      { feature: "Notes", free: "100", pro: "Unlimited", team: "Unlimited" },
+      { feature: "Agent connections", free: "1", pro: "Unlimited", team: "Unlimited" },
       { feature: "Boxes", free: "3", pro: "Unlimited", team: "Unlimited" },
-      { feature: "Bidirectional links", free: true, pro: true, team: true },
+      { feature: "MCP read access", free: true, pro: true, team: true },
+      { feature: "Scoped agent permissions", free: false, pro: true, team: true },
       { feature: "Full-text search", free: true, pro: true, team: true },
-      { feature: "Import from Obsidian / Notion", free: true, pro: true, team: true },
     ],
   },
   {
-    category: "AI & Export",
+    category: "Trust Gate",
     rows: [
-      { feature: "Basic markdown export", free: true, pro: true, team: true },
-      { feature: "AI context bundles", free: false, pro: true, team: true },
-      { feature: "Token-aware packing", free: false, pro: true, team: true },
-      { feature: "Multi-format export (JSON, text)", free: false, pro: true, team: true },
-      { feature: "REST API", free: false, pro: true, team: true },
+      { feature: "Proposal review & approval", free: true, pro: true, team: true },
+      { feature: "Diff viewer", free: false, pro: true, team: true },
+      { feature: "One-click rollback", free: false, pro: true, team: true },
+      { feature: "Markdown export", free: true, pro: true, team: true },
     ],
   },
   {
     category: "History & Audit",
     rows: [
       { feature: "Version history", free: "7 days", pro: "Unlimited", team: "Unlimited" },
-      { feature: "Diff viewer", free: false, pro: true, team: true },
-      { feature: "One-click rollback", free: false, pro: true, team: true },
+      { feature: "Append-only audit log", free: false, pro: true, team: true },
       { feature: "Full audit log", free: false, pro: false, team: true },
     ],
   },
@@ -126,8 +126,8 @@ const FAQS = [
     a: "Yes. The free plan has no time limit. You'll never be forced to upgrade. We only ask you to pay when you need features beyond the free tier.",
   },
   {
-    q: "What counts as a note?",
-    a: "Any markdown document you create in Poggle. Attachments, images, and imported files each count as one note.",
+    q: "How do agents connect?",
+    a: "Agents connect over MCP with a scoped token. They get read access to the context you grant and can submit proposals — but they can never write to your workspace directly.",
   },
   {
     q: "Can I cancel anytime?",
@@ -139,7 +139,7 @@ const FAQS = [
   },
   {
     q: "What payment methods do you accept?",
-    a: "We accept all major credit cards and debit cards via Stripe. Annual plans can also be paid by invoice.",
+    a: "We accept all major credit and debit cards. Annual plans can also be paid by invoice.",
   },
 ];
 
@@ -201,13 +201,25 @@ export default async function PricingPage() {
                       or {plan.annual}/mo billed annually
                     </p>
                   )}
-                  <Button
-                    variant={plan.variant}
-                    className="w-full font-semibold"
-                    render={<Link href={plan.href} />}
-                  >
-                    {plan.cta}
-                  </Button>
+                  {plan.name === "Pro" ? (
+                    <UpgradeButton>{plan.cta}</UpgradeButton>
+                  ) : plan.href.startsWith("mailto:") ? (
+                    <Button
+                      variant={plan.variant}
+                      className="w-full font-semibold"
+                      render={<a href={plan.href} />}
+                    >
+                      {plan.cta}
+                    </Button>
+                  ) : (
+                    <Button
+                      variant={plan.variant}
+                      className="w-full font-semibold"
+                      render={<Link href={plan.href} />}
+                    >
+                      {plan.cta}
+                    </Button>
+                  )}
                 </PricingCard.Header>
                 <PricingCard.Body>
                   <PricingCard.Description>
@@ -316,13 +328,13 @@ export default async function PricingPage() {
                   volume discounts for 50+ seat deployments.
                 </p>
               </div>
-              <Link
-                href="/contact"
+              <a
+                href={SALES_MAILTO}
                 className="inline-flex shrink-0 items-center gap-2 rounded-lg border border-border px-5 py-2.5 text-sm font-semibold text-foreground transition-colors hover:bg-muted"
               >
                 Talk to sales
                 <ArrowRight className="h-4 w-4" />
-              </Link>
+              </a>
             </div>
           </div>
         </div>

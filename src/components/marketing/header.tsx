@@ -6,38 +6,16 @@ import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { MenuToggleIcon } from '@/components/ui/menu-toggle-icon';
 import { createPortal } from 'react-dom';
-import {
-	NavigationMenu,
-	NavigationMenuContent,
-	NavigationMenuItem,
-	NavigationMenuLink,
-	NavigationMenuList,
-	NavigationMenuTrigger,
-} from '@/components/ui/navigation-menu';
-import { type LucideIcon } from 'lucide-react';
-import {
-	CodeIcon,
-	LayersIcon,
-	FileText,
-	Shield,
-	RotateCcw,
-	Leaf,
-	HelpCircle,
-	BarChart2,
-	Archive,
-	GitBranch,
-	Users,
-	Upload,
-	BookOpen,
-	Star,
-} from 'lucide-react';
 
-type LinkItem = {
+type NavLink = {
 	title: string;
 	href: string;
-	icon: LucideIcon;
-	description?: string;
 };
+
+const navLinks: NavLink[] = [
+	{ title: 'How It Works', href: '/how-it-works' },
+	{ title: 'Pricing', href: '/pricing' },
+];
 
 export function MarketingHeader() {
 	const [open, setOpen] = React.useState(false);
@@ -66,62 +44,18 @@ export function MarketingHeader() {
 					<Link href="/" className="hover:bg-accent flex items-center gap-2.5 rounded-md px-2 py-1.5">
 						<WordmarkLogo />
 					</Link>
-					<NavigationMenu className="hidden md:flex">
-						<NavigationMenuList>
-							<NavigationMenuItem>
-								<NavigationMenuTrigger className="bg-transparent">Product</NavigationMenuTrigger>
-								<NavigationMenuContent className="bg-background p-1 pr-1.5">
-									<ul className="bg-popover grid w-lg grid-cols-2 gap-2 rounded-md border p-2 shadow">
-										{productLinks.map((item, i) => (
-											<li key={i}>
-												<ListItem {...item} />
-											</li>
-										))}
-									</ul>
-									<div className="p-2">
-										<p className="text-muted-foreground text-sm">
-											Want a closer look?{' '}
-											<Link href="/pricing" className="text-foreground font-medium hover:underline">
-												View pricing
-											</Link>
-										</p>
-									</div>
-								</NavigationMenuContent>
-							</NavigationMenuItem>
-							<NavigationMenuItem>
-								<NavigationMenuTrigger className="bg-transparent">Company</NavigationMenuTrigger>
-								<NavigationMenuContent className="bg-background p-1 pr-1.5 pb-1.5">
-									<div className="grid w-lg grid-cols-2 gap-2">
-										<ul className="bg-popover space-y-2 rounded-md border p-2 shadow">
-											{companyLinks.map((item, i) => (
-												<li key={i}>
-													<ListItem {...item} />
-												</li>
-											))}
-										</ul>
-										<ul className="space-y-2 p-3">
-											{companyLinks2.map((item, i) => (
-												<li key={i}>
-													<NavigationMenuLink
-														href={item.href}
-														className="flex p-2 hover:bg-accent flex-row rounded-md items-center gap-x-2"
-													>
-														<item.icon className="text-foreground size-4" />
-														<span className="font-medium">{item.title}</span>
-													</NavigationMenuLink>
-												</li>
-											))}
-										</ul>
-									</div>
-								</NavigationMenuContent>
-							</NavigationMenuItem>
-							<NavigationMenuLink className="px-4" asChild>
-								<Link href="/pricing" className="hover:bg-accent rounded-md p-2">
-									Pricing
+					<ul className="hidden items-center gap-1 md:flex">
+						{navLinks.map((link) => (
+							<li key={link.href}>
+								<Link
+									href={link.href}
+									className="hover:bg-accent rounded-md px-3 py-2 text-sm text-foreground"
+								>
+									{link.title}
 								</Link>
-							</NavigationMenuLink>
-						</NavigationMenuList>
-					</NavigationMenu>
+							</li>
+						))}
+					</ul>
 				</div>
 				<div className="hidden items-center gap-2 md:flex">
 					<Button variant="outline" render={<Link href="/sign_in" />}>Sign In</Button>
@@ -140,21 +74,18 @@ export function MarketingHeader() {
 				</Button>
 			</nav>
 			<MobileMenu open={open} className="flex flex-col justify-between gap-2 overflow-y-auto">
-				<NavigationMenu className="max-w-full">
-					<div className="flex w-full flex-col gap-y-2">
-						<span className="text-sm">Product</span>
-						{productLinks.map((link) => (
-							<ListItem key={link.title} {...link} />
-						))}
-						<span className="text-sm">Company</span>
-						{companyLinks.map((link) => (
-							<ListItem key={link.title} {...link} />
-						))}
-						{companyLinks2.map((link) => (
-							<ListItem key={link.title} {...link} />
-						))}
-					</div>
-				</NavigationMenu>
+				<div className="flex w-full flex-col gap-y-1">
+					{navLinks.map((link) => (
+						<Link
+							key={link.href}
+							href={link.href}
+							onClick={() => setOpen(false)}
+							className="hover:bg-accent rounded-md px-3 py-2.5 text-sm font-medium text-foreground"
+						>
+							{link.title}
+						</Link>
+					))}
+				</div>
 				<div className="flex flex-col gap-2">
 					<Button variant="outline" className="w-full bg-transparent" render={<Link href="/sign_in" />}>
 						Sign In
@@ -197,129 +128,6 @@ function MobileMenu({ open, children, className, ...props }: MobileMenuProps) {
 	);
 }
 
-function ListItem({
-	title,
-	description,
-	icon: Icon,
-	className,
-	href,
-	...props
-}: React.ComponentProps<typeof NavigationMenuLink> & LinkItem) {
-	return (
-		<NavigationMenuLink
-			className={cn(
-				'w-full flex flex-row gap-x-2 data-[active=true]:focus:bg-accent data-[active=true]:hover:bg-accent data-[active=true]:bg-accent/50 data-[active=true]:text-accent-foreground hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground rounded-sm p-2',
-				className,
-			)}
-			{...props}
-			asChild
-		>
-			<Link href={href}>
-				<div className="bg-background/40 flex aspect-square size-12 items-center justify-center rounded-md border shadow-sm">
-					<Icon className="text-foreground size-5" />
-				</div>
-				<div className="flex flex-col items-start justify-center">
-					<span className="font-medium">{title}</span>
-					<span className="text-muted-foreground text-xs">{description}</span>
-				</div>
-			</Link>
-		</NavigationMenuLink>
-	);
-}
-
-const productLinks: LinkItem[] = [
-	{
-		title: 'Notes & Files',
-		href: '/notes-and-files',
-		description: 'Markdown notes and code artifacts in one place',
-		icon: FileText,
-	},
-	{
-		title: 'Boxes & Folders',
-		href: '/organization',
-		description: 'Organize your work into focused containers',
-		icon: Archive,
-	},
-	{
-		title: 'Skills & Agents',
-		href: '/skills-and-agents',
-		description: 'Reusable modules and orchestrators with real structure',
-		icon: LayersIcon,
-	},
-	{
-		title: 'Connections',
-		href: '/connections',
-		description: 'Typed relationships and interactive graph views',
-		icon: GitBranch,
-	},
-	{
-		title: 'API & MCP',
-		href: '/api',
-		description: 'Programmatic access for your tools and agents',
-		icon: CodeIcon,
-	},
-	{
-		title: 'Import & Export',
-		href: '/portability',
-		description: 'Portable packages you own forever',
-		icon: Upload,
-	},
-];
-
-const companyLinks: LinkItem[] = [
-	{
-		title: 'About Us',
-		href: '/about',
-		description: 'Our story and the team behind Poggle',
-		icon: Users,
-	},
-	{
-		title: 'Changelog',
-		href: '/changelog',
-		description: "What's new in each release",
-		icon: BarChart2,
-	},
-	{
-		title: 'How It Works',
-		href: '/how-it-works',
-		description: 'See how Poggle fits into your workflow',
-		icon: BookOpen,
-	},
-];
-
-const companyLinks2: LinkItem[] = [
-	{
-		title: 'Docs',
-		href: 'https://docs.poggle.app',
-		icon: BookOpen,
-	},
-	{
-		title: 'Privacy Policy',
-		href: '/privacy',
-		icon: Shield,
-	},
-	{
-		title: 'Terms of Service',
-		href: '/terms',
-		icon: FileText,
-	},
-	{
-		title: 'Refund Policy',
-		href: '/refund-policy',
-		icon: RotateCcw,
-	},
-	{
-		title: 'Blog',
-		href: '/blog',
-		icon: Leaf,
-	},
-	{
-		title: 'Help Center',
-		href: '/help',
-		icon: HelpCircle,
-	},
-];
-
 function useScroll(threshold: number) {
 	const [scrolled, setScrolled] = React.useState(false);
 
@@ -349,6 +157,3 @@ function WordmarkLogo() {
 		</>
 	);
 }
-
-// Suppress unused import warning — Star is kept for potential use
-void Star;
