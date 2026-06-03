@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { Building2 } from "lucide-react";
 import { requireAuthenticatedUser } from "@/server/auth/require_authenticated_user";
 import { createClient } from "@/lib/supabase/server";
@@ -52,12 +53,23 @@ function EmptyBoxes() {
     <div className="flex flex-col items-center justify-center py-16 text-center">
       <Building2 className="mb-4 h-12 w-12 text-muted-foreground/30" aria-hidden="true" />
       <h3 className="text-base font-semibold text-foreground">No boxes yet</h3>
-      <p className="mt-1.5 max-w-xs text-sm text-muted-foreground">
-        Boxes are focused context domains — one per project, research area, or knowledge topic.
+      <p className="mt-1.5 max-w-sm text-sm text-muted-foreground">
+        Boxes are focused context domains — one per project, research area, or
+        knowledge topic. They hold the notes and files a connected agent reads,
+        then proposes changes to for you to approve in AI Edits.
       </p>
       <div className="mt-6">
         <CreateBoxDialog />
       </div>
+      <p className="mt-4 text-xs text-muted-foreground">
+        Want an agent to fill it for you?{" "}
+        <Link
+          href="/app/connect"
+          className="font-medium text-foreground underline underline-offset-4 hover:text-foreground/80"
+        >
+          Connect an agent
+        </Link>
+      </p>
     </div>
   );
 }

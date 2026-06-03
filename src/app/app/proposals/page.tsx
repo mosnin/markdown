@@ -79,13 +79,13 @@ export default async function ProposalsPage() {
             <EmptyState
               icon={<CircleDashed className="h-5 w-5" />}
               title="No edits pending"
-              description="Ask Atlas AI to review, improve, or reorganize your notes — it will propose specific changes here before touching anything."
+              description="This is where AI edits land. Connect an agent and it can read your workspace context and propose changes here — nothing is written until you approve it."
               action={
                 <Link
-                  href="/app"
+                  href="/app/connect"
                   className="mt-4 inline-flex items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
                 >
-                  Start a conversation
+                  Connect an agent
                 </Link>
               }
             />

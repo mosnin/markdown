@@ -8,6 +8,7 @@ import {
   listAccessibleWorkspaces,
   type WorkspaceRole,
 } from "@/server/repositories/workspace_membership_repository";
+import { seedStarterBox } from "./seed_starter_box";
 
 /**
  * Returns the user's active workspace.
@@ -52,6 +53,7 @@ export async function getOrCreateDefaultWorkspace(
   // missing a membership. Reattach it rather than retrying an insert
   // that's guaranteed to hit `workspaces_owner_id_slug_key`.
   const existing = await getWorkspaceByOwnerAndSlug(supabase, user_id, slug);
+  const isFreshCreate = existing === null;
   const ws =
     existing ??
     (await createWorkspace(supabase, {
@@ -59,6 +61,16 @@ export async function getOrCreateDefaultWorkspace(
       name: "My Workspace",
       slug,
     }));
+
+  // First-run seed: drop a single starter Box into a brand-new workspace
+  // so the user never lands in an empty void. Only on the fresh-create
+  // branch (not the repair path where the workspace already existed but a
+  // membership was missing) so it is never duplicated on later logins.
+  // Fully failure-isolated inside seedStarterBox — bootstrap continues
+  // regardless.
+  if (isFreshCreate) {
+    await seedStarterBox(supabase, ws.id);
+  }
 
   // Ensure the owner has a matching admin membership. Upsert on the
   // composite key so the repair path (workspace already exists, row
