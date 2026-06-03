@@ -1,6 +1,6 @@
 -- =============================================================================
 -- Context Store — v3 critical security & partition fixes
--- Migration: 202604210001_v3_critical_security_and_partition_fixes.sql
+-- Migration: 20260421000001_v3_critical_security_and_partition_fixes.sql
 --
 -- Fixes three issues surfaced by v3 post-launch audit:
 --
