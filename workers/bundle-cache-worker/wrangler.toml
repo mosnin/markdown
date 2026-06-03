@@ -2,6 +2,23 @@ name = "context-store-bundle-cache"
 main = "src/index.ts"
 compatibility_date = "2026-04-01"
 
+# ─────────────────────────────────────────────────────────────────────────────
+# THIS WORKER IS OPTIONAL.
+#
+# The Poggle app no-ops gracefully when `NEXT_PUBLIC_BUNDLE_CACHE_URL` is unset
+# (see src/lib/env.ts — it is listed under "Optional"). You only need to deploy
+# this worker if you want the bundle-cache acceleration. If you are not using it,
+# leave `NEXT_PUBLIC_BUNDLE_CACHE_URL` empty and skip deploying this entirely.
+#
+# ── ACTION REQUIRED BEFORE `wrangler deploy` ────────────────────────────────
+# The `id` below is a PLACEHOLDER, not a real KV namespace id. `wrangler deploy`
+# WILL FAIL until you replace it. The operator must:
+#   1. Create a KV namespace:   wrangler kv namespace create BUNDLE_CACHE
+#   2. Copy the `id` it prints and paste it as the `id` value below.
+#      (For local dev / `wrangler dev`, also set `preview_id` to the preview id.)
+# Do NOT commit a real namespace id to the repo if it is environment-specific —
+# prefer per-environment overrides or your own untracked config.
+# ─────────────────────────────────────────────────────────────────────────────
 [[kv_namespaces]]
 binding = "BUNDLE_CACHE"
 id = "REPLACE_WITH_KV_NAMESPACE_ID"

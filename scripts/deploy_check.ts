@@ -10,6 +10,8 @@
  *
  * Checks:
  *   1. Required env vars are set (prints each missing one on stderr).
+ *      Optional env vars (OPENAI_API_KEY, EMBEDDING_API_KEY) only WARN when
+ *      missing — the app degrades gracefully without them.
  *   2. Supabase DB reachable via admin client.
  *   3. Lists pending migrations in supabase/migrations/*.sql (does not
  *      compare against applied_migrations — just enumerates the repo).
@@ -27,11 +29,26 @@ const REQUIRED_ENV_VARS = [
   "NEXT_PUBLIC_SUPABASE_URL",
   "NEXT_PUBLIC_SUPABASE_ANON_KEY",
   "SUPABASE_SERVICE_ROLE_KEY",
-  "OPENAI_API_KEY",
-  "EMBEDDING_API_KEY",
   "INNGEST_SIGNING_KEY",
   "INNGEST_EVENT_KEY",
 ] as const;
+
+/**
+ * Optional env vars — missing ones WARN but do not fail the deploy, because the
+ * runtime degrades gracefully without them (and src/lib/env.ts does not require
+ * them). Keeping these out of REQUIRED keeps this pre-flight check in sync with
+ * actual app behavior so a deploy that runs fine isn't blocked.
+ *
+ *   OPENAI_API_KEY    — only used by /api/voice/transcribe (returns HTTP 503
+ *                       "not configured" when absent) and workflow "transform"
+ *                       nodes. Core app works without it; voice + AI transforms
+ *                       are disabled until it is set.
+ *   EMBEDDING_API_KEY — embedding_service.ts no-ops when unset: semantic /
+ *                       hybrid search, insights, and the knowledge graph
+ *                       gracefully fall back (keyword-only / empty) instead of
+ *                       throwing. Core app works without it.
+ */
+const OPTIONAL_ENV_VARS = ["OPENAI_API_KEY", "EMBEDDING_API_KEY"] as const;
 
 const INNGEST_ENV_VARS = ["INNGEST_SIGNING_KEY", "INNGEST_EVENT_KEY"] as const;
 
@@ -66,6 +83,16 @@ for (const name of REQUIRED_ENV_VARS) {
     fail("env", `${name} — missing`);
     missingEnv.push(name);
     console.error(name);
+  } else {
+    ok("env", name);
+  }
+}
+
+// --- 1b. Optional env vars (warn-only — runtime no-ops without them) ------
+for (const name of OPTIONAL_ENV_VARS) {
+  const value = process.env[name];
+  if (!value || value.trim() === "") {
+    warn("env", `${name} — not set (optional; related features disabled)`);
   } else {
     ok("env", name);
   }
