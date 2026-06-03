@@ -38,8 +38,8 @@ function readSource(relPath: string): string {
   return readFileSync(resolve(REPO_ROOT, relPath), "utf8");
 }
 
-const operatorPanelSrc = readSource("src/components/product/operator_panel.tsx");
-const mobileSidebarSrc = readSource("src/components/product/mobile_sidebar.tsx");
+const operatorPanelSrc = readSource("src/components/product/operator/operator_panel.tsx");
+const mobileSidebarSrc = readSource("src/components/product/shell/mobile_sidebar.tsx");
 const layoutSrc = readSource("src/app/app/layout.tsx");
 
 // ─── 1. mobile_sidebar.tsx must not import or render OperatorPanel ───────────
@@ -74,7 +74,7 @@ describe("mobile_sidebar.tsx does not embed the OperatorPanel", () => {
 describe("OperatorPanelTrigger is mounted at the layout root", () => {
   it("layout imports OperatorPanelTrigger", () => {
     expect(layoutSrc).toMatch(
-      /import\s*\{\s*OperatorPanelTrigger\s*\}\s*from\s*["']@\/components\/product\/operator_panel_trigger["']/
+      /import\s*\{\s*OperatorPanelTrigger\s*\}\s*from\s*["']@\/components\/product\/operator\/operator_panel_trigger["']/
     );
   });
 

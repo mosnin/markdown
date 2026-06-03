@@ -21,7 +21,7 @@ import { resolve } from "node:path";
 
 const PANEL_PATH = resolve(
   __dirname,
-  "../../components/product/operator_panel.tsx"
+  "../../components/product/operator/operator_panel.tsx"
 );
 const panelSource = readFileSync(PANEL_PATH, "utf8");
 
@@ -83,13 +83,12 @@ describe("operator_panel.tsx — keyboard shortcuts wiring", () => {
   });
 
   it("renders a visible Shortcuts hint row beneath the textarea", () => {
-    // The hint lives in the idle phase (same block as the textarea).
-    // Match the three documented keys — Enter / Up / Down / Esc should
-    // all appear as <kbd> hints.
-    expect(panelSource).toMatch(/<kbd\b[^>]*>\s*Ctrl\s*<\/kbd>/);
-    expect(panelSource).toMatch(/<kbd\b[^>]*>\s*Cmd\s*<\/kbd>/);
-    expect(panelSource).toMatch(/<kbd\b[^>]*>\s*Enter\s*<\/kbd>/);
-    expect(panelSource).toMatch(/<kbd\b[^>]*>\s*Esc\s*<\/kbd>/);
+    // The hint lives in the idle phase (same block as the textarea). The
+    // panel was redesigned from a <kbd>Ctrl/Cmd/Enter/Esc</kbd> grid to a
+    // single minimal "↵ …" affordance whose copy is keyed by autoMode.
+    expect(panelSource).toMatch(/id="operator-prompt-shortcuts"/);
+    expect(panelSource).toMatch(/↵ runs immediately/);
+    expect(panelSource).toMatch(/↵ generates a plan to review/);
   });
 
   it("attaches a ref to the prompt textarea so Cmd/Ctrl+K can focus it", () => {

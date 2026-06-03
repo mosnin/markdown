@@ -39,68 +39,52 @@ const UID = "user-1";
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 /**
- * Build a minimal Supabase-like mock that supports the exact chain the
+ * Build a minimal Supabase-like mock that supports the exact chains the
  * reindex action uses:
- *   1. count via `.from("notes").select("id", {count,head}).eq().neq().is()`
- *   2. rows  via `.from("notes").select(cols).eq().neq().is().order().limit()`
+ *   1. boxes:      `.from("boxes").select("id").eq("workspace_id", ws)` → box ids
+ *   2. notes count `.from("notes").select("id", {count,head}).in().neq().is()`
+ *   3. notes rows  `.from("notes").select(cols).in().neq().is().order().limit()`
+ *
+ * Note membership is resolved through `notes.box_id → boxes.workspace_id`, so
+ * the boxes lookup MUST return at least one id — otherwise the action treats
+ * the workspace as empty and reports 0 eligible notes.
  */
 function makeMock(notes: Array<{ id: string; title: string; markdown_content: string | null }>) {
-  const countChain = {
-    eq: () => countChain,
-    neq: () => countChain,
-    is: () => Promise.resolve({ count: notes.length, data: null, error: null }),
-  } as Record<string, unknown>;
-
-  // Make is() also chain-capable before resolving
-  (countChain as { is: (col: string, val: unknown) => unknown }).is = () =>
-    Promise.resolve({ count: notes.length, data: null, error: null });
-
-  const rowsChain: Record<string, unknown> = {
-    eq: () => rowsChain,
-    neq: () => rowsChain,
-    is: () => rowsChain,
-    order: () => rowsChain,
-    limit: () => Promise.resolve({ data: notes, error: null }),
-  };
+  const BOX_ID = "box-1";
 
   const from = vi.fn((table: string) => {
-    if (table !== "notes") {
+    if (table === "boxes") {
+      // `.select("id").eq("workspace_id", ws)` is awaited directly.
+      const chain: Record<string, unknown> = {
+        select: () => chain,
+        eq: () => Promise.resolve({ data: [{ id: BOX_ID }], error: null }),
+      };
+      return chain;
+    }
+
+    if (table === "notes") {
       return {
-        select: () => ({
-          eq: () => ({}),
-        }),
+        select: (_cols: string, opts?: { count?: string; head?: boolean }) => {
+          const result = opts?.head
+            ? { count: notes.length, data: null, error: null }
+            : { data: notes, error: null };
+          // The count query awaits the chain at `.is()`; the rows query awaits
+          // the promise from `.limit()`. Make the chain both thenable and
+          // further-chainable so a single shape serves both.
+          const chain: Record<string, unknown> = {
+            in: () => chain,
+            neq: () => chain,
+            is: () => chain,
+            order: () => chain,
+            limit: () => Promise.resolve(result),
+            then: (resolve: (r: unknown) => unknown) => resolve(result),
+          };
+          return chain;
+        },
       };
     }
-    return {
-      select: (_cols: string, opts?: { count?: string; head?: boolean }) => {
-        if (opts?.head) {
-          return {
-            eq: () => ({
-              neq: () => ({
-                is: () =>
-                  Promise.resolve({
-                    count: notes.length,
-                    data: null,
-                    error: null,
-                  }),
-              }),
-            }),
-          };
-        }
-        return {
-          eq: () => ({
-            neq: () => ({
-              is: () => ({
-                order: () => ({
-                  limit: () =>
-                    Promise.resolve({ data: notes, error: null }),
-                }),
-              }),
-            }),
-          }),
-        };
-      },
-    };
+
+    return { select: () => ({ in: () => ({}), eq: () => ({}) }) };
   });
 
   return { from };

@@ -57,7 +57,11 @@ describe("computeDiff", () => {
     expect(removedParts.length).toBeGreaterThanOrEqual(1);
   });
 
-  it("falls back to line-level diff for large content", { timeout: 15_000 }, () => {
+  // Line-level diff of maximally-different ~70KB content is genuinely O(n·d)
+  // (~5s uninstrumented). Allow generous headroom so v8 coverage
+  // instrumentation (which can 3-4x wall time) doesn't time out and kill the
+  // worker — which otherwise cascades into sibling files reporting as failed.
+  it("falls back to line-level diff for large content", { timeout: 60_000 }, () => {
     // Generate content > 50KB
     const bigBefore = "line A\n".repeat(5000); // ~35KB
     const bigAfter = "line B\n".repeat(5000); // ~35KB

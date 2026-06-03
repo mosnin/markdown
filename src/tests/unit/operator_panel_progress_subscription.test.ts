@@ -29,7 +29,7 @@ import { resolve } from "node:path";
 
 const PANEL_PATH = resolve(
   __dirname,
-  "../../components/product/operator_panel.tsx"
+  "../../components/product/operator/operator_panel.tsx"
 );
 const HOOK_PATH = resolve(
   __dirname,
@@ -106,7 +106,9 @@ describe("realtime channel convention — panel hook aligns with progress route"
     // The Modal agent POSTs to /api/agent/tools/progress; that route
     // sends a broadcast to `operator_run:<run_id>` which the hook
     // subscribes to. If either side drifts, live events silently stop.
-    expect(progressRouteSource).toMatch(/operator_run:\$\{body\.run_id\}/);
+    // The route derives the channel from the *authenticated* run id
+    // (auth.ctx.runId), not the request body, as a defense-in-depth measure.
+    expect(progressRouteSource).toMatch(/operator_run:\$\{auth\.ctx\.runId\}/);
     expect(progressRouteSource).toMatch(/event:\s*"progress"/);
   });
 });

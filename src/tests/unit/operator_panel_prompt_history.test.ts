@@ -182,7 +182,7 @@ describe("loadPromptHistory / savePromptHistory", () => {
 
 const PANEL_PATH = resolve(
   __dirname,
-  "../../components/product/operator_panel.tsx"
+  "../../components/product/operator/operator_panel.tsx"
 );
 const panelSource = readFileSync(PANEL_PATH, "utf8");
 

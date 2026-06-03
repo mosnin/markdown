@@ -26,9 +26,23 @@ const USER_ID = "user-001";
 const BOX_ID = "box-001";
 
 /** Minimal mock of SupabaseClient with RPC support. */
-function makeSupabase(rpcResult: { data: unknown; error: unknown } = { data: null, error: null }) {
+function makeSupabase(
+  rpcResult: { data: unknown; error: unknown } = { data: null, error: null },
+  ownerWorkspaceId: string = WORKSPACE_ID
+) {
+  // Defense-in-depth: updateNote verifies the note's box belongs to the
+  // caller's workspace via `from("boxes").select("workspace_id").eq("id", boxId)
+  // .maybeSingle()` before invoking the RPC. Provide a chainable stub that
+  // resolves that lookup to an owning box.
+  const boxesChain = {
+    select: vi.fn().mockReturnThis(),
+    eq: vi.fn().mockReturnThis(),
+    maybeSingle: vi
+      .fn()
+      .mockResolvedValue({ data: { workspace_id: ownerWorkspaceId }, error: null }),
+  };
   return {
-    from: vi.fn(),
+    from: vi.fn().mockReturnValue(boxesChain),
     rpc: vi.fn().mockResolvedValue(rpcResult),
   } as unknown as Parameters<typeof updateNote>[0];
 }
@@ -182,20 +196,22 @@ describe("updateNote — diff from prior state", () => {
     );
   });
 
-  it("uses null diff_summary when current note is not found", async () => {
+  it("throws 'Note not found' when the current note does not exist", async () => {
     vi.mocked(noteRepo.getNoteById).mockResolvedValue(null);
     const supabase = makeSupabase({ data: makeRpcNote(), error: null });
 
-    await updateNote(supabase, USER_ID, WORKSPACE_ID, NOTE_ID, {
-      title: "Title",
-      markdownContent: "content",
-    });
+    // updateNote now guards on existence (defense-in-depth) before the RPC:
+    // a missing note short-circuits with a thrown error rather than proceeding
+    // with a null diff_summary.
+    await expect(
+      updateNote(supabase, USER_ID, WORKSPACE_ID, NOTE_ID, {
+        title: "Title",
+        markdownContent: "content",
+      })
+    ).rejects.toThrow("Note not found");
 
     expect(diffUtils.computeDiffSummary).not.toHaveBeenCalled();
-    expect(supabase.rpc).toHaveBeenCalledWith(
-      "update_note_and_create_version",
-      expect.objectContaining({ p_diff_summary: null })
-    );
+    expect(supabase.rpc).not.toHaveBeenCalled();
   });
 
   it("forwards diff_summary returned by computeDiffSummary to RPC", async () => {

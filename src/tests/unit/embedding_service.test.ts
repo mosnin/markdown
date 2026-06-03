@@ -50,6 +50,7 @@ function makeFakeSupabase(opts: {
         return chain;
       },
       or: () => chain,
+      in: () => chain,
       limit: () => chain,
       order: () => chain,
       maybeSingle: async () => ({
@@ -82,6 +83,15 @@ function makeFakeSupabase(opts: {
       if (table === "notes") {
         return {
           select: (_cols: string) => makeFilterChain(notes),
+        };
+      }
+      if (table === "boxes") {
+        // Workspace membership resolves via notes.box_id → boxes.workspace_id;
+        // the keyword path reads box ids first, so return one owning box so the
+        // lookup is non-empty (an empty result yields zero keyword hits).
+        return {
+          select: (_cols: string) =>
+            makeFilterChain([{ id: "box-1", workspace_id: "ws-1" }]),
         };
       }
       return {

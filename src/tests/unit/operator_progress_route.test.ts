@@ -108,6 +108,9 @@ describe("POST /api/agent/tools/progress", () => {
   });
 
   it("broadcasts progress event via Supabase channel on valid request", async () => {
+    // The route derives run_id from the authenticated envelope and rejects a
+    // body whose run_id disagrees (defense-in-depth, route.ts:62), so the
+    // request body's run_id must match ctx.runId.
     vi.mocked(verifyAgentRequest).mockReturnValue({
       ok: true,
       ctx: {
@@ -120,7 +123,7 @@ describe("POST /api/agent/tools/progress", () => {
 
     const res = await POST(
       makeRequest({
-        run_id: "r-42",
+        run_id: "run-1",
         type: "step_complete",
         step_index: 2,
         detail: "Finished search",
@@ -129,8 +132,8 @@ describe("POST /api/agent/tools/progress", () => {
 
     expect(res.status).toBe(200);
 
-    // Verify channel was created with the correct name
-    expect(mockChannel).toHaveBeenCalledWith("operator_run:r-42");
+    // Channel name is derived from the authenticated ctx.runId.
+    expect(mockChannel).toHaveBeenCalledWith("operator_run:run-1");
 
     // Verify the broadcast payload
     expect(mockSend).toHaveBeenCalledTimes(1);
@@ -139,7 +142,7 @@ describe("POST /api/agent/tools/progress", () => {
     expect(sendArg.event).toBe("progress");
 
     const payload = sendArg.payload as Record<string, unknown>;
-    expect(payload.run_id).toBe("r-42");
+    expect(payload.run_id).toBe("run-1");
     expect(payload.type).toBe("step_complete");
     expect(payload.step_index).toBe(2);
     expect(payload.detail).toBe("Finished search");
@@ -158,7 +161,7 @@ describe("POST /api/agent/tools/progress", () => {
     } as any);
 
     const res = await POST(
-      makeRequest({ run_id: "r-1", type: "completed" })
+      makeRequest({ run_id: "run-1", type: "completed" })
     );
     const json = await res.json();
 
@@ -178,7 +181,7 @@ describe("POST /api/agent/tools/progress", () => {
       },
     } as any);
 
-    await POST(makeRequest({ run_id: "r-1", type: "completed" }));
+    await POST(makeRequest({ run_id: "run-1", type: "completed" }));
 
     const payload = (mockSend.mock.calls[0][0] as any).payload;
     expect(payload.step_index).toBeNull();
@@ -198,7 +201,7 @@ describe("POST /api/agent/tools/progress", () => {
 
     const ts = "2026-04-19T12:00:00.000Z";
     await POST(
-      makeRequest({ run_id: "r-1", type: "step_start", timestamp: ts })
+      makeRequest({ run_id: "run-1", type: "step_start", timestamp: ts })
     );
 
     const payload = (mockSend.mock.calls[0][0] as any).payload;
