@@ -38,15 +38,26 @@ import { TreeSidebar } from "@/components/product/tree_sidebar";
  * the expandable box tree.
  */
 
-const primaryNav = [
+// One-loop focus (Phase 2): the mobile nav mirrors AppSidebar — only Home and
+// AI Edits (proposals) in the primary nav. The Build/Explore destinations
+// (Skills / Agents / Workflows / Branches / Graph) and their routes still
+// exist; they are hidden here. Flip `FOCUSED_NAV` to `false` to restore them.
+const FOCUSED_NAV: boolean = true;
+
+const coreNav = [
   { label: "Home", href: "/app", icon: Home },
   { label: "AI Edits", href: "/app/proposals", icon: Inbox },
+];
+
+const extendedNav = [
   { label: "Skills", href: "/app/skills", icon: Puzzle },
   { label: "Agents", href: "/app/agents", icon: Bot },
   { label: "Workflows", href: "/app/workflows", icon: GitFork },
   { label: "Branches", href: "/app/branches", icon: GitBranch },
   { label: "Graph", href: "/app/graph", icon: Network },
 ];
+
+const primaryNav = FOCUSED_NAV ? coreNav : [...coreNav, ...extendedNav];
 
 interface MobileSidebarProps {
   userEmail?: string;

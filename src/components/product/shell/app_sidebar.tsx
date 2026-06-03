@@ -136,6 +136,15 @@ function NavItemWithBadge({
   );
 }
 
+// ─── One-loop focus (Phase 2) ──────────────────────────────────────────────
+// The product is intentionally carved down to the core loop — Home, AI Edits
+// (proposals), Collections (context), Settings — so a new user sees only the
+// path that matters and no half-built surface is one click away. The Build
+// (Skills / Agents / Workflows / Branches) and Explore (Knowledge Graph)
+// sections — and all their routes — still exist; they are simply hidden from
+// the primary nav here. Flip to `false` to restore the full navigation.
+const FOCUSED_NAV: boolean = true;
+
 // ─── Sidebar ──────────────────────────────────────────────────────────────────
 
 interface AppSidebarProps {
@@ -247,6 +256,8 @@ export function AppSidebar({
 
       <Separator className="mx-2 my-1" />
 
+      {!FOCUSED_NAV && (
+        <>
       {/* Build section */}
       <div className="px-2 pt-1 pb-1">
         <button
@@ -316,6 +327,8 @@ export function AppSidebar({
           </m.ul>
         )}
       </div>
+        </>
+      )}
 
       <Separator className="mx-2 my-1" />
 

@@ -135,7 +135,7 @@ const FAQS = [
   },
   {
     q: "Do you offer student or nonprofit discounts?",
-    a: "Yes — email us at hello@atlas.app with verification and we'll set you up with 50% off Pro.",
+    a: "Yes — email us at hello@poggle.app with verification and we'll set you up with 50% off Pro.",
   },
   {
     q: "What payment methods do you accept?",

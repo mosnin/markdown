@@ -83,7 +83,7 @@ function BoxesMockup() {
           <div className="h-2.5 w-2.5 rounded-full bg-red-400/70" />
           <div className="h-2.5 w-2.5 rounded-full bg-yellow-400/70" />
           <div className="h-2.5 w-2.5 rounded-full bg-green-400/70" />
-          <span className="ml-2 text-muted-foreground/60">atlas</span>
+          <span className="ml-2 text-muted-foreground/60">poggle</span>
         </div>
         <div className="space-y-1 p-4 leading-relaxed text-muted-foreground/70">
           <p>
