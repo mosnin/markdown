@@ -21,13 +21,17 @@ import { seedStarterBox } from "./seed_starter_box";
  *      creation time). Stable default so every session picks the same
  *      workspace unless the user explicitly switches.
  *   3. If the user has no accessible workspaces, create a default "My
- *      Workspace" owned by them. The membership row is inserted by the
- *      workspace-memberships migration trigger; since we don't rely on a
- *      trigger yet the bootstrap here also writes the admin membership
- *      explicitly so the caller always has the access flag it needs.
+ *      Workspace" owned by them. There is NO database trigger that creates
+ *      the membership row (the workspace-memberships migration only
+ *      backfills existing owners once); this bootstrap writes the owner's
+ *      admin membership explicitly — via an idempotent upsert below — so the
+ *      caller always has the access flag it needs.
  *
  * Slug generation for the default: derived from user_id to guarantee
- * global uniqueness without a round-trip uniqueness check.
+ * global uniqueness without a round-trip uniqueness check. Creation itself
+ * is race-safe: `createWorkspace` upserts on UNIQUE(owner_id, slug), so two
+ * concurrent first-login renders converge on the same workspace row instead
+ * of one throwing a duplicate-key error.
  */
 export async function getOrCreateDefaultWorkspace(
   supabase: SupabaseClient,

@@ -63,13 +63,25 @@ export async function listWorkspacesByOwner(
   return data as Workspace[];
 }
 
+/**
+ * Create a workspace, or return the existing row when one already exists
+ * for the same (owner_id, slug).
+ *
+ * First-login bootstrap can fire two concurrent renders (layout + page),
+ * each calling `getOrCreateDefaultWorkspace` -> `createWorkspace` with the
+ * same deterministic slug. A plain INSERT makes the loser hit
+ * `workspaces_owner_id_slug_key` and throw, rendering error.tsx on first
+ * login. Upserting on the unique key makes the race self-healing: both
+ * callers converge on the same row. `onConflict` does an idempotent
+ * DO UPDATE (re-stamping the name) so the existing row is always returned.
+ */
 export async function createWorkspace(
   supabase: SupabaseClient,
   input: CreateWorkspaceInput
 ): Promise<Workspace> {
   const { data, error } = await supabase
     .from("workspaces")
-    .insert(input)
+    .upsert(input, { onConflict: "owner_id,slug" })
     .select()
     .single();
 

@@ -1,3 +1,4 @@
+import { cache } from "react";
 import { cookies } from "next/headers";
 import { type User } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
@@ -68,6 +69,14 @@ export const ACTIVE_BRANCH_COOKIE = "active_branch_id";
  * first access). Multi-workspace users have their active workspace
  * selection honored via the `active_workspace_id` cookie.
  *
+ * Wrapped in React `cache()` (see the export below) so it is deduplicated
+ * within a single server render. On first login the root layout and the
+ * page both resolve the context; without dedup each would independently
+ * call `getOrCreateDefaultWorkspace` -> `createWorkspace`, racing on the
+ * `UNIQUE(owner_id, slug)` constraint. `cache()` collapses concurrent calls
+ * in one render to a single execution. (In server actions / route handlers
+ * there is no shared cache scope, so it simply behaves as a normal call.)
+ *
  * @example
  * ```ts
  * const ctx = await getRequestContext();
@@ -75,7 +84,7 @@ export const ACTIVE_BRANCH_COOKIE = "active_branch_id";
  * const { workspace } = ctx; // WorkspaceContext, non-null here
  * ```
  */
-export async function getRequestContext(): Promise<RequestContext> {
+async function resolveRequestContext(): Promise<RequestContext> {
   const supabase = await createClient();
   const {
     data: { user },
@@ -137,3 +146,15 @@ export async function getRequestContext(): Promise<RequestContext> {
     activeBranchId: resolvedBranchId,
   };
 }
+
+/**
+ * Resolves the request context for the current server render.
+ *
+ * Deduplicated with React `cache()`: within a single render pass every call
+ * (layout, page, nested server components) shares one resolution. This is
+ * what prevents the first-login bootstrap race described on
+ * `resolveRequestContext` above. Takes no arguments, so the cache key is
+ * constant for the render. See `src/server/services/cached_reads.ts` for the
+ * same pattern applied to repository reads.
+ */
+export const getRequestContext = cache(resolveRequestContext);

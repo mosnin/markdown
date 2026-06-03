@@ -1,3 +1,22 @@
+// -----------------------------------------------------------------------------
+// INTENTIONALLY RETAINED — do not delete.
+//
+// A security audit flagged this module as "dead (zero importers)". That is
+// incorrect: the `ConnectionRequestContext` type exported below is the
+// canonical contract that the `/api/v1/**` service layer is written against —
+// it is imported by `write_proposal_service.ts`, `generated_note_service.ts`,
+// and is the bridge target of `mcp_auth_adapter.ts`'s
+// `toConnectionRequestContext()`. Deleting this file would break all three.
+//
+// The `getConnectionContext()` FUNCTION (the csk_v1_ bearer-token path) is the
+// part that is superseded: live MCP / API routes now authenticate via
+// `mcp_auth_adapter.ts`. The function is kept because (a) it still defines the
+// `ConnectionRequestContext` shape and the OAuth bridge `resolveOAuthContext`,
+// and (b) `src/tests/unit/token_format.test.ts` documents its structural
+// token checks. If the legacy csk_v1_ path is fully removed in future, extract
+// the `ConnectionRequestContext` type + OAuth bridge first, then drop the rest.
+// -----------------------------------------------------------------------------
+
 import { createHash, timingSafeEqual } from "node:crypto";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { log } from "@/lib/logger";

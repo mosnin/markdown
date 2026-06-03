@@ -245,9 +245,25 @@ export async function acceptInvitationAction(
 ): Promise<ActionResult<{ workspaceId: string }>> {
   const ctx = await requireAuthenticatedUser();
 
+  // An authenticated user always has a verified email in this product
+  // (email is the sole sign-in identifier). Guard explicitly so the
+  // email-match check below never silently passes on an empty string.
+  const userEmail = ctx.user.email;
+  if (!userEmail) {
+    return {
+      ok: false,
+      error: "Your account has no email address; cannot accept invitation.",
+    };
+  }
+
   try {
     const supabase = await createClient();
-    const invitation = await acceptInvitation(supabase, token, ctx.user.id);
+    const invitation = await acceptInvitation(
+      supabase,
+      token,
+      ctx.user.id,
+      userEmail
+    );
 
     await createAuditEvent(supabase, {
       workspace_id: invitation.workspace_id,

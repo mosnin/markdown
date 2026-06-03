@@ -227,16 +227,32 @@ function escapeHtml(s: string): string {
 // ─── Accept ─────────────────────────────────────────────────────────────────
 
 /**
- * Accept an invitation by token. Validates the token exists, is still
- * pending, and has not expired. On success, creates a workspace_membership
- * row and marks the invitation as accepted.
+ * Accept an invitation by token.
+ *
+ * The membership insert is performed by the `accept_workspace_invitation`
+ * SECURITY DEFINER Postgres function (migration 20260430000003), NOT by a
+ * direct insert from this RLS-active client. A brand-new invitee is not yet
+ * a member of the target workspace, so they fail `can_admin_workspace(...)`
+ * — the only INSERT policy on `workspace_memberships` — and a direct insert
+ * is rejected. The RPC proves the caller holds a valid, pending, non-expired
+ * invitation addressed to their own email, then inserts the membership and
+ * marks the invitation accepted in a single transaction.
+ *
+ * We still validate the invitation in TS first (lookup, expiry, email match,
+ * already-a-member) so the caller gets precise, friendly errors and so the
+ * email check is enforced defence-in-depth on top of the RPC's own check —
+ * mandatory now that the RPC bypasses RLS.
+ *
+ * `userEmail` MUST come from the authenticated session (never client input);
+ * it is checked against the invitation's email case-insensitively.
  *
  * Returns the accepted invitation for audit/display purposes.
  */
 export async function acceptInvitation(
   supabase: SupabaseClient,
   token: string,
-  userId: string
+  userId: string,
+  userEmail: string
 ): Promise<WorkspaceInvitation> {
   // 1. Look up the invitation
   const { data: invitation, error: lookupErr } = await supabase
@@ -261,7 +277,16 @@ export async function acceptInvitation(
     throw new Error("This invitation has expired.");
   }
 
-  // 3. Check if user is already a member
+  // 3. The caller may only accept an invitation addressed to their own
+  //    email. Defence-in-depth: the SECURITY DEFINER RPC enforces this too,
+  //    but checking here gives a clear error and never relies on RLS alone.
+  if (inv.email.trim().toLowerCase() !== userEmail.trim().toLowerCase()) {
+    throw new Error(
+      "This invitation was issued to a different email address."
+    );
+  }
+
+  // 4. Check if user is already a member
   const { data: existingMember } = await supabase
     .from("workspace_memberships")
     .select("user_id")
@@ -273,34 +298,38 @@ export async function acceptInvitation(
     throw new Error("User is already a member of this workspace");
   }
 
-  // 4. Create the membership
-  const { error: memberErr } = await supabase
-    .from("workspace_memberships")
-    .upsert(
-      {
-        workspace_id: inv.workspace_id,
-        user_id: userId,
-        role: inv.role,
-        invited_by: inv.invited_by,
-        accepted_at: new Date().toISOString(),
-      },
-      { onConflict: "workspace_id,user_id" }
-    );
+  // 5. Create the membership + mark the invitation accepted via the
+  //    SECURITY DEFINER RPC (bypasses the admin-only membership INSERT
+  //    policy after re-proving the invitation is valid for this caller).
+  const { data: workspaceId, error: rpcErr } = await supabase.rpc(
+    "accept_workspace_invitation",
+    {
+      p_token: token,
+      p_user_id: userId,
+      p_user_email: userEmail,
+    }
+  );
 
-  if (memberErr) throw new Error(memberErr.message);
+  if (rpcErr) throw new Error(rpcErr.message);
 
-  // 5. Mark accepted
-  const now = new Date().toISOString();
-  const { data: updated, error: updateErr } = await supabase
+  // 6. Return the now-accepted invitation. The RPC already flipped status to
+  //    'accepted'; re-read so callers/audit get the fresh row. Fall back to a
+  //    locally-derived accepted shape if the post-accept re-read is somehow
+  //    not visible (the workspace id from the RPC is the source of truth).
+  const { data: updated } = await supabase
     .from("workspace_invitations")
-    .update({ status: "accepted", accepted_at: now })
+    .select("*")
     .eq("id", inv.id)
-    .select()
-    .single();
+    .maybeSingle();
 
-  if (updateErr) throw new Error(updateErr.message);
+  if (updated) return updated as WorkspaceInvitation;
 
-  return updated as WorkspaceInvitation;
+  return {
+    ...inv,
+    workspace_id: (workspaceId as string | null) ?? inv.workspace_id,
+    status: "accepted",
+    accepted_at: new Date().toISOString(),
+  };
 }
 
 // ─── Decline ────────────────────────────────────────────────────────────────

@@ -204,12 +204,71 @@ function makeFakeSupabase(state: MockState) {
     return chain;
   }
 
+  // Mirrors the accept_workspace_invitation SECURITY DEFINER function
+  // (migration 20260430000003): validate the invitation, insert the
+  // membership at its role, mark it accepted, return the workspace id.
+  // The real RPC runs in Postgres; this in-memory stand-in lets the
+  // service's RPC call resolve against the same arrays the rest of the
+  // mock mutates.
+  function rpc(
+    name: string,
+    args: { p_token: string; p_user_id: string; p_user_email: string }
+  ) {
+    if (name !== "accept_workspace_invitation") {
+      return Promise.resolve({
+        data: null,
+        error: { message: `Unexpected rpc: ${name}` },
+      });
+    }
+    const inv = state.invitations.find(
+      (r) => r.token === args.p_token && r.status === "pending"
+    );
+    if (!inv) {
+      return Promise.resolve({
+        data: null,
+        error: { message: "Invitation not found or already used." },
+      });
+    }
+    if (new Date(inv.expires_at) < new Date()) {
+      inv.status = "expired";
+      return Promise.resolve({
+        data: null,
+        error: { message: "This invitation has expired." },
+      });
+    }
+    if (inv.email.toLowerCase() !== args.p_user_email.toLowerCase()) {
+      return Promise.resolve({
+        data: null,
+        error: {
+          message:
+            "This invitation was issued to a different email address.",
+        },
+      });
+    }
+    const existing = state.memberships.find(
+      (m) => m.workspace_id === inv.workspace_id && m.user_id === args.p_user_id
+    );
+    if (!existing) {
+      state.memberships.push({
+        workspace_id: inv.workspace_id,
+        user_id: args.p_user_id,
+        role: inv.role,
+        invited_by: inv.invited_by,
+        accepted_at: new Date().toISOString(),
+      });
+    }
+    inv.status = "accepted";
+    inv.accepted_at = new Date().toISOString();
+    return Promise.resolve({ data: inv.workspace_id, error: null });
+  }
+
   return {
     from: (table: string) => {
       if (table === "workspace_invitations") return fromInvitations();
       if (table === "workspace_memberships") return fromMemberships();
       throw new Error(`Unexpected table: ${table}`);
     },
+    rpc,
   };
 }
 
@@ -427,7 +486,12 @@ describe("workspace_invitation_service", () => {
         created_at: new Date().toISOString(),
       });
 
-      const result = await acceptInvitation(sb as never, "valid-token-123", "user-bob");
+      const result = await acceptInvitation(
+        sb as never,
+        "valid-token-123",
+        "user-bob",
+        "bob@example.com"
+      );
 
       expect(result.status).toBe("accepted");
       expect(result.accepted_at).toBeTruthy();
@@ -468,11 +532,48 @@ describe("workspace_invitation_service", () => {
 
       const sb = makeFakeSupabase(state);
       await expect(
-        acceptInvitation(sb as never, "already-member-token", "user-existing")
+        acceptInvitation(
+          sb as never,
+          "already-member-token",
+          "user-existing",
+          "existing@example.com"
+        )
       ).rejects.toThrow(/already a member/i);
 
       // No new membership should be created
       expect(state.memberships).toHaveLength(1);
+    });
+  });
+
+  // 4c. Accept rejects an email that doesn't match the invitation
+  describe("acceptInvitation — email mismatch", () => {
+    it("rejects when the caller's email differs from the invitation", async () => {
+      state.invitations.push({
+        id: "inv-mismatch-1",
+        workspace_id: "ws-1",
+        email: "intended@example.com",
+        role: "member",
+        token: "mismatch-token",
+        invited_by: "user-admin",
+        status: "pending",
+        expires_at: new Date(Date.now() + 86400000).toISOString(),
+        accepted_at: null,
+        created_at: new Date().toISOString(),
+      });
+
+      const sb = makeFakeSupabase(state);
+      await expect(
+        acceptInvitation(
+          sb as never,
+          "mismatch-token",
+          "user-attacker",
+          "attacker@example.com"
+        )
+      ).rejects.toThrow(/different email/i);
+
+      // No membership created and the invitation stays pending.
+      expect(state.memberships).toHaveLength(0);
+      expect(state.invitations[0].status).toBe("pending");
     });
   });
 
@@ -496,7 +597,12 @@ describe("workspace_invitation_service", () => {
       });
 
       await expect(
-        acceptInvitation(sb as never, "expired-token-456", "user-charlie")
+        acceptInvitation(
+          sb as never,
+          "expired-token-456",
+          "user-charlie",
+          "charlie@example.com"
+        )
       ).rejects.toThrow("expired");
 
       // Should not have created a membership
@@ -614,7 +720,12 @@ describe("workspace_invitation_service", () => {
       const sb = makeFakeSupabase(state);
 
       await expect(
-        acceptInvitation(sb as never, "nonexistent-token", "user-x")
+        acceptInvitation(
+          sb as never,
+          "nonexistent-token",
+          "user-x",
+          "x@example.com"
+        )
       ).rejects.toThrow("not found");
     });
   });
