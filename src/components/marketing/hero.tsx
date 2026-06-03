@@ -25,7 +25,7 @@ export function HeroSection() {
             <ArrowRightIcon className="size-3 -translate-x-0.5 transition-transform duration-150 ease-out group-hover:translate-x-0.5" />
           </Link>
 
-          <h1 className="text-balance text-4xl font-bold leading-tight tracking-tight text-foreground md:text-5xl">
+          <h1 className="font-hero text-balance text-4xl font-bold leading-tight tracking-tight text-foreground md:text-5xl">
             The governed context layer for AI agents.
           </h1>
 
@@ -82,7 +82,7 @@ export function PageHeroSection({
       <div className="relative mx-auto max-w-3xl px-6 text-center">
         <p className="text-overline mb-3 text-violet-400">{eyebrow}</p>
 
-        <h1 className="text-4xl font-bold tracking-tight text-foreground sm:text-5xl">
+        <h1 className="font-hero text-4xl font-bold tracking-tight text-foreground sm:text-5xl">
           {title}
         </h1>
 

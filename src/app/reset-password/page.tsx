@@ -24,7 +24,7 @@ export default function ResetPasswordPage() {
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-violet-600">
               <div className="h-3 w-3 rounded-sm bg-background" />
             </div>
-            <span className="text-sm font-semibold text-foreground">Poggle</span>
+            <span className="font-display text-sm font-semibold text-foreground">Poggle</span>
           </Link>
         </div>
 

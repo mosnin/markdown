@@ -33,7 +33,7 @@ export function BrandPanel() {
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-violet-600">
               <div className="h-3 w-3 rounded-sm bg-white" />
             </div>
-            <span className="text-sm font-semibold text-white">Poggle</span>
+            <span className="font-display text-sm font-semibold text-white">Poggle</span>
           </Link>
         </m.div>
 

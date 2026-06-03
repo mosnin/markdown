@@ -87,6 +87,9 @@
   /* Font stacks */
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+  /* Brand fonts — swap these two values to flip the hero ↔ title/logo mapping */
+  --font-display: var(--font-space-grotesk);  /* logo wordmark + title/heading text */
+  --font-hero: var(--font-share-tech-mono);   /* hero headlines */
 
   /* Radius scale — enterprise: sharper corners */
   --radius-none: 0;
@@ -289,6 +292,7 @@
 
   h1, h2, h3, .text-display, .text-headline, .text-title {
     letter-spacing: -0.018em;
+    font-family: var(--font-display);
   }
 
   [data-scroll-area] {
