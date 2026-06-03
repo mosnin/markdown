@@ -156,18 +156,14 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
           <PaletteItem
             value="action:start-pog"
             keywords={["chat", "conversation", "pog", "assistant"]}
-            onSelect={() => navigate("/app/conversation")}
+            onSelect={() => navigate("/app")}
             icon={Bot}
             label="Start Atlas AI"
           />
           {hasQuery && (
             <PaletteItem
               value="action:ask-pog"
-              onSelect={() =>
-                navigate(
-                  `/app/conversation?prompt=${encodeURIComponent(trimmedQuery)}`,
-                )
-              }
+              onSelect={() => navigate("/app")}
               icon={Sparkles}
               label={`Ask Atlas AI: ${trimmedQuery}`}
             />
@@ -258,7 +254,7 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
           />
           <PaletteItem
             value="goto:conversation"
-            onSelect={() => navigate("/app/conversation")}
+            onSelect={() => navigate("/app")}
             icon={MessageCircle}
             label="Conversation"
           />

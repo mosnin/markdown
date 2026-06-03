@@ -1,6 +1,8 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
-import { requireAdminRole } from "@/server/auth/require_role";
+import { requireAuthenticatedUser } from "@/server/auth/require_authenticated_user";
+import { canAdmin } from "@/server/auth/require_role";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { listWorkspaceMembers } from "@/server/repositories/workspace_membership_repository";
@@ -16,7 +18,12 @@ import type { MemberView, InvitationView } from "./actions";
  * form. Admin-only — `requireAdminRole()` at the top of the page.
  */
 export default async function WorkspaceMembersPage() {
-  const ctx = await requireAdminRole();
+  const ctx = await requireAuthenticatedUser();
+
+  if (!canAdmin(ctx.workspace.role)) {
+    redirect("/app");
+  }
+
   const supabase = await createClient();
   const admin = createAdminClient();
 

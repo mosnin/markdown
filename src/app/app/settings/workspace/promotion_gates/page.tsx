@@ -1,6 +1,8 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
-import { requireAdminRole } from "@/server/auth/require_role";
+import { requireAuthenticatedUser } from "@/server/auth/require_authenticated_user";
+import { canAdmin } from "@/server/auth/require_role";
 import { createClient } from "@/lib/supabase/server";
 import { listGates, listRecentRunsByGate } from "@/server/services/branch_promotion_gate_service";
 import { Separator } from "@/components/ui/separator";
@@ -14,15 +16,17 @@ import type { PromotionGateRow } from "./actions";
  * promoted to main. Each gate returns pass/fail; any failure vetoes
  * the promotion. See `docs/branch_promotion_gates_v1.md`.
  *
- * Role gating: `requireAdminRole()` at the top of the page. Non-admins
- * are bounced with an error rather than a silent redirect because
- * they've already navigated to a settings subpage — keeping the
- * response explicit avoids a "why did I land on /app" mystery.
+ * Role gating: admin-only. Non-admins are redirected to /app, matching
+ * the rest of the admin-gated page surface — a graceful redirect rather
+ * than throwing into the generic error boundary.
  */
 export default async function PromotionGatesPage() {
-  // Explicit admin guard. Throws which Next renders as an error page,
-  // matching the rest of the admin-gated action surface.
-  const ctx = await requireAdminRole();
+  const ctx = await requireAuthenticatedUser();
+
+  if (!canAdmin(ctx.workspace.role)) {
+    redirect("/app");
+  }
+
   const supabase = await createClient();
   const gates = await listGates(supabase, ctx.workspace.id);
   const runsByGate = await listRecentRunsByGate(supabase, ctx.workspace.id, 5);

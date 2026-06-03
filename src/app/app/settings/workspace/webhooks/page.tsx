@@ -1,6 +1,8 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
-import { requireAdminRole } from "@/server/auth/require_role";
+import { requireAuthenticatedUser } from "@/server/auth/require_authenticated_user";
+import { canAdmin } from "@/server/auth/require_role";
 import { createClient } from "@/lib/supabase/server";
 import { listWebhooks, listRecentDeliveries } from "@/server/services/content_webhook_service";
 import { Separator } from "@/components/ui/separator";
@@ -15,7 +17,12 @@ import type { ContentWebhookRow } from "./actions";
  * creation — store them somewhere safe before closing the dialog.
  */
 export default async function ContentWebhooksPage() {
-  const ctx = await requireAdminRole();
+  const ctx = await requireAuthenticatedUser();
+
+  if (!canAdmin(ctx.workspace.role)) {
+    redirect("/app");
+  }
+
   const supabase = await createClient();
   const webhooks = await listWebhooks(supabase, ctx.workspace.id);
 

@@ -1,6 +1,8 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
-import { requireAdminRole } from "@/server/auth/require_role";
+import { requireAuthenticatedUser } from "@/server/auth/require_authenticated_user";
+import { canAdmin } from "@/server/auth/require_role";
 import { Separator } from "@/components/ui/separator";
 import { MigrationDashboard } from "./migration_dashboard";
 
@@ -13,7 +15,11 @@ import { MigrationDashboard } from "./migration_dashboard";
  * replacements and deprecate legacy connections.
  */
 export default async function LegacyMigrationPage() {
-  await requireAdminRole();
+  const ctx = await requireAuthenticatedUser();
+
+  if (!canAdmin(ctx.workspace.role)) {
+    redirect("/app");
+  }
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
