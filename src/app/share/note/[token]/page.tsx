@@ -1,3 +1,4 @@
+import { type Metadata } from "next";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -6,6 +7,38 @@ import { getNoteById } from "@/server/repositories/note_repository";
 
 interface PageProps {
   params: Promise<{ token: string }>;
+}
+
+export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
+  const { token } = await params;
+  const noteId = verifyNoteToken(token);
+  if (!noteId) {
+    return { title: "Shared note — Poggle" };
+  }
+
+  const supabase = createAdminClient();
+  const note = await getNoteById(supabase, noteId);
+  if (!note) {
+    return { title: "Shared note — Poggle" };
+  }
+
+  const description =
+    note.summary ?? "A note shared with you via Poggle.";
+
+  return {
+    title: `${note.title} — Poggle`,
+    description,
+    openGraph: {
+      title: `${note.title} — Poggle`,
+      description,
+      type: "article",
+    },
+    twitter: {
+      card: "summary",
+      title: `${note.title} — Poggle`,
+      description,
+    },
+  };
 }
 
 export default async function SharedNotePage({ params }: PageProps) {

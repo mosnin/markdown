@@ -5,12 +5,28 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { ThemeProvider } from "@/components/product/theme_provider";
 import { MotionProvider } from "@/components/product/motion_provider";
 import { ServiceWorkerRegister } from "@/components/product/sw_register";
+import { getCanonicalBaseUrl } from "@/lib/canonical_url";
 import "./globals.css";
 
+const SITE_DESCRIPTION =
+  "Agents connect over MCP, read your workspace context, and propose changes you approve. Poggle is the trust gate between your AI agents and your source of truth.";
+
 export const metadata: Metadata = {
+  metadataBase: new URL(getCanonicalBaseUrl()),
   title: "Poggle",
   description:
     "A structured, markdown-native context operating system for humans and AI.",
+  openGraph: {
+    type: "website",
+    siteName: "Poggle",
+    title: "Poggle — The governed context layer for AI agents",
+    description: SITE_DESCRIPTION,
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Poggle — The governed context layer for AI agents",
+    description: SITE_DESCRIPTION,
+  },
   icons: {
     icon: "/logo-symbol-light.png",
     shortcut: "/logo-symbol-light.png",

@@ -1,4 +1,5 @@
 import { connection } from "next/server";
+import { Fragment } from "react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowRight, Check, Minus, CheckCircle2, Users, Briefcase, Building2 } from "lucide-react";
@@ -273,8 +274,8 @@ export default async function PricingPage() {
               </thead>
               <tbody>
                 {COMPARISON.map((section) => (
-                  <>
-                    <tr key={section.category}>
+                  <Fragment key={section.category}>
+                    <tr>
                       <td
                         colSpan={4}
                         className="pb-2 pt-6 text-xs font-semibold uppercase tracking-widest text-muted-foreground/60"
@@ -303,7 +304,7 @@ export default async function PricingPage() {
                         </td>
                       </tr>
                     ))}
-                  </>
+                  </Fragment>
                 ))}
               </tbody>
             </table>

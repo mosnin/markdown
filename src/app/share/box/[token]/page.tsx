@@ -1,3 +1,4 @@
+import { type Metadata } from "next";
 import { notFound } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { verifyBoxToken } from "@/lib/share_token";
@@ -8,6 +9,38 @@ import { FileText } from "lucide-react";
 
 interface PageProps {
   params: Promise<{ token: string }>;
+}
+
+export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
+  const { token } = await params;
+  const boxId = verifyBoxToken(token);
+  if (!boxId) {
+    return { title: "Shared box — Poggle" };
+  }
+
+  const supabase = createAdminClient();
+  const box = await getBoxById(supabase, boxId);
+  if (!box) {
+    return { title: "Shared box — Poggle" };
+  }
+
+  const description =
+    box.description ?? "A knowledge box shared with you via Poggle.";
+
+  return {
+    title: `${box.name} — Poggle`,
+    description,
+    openGraph: {
+      title: `${box.name} — Poggle`,
+      description,
+      type: "website",
+    },
+    twitter: {
+      card: "summary",
+      title: `${box.name} — Poggle`,
+      description,
+    },
+  };
 }
 
 export default async function SharedBoxPage({ params }: PageProps) {
