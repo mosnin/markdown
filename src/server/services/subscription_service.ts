@@ -27,6 +27,24 @@ function isKnownPlan(value: unknown): value is WorkspacePlan {
 }
 
 /**
+ * Maps a Creem product id to a billing tier by comparing it to the configured
+ * `CREEM_PRO_PRODUCT_ID` / `CREEM_BUSINESS_PRODUCT_ID` env vars.
+ *
+ * Used by the Creem checkout webhook so Business buyers aren't under-provisioned
+ * as Pro. Defaults to `pro` when the id is missing or matches neither
+ * (indeterminate) — a paying customer is never silently dropped to free, and a
+ * misconfigured Business product id degrades to Pro rather than to a free
+ * giveaway.
+ */
+export function planFromProductId(productId: string | null | undefined): WorkspacePlan {
+  if (productId) {
+    if (productId === process.env.CREEM_BUSINESS_PRODUCT_ID) return "business";
+    if (productId === process.env.CREEM_PRO_PRODUCT_ID) return "pro";
+  }
+  return "pro";
+}
+
+/**
  * Returns the plan for a workspace by querying workspace_subscriptions.
  * Returns 'free' if no subscription row exists or the table is missing.
  *

@@ -8,7 +8,10 @@ import {
   BranchTargetingNotAllowedError,
 } from "@/server/auth/mcp_auth_adapter";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { createGeneratedNote } from "@/server/services/generated_note_service";
+import {
+  createGeneratedNote,
+  isQuotaExceeded,
+} from "@/server/services/generated_note_service";
 import { auditMcp } from "@/server/services/audit_service";
 import {
   apiOk,
@@ -21,6 +24,7 @@ import {
   E_INSUFFICIENT_SCOPE,
   E_FORBIDDEN_ROLE,
   E_BRANCH_TARGETING_NOT_ALLOWED,
+  E_QUOTA_EXCEEDED,
 } from "@/lib/api/response";
 import { PERMISSION_MODE } from "@/server/domain/constants/connection_constants";
 import { apiWriteLimit } from "@/lib/api/rate_limit";
@@ -142,6 +146,16 @@ export const POST = withApiHandler(async (request: NextRequest) => {
       read_hint: body.read_hint ?? null,
       retrieval_priority: body.retrieval_priority,
     });
+
+    // Plan paywall — the workspace exhausted its per-period write allowance.
+    // Surface as 402 with limit/used/upgrade_url; no note was created.
+    if (isQuotaExceeded(result)) {
+      return E_QUOTA_EXCEEDED({
+        limit: result.limit,
+        used: result.used,
+        upgradeUrl: result.upgradeUrl,
+      });
+    }
 
     // User-attributed MCP audit event — complements the service's
     // existing connection-attributed `note.generated` event.

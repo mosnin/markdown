@@ -665,7 +665,7 @@ async function dispatchTool(
       const allowedBoxIds = new Set(
         workspaceBoxIds.filter((id: string) => canAccessBox(ctx.scope, id))
       );
-      const { createGeneratedNote } = await import(
+      const { createGeneratedNote, isQuotaExceeded } = await import(
         "@/server/services/generated_note_service"
       );
       const syntheticConnection = {
@@ -694,6 +694,16 @@ async function dispatchTool(
         summary: typeof args.summary === "string" ? args.summary : null,
         tags: Array.isArray(args.tags) ? (args.tags as string[]) : [],
       });
+
+      // Plan paywall — the workspace exhausted its per-period write allowance.
+      // Surface a clear upgrade error to the agent (mirrors create_write_proposal).
+      if (isQuotaExceeded(result)) {
+        throw toolError(
+          -32004,
+          `Plan limit reached: ${result.used}/${result.limit} writes used this billing period. Upgrade at ${result.upgradeUrl} to continue.`
+        );
+      }
+
       return { note: result };
     }
 

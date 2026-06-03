@@ -23,11 +23,15 @@ vi.mock("@/server/repositories/folder_repository");
 vi.mock("@/server/repositories/box_repository");
 vi.mock("@/server/services/audit_service");
 
-import { createGeneratedNote } from "@/server/services/generated_note_service";
+import {
+  createGeneratedNote,
+  isQuotaExceeded,
+} from "@/server/services/generated_note_service";
 import * as folderRepo from "@/server/repositories/folder_repository";
 import * as boxRepo from "@/server/repositories/box_repository";
 import * as auditService from "@/server/services/audit_service";
 import { PERMISSION_MODE, type PermissionMode } from "@/server/domain/constants/connection_constants";
+import { PROPOSAL_TIER_LIMITS } from "@/server/domain/constants/proposal_quota";
 
 const WORKSPACE_ID = "ws-integration-002";
 const BOX_ID = "box-002";
@@ -68,6 +72,42 @@ function makeBox() {
     status: "active",
     guide_note_id: null,
   };
+}
+
+/**
+ * Build a Supabase double that answers the three reads `createGeneratedNote`
+ * now performs:
+ *   1. `checkProposalQuota` subscription read — `workspace_subscriptions`
+ *      `.eq().maybeSingle()` → no row (free tier).
+ *   2. `checkProposalQuota` usage count — `write_proposals`
+ *      `.select(id,{count,head}).eq().gte()` → `proposalsUsed`.
+ *   3. `notePathExists` — `notes` `.eq().eq().neq().maybeSingle()` → no row.
+ * plus the create RPC.
+ */
+function makeQuotaAwareClient(opts: {
+  proposalsUsed: number;
+  rpc: ReturnType<typeof vi.fn>;
+}) {
+  const countResult = { count: opts.proposalsUsed, error: null };
+  return {
+    rpc: opts.rpc,
+    from(table: string) {
+      if (table === "write_proposals") {
+        // count chain: .select(id,{count,head}).eq(workspace_id).gte(created_at)
+        return {
+          select: () => ({ eq: () => ({ gte: () => Promise.resolve(countResult) }) }),
+        };
+      }
+      // workspace_subscriptions (.eq().maybeSingle()) and notes
+      // (.eq().eq().neq().maybeSingle()) both terminate on maybeSingle → null.
+      const chain = {
+        eq: () => chain,
+        neq: () => chain,
+        maybeSingle: () => Promise.resolve({ data: null, error: null }),
+      };
+      return { select: () => chain };
+    },
+  } as never;
 }
 
 beforeEach(() => {
@@ -158,21 +198,19 @@ describe("Generated note authorization — accepts_generated_notes flag", () => 
       data: { note: mockNote, version: mockVersion },
       error: null,
     });
-    // Mock supabase.from(...).select(...) chain for notePathExists
-    const mockSupabase = {
-      rpc: mockRpc,
-      from: vi.fn().mockReturnThis(),
-      select: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockReturnThis(),
-      neq: vi.fn().mockReturnThis(),
-      maybeSingle: vi.fn().mockResolvedValue({ data: null }), // no path collision
-    } as never;
+    // Mock supabase: serves the quota read (free tier, 0 proposals used) and
+    // the notePathExists lookup (no path collision). See makeQuotaAwareClient.
+    const mockSupabase = makeQuotaAwareClient({ proposalsUsed: 0, rpc: mockRpc });
 
     const result = await createGeneratedNote(mockSupabase, ctx, {
       folder_id: FOLDER_ID,
       title: "Test Note",
     });
 
+    // Under-limit success returns a GeneratedNoteResult, not a quota error.
+    if (isQuotaExceeded(result)) {
+      throw new Error("expected a note result, got quota_exceeded");
+    }
     expect(result.note.is_generated).toBe(true);
     expect(result.note.generated_by_connection_id).toBe(CONN_ID);
     expect(mockRpc).toHaveBeenCalledWith(
@@ -182,5 +220,35 @@ describe("Generated note authorization — accepts_generated_notes flag", () => 
         p_connection_id: CONN_ID,
       })
     );
+  });
+});
+
+describe("Generated note authorization — plan paywall", () => {
+  it("returns quota_exceeded (without creating a note) when the period cap is hit", async () => {
+    const ctx = makeCtx();
+    vi.mocked(folderRepo.getFolderById).mockResolvedValue(makeFolder() as never);
+    vi.mocked(boxRepo.getBoxById).mockResolvedValue(makeBox() as never);
+
+    const mockRpc = vi.fn();
+    // Free tier limit is PROPOSAL_TIER_LIMITS.free; report usage at the cap so
+    // checkProposalQuota resolves allowed=false.
+    const mockSupabase = makeQuotaAwareClient({
+      proposalsUsed: PROPOSAL_TIER_LIMITS.free,
+      rpc: mockRpc,
+    });
+
+    const result = await createGeneratedNote(mockSupabase, ctx, {
+      folder_id: FOLDER_ID,
+      title: "Test Note",
+    });
+
+    expect(isQuotaExceeded(result)).toBe(true);
+    if (isQuotaExceeded(result)) {
+      expect(result.code).toBe("quota_exceeded");
+      expect(result.limit).toBe(PROPOSAL_TIER_LIMITS.free);
+      expect(result.used).toBe(PROPOSAL_TIER_LIMITS.free);
+    }
+    // The meter runs before any write — the create RPC must not be called.
+    expect(mockRpc).not.toHaveBeenCalled();
   });
 });

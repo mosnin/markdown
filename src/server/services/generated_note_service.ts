@@ -11,6 +11,15 @@ import {
   auditGeneratedNoteCreated,
   auditGeneratedNotePromoted,
 } from "@/server/services/audit_service";
+import {
+  checkProposalQuota,
+  quotaExceeded,
+  type QuotaExceededResult,
+} from "@/server/services/proposal_quota_service";
+
+// Re-export so callers can narrow a `createGeneratedNote` union result
+// without importing the quota service directly (mirrors write_proposal_service).
+export { isQuotaExceeded } from "@/server/services/proposal_quota_service";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -110,13 +119,23 @@ function defaultTitle(connectionName: string): string {
  * 3. folder.box_id must be in ctx.allowedBoxIds
  * 4. folder.accepts_generated_notes must be true
  *
+ * Plan paywall:
+ *   Generated notes are a write into the workspace just like an approved
+ *   write proposal, so they share the same per-tier, per-billing-period
+ *   meter (`checkProposalQuota`). When the workspace has exhausted its
+ *   allowance this returns a typed `QuotaExceededResult`
+ *   (`{ ok: false, code: "quota_exceeded", limit, used, upgradeUrl }`)
+ *   INSTEAD OF throwing — the under-limit success shape is unchanged
+ *   (`GeneratedNoteResult`), so callers narrow with `isQuotaExceeded`
+ *   before using the note. This mirrors `createProposal`.
+ *
  * Calls the atomic `create_generated_note_with_version` SQL function.
  */
 export async function createGeneratedNote(
   adminClient: SupabaseClient,
   ctx: ConnectionRequestContext,
   input: CreateGeneratedNoteInput
-): Promise<GeneratedNoteResult> {
+): Promise<GeneratedNoteResult | QuotaExceededResult> {
   // Permission check
   if (ctx.connection.permission_mode !== PERMISSION_MODE.GENERATE_IN_ALLOWED_FOLDERS) {
     throw new Error(
@@ -147,6 +166,18 @@ export async function createGeneratedNote(
   const box = await getBoxById(adminClient, boxId);
   if (!box || box.workspace_id !== ctx.connection.workspace_id || box.status === "trashed") {
     throw new Error("Box not found");
+  }
+
+  // ── Plan paywall ──────────────────────────────────────────────────────────
+  // Meter the write against the per-tier, per-billing-period allowance once
+  // the request is fully authorized but BEFORE the insert RPC. Returning (not
+  // throwing) lets the MCP and in-app callers surface a clean "upgrade"
+  // response, exactly like createProposal. Placed after the authorization
+  // checks so a malformed/forbidden request still gets a precise 403/404
+  // rather than a paywall, and so nothing is written when over quota.
+  const quota = await checkProposalQuota(adminClient, ctx.connection.workspace_id);
+  if (!quota.allowed) {
+    return quotaExceeded(quota);
   }
 
   // Title resolution

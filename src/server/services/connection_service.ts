@@ -31,6 +31,8 @@ import {
   auditTokenRotated,
 } from "@/server/services/audit_service";
 import { cancelPendingProposalsByConnection } from "@/server/services/write_proposal_service";
+import { checkConnectedAgentQuota } from "@/server/services/proposal_quota_service";
+import { UPGRADE_URL } from "@/server/domain/constants/proposal_quota";
 
 // ─── Token expiry defaults ────────────────────────────────────────────────────
 
@@ -113,6 +115,21 @@ export async function createConnection(
   actorId: string,
   input: CreateConnectionInput
 ): Promise<CreateConnectionResult> {
+  // Per-tier connected-agent cap. Enforce BEFORE inserting the row so a
+  // workspace at its limit can't create another connection.
+  //
+  // NOTE: OAuth/MCP agents authenticate without creating `connections` rows
+  // (they carry a synthetic `oauth:<client_id>` context — see api/mcp/route.ts),
+  // so `checkConnectedAgentQuota` only counts legacy csk_v1_ connections. This
+  // cap therefore currently only meters legacy connections — a known design
+  // gap. Do NOT re-architect it here.
+  const quota = await checkConnectedAgentQuota(supabase, workspaceId);
+  if (!quota.allowed) {
+    throw new Error(
+      `Connected-agent limit reached: ${quota.used}/${quota.limit} on the ${quota.tier} plan. Upgrade at ${UPGRADE_URL} to add more connections.`
+    );
+  }
+
   const connection = await repoCreateConnection(supabase, {
     workspace_id: workspaceId,
     name: input.name,
