@@ -11,6 +11,7 @@ import {
   GitBranch,
   GitFork,
   Network,
+  Plug,
   Plus,
   Puzzle,
 } from "lucide-react";
@@ -239,6 +240,14 @@ export function AppSidebar({
                 icon={Home01Icon}
                 label="Home"
                 isActive={pathname === "/app"}
+              />
+            </m.li>
+            <m.li {...listItemProps}>
+              <NavItem
+                href="/app/connect"
+                icon={Plug}
+                label="Connect agent"
+                isActive={pathname === "/app/connect" || pathname.startsWith("/app/connect/")}
               />
             </m.li>
             <m.li {...listItemProps}>

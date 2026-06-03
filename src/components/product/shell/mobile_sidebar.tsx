@@ -11,6 +11,7 @@ import {
   Inbox,
   Menu,
   Network,
+  Plug,
   Plus,
   Puzzle,
   X,
@@ -46,6 +47,7 @@ const FOCUSED_NAV: boolean = true;
 
 const coreNav = [
   { label: "Home", href: "/app", icon: Home },
+  { label: "Connect agent", href: "/app/connect", icon: Plug },
   { label: "AI Edits", href: "/app/proposals", icon: Inbox },
 ];
 
