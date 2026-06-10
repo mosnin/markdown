@@ -69,6 +69,15 @@
 --   { quota_exceeded: true, limit: <int>, used: <int> }   (nothing inserted)
 -- ---------------------------------------------------------------------------
 
+-- Drop the prior 11-argument signature first. Adding the two new trailing
+-- parameters below does NOT replace it — Postgres treats a different argument
+-- list as a distinct overload, which would leave two same-named functions and
+-- make PostgREST rpc() / positional calls ambiguous ("function is not unique").
+-- Remove the old one so only the quota-gated 13-arg version exists.
+DROP FUNCTION IF EXISTS public.create_generated_note_with_version(
+  uuid, uuid, text, text, text, text, text, text[], text, integer, uuid
+);
+
 CREATE OR REPLACE FUNCTION public.create_generated_note_with_version(
   p_box_id              uuid,
   p_folder_id           uuid,
