@@ -27,6 +27,15 @@ export const runtime = "nodejs";
  *   the flag's contract is that it gates Creem sync — so we SKIP the
  *   plan/status write rather than let a later Creem event clobber the
  *   override. See `isManuallyOverridden`.
+ *
+ * Idempotency / replay protection:
+ *   Creem retries failed deliveries and may redeliver old events, so a stale
+ *   event (e.g. an old `subscription.canceled` redelivered after a renewal)
+ *   could clobber current plan/status. Every flat callback payload carries a
+ *   unique `webhookId`; at the start of each handler we record it in
+ *   `processed_webhook_events` (PRIMARY KEY) via the admin client. If the id
+ *   was already recorded the event is a replay and the handler no-ops. See
+ *   `markWebhookProcessed`.
  */
 function getWebhookHandler() {
   const secret = process.env.CREEM_WEBHOOK_SECRET;
@@ -37,7 +46,15 @@ function getWebhookHandler() {
     webhookSecret: secret,
 
   // ── checkout.completed ─────────────────────────────────────────────────────
-  onCheckoutCompleted: async ({ id, product, customer, subscription, metadata }) => {
+  onCheckoutCompleted: async ({ id, webhookId, webhookEventType, product, customer, subscription, metadata }) => {
+    const adminClient = createAdminClient();
+
+    // Replay guard: a redelivered, signature-valid event must not be processed
+    // twice. Skip if we have already recorded this webhook id.
+    if (!(await markWebhookProcessed(adminClient, webhookId, webhookEventType))) {
+      return;
+    }
+
     const workspaceId = typeof metadata?.workspace_id === 'string' ? metadata.workspace_id : null;
 
     if (!workspaceId) {
@@ -47,8 +64,6 @@ function getWebhookHandler() {
       );
       return;
     }
-
-    const adminClient = createAdminClient();
 
     // Admin-comped workspaces are pinned by `manually_overridden`; a later
     // Creem checkout must not silently downgrade/clobber them.
@@ -98,11 +113,15 @@ function getWebhookHandler() {
   // ── subscription.active ────────────────────────────────────────────────────
   onSubscriptionActive: async ({
     id,
+    webhookId,
+    webhookEventType,
     customer,
     current_period_end_date,
     metadata,
   }) => {
     await upsertSubscription({
+      webhookId,
+      webhookEventType,
       subscriptionId: id,
       customerId: typeof customer === "object" ? customer.id : undefined,
       periodEnd:
@@ -118,11 +137,15 @@ function getWebhookHandler() {
   // ── subscription.paid ──────────────────────────────────────────────────────
   onSubscriptionPaid: async ({
     id,
+    webhookId,
+    webhookEventType,
     customer,
     current_period_end_date,
     metadata,
   }) => {
     await upsertSubscription({
+      webhookId,
+      webhookEventType,
       subscriptionId: id,
       customerId: typeof customer === "object" ? customer.id : undefined,
       periodEnd:
@@ -136,8 +159,10 @@ function getWebhookHandler() {
   },
 
   // ── subscription.canceled ──────────────────────────────────────────────────
-  onSubscriptionCanceled: async ({ id, customer, metadata }) => {
+  onSubscriptionCanceled: async ({ id, webhookId, webhookEventType, customer, metadata }) => {
     await upsertSubscription({
+      webhookId,
+      webhookEventType,
       subscriptionId: id,
       customerId: typeof customer === "object" ? customer.id : undefined,
       plan: "free",
@@ -147,8 +172,10 @@ function getWebhookHandler() {
   },
 
   // ── subscription.expired ───────────────────────────────────────────────────
-  onSubscriptionExpired: async ({ id, customer, metadata }) => {
+  onSubscriptionExpired: async ({ id, webhookId, webhookEventType, customer, metadata }) => {
     await upsertSubscription({
+      webhookId,
+      webhookEventType,
       subscriptionId: id,
       customerId: typeof customer === "object" ? customer.id : undefined,
       plan: "free",
@@ -158,8 +185,10 @@ function getWebhookHandler() {
   },
 
   // ── subscription.past_due ──────────────────────────────────────────────────
-  onSubscriptionPastDue: async ({ id, customer, metadata }) => {
+  onSubscriptionPastDue: async ({ id, webhookId, webhookEventType, customer, metadata }) => {
     await upsertSubscription({
+      webhookId,
+      webhookEventType,
       subscriptionId: id,
       customerId: typeof customer === "object" ? customer.id : undefined,
       status: "past_due",
@@ -171,8 +200,10 @@ function getWebhookHandler() {
   // Creem's contract for a paused subscription is to revoke access. Drop the
   // workspace off paid provisioning (status != 'active') until it resumes;
   // leave the plan so the row stays linked for the eventual resume.
-  onSubscriptionPaused: async ({ id, customer, metadata }) => {
+  onSubscriptionPaused: async ({ id, webhookId, webhookEventType, customer, metadata }) => {
     await upsertSubscription({
+      webhookId,
+      webhookEventType,
       subscriptionId: id,
       customerId: typeof customer === "object" ? customer.id : undefined,
       status: "past_due",
@@ -183,8 +214,10 @@ function getWebhookHandler() {
   // ── subscription.unpaid ────────────────────────────────────────────────────
   // Dunning exhausted (payment never recovered) — treat as cancelled so the
   // workspace loses paid access, mirroring subscription.canceled/expired.
-  onSubscriptionUnpaid: async ({ id, customer, metadata }) => {
+  onSubscriptionUnpaid: async ({ id, webhookId, webhookEventType, customer, metadata }) => {
     await upsertSubscription({
+      webhookId,
+      webhookEventType,
       subscriptionId: id,
       customerId: typeof customer === "object" ? customer.id : undefined,
       plan: "free",
@@ -200,6 +233,8 @@ export const POST = getWebhookHandler();
 // ── Shared upsert helper ─────────────────────────────────────────────────────
 
 interface UpsertSubscriptionOptions {
+  webhookId: string;
+  webhookEventType: string;
   subscriptionId: string;
   customerId?: string;
   periodEnd?: string;
@@ -209,6 +244,8 @@ interface UpsertSubscriptionOptions {
 }
 
 async function upsertSubscription({
+  webhookId,
+  webhookEventType,
   subscriptionId,
   customerId,
   periodEnd,
@@ -216,6 +253,15 @@ async function upsertSubscription({
   status,
   metadata,
 }: UpsertSubscriptionOptions): Promise<void> {
+  const adminClient = createAdminClient();
+
+  // Replay guard: a redelivered, signature-valid event must not be processed
+  // twice (e.g. a stale `subscription.canceled` redelivered after a renewal
+  // would otherwise downgrade the workspace). Skip if already recorded.
+  if (!(await markWebhookProcessed(adminClient, webhookId, webhookEventType))) {
+    return;
+  }
+
   const workspaceId = typeof metadata?.workspace_id === 'string' ? metadata.workspace_id : null;
 
   if (!workspaceId) {
@@ -224,8 +270,6 @@ async function upsertSubscription({
     );
     return;
   }
-
-  const adminClient = createAdminClient();
 
   const row: Record<string, unknown> = { workspace_id: workspaceId };
 
@@ -264,6 +308,54 @@ async function upsertSubscription({
     );
     throw error; // causes the handler to return 500 so Creem retries
   }
+}
+
+// ── Idempotency / replay guard ───────────────────────────────────────────────
+
+/**
+ * Records a webhook event the first time it is seen, returning whether the
+ * caller should proceed.
+ *
+ * The Creem adapter has already verified the signature, but Creem retries
+ * failed deliveries and may redeliver stale events; a replayed
+ * `subscription.canceled` arriving after a renewal would otherwise clobber the
+ * workspace back to free/cancelled. We dedup on the adapter-supplied unique
+ * `webhookId` by inserting it into `processed_webhook_events` (PRIMARY KEY).
+ *
+ *   - Insert succeeds → first time we've seen this event; returns true (proceed).
+ *   - Unique violation (23505) → already processed; returns false (no-op).
+ *   - Any other error → re-thrown so the handler returns 500 and Creem retries;
+ *     we never silently process (or skip) an event whose dedup state is unknown.
+ */
+async function markWebhookProcessed(
+  adminClient: SupabaseClient,
+  webhookId: string,
+  eventType: string
+): Promise<boolean> {
+  const { error } = await adminClient
+    .from("processed_webhook_events")
+    .insert({ webhook_id: webhookId, event_type: eventType });
+
+  if (!error) return true;
+
+  // Postgres unique-violation: this event id is already recorded, so it is a
+  // replay. Swallow it and tell the caller to no-op.
+  if (
+    (error as { code?: string }).code === "23505" ||
+    /duplicate key|unique/i.test(error.message ?? "")
+  ) {
+    console.info(
+      "Creem webhook: duplicate event ignored (replay protection)",
+      { webhookId, eventType }
+    );
+    return false;
+  }
+
+  console.error(
+    "Creem webhook: failed to record processed event id",
+    { webhookId, eventType, error }
+  );
+  throw error; // causes the handler to return 500 so Creem retries
 }
 
 // ── Admin-override guard ─────────────────────────────────────────────────────
