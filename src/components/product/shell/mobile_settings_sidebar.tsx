@@ -19,15 +19,13 @@ import {
   Users,
   X,
 } from "lucide-react";
+import * as m from "motion/react-m";
+import { staggerContainer, fadeRise } from "@/lib/motion";
 import { cn } from "@/lib/utils";
-import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-} from "@/components/ui/sheet";
+import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { MobileSidebarFooter } from "@/components/product/shell/mobile_sidebar_footer";
-import { Separator } from "@/components/ui/separator";
+import { MobileNavBackdrop } from "@/components/product/shell/mobile_nav_ascii_bg";
+import { GlyphReveal } from "@/components/product/shell/glyph_reveal";
 
 const accountNav = [
   { id: "profile", label: "Profile", icon: User },
@@ -77,9 +75,12 @@ interface MobileSettingsSidebarProps {
 }
 
 /**
- * Mobile variant of the Settings sidebar. Same sheet + primary-nav
- * layout as MobileSidebar so the mobile user sees a stable header,
- * but the body lists Settings sections instead of Home/Search/etc.
+ * Mobile variant of the Settings sidebar.
+ *
+ * Shares the full-screen launch-screen shell with MobileSidebar — the animated
+ * ASCII context-field backdrop and decrypt-in wordmark — so toggling between
+ * the main nav and Settings feels like one surface. The body lists Settings
+ * sections instead of Home/Connect/AI Edits.
  */
 export function MobileSettingsSidebar({
   userEmail,
@@ -90,9 +91,19 @@ export function MobileSettingsSidebar({
   const [open, setOpen] = useState(false);
   const pathname = usePathname();
 
+  // Accepted for API parity with the desktop sidebar; switching happens at
+  // /app/workspaces (no nested popup primitives inside the sheet).
+  void workspaceId;
+  void workspaces;
+
   function close() {
     setOpen(false);
   }
+
+  const sectionLabel =
+    "font-mono text-[10px] uppercase tracking-[0.18em] text-sidebar-foreground/40";
+  const rowBase =
+    "flex items-center gap-3 rounded-xl px-3.5 py-3 text-sm transition-fast text-sidebar-foreground/75 hover:bg-sidebar-accent/60 hover:text-sidebar-foreground";
 
   return (
     <>
@@ -101,7 +112,7 @@ export function MobileSettingsSidebar({
         className={cn(
           "flex items-center justify-center rounded-md p-2",
           "text-foreground/70 hover:bg-accent hover:text-foreground",
-          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         )}
         aria-label="Open settings menu"
         aria-expanded={open}
@@ -115,165 +126,178 @@ export function MobileSettingsSidebar({
           id="mobile-settings-sheet"
           side="left"
           showCloseButton={false}
-          className="w-72 p-0 bg-sidebar text-sidebar-foreground flex flex-col gap-0"
+          className="w-screen max-w-none border-0 p-0 bg-sidebar text-sidebar-foreground data-[side=left]:sm:max-w-none flex flex-col gap-0 overflow-hidden"
         >
-          <SheetHeader className="flex-row items-center justify-between border-b border-sidebar-border px-4 py-3">
-            <SheetTitle className="sr-only">Settings navigation</SheetTitle>
-            <button
-              onClick={close}
-              className={cn(
-                "ml-auto flex items-center justify-center rounded-md p-1.5",
-                "text-sidebar-foreground/60 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
-                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-              )}
-              aria-label="Close settings menu"
-            >
-              <X className="h-4 w-4" />
-            </button>
-          </SheetHeader>
+          <MobileNavBackdrop />
 
-          {/* Workspace label — inline only. See MobileSidebar for the
-              portal-collision rationale that banned nested popup
-              primitives inside this Sheet. */}
-          <div className="px-4 pt-3 pb-1">
-            <div className="flex items-center justify-between gap-2">
-              <div className="min-w-0">
-                <p className="text-[10px] font-semibold uppercase tracking-wider text-sidebar-foreground/40">
-                  Workspace
-                </p>
-                <p
-                  className="truncate text-sm font-semibold text-sidebar-foreground"
-                  title={workspaceName}
-                >
-                  {workspaceName}
-                </p>
-              </div>
-              <Link
-                href="/app/workspaces"
-                onClick={close}
-                className="shrink-0 rounded-md px-2 py-1 text-[11px] text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-              >
-                Manage
+          <SheetTitle className="sr-only">Settings navigation</SheetTitle>
+
+          <m.div
+            className="relative z-10 flex h-full flex-col overflow-hidden"
+            variants={staggerContainer(0.05, 0.04)}
+            initial="hidden"
+            animate="visible"
+          >
+            {/* Header — wordmark decrypts in, close button */}
+            <m.div
+              variants={fadeRise}
+              className="flex items-center justify-between px-5 pb-4"
+              style={{ paddingTop: "max(1.25rem, env(safe-area-inset-top))" }}
+            >
+              <Link href="/app" onClick={close} className="flex items-center gap-2.5">
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-violet-600 shadow-[0_0_24px_-4px] shadow-violet-600/60">
+                  <div className="h-3 w-3 rounded-sm bg-white" />
+                </div>
+                <GlyphReveal
+                  text="Poggle"
+                  className="font-display text-lg font-semibold tracking-tight text-sidebar-foreground"
+                  delayMs={40}
+                />
               </Link>
-            </div>
-          </div>
+              <button
+                onClick={close}
+                className={cn(
+                  "flex h-9 w-9 items-center justify-center rounded-lg transition-fast",
+                  "text-sidebar-foreground/60 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+                  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                )}
+                aria-label="Close settings menu"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </m.div>
 
-          <Separator className="mx-3 bg-sidebar-border" />
-
-          {/* Back to workspace */}
-          <nav aria-label="Navigation" className="px-2 pt-2 pb-1">
-            <Link
-              href="/app"
-              onClick={close}
-              className={cn(
-                "flex items-center gap-2.5 rounded-md px-2.5 py-2 text-sm",
-                "text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
-              )}
-            >
-              <ArrowLeft className="h-4 w-4 shrink-0" aria-hidden="true" />
-              <span>Back to workspace</span>
-            </Link>
-          </nav>
-
-          <Separator className="mx-2 my-1 bg-sidebar-border" />
-
-          <div className="flex items-center justify-between px-4 py-2">
-            <span className="text-[11px] font-semibold uppercase tracking-wider text-sidebar-foreground/40">
-              Settings
-            </span>
-          </div>
-
-          <nav aria-label="Settings sections" className="flex-1 overflow-y-auto px-2">
-            <ul className="flex flex-col gap-0.5 list-none">
-              {accountNav.map(({ id, label, icon: Icon }) => (
-                <li key={id}>
-                  <Link
-                    href={`/app/settings#settings-${id}`}
-                    onClick={close}
-                    className={cn(
-                      "flex items-center gap-2.5 rounded-md px-2.5 py-2 text-sm",
-                      "text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
-                    )}
+            {/* Workspace pill + back to workspace */}
+            <m.div variants={fadeRise} className="space-y-1 px-5 pb-1">
+              <div
+                className="flex items-center justify-between gap-2 rounded-xl px-3.5 py-2.5 border border-sidebar-border/60 bg-sidebar-accent/30 backdrop-blur-sm"
+              >
+                <span className="min-w-0">
+                  <span className="block font-mono text-[10px] uppercase tracking-[0.18em] text-violet-400/70">
+                    Workspace
+                  </span>
+                  <span
+                    className="block truncate font-display text-sm text-sidebar-foreground"
+                    title={workspaceName}
                   >
-                    <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
-                    <span>{label}</span>
-                  </Link>
-                </li>
-              ))}
-            </ul>
-            <div className="mt-4 px-2.5 py-1.5">
-              <span className="text-[11px] font-semibold uppercase tracking-wider text-sidebar-foreground/40">
-                Developer &amp; Apps
-              </span>
-            </div>
-            <ul className="flex flex-col gap-0.5 list-none">
-              {developerNav.map(({ href, label, subLabel, icon: Icon }) => {
-                const active = pathname === href;
-                return (
-                  <li key={href}>
-                    <Link
-                      href={href}
-                      onClick={close}
-                      aria-current={active ? "page" : undefined}
-                      className={cn(
-                        "flex items-start gap-2.5 rounded-md px-2.5 py-2 text-sm",
-                        "text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
-                        active && "bg-sidebar-accent text-sidebar-accent-foreground",
-                      )}
-                    >
-                      <Icon className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
-                      <span className="flex flex-col leading-tight">
-                        <span>{label}</span>
-                        <span className="text-[10px] text-sidebar-foreground/40">
-                          {subLabel}
-                        </span>
-                      </span>
-                    </Link>
-                  </li>
-                );
-              })}
-            </ul>
-            <div className="mt-4 px-2.5 py-1.5">
-              <span className="text-[11px] font-semibold uppercase tracking-wider text-sidebar-foreground/40">
-                Workspace admin
-              </span>
-            </div>
-            <ul className="flex flex-col gap-0.5 list-none">
-              {workspaceAdminNav.map(({ href, label, subLabel, icon: Icon }) => {
-                const active = pathname === href;
-                return (
-                  <li key={href}>
-                    <Link
-                      href={href}
-                      onClick={close}
-                      aria-current={active ? "page" : undefined}
-                      className={cn(
-                        "flex items-start gap-2.5 rounded-md px-2.5 py-2 text-sm",
-                        "text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
-                        active && "bg-sidebar-accent text-sidebar-accent-foreground",
-                      )}
-                    >
-                      <Icon className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
-                      <span className="flex flex-col leading-tight">
-                        <span>{label}</span>
-                        <span className="text-[10px] text-sidebar-foreground/40">
-                          {subLabel}
-                        </span>
-                      </span>
-                    </Link>
-                  </li>
-                );
-              })}
-            </ul>
-          </nav>
+                    {workspaceName}
+                  </span>
+                </span>
+                <Link
+                  href="/app/workspaces"
+                  onClick={close}
+                  className="shrink-0 rounded-md px-2 py-1 text-[11px] text-sidebar-foreground/60 hover:text-sidebar-foreground/90"
+                >
+                  Manage
+                </Link>
+              </div>
+            </m.div>
 
-          {/* Bottom chrome — inline (non-portaled). See
-              MobileSidebarFooter for the portal-collision rationale. */}
-          <MobileSidebarFooter
-            userEmail={userEmail}
-            isSettingsActive={pathname === "/app/settings"}
-            onNavigate={close}
-          />
+            {/* Back to workspace */}
+            <m.nav variants={fadeRise} aria-label="Navigation" className="px-3 pt-2">
+              <Link href="/app" onClick={close} className={rowBase}>
+                <ArrowLeft className="h-4 w-4 shrink-0" aria-hidden="true" />
+                <span className="font-display">Back to workspace</span>
+              </Link>
+            </m.nav>
+
+            <m.div variants={fadeRise} className="flex items-center gap-2 px-5 pb-1 pt-4">
+              <span className={sectionLabel}>Settings</span>
+              <span className="h-px flex-1 bg-sidebar-border/60" />
+            </m.div>
+
+            <nav
+              aria-label="Settings sections"
+              className="flex-1 overflow-y-auto px-3 pb-2"
+            >
+              <ul className="flex list-none flex-col gap-0.5">
+                {accountNav.map(({ id, label, icon: Icon }) => (
+                  <li key={id}>
+                    <Link
+                      href={`/app/settings#settings-${id}`}
+                      onClick={close}
+                      className={rowBase}
+                    >
+                      <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
+                      <span className="font-display">{label}</span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+
+              <div className="px-3.5 pb-1 pt-5">
+                <span className={sectionLabel}>Developer &amp; Apps</span>
+              </div>
+              <ul className="flex list-none flex-col gap-0.5">
+                {developerNav.map(({ href, label, subLabel, icon: Icon }) => {
+                  const active = pathname === href;
+                  return (
+                    <li key={href}>
+                      <Link
+                        href={href}
+                        onClick={close}
+                        aria-current={active ? "page" : undefined}
+                        className={cn(
+                          "flex items-start gap-3 rounded-xl px-3.5 py-3 text-sm transition-fast",
+                          "text-sidebar-foreground/75 hover:bg-sidebar-accent/60 hover:text-sidebar-foreground",
+                          active && "bg-sidebar-accent text-sidebar-accent-foreground"
+                        )}
+                      >
+                        <Icon className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+                        <span className="flex flex-col leading-tight">
+                          <span className="font-display">{label}</span>
+                          <span className="text-[10px] text-sidebar-foreground/40">
+                            {subLabel}
+                          </span>
+                        </span>
+                      </Link>
+                    </li>
+                  );
+                })}
+              </ul>
+
+              <div className="px-3.5 pb-1 pt-5">
+                <span className={sectionLabel}>Workspace admin</span>
+              </div>
+              <ul className="flex list-none flex-col gap-0.5">
+                {workspaceAdminNav.map(({ href, label, subLabel, icon: Icon }) => {
+                  const active = pathname === href;
+                  return (
+                    <li key={href}>
+                      <Link
+                        href={href}
+                        onClick={close}
+                        aria-current={active ? "page" : undefined}
+                        className={cn(
+                          "flex items-start gap-3 rounded-xl px-3.5 py-3 text-sm transition-fast",
+                          "text-sidebar-foreground/75 hover:bg-sidebar-accent/60 hover:text-sidebar-foreground",
+                          active && "bg-sidebar-accent text-sidebar-accent-foreground"
+                        )}
+                      >
+                        <Icon className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+                        <span className="flex flex-col leading-tight">
+                          <span className="font-display">{label}</span>
+                          <span className="text-[10px] text-sidebar-foreground/40">
+                            {subLabel}
+                          </span>
+                        </span>
+                      </Link>
+                    </li>
+                  );
+                })}
+              </ul>
+            </nav>
+
+            {/* Bottom chrome — inline (non-portaled). See MobileSidebarFooter
+                for the portal-collision rationale. */}
+            <div style={{ paddingBottom: "env(safe-area-inset-bottom)" }}>
+              <MobileSidebarFooter
+                userEmail={userEmail}
+                isSettingsActive={pathname === "/app/settings"}
+                onNavigate={close}
+              />
+            </div>
+          </m.div>
         </SheetContent>
       </Sheet>
     </>
