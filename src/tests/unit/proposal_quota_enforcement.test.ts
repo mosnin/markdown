@@ -3,36 +3,59 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 /**
  * Unit tests for the write-proposal PAYWALL.
  *
- * Two layers are covered:
+ * Enforcement is ATOMIC: rather than count-then-insert (which races — see the
+ * TOCTOU bug fixed in migration 20260501000002), `createProposal` resolves the
+ * tier/limit/period window up front and delegates the count + cap + insert to
+ * `createWriteProposalGuarded`, whose RPC takes a per-workspace advisory lock
+ * so concurrent writers serialize. The public contract is unchanged:
  *
  *  1. The enforcement *gate* in `createProposal` (write_proposal_service.ts):
- *     - under limit  → proposal is created (success shape unchanged).
- *     - over limit   → typed `{ ok:false, code:"quota_exceeded", ... }`
- *                      result; no proposal is created and nothing throws.
+ *     - under limit  → proposal is created (success shape unchanged); the
+ *                      guarded insert returns the new row.
+ *     - over limit   → the guarded insert returns a quota signal and inserts
+ *                      nothing; `createProposal` maps it to a typed
+ *                      `{ ok:false, code:"quota_exceeded", ... }` result and
+ *                      does NOT throw.
  *
- *  2. The `checkProposalQuota` resolver (proposal_quota_service.ts):
+ *  2. The `checkProposalQuota` resolver (proposal_quota_service.ts) still
+ *     exists for read-only status surfaces:
  *     - under limit  → allowed.
  *     - at/over limit → not allowed.
  *     - fails CLOSED when the usage count errors.
  *
- * The gate tests mock the quota service so we can drive both branches
- * deterministically without standing up a Supabase double. The resolver
- * tests drive a hand-rolled Supabase mock to exercise the real counting
- * logic.
+ * The gate tests mock the quota resolver + the guarded insert so we can drive
+ * both branches deterministically. The resolver tests drive a hand-rolled
+ * Supabase mock to exercise the real counting logic.
  */
 
 // ─── Mocks for the gate-level tests ────────────────────────────────────────────
 vi.mock("@/server/repositories/note_repository");
 vi.mock("@/server/repositories/folder_repository");
-vi.mock("@/server/repositories/write_proposal_repository");
+// Keep the real `isGuardedQuotaExceeded` discriminator; mock the data fns.
+vi.mock("@/server/repositories/write_proposal_repository", async (importActual) => {
+  const actual =
+    await importActual<typeof import("@/server/repositories/write_proposal_repository")>();
+  return {
+    ...actual,
+    createWriteProposalGuarded: vi.fn(),
+  };
+});
 vi.mock("@/server/services/audit_service");
 vi.mock("@/server/services/proposal_quota_service", async (importActual) => {
   const actual =
     await importActual<typeof import("@/server/services/proposal_quota_service")>();
   return {
     ...actual,
-    // Default: allow. Individual tests override per-case.
-    checkProposalQuota: vi.fn(),
+    // The resolver only returns tier/limit/period now; the count + gate live
+    // in the guarded insert. Default to free-tier context. (Literal 20 — the
+    // free PROPOSAL_TIER_LIMIT — because this factory is hoisted above imports
+    // and cannot reference the imported constant.)
+    resolveProposalQuotaContext: vi.fn().mockResolvedValue({
+      tier: "free",
+      limit: 20,
+      periodStart: new Date("2026-06-01T00:00:00Z"),
+      periodEnd: new Date("2099-01-01T00:00:00Z"),
+    }),
   };
 });
 
@@ -99,15 +122,9 @@ beforeEach(() => {
 
 describe("createProposal — paywall enforcement", () => {
   it("under limit → proposal is created (unchanged success shape)", async () => {
-    vi.mocked(quotaService.checkProposalQuota).mockResolvedValue({
-      tier: "free",
-      limit: PROPOSAL_TIER_LIMITS.free,
-      used: 3,
-      allowed: true,
-      resetsAt: new Date("2099-01-01T00:00:00Z"),
-    });
     vi.mocked(noteRepo.getNoteById).mockResolvedValue(makeNote() as never);
-    vi.mocked(proposalRepo.createWriteProposal).mockResolvedValue(
+    // The guarded insert returns the created row when under cap.
+    vi.mocked(proposalRepo.createWriteProposalGuarded).mockResolvedValue(
       makeProposalRow() as never
     );
 
@@ -123,21 +140,26 @@ describe("createProposal — paywall enforcement", () => {
       expect(result.id).toBe("proposal-1");
       expect(result.proposal_type).toBe("update_note");
     }
-    expect(proposalRepo.createWriteProposal).toHaveBeenCalledTimes(1);
+    expect(proposalRepo.createWriteProposalGuarded).toHaveBeenCalledTimes(1);
+    // The cap is enforced atomically inside the guarded insert: the resolved
+    // limit + period-start are handed to it so the RPC counts + inserts under
+    // a per-workspace lock.
+    expect(proposalRepo.createWriteProposalGuarded).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ workspace_id: WORKSPACE_ID }),
+      expect.objectContaining({ limit: PROPOSAL_TIER_LIMITS.free })
+    );
   });
 
   it("over limit → returns quota_exceeded and creates nothing", async () => {
-    vi.mocked(quotaService.checkProposalQuota).mockResolvedValue({
-      tier: "free",
+    vi.mocked(noteRepo.getNoteById).mockResolvedValue(makeNote() as never);
+    // Atomic over-cap: the guarded insert refuses and signals quota-exceeded
+    // WITHOUT inserting (the insert never runs inside the locked transaction).
+    vi.mocked(proposalRepo.createWriteProposalGuarded).mockResolvedValue({
+      quota_exceeded: true,
       limit: PROPOSAL_TIER_LIMITS.free,
       used: PROPOSAL_TIER_LIMITS.free,
-      allowed: false,
-      resetsAt: new Date("2099-01-01T00:00:00Z"),
-    });
-    vi.mocked(noteRepo.getNoteById).mockResolvedValue(makeNote() as never);
-    vi.mocked(proposalRepo.createWriteProposal).mockResolvedValue(
-      makeProposalRow() as never
-    );
+    } as never);
 
     const result = await createProposal({} as never, makeCtx(), {
       proposal_type: "update_note",
@@ -153,9 +175,9 @@ describe("createProposal — paywall enforcement", () => {
       expect(result.used).toBe(PROPOSAL_TIER_LIMITS.free);
       expect(result.upgradeUrl).toBe("/pricing");
     }
-    // No proposal row written, no ownership lookups performed.
-    expect(proposalRepo.createWriteProposal).not.toHaveBeenCalled();
-    expect(noteRepo.getNoteById).not.toHaveBeenCalled();
+    // The over-limit decision and the (suppressed) insert are one atomic unit
+    // in the RPC, so the "created" audit must not fire.
+    expect(auditService.auditWriteProposalCreated).not.toHaveBeenCalled();
   });
 
   it("still enforces the permission check before the paywall", async () => {
@@ -169,7 +191,9 @@ describe("createProposal — paywall enforcement", () => {
         proposed_content: "# hello",
       })
     ).rejects.toThrow("permission");
-    // Permission rejection happens before we even consult the quota.
-    expect(quotaService.checkProposalQuota).not.toHaveBeenCalled();
+    // Permission rejection happens before we even resolve the quota window or
+    // attempt the guarded insert.
+    expect(quotaService.resolveProposalQuotaContext).not.toHaveBeenCalled();
+    expect(proposalRepo.createWriteProposalGuarded).not.toHaveBeenCalled();
   });
 });

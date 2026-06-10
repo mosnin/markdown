@@ -13,7 +13,8 @@ import {
   getWriteProposalById,
   listWriteProposalsByWorkspace,
   listWriteProposalsByConnection,
-  createWriteProposal,
+  createWriteProposalGuarded,
+  isGuardedQuotaExceeded,
   updateWriteProposal,
   type CreateWriteProposalInput,
 } from "@/server/repositories/write_proposal_repository";
@@ -33,8 +34,9 @@ import {
   recordChangeSetItem,
 } from "@/server/services/change_set_service";
 import {
-  checkProposalQuota,
-  quotaExceeded,
+  resolveProposalQuotaContext,
+  quotaExceededFrom,
+  type ProposalQuotaContext,
   type QuotaExceededResult,
 } from "@/server/services/proposal_quota_service";
 
@@ -207,6 +209,12 @@ async function resolveObjectWithPermission(
  *     INSTEAD OF throwing. The under-limit success shape is unchanged
  *     (still a `WriteProposal`), so callers narrow with `isQuotaExceeded`
  *     / a `"code" in result` check before using the proposal.
+ *   - Enforcement is ATOMIC: rather than count-then-insert (which races and
+ *     lets N concurrent writers all pass the check at used == limit-1), the
+ *     cap is counted and applied inside the same DB transaction as the insert
+ *     via `createWriteProposalGuarded` (a per-workspace advisory lock). This
+ *     function only resolves the tier/limit/period window up front; the
+ *     count + insert happen as one serialized unit per workspace.
  */
 export async function createProposal(
   adminClient: SupabaseClient,
@@ -217,27 +225,27 @@ export async function createProposal(
     throw new Error("Connection does not have write proposal permission");
   }
 
-  // ── Plan paywall ──────────────────────────────────────────────────────────
-  // Enforce the per-tier, per-billing-period write-proposal cap before any
-  // ownership lookups or inserts. Returning (not throwing) keeps the MCP and
-  // in-app callers able to surface a clean "upgrade" response.
-  const quota = await checkProposalQuota(adminClient, ctx.workspaceId);
-  if (!quota.allowed) {
-    return quotaExceeded(quota);
-  }
+  // ── Plan paywall (atomic) ───────────────────────────────────────────────────
+  // Resolve the per-tier limit + billing-period window now, but defer the
+  // usage count to the guarded insert RPC so it happens atomically with the
+  // insert (closes the check-then-insert TOCTOU). Ownership lookups below run
+  // first so a malformed/forbidden request still yields a precise 4xx; the
+  // guarded insert then either creates the row or returns quota-exceeded
+  // WITHOUT inserting — and we surface that as a typed result, never a throw.
+  const quota = await resolveProposalQuotaContext(adminClient, ctx.workspaceId);
 
   const { proposal_type } = input;
 
   // ── Note proposals ────────────────────────────────────────────────────────
 
   if (NOTE_PROPOSAL_TYPES.has(proposal_type as (typeof PROPOSAL_TYPE)[keyof typeof PROPOSAL_TYPE])) {
-    return _createNoteProposal(adminClient, ctx, input as CreateNoteProposalInput);
+    return _createNoteProposal(adminClient, ctx, input as CreateNoteProposalInput, quota);
   }
 
   // ── Object proposals ──────────────────────────────────────────────────────
 
   if (OBJECT_PROPOSAL_TYPES.has(proposal_type as (typeof PROPOSAL_TYPE)[keyof typeof PROPOSAL_TYPE])) {
-    return _createObjectProposal(adminClient, ctx, input as CreateObjectProposalInput);
+    return _createObjectProposal(adminClient, ctx, input as CreateObjectProposalInput, quota);
   }
 
   throw new Error(`Unknown proposal_type: ${proposal_type}`);
@@ -246,8 +254,9 @@ export async function createProposal(
 async function _createNoteProposal(
   adminClient: SupabaseClient,
   ctx: ConnectionRequestContext,
-  input: CreateNoteProposalInput
-): Promise<WriteProposal> {
+  input: CreateNoteProposalInput,
+  quota: ProposalQuotaContext
+): Promise<WriteProposal | QuotaExceededResult> {
   const { proposal_type } = input;
   let target_note_id: string | null = null;
   let target_version_id: string | null = null;
@@ -309,7 +318,14 @@ async function _createNoteProposal(
     rationale: input.rationale ?? null,
   };
 
-  const proposal = await createWriteProposal(adminClient, createInput);
+  const result = await createWriteProposalGuarded(adminClient, createInput, {
+    limit: quota.limit,
+    periodStart: quota.periodStart,
+  });
+  if (isGuardedQuotaExceeded(result)) {
+    return quotaExceededFrom(result.limit, result.used);
+  }
+  const proposal = result;
 
   auditWriteProposalCreated(adminClient, ctx.workspaceId, ctx.connection.id, proposal.id, {
     proposal_type,
@@ -324,8 +340,9 @@ async function _createNoteProposal(
 async function _createObjectProposal(
   adminClient: SupabaseClient,
   ctx: ConnectionRequestContext,
-  input: CreateObjectProposalInput
-): Promise<WriteProposal> {
+  input: CreateObjectProposalInput,
+  quota: ProposalQuotaContext
+): Promise<WriteProposal | QuotaExceededResult> {
   const { proposal_type } = input;
 
   const objectType =
@@ -375,7 +392,14 @@ async function _createObjectProposal(
     rationale: input.rationale ?? null,
   };
 
-  const proposal = await createWriteProposal(adminClient, createInput);
+  const result = await createWriteProposalGuarded(adminClient, createInput, {
+    limit: quota.limit,
+    periodStart: quota.periodStart,
+  });
+  if (isGuardedQuotaExceeded(result)) {
+    return quotaExceededFrom(result.limit, result.used);
+  }
+  const proposal = result;
 
   auditWriteProposalCreated(adminClient, ctx.workspaceId, ctx.connection.id, proposal.id, {
     proposal_type,

@@ -13,23 +13,37 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 vi.mock("@/server/repositories/note_repository");
 vi.mock("@/server/repositories/box_repository");
 vi.mock("@/server/repositories/folder_repository");
-vi.mock("@/server/repositories/write_proposal_repository");
+// Mock the repo but keep the real `isGuardedQuotaExceeded` discriminator so a
+// returned proposal row is correctly distinguished from a quota signal.
+vi.mock("@/server/repositories/write_proposal_repository", async (importActual) => {
+  const actual =
+    await importActual<typeof import("@/server/repositories/write_proposal_repository")>();
+  return {
+    ...actual,
+    getWriteProposalById: vi.fn(),
+    listWriteProposalsByWorkspace: vi.fn(),
+    listWriteProposalsByConnection: vi.fn(),
+    createWriteProposalGuarded: vi.fn(),
+    updateWriteProposal: vi.fn(),
+  };
+});
 vi.mock("@/server/services/audit_service");
 
 // Quota enforcement has its own suite (proposal_quota_service.test.ts).
-// Here we stub it to "allowed" so these permission/ownership tests stay
-// focused on the proposal logic and aren't gated by the paywall.
+// The cap is now enforced atomically inside the guarded insert RPC, so the
+// service only resolves the tier/limit/period window up front. Stub that
+// resolver (the count + gate live in createWriteProposalGuarded, mocked in the
+// repo below) so these permission/ownership tests aren't gated by the paywall.
 vi.mock("@/server/services/proposal_quota_service", async (importActual) => {
   const actual =
     await importActual<typeof import("@/server/services/proposal_quota_service")>();
   return {
     ...actual,
-    checkProposalQuota: vi.fn().mockResolvedValue({
+    resolveProposalQuotaContext: vi.fn().mockResolvedValue({
       tier: "free",
       limit: 20,
-      used: 0,
-      allowed: true,
-      resetsAt: new Date("2099-01-01T00:00:00Z"),
+      periodStart: new Date("2026-06-01T00:00:00Z"),
+      periodEnd: new Date("2099-01-01T00:00:00Z"),
     }),
   };
 });
@@ -124,6 +138,12 @@ beforeEach(() => {
   vi.mocked(auditService.auditWriteProposalApproved).mockReturnValue(undefined as never);
   vi.mocked(auditService.auditWriteProposalRejected).mockReturnValue(undefined as never);
   vi.mocked(auditService.auditWriteProposalConflicted).mockReturnValue(undefined as never);
+  // The guarded insert is the atomic count+insert; default it to a created
+  // proposal. `isGuardedQuotaExceeded` is the real impl (see the repo mock),
+  // so a returned row is treated as a proposal, not a quota signal.
+  vi.mocked(proposalRepo.createWriteProposalGuarded).mockResolvedValue(
+    makeProposal() as never
+  );
 });
 
 describe("createProposal — permission checks", () => {
@@ -142,7 +162,7 @@ describe("createProposal — permission checks", () => {
   it("allows propose_writes permission", async () => {
     const ctx = makeCtx(PERMISSION_MODE.PROPOSE_WRITES);
     vi.mocked(noteRepo.getNoteById).mockResolvedValue(makeNote() as never);
-    vi.mocked(proposalRepo.createWriteProposal).mockResolvedValue(
+    vi.mocked(proposalRepo.createWriteProposalGuarded).mockResolvedValue(
       makeProposal() as never
     );
 
@@ -156,7 +176,7 @@ describe("createProposal — permission checks", () => {
   it("allows generate_in_allowed_folders permission for create_note", async () => {
     const ctx = makeCtx(PERMISSION_MODE.GENERATE_IN_ALLOWED_FOLDERS);
     vi.mocked(folderRepo.getFolderById).mockResolvedValue(makeFolder() as never);
-    vi.mocked(proposalRepo.createWriteProposal).mockResolvedValue(
+    vi.mocked(proposalRepo.createWriteProposalGuarded).mockResolvedValue(
       makeProposal({ proposal_type: "create_note" }) as never
     );
 

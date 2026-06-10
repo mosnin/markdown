@@ -12,8 +12,8 @@ import {
   auditGeneratedNotePromoted,
 } from "@/server/services/audit_service";
 import {
-  checkProposalQuota,
-  quotaExceeded,
+  resolveProposalQuotaContext,
+  quotaExceededFrom,
   type QuotaExceededResult,
 } from "@/server/services/proposal_quota_service";
 
@@ -122,12 +122,19 @@ function defaultTitle(connectionName: string): string {
  * Plan paywall:
  *   Generated notes are a write into the workspace just like an approved
  *   write proposal, so they share the same per-tier, per-billing-period
- *   meter (`checkProposalQuota`). When the workspace has exhausted its
- *   allowance this returns a typed `QuotaExceededResult`
+ *   meter. When the workspace has exhausted its allowance this returns a
+ *   typed `QuotaExceededResult`
  *   (`{ ok: false, code: "quota_exceeded", limit, used, upgradeUrl }`)
  *   INSTEAD OF throwing — the under-limit success shape is unchanged
  *   (`GeneratedNoteResult`), so callers narrow with `isQuotaExceeded`
  *   before using the note. This mirrors `createProposal`.
+ *
+ *   Enforcement is ATOMIC: the limit + period-start are passed to
+ *   `create_generated_note_with_version`, which takes a per-workspace
+ *   advisory lock, counts period usage, and inserts only when under cap —
+ *   all in one transaction. This closes the check-then-insert TOCTOU where
+ *   concurrent generators could each pass a count at used == limit-1 and all
+ *   write. The over-cap branch returns a quota signal and writes nothing.
  *
  * Calls the atomic `create_generated_note_with_version` SQL function.
  */
@@ -168,17 +175,17 @@ export async function createGeneratedNote(
     throw new Error("Box not found");
   }
 
-  // ── Plan paywall ──────────────────────────────────────────────────────────
-  // Meter the write against the per-tier, per-billing-period allowance once
-  // the request is fully authorized but BEFORE the insert RPC. Returning (not
-  // throwing) lets the MCP and in-app callers surface a clean "upgrade"
-  // response, exactly like createProposal. Placed after the authorization
-  // checks so a malformed/forbidden request still gets a precise 403/404
-  // rather than a paywall, and so nothing is written when over quota.
-  const quota = await checkProposalQuota(adminClient, ctx.connection.workspace_id);
-  if (!quota.allowed) {
-    return quotaExceeded(quota);
-  }
+  // ── Plan paywall (atomic) ───────────────────────────────────────────────────
+  // Resolve the per-tier limit + billing-period window once the request is
+  // fully authorized. The usage count + cap check are NOT done here — they are
+  // deferred into the insert RPC (which takes a per-workspace advisory lock,
+  // counts, and inserts atomically) so concurrent generators can't race past
+  // the cap. Resolved after the authorization checks so a malformed/forbidden
+  // request still gets a precise 403/404 rather than a paywall.
+  const quota = await resolveProposalQuotaContext(
+    adminClient,
+    ctx.connection.workspace_id
+  );
 
   // Title resolution
   const title = input.title?.trim()
@@ -211,10 +218,21 @@ export async function createGeneratedNote(
     p_read_hint: read_hint,
     p_retrieval_priority: retrieval_priority,
     p_connection_id: ctx.connection.id,
+    // Atomic paywall: the RPC locks the workspace, counts period usage, and
+    // inserts only when under cap (see migration 20260501000002).
+    p_quota_limit: quota.limit,
+    p_period_start: quota.periodStart.toISOString(),
   });
 
   if (error || !data) {
     throw new Error(error?.message ?? "Failed to create generated note");
+  }
+
+  // Over-cap: the RPC inserted nothing and signalled quota-exceeded. Surface
+  // the typed result (non-throwing), mirroring createProposal.
+  if ((data as { quota_exceeded?: unknown }).quota_exceeded === true) {
+    const signal = data as { limit: number; used: number };
+    return quotaExceededFrom(signal.limit, signal.used);
   }
 
   const result = data as { note: Note; version: NoteVersion };

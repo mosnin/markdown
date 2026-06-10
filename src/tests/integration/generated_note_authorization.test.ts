@@ -75,29 +75,22 @@ function makeBox() {
 }
 
 /**
- * Build a Supabase double that answers the three reads `createGeneratedNote`
- * now performs:
- *   1. `checkProposalQuota` subscription read — `workspace_subscriptions`
- *      `.eq().maybeSingle()` → no row (free tier).
- *   2. `checkProposalQuota` usage count — `write_proposals`
- *      `.select(id,{count,head}).eq().gte()` → `proposalsUsed`.
- *   3. `notePathExists` — `notes` `.eq().eq().neq().maybeSingle()` → no row.
- * plus the create RPC.
+ * Build a Supabase double for `createGeneratedNote`.
+ *
+ * The paywall is now enforced ATOMICALLY inside the
+ * `create_generated_note_with_version` RPC (which counts period usage under a
+ * per-workspace advisory lock and inserts only when under cap). The service no
+ * longer counts usage itself, so this double only needs to answer:
+ *   1. `resolveProposalQuotaContext` subscription read — `workspace_subscriptions`
+ *      `.eq().maybeSingle()` → no row (free tier, no Creem period).
+ *   2. `notePathExists` — `notes` `.eq().eq().neq().maybeSingle()` → no row.
+ * plus the create RPC, which is supplied directly so each test can return
+ * either a created note or a quota-exceeded signal.
  */
-function makeQuotaAwareClient(opts: {
-  proposalsUsed: number;
-  rpc: ReturnType<typeof vi.fn>;
-}) {
-  const countResult = { count: opts.proposalsUsed, error: null };
+function makeQuotaAwareClient(opts: { rpc: ReturnType<typeof vi.fn> }) {
   return {
     rpc: opts.rpc,
-    from(table: string) {
-      if (table === "write_proposals") {
-        // count chain: .select(id,{count,head}).eq(workspace_id).gte(created_at)
-        return {
-          select: () => ({ eq: () => ({ gte: () => Promise.resolve(countResult) }) }),
-        };
-      }
+    from() {
       // workspace_subscriptions (.eq().maybeSingle()) and notes
       // (.eq().eq().neq().maybeSingle()) both terminate on maybeSingle → null.
       const chain = {
@@ -194,13 +187,14 @@ describe("Generated note authorization — accepts_generated_notes flag", () => 
       generated_by_connection_id: CONN_ID,
     };
     const mockVersion = { id: "version-new" };
+    // Under cap, the RPC inserts and returns the note + version.
     const mockRpc = vi.fn().mockResolvedValue({
       data: { note: mockNote, version: mockVersion },
       error: null,
     });
-    // Mock supabase: serves the quota read (free tier, 0 proposals used) and
-    // the notePathExists lookup (no path collision). See makeQuotaAwareClient.
-    const mockSupabase = makeQuotaAwareClient({ proposalsUsed: 0, rpc: mockRpc });
+    // Mock supabase: serves the subscription read (free tier) and the
+    // notePathExists lookup (no path collision). See makeQuotaAwareClient.
+    const mockSupabase = makeQuotaAwareClient({ rpc: mockRpc });
 
     const result = await createGeneratedNote(mockSupabase, ctx, {
       folder_id: FOLDER_ID,
@@ -213,11 +207,15 @@ describe("Generated note authorization — accepts_generated_notes flag", () => 
     }
     expect(result.note.is_generated).toBe(true);
     expect(result.note.generated_by_connection_id).toBe(CONN_ID);
+    // The atomic cap is enforced in the RPC: the resolved limit + period-start
+    // are passed so it counts + inserts under a per-workspace lock.
     expect(mockRpc).toHaveBeenCalledWith(
       "create_generated_note_with_version",
       expect.objectContaining({
         p_folder_id: FOLDER_ID,
         p_connection_id: CONN_ID,
+        p_quota_limit: PROPOSAL_TIER_LIMITS.free,
+        p_period_start: expect.any(String),
       })
     );
   });
@@ -229,13 +227,18 @@ describe("Generated note authorization — plan paywall", () => {
     vi.mocked(folderRepo.getFolderById).mockResolvedValue(makeFolder() as never);
     vi.mocked(boxRepo.getBoxById).mockResolvedValue(makeBox() as never);
 
-    const mockRpc = vi.fn();
-    // Free tier limit is PROPOSAL_TIER_LIMITS.free; report usage at the cap so
-    // checkProposalQuota resolves allowed=false.
-    const mockSupabase = makeQuotaAwareClient({
-      proposalsUsed: PROPOSAL_TIER_LIMITS.free,
-      rpc: mockRpc,
+    // Atomic enforcement: the RPC counts under a per-workspace lock and, at the
+    // cap, returns a quota-exceeded signal having inserted NOTHING. No
+    // note/version is returned in that branch.
+    const mockRpc = vi.fn().mockResolvedValue({
+      data: {
+        quota_exceeded: true,
+        limit: PROPOSAL_TIER_LIMITS.free,
+        used: PROPOSAL_TIER_LIMITS.free,
+      },
+      error: null,
     });
+    const mockSupabase = makeQuotaAwareClient({ rpc: mockRpc });
 
     const result = await createGeneratedNote(mockSupabase, ctx, {
       folder_id: FOLDER_ID,
@@ -248,7 +251,14 @@ describe("Generated note authorization — plan paywall", () => {
       expect(result.limit).toBe(PROPOSAL_TIER_LIMITS.free);
       expect(result.used).toBe(PROPOSAL_TIER_LIMITS.free);
     }
-    // The meter runs before any write — the create RPC must not be called.
-    expect(mockRpc).not.toHaveBeenCalled();
+    // The over-cap decision is made inside the (atomic) RPC, which is passed
+    // the limit + period-start so it gates correctly.
+    expect(mockRpc).toHaveBeenCalledWith(
+      "create_generated_note_with_version",
+      expect.objectContaining({
+        p_quota_limit: PROPOSAL_TIER_LIMITS.free,
+        p_period_start: expect.any(String),
+      })
+    );
   });
 });

@@ -14,23 +14,33 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
  * This test file complements write_proposal_service.test.ts which covers note proposals.
  */
 
-vi.mock("@/server/repositories/write_proposal_repository");
+// Mock the repo but keep the real `isGuardedQuotaExceeded` discriminator so a
+// returned proposal row is distinguished from a quota signal.
+vi.mock("@/server/repositories/write_proposal_repository", async (importActual) => {
+  const actual =
+    await importActual<typeof import("@/server/repositories/write_proposal_repository")>();
+  return {
+    ...actual,
+    createWriteProposalGuarded: vi.fn(),
+  };
+});
 vi.mock("@/server/services/audit_service");
 
 // Quota enforcement has its own suite (proposal_quota_service.test.ts).
-// Stub it to "allowed" so these object permission/scope tests aren't gated
-// by the paywall.
+// The cap is now enforced atomically inside the guarded insert RPC, so the
+// service only resolves the tier/limit/period window up front. Stub that
+// resolver so these object permission/scope tests aren't gated by the paywall;
+// the guarded insert (mocked above) returns a proposal row by default.
 vi.mock("@/server/services/proposal_quota_service", async (importActual) => {
   const actual =
     await importActual<typeof import("@/server/services/proposal_quota_service")>();
   return {
     ...actual,
-    checkProposalQuota: vi.fn().mockResolvedValue({
+    resolveProposalQuotaContext: vi.fn().mockResolvedValue({
       tier: "free",
       limit: 20,
-      used: 0,
-      allowed: true,
-      resetsAt: new Date("2099-01-01T00:00:00Z"),
+      periodStart: new Date("2026-06-01T00:00:00Z"),
+      periodEnd: new Date("2099-01-01T00:00:00Z"),
     }),
   };
 });
@@ -134,7 +144,7 @@ function asProposal(
 beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(auditService.auditWriteProposalCreated).mockReturnValue(undefined as never);
-  vi.mocked(proposalRepo.createWriteProposal).mockResolvedValue(makeProposal() as never);
+  vi.mocked(proposalRepo.createWriteProposalGuarded).mockResolvedValue(makeProposal() as never);
 });
 
 // ─── Permission checks ────────────────────────────────────────────────────────
@@ -232,7 +242,7 @@ describe("object proposal — reusable shared object scope", () => {
     const adminClient = makeAdminClient(
       makeObjectRow({ id: AGENT_ID, box_id: null, is_reusable: true })
     );
-    vi.mocked(proposalRepo.createWriteProposal).mockResolvedValue(
+    vi.mocked(proposalRepo.createWriteProposalGuarded).mockResolvedValue(
       makeProposal({ proposal_type: "update_agent", target_object_id: AGENT_ID }) as never
     );
 

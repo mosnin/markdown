@@ -89,6 +89,69 @@ export function quotaExceeded(status: QuotaStatus): QuotaExceededResult {
   };
 }
 
+/**
+ * Build the typed over-limit payload directly from a limit + used pair —
+ * used by callers that enforce the cap atomically in the database (the
+ * guarded insert RPCs) and so never materialise a full `QuotaStatus`. Same
+ * non-throwing contract as {@link quotaExceeded}.
+ */
+export function quotaExceededFrom(
+  limit: number,
+  used: number
+): QuotaExceededResult {
+  return {
+    ok: false,
+    code: "quota_exceeded",
+    limit,
+    used,
+    upgradeUrl: UPGRADE_URL,
+  };
+}
+
+// ─── Atomic-enforcement context ────────────────────────────────────────────────
+
+/**
+ * The inputs an *atomic* write path needs to enforce the write-proposal
+ * paywall itself (inside the same DB transaction that inserts), instead of
+ * the racy check-then-insert that {@link checkProposalQuota} enables.
+ *
+ * `limit` and `periodStart` are passed straight to the guarded insert RPCs
+ * (`create_write_proposal_guarded` / `create_generated_note_with_version`),
+ * which take a per-workspace advisory lock, COUNT period usage, and insert
+ * only when under `limit`. The TOCTOU window is thereby closed: the count and
+ * the insert are serialized per workspace and happen as one unit.
+ */
+export interface ProposalQuotaContext {
+  tier: WorkspacePlan;
+  /** Per-period cap for this tier. */
+  limit: number;
+  /** First instant (inclusive) of the current billing period. */
+  periodStart: Date;
+  /** First instant of the next billing period — for "resets on" UI. */
+  periodEnd: Date;
+}
+
+/**
+ * Resolve the plan, per-period limit, and period window for a workspace
+ * without counting usage. The counting is delegated to the guarded insert
+ * RPC so it happens atomically with the insert (see {@link ProposalQuotaContext}).
+ *
+ * Unlike {@link checkProposalQuota} this performs no usage read and so has no
+ * "fail closed on count error" branch — the DB does the count. The plan lookup
+ * still defaults to the most restrictive tier (`free`) on error, preserving
+ * the paywall.
+ */
+export async function resolveProposalQuotaContext(
+  supabase: SupabaseClient,
+  workspaceId: string
+): Promise<ProposalQuotaContext> {
+  const { tier, periodStart, periodEnd } = await loadPlanAndPeriod(
+    supabase,
+    workspaceId
+  );
+  return { tier, limit: PROPOSAL_TIER_LIMITS[tier], periodStart, periodEnd };
+}
+
 // ─── Write-proposal quota ────────────────────────────────────────────────────
 
 /**

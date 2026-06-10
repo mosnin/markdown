@@ -222,6 +222,65 @@ export async function createWriteProposal(
   return data as WriteProposal;
 }
 
+/**
+ * Signal returned by {@link createWriteProposalGuarded} when the per-period
+ * paywall cap was hit. Mirrors the jsonb the `create_write_proposal_guarded`
+ * RPC emits; the service maps it to a typed `QuotaExceededResult`.
+ */
+export interface GuardedQuotaExceeded {
+  quota_exceeded: true;
+  limit: number;
+  used: number;
+}
+
+export function isGuardedQuotaExceeded(
+  value: unknown
+): value is GuardedQuotaExceeded {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    (value as { quota_exceeded?: unknown }).quota_exceeded === true
+  );
+}
+
+/**
+ * Atomic, quota-gated proposal insert.
+ *
+ * Closes the check-then-insert TOCTOU on the write-proposal paywall: the
+ * `create_write_proposal_guarded` RPC takes a per-workspace transaction
+ * advisory lock, counts period usage, and inserts ONLY when under `limit` —
+ * all in one transaction, so N concurrent writers serialize and the cap holds
+ * exactly. When `limit` is null the gate is disabled and the insert always
+ * proceeds.
+ *
+ * Returns the created {@link WriteProposal} (same full-row shape as
+ * {@link createWriteProposal}) or a {@link GuardedQuotaExceeded} signal when
+ * the workspace is at/over its cap (nothing inserted). Infra errors throw,
+ * matching the existing repository contract.
+ */
+export async function createWriteProposalGuarded(
+  supabase: SupabaseClient,
+  input: CreateWriteProposalInput,
+  quota: { limit: number | null; periodStart: Date }
+): Promise<WriteProposal | GuardedQuotaExceeded> {
+  const { workspace_id, ...proposalFields } = input;
+
+  const { data, error } = await supabase.rpc("create_write_proposal_guarded", {
+    p_workspace_id: workspace_id,
+    p_proposal: proposalFields,
+    p_quota_limit: quota.limit,
+    p_period_start: quota.periodStart.toISOString(),
+  });
+
+  if (error || !data) throw new RepositoryError("createWriteProposalGuarded", error);
+
+  if (isGuardedQuotaExceeded(data)) return data;
+
+  const row = (data as { proposal?: unknown }).proposal;
+  if (!row) throw new RepositoryError("createWriteProposalGuarded", error);
+  return row as WriteProposal;
+}
+
 export async function updateWriteProposal(
   supabase: SupabaseClient,
   id: string,
