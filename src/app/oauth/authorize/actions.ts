@@ -14,6 +14,8 @@ import {
   type OAuthCapabilityScope,
 } from "@/server/services/oauth_scope_service";
 import { issueAuthorizationCode } from "@/server/services/oauth_token_service";
+import { verifyConsentBoxes } from "@/server/services/oauth_consent_signature";
+import { getOrCreateOAuthConnection } from "@/server/services/connection_service";
 import { listAccessibleWorkspaces } from "@/server/repositories/workspace_membership_repository";
 import { listBoxesByWorkspace } from "@/server/repositories/box_repository";
 import { createClient } from "@/lib/supabase/server";
@@ -49,6 +51,8 @@ export async function approveAuthorizeAction(formData: FormData): Promise<never>
   const codeChallenge = String(formData.get("code_challenge") ?? "");
   const scope = String(formData.get("scope") ?? "");
   const workspaceId = String(formData.get("workspace_id") ?? "");
+  const connectorBoxes = String(formData.get("connector_boxes") ?? "");
+  const connectorBoxesSig = String(formData.get("connector_boxes_sig") ?? "");
 
   const ctx = await requireAuthenticatedUser();
 
@@ -112,6 +116,39 @@ export async function approveAuthorizeAction(formData: FormData): Promise<never>
     redirect(errorRedirect(redirectUri, state, "invalid_scope", resolution.error));
   }
 
+  // Enforce the narrow-only box rule server-side. The authorize page signed the
+  // connector's requested box set (bound to client_id); the consent UI may only
+  // narrow it. Verify the signature, then reject any granted context:box:<id>
+  // the connector did not originally request — the client form is not trusted.
+  if (!verifyConsentBoxes(client!.client_id, connectorBoxes, connectorBoxesSig)) {
+    redirect(
+      errorRedirect(
+        redirectUri,
+        state,
+        "invalid_request",
+        "Consent integrity check failed. Restart the authorization."
+      )
+    );
+  }
+  if (resolution.ok && connectorBoxes !== "*") {
+    const requestedBoxSet = new Set(connectorBoxes.split(",").filter(Boolean));
+    const broadened = resolution.scopes
+      .map(String)
+      .filter((s) => s.startsWith("context:box:"))
+      .map((s) => s.slice("context:box:".length))
+      .some((id) => !requestedBoxSet.has(id));
+    if (broadened) {
+      redirect(
+        errorRedirect(
+          redirectUri,
+          state,
+          "invalid_scope",
+          "Requested boxes exceed what the connector asked for."
+        )
+      );
+    }
+  }
+
   // Persist a consent record so subsequent authorizations for the same
   // (client, workspace, scopes) skip the screen. Admin client to
   // bypass RLS, then explicitly bound to the calling user id.
@@ -129,6 +166,19 @@ export async function approveAuthorizeAction(formData: FormData): Promise<never>
     );
   if (consentUpsertError) {
     redirect(errorRedirect(redirectUri, state, "server_error", "Failed to record consent"));
+  }
+
+  // Provision the connections row for this OAuth client so it is attributed and
+  // counted toward the connected-agent cap. Best-effort: a hiccup here must not
+  // block consent — the MCP write path get-or-creates this same row on demand.
+  try {
+    await getOrCreateOAuthConnection(admin, {
+      workspaceId: selectedWorkspace!.id,
+      clientId: client!.client_id,
+      name: `OAuth app (${client!.client_id})`,
+    });
+  } catch {
+    // Non-fatal; the write path will create it if missing.
   }
 
   // Mint the authorization code, bound to (client, user, workspace,

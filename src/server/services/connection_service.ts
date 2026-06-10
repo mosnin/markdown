@@ -109,6 +109,62 @@ export interface CreateConnectionResult {
  * Caller must verify that all boxIds belong to the given workspaceId
  * before calling this function.
  */
+/**
+ * Get-or-create the `connections` row that represents an OAuth-connected agent
+ * (a registered OAuth client) within a workspace.
+ *
+ * OAuth clients aren't provisioned through the token-based connect flow, but
+ * the writes they make stamp `write_proposals.connection_id` /
+ * `notes.generated_by_connection_id` (uuid FKs to connections), and the
+ * connected-agent cap is a live count of `connections` — so each
+ * (workspace, OAuth client) maps to exactly one connections row, keyed by
+ * `oauth_client_id`. Call with the admin/service-role client (RLS-bypassing);
+ * the MCP route and the consent action both already use it.
+ */
+export async function getOrCreateOAuthConnection(
+  supabase: SupabaseClient,
+  params: { workspaceId: string; clientId: string; name: string }
+): Promise<{ id: string }> {
+  const { workspaceId, clientId, name } = params;
+
+  const existing = await supabase
+    .from("connections")
+    .select("id")
+    .eq("workspace_id", workspaceId)
+    .eq("oauth_client_id", clientId)
+    .maybeSingle();
+  if (existing.data?.id) return { id: existing.data.id };
+
+  const created = await supabase
+    .from("connections")
+    .insert({
+      workspace_id: workspaceId,
+      name: name.slice(0, 200),
+      connection_type: "mcp",
+      status: "active",
+      // Label only — the OAuth scope gate (context:propose / context:generate)
+      // is what actually authorizes each write tool.
+      permission_mode: "propose_writes",
+      oauth_client_id: clientId,
+      metadata: { source: "oauth" },
+    })
+    .select("id")
+    .single();
+
+  if (created.error) {
+    // Lost the unique race to a concurrent create — re-read the row.
+    const raced = await supabase
+      .from("connections")
+      .select("id")
+      .eq("workspace_id", workspaceId)
+      .eq("oauth_client_id", clientId)
+      .maybeSingle();
+    if (raced.data?.id) return { id: raced.data.id };
+    throw created.error;
+  }
+  return { id: created.data.id };
+}
+
 export async function createConnection(
   supabase: SupabaseClient,
   workspaceId: string,

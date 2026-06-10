@@ -33,6 +33,10 @@ import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { AuthorizeConsentForm } from "./consent_form";
 import {
+  canonicalConnectorBoxes,
+  signConsentBoxes,
+} from "@/server/services/oauth_consent_signature";
+import {
   buildErrorRedirect,
   buildCodeRedirect,
   consentCoversScopes,
@@ -210,6 +214,17 @@ export default async function AuthorizePage({ searchParams }: PageProps) {
   const { capabilities: capabilityScopes, boxIds: requestedBoxIds } =
     splitScopes(grantableScopes);
   const defaultBoxIds = requestedBoxIds ?? accessibleBoxIdSet;
+
+  // Sign the connector's requested box set so approveAuthorizeAction can
+  // enforce the narrow-only rule server-side (the form can only be trusted to
+  // narrow this set, never broaden it).
+  const connectorBoxesCanonical = canonicalConnectorBoxes(
+    requestedBoxIds ? Array.from(requestedBoxIds) : null
+  );
+  const connectorBoxesSig = signConsentBoxes(
+    client!.client_id,
+    connectorBoxesCanonical
+  );
   const accessible = await listAccessibleWorkspaces(supabase, ctx.user.id);
   const groups = groupScopes(grantableScopes);
   const hasAnyWrite = anyWriteCapable(grantableScopes);
@@ -426,6 +441,8 @@ export default async function AuthorizePage({ searchParams }: PageProps) {
               connectorRequestedBoxIds={
                 requestedBoxIds ? Array.from(requestedBoxIds) : null
               }
+              connectorBoxesCanonical={connectorBoxesCanonical}
+              connectorBoxesSig={connectorBoxesSig}
               workspaces={accessible.map((w) => ({
                 id: w.id,
                 name: w.name,

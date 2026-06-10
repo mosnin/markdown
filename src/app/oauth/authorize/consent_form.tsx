@@ -26,6 +26,8 @@ export function AuthorizeConsentForm({
   boxes,
   defaultBoxIds,
   connectorRequestedBoxIds,
+  connectorBoxesCanonical,
+  connectorBoxesSig,
   workspaces,
   activeWorkspaceId,
 }: {
@@ -44,6 +46,13 @@ export function AuthorizeConsentForm({
    * and the user is free to narrow (or leave it broad).
    */
   connectorRequestedBoxIds: string[] | null;
+  /**
+   * Server-signed canonical form of `connectorRequestedBoxIds` (and its HMAC)
+   * so the server action can enforce the narrow-only rule — the action trusts
+   * this signed pair, not the posted scope. See oauth_consent_signature.ts.
+   */
+  connectorBoxesCanonical: string;
+  connectorBoxesSig: string;
   workspaces: Array<{ id: string; name: string; role: "owner" | "admin" | "member" | "viewer" }>;
   activeWorkspaceId: string;
 }) {
@@ -90,6 +99,8 @@ export function AuthorizeConsentForm({
       <input type="hidden" name="code_challenge" value={codeChallenge} />
       <input type="hidden" name="scope" value={finalScope} />
       <input type="hidden" name="workspace_id" value={selectedWorkspaceId} />
+      <input type="hidden" name="connector_boxes" value={connectorBoxesCanonical} />
+      <input type="hidden" name="connector_boxes_sig" value={connectorBoxesSig} />
 
       {workspaces.length > 1 && (
         <div>

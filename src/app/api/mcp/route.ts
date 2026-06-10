@@ -668,11 +668,23 @@ async function dispatchTool(
       const { createGeneratedNote, isQuotaExceeded } = await import(
         "@/server/services/generated_note_service"
       );
+      const { getOrCreateOAuthConnection } = await import(
+        "@/server/services/connection_service"
+      );
+      // OAuth clients have no token-based connection row, but a generated note
+      // stamps notes.generated_by_connection_id (a uuid FK to connections).
+      // Resolve/create the real connection for this (workspace, client) so the
+      // write succeeds and the agent is attributed + counted like any other.
+      const oauthConn = await getOrCreateOAuthConnection(admin, {
+        workspaceId: ctx.workspaceId,
+        clientId: ctx.clientId,
+        name: `OAuth app (${ctx.clientId})`,
+      });
       const syntheticConnection = {
         connection: {
-          id: `oauth:${ctx.clientId}`,
+          id: oauthConn.id,
           workspace_id: ctx.workspaceId,
-          name: `oauth:${ctx.clientId}`,
+          name: `OAuth app (${ctx.clientId})`,
           description: null,
           connection_type: "mcp" as const,
           status: "active" as const,
@@ -685,7 +697,7 @@ async function dispatchTool(
         },
         workspaceId: ctx.workspaceId,
         allowedBoxIds,
-        tokenId: `oauth:${ctx.clientId}`,
+        tokenId: oauthConn.id,
       };
       const result = await createGeneratedNote(admin, syntheticConnection, {
         folder_id: folderId,
@@ -1065,11 +1077,23 @@ async function dispatchTool(
       const allowedBoxIds = new Set(
         workspaceBoxIds.filter((id: string) => canAccessBox(ctx.scope, id))
       );
+      const { getOrCreateOAuthConnection } = await import(
+        "@/server/services/connection_service"
+      );
+      // OAuth clients have no token-based connection row, but a write proposal
+      // stamps write_proposals.connection_id (a uuid FK to connections).
+      // Resolve/create the real connection for this (workspace, client) so the
+      // write succeeds and the agent is attributed + counted like any other.
+      const oauthConn = await getOrCreateOAuthConnection(admin, {
+        workspaceId: ctx.workspaceId,
+        clientId: ctx.clientId,
+        name: `OAuth app (${ctx.clientId})`,
+      });
       const syntheticConnection = {
         connection: {
-          id: `oauth:${ctx.clientId}`,
+          id: oauthConn.id,
           workspace_id: ctx.workspaceId,
-          name: `oauth:${ctx.clientId}`,
+          name: `OAuth app (${ctx.clientId})`,
           description: null,
           connection_type: "mcp" as const,
           status: "active" as const,
@@ -1082,7 +1106,7 @@ async function dispatchTool(
         },
         workspaceId: ctx.workspaceId,
         allowedBoxIds,
-        tokenId: `oauth:${ctx.clientId}`,
+        tokenId: oauthConn.id,
       };
 
       const cs = await openChangeSet(admin, {
