@@ -9,7 +9,7 @@ import { logger } from "@/lib/logger";
 import { NotFoundError, ConflictError, RepositoryError } from "@/server/domain/errors";
 
 const BOX_COLS =
-  "id, workspace_id, guide_note_id, name, slug, description, status, branch_id, agent_instructions, is_public, created_at, updated_at";
+  "id, workspace_id, guide_note_id, name, slug, description, status, branch_id, agent_instructions, is_public, share_version, created_at, updated_at";
 
 /**
  * Box repository.
@@ -108,6 +108,38 @@ export async function updateBox(
 
   if (error || !data) throw new RepositoryError("updateBox", error);
   return data as Box;
+}
+
+/**
+ * Increment a box's share_version, invalidating every previously issued
+ * share link for it (the share page requires the token's version to match
+ * the live row). Returns the new version.
+ *
+ * Supabase has no atomic column-increment over the JS client, so we read
+ * the current value and write +1. A concurrent double-bump could collapse
+ * two increments into one, but the only effect is that one extra-stale link
+ * survives a beat — revocation is still monotonic and never *un*-revokes.
+ */
+export async function bumpBoxShareVersion(
+  supabase: SupabaseClient,
+  id: string
+): Promise<number> {
+  const { data: current, error: readError } = await supabase
+    .from("boxes")
+    .select("share_version")
+    .eq("id", id)
+    .single();
+  if (readError || !current) throw new RepositoryError("bumpBoxShareVersion", readError);
+
+  const next = (current.share_version as number) + 1;
+  const { data, error } = await supabase
+    .from("boxes")
+    .update({ share_version: next })
+    .eq("id", id)
+    .select("share_version")
+    .single();
+  if (error || !data) throw new RepositoryError("bumpBoxShareVersion", error);
+  return data.share_version as number;
 }
 
 export async function listPublicBoxesByWorkspace(

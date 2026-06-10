@@ -12,15 +12,20 @@ interface PageProps {
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { token } = await params;
-  const noteId = verifyNoteToken(token);
-  if (!noteId) {
+  const verified = verifyNoteToken(token);
+  if (!verified) {
     return { title: "Shared note — Poggle" };
   }
 
   const supabase = createAdminClient();
-  const note = await getNoteById(supabase, noteId);
-  // Don't surface trashed/archived notes through a share link, even in metadata.
-  if (!note || note.status !== NOTE_STATUS.ACTIVE) {
+  const note = await getNoteById(supabase, verified.id);
+  // Don't surface trashed/archived notes through a share link, and treat a
+  // share_version mismatch as a revoked/superseded link — even in metadata.
+  if (
+    !note ||
+    note.status !== NOTE_STATUS.ACTIVE ||
+    note.share_version !== verified.version
+  ) {
     return { title: "Shared note — Poggle" };
   }
 
@@ -45,14 +50,21 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 
 export default async function SharedNotePage({ params }: PageProps) {
   const { token } = await params;
-  const noteId = verifyNoteToken(token);
-  if (!noteId) notFound();
+  const verified = verifyNoteToken(token);
+  if (!verified) notFound();
 
   const supabase = createAdminClient();
-  const note = await getNoteById(supabase, noteId);
-  // A share link must stop working once the note is trashed or archived —
-  // getNoteById returns rows of any status, so gate on active here.
-  if (!note || note.status !== NOTE_STATUS.ACTIVE) notFound();
+  const note = await getNoteById(supabase, verified.id);
+  // A share link must stop working once the note is trashed/archived
+  // (getNoteById returns rows of any status) OR once it's been revoked /
+  // superseded (the token's version no longer matches share_version).
+  if (
+    !note ||
+    note.status !== NOTE_STATUS.ACTIVE ||
+    note.share_version !== verified.version
+  ) {
+    notFound();
+  }
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-12">

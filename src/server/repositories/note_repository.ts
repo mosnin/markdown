@@ -20,10 +20,10 @@ import { NotFoundError, ConflictError, RepositoryError } from "@/server/domain/e
  */
 
 // Heavy: used only when the full note body is needed (editor, export)
-const NOTE_FULL_COLS = "id, box_id, folder_id, current_version_id, title, slug, path_cache, markdown_content, content_bytes, summary, tags, read_hint, retrieval_priority, kind, status, origin_type, is_generated, generated_by_connection_id, branch_id, created_at, updated_at";
+const NOTE_FULL_COLS = "id, box_id, folder_id, current_version_id, title, slug, path_cache, markdown_content, content_bytes, summary, tags, read_hint, retrieval_priority, kind, status, origin_type, is_generated, generated_by_connection_id, branch_id, share_version, created_at, updated_at";
 
 // Light: used for lists, sidebars, search results — no markdown body
-const NOTE_LIST_COLS = "id, box_id, folder_id, current_version_id, title, slug, path_cache, content_bytes, tags, read_hint, retrieval_priority, kind, status, origin_type, is_generated, generated_by_connection_id, branch_id, created_at, updated_at";
+const NOTE_LIST_COLS = "id, box_id, folder_id, current_version_id, title, slug, path_cache, content_bytes, tags, read_hint, retrieval_priority, kind, status, origin_type, is_generated, generated_by_connection_id, branch_id, share_version, created_at, updated_at";
 
 export async function getNoteById(
   supabase: SupabaseClient,
@@ -164,6 +164,33 @@ export async function updateNote(
 
   if (error || !data) throw new RepositoryError("updateNote", error);
   return data as Note;
+}
+
+/**
+ * Increment a note's share_version, invalidating every previously issued
+ * share link for it. See bumpBoxShareVersion for the concurrency note —
+ * the same read-then-write caveat applies. Returns the new version.
+ */
+export async function bumpNoteShareVersion(
+  supabase: SupabaseClient,
+  id: string
+): Promise<number> {
+  const { data: current, error: readError } = await supabase
+    .from("notes")
+    .select("share_version")
+    .eq("id", id)
+    .single();
+  if (readError || !current) throw new RepositoryError("bumpNoteShareVersion", readError);
+
+  const next = (current.share_version as number) + 1;
+  const { data, error } = await supabase
+    .from("notes")
+    .update({ share_version: next })
+    .eq("id", id)
+    .select("share_version")
+    .single();
+  if (error || !data) throw new RepositoryError("bumpNoteShareVersion", error);
+  return data.share_version as number;
 }
 
 /**

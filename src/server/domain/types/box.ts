@@ -30,6 +30,12 @@ export interface Box {
   branch_id: string | null;
   agent_instructions: string | null;
   is_public: boolean;
+  /**
+   * Monotonic counter mixed into the box's share token. Bumping it
+   * (via the privacy toggle or an explicit revoke) invalidates every
+   * previously issued share link. Defaults to 1. See src/lib/share_token.ts.
+   */
+  share_version: number;
   created_at: string;
   updated_at: string;
 }

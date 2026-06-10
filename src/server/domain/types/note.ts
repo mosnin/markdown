@@ -47,6 +47,12 @@ export interface Note {
    * docs/branch_local_structural_creation_v1.md.
    */
   branch_id: string | null;
+  /**
+   * Monotonic counter mixed into the note's share token. Bumping it
+   * (via an explicit revoke) invalidates every previously issued share
+   * link. Defaults to 1. See src/lib/share_token.ts.
+   */
+  share_version: number;
   created_at: string;
   updated_at: string;
 }

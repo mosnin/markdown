@@ -14,15 +14,21 @@ interface PageProps {
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { token } = await params;
-  const boxId = verifyBoxToken(token);
-  if (!boxId) {
+  const verified = verifyBoxToken(token);
+  if (!verified) {
     return { title: "Shared box — Poggle" };
   }
 
   const supabase = createAdminClient();
-  const box = await getBoxById(supabase, boxId);
-  // Don't surface trashed/archived boxes through a share link, even in metadata.
-  if (!box || box.status !== BOX_STATUS.ACTIVE) {
+  const box = await getBoxById(supabase, verified.id);
+  // Don't surface trashed/archived boxes through a share link, and treat a
+  // share_version mismatch (revoked, or the box was made private) as gone —
+  // even in metadata.
+  if (
+    !box ||
+    box.status !== BOX_STATUS.ACTIVE ||
+    box.share_version !== verified.version
+  ) {
     return { title: "Shared box — Poggle" };
   }
 
@@ -47,16 +53,24 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 
 export default async function SharedBoxPage({ params }: PageProps) {
   const { token } = await params;
-  const boxId = verifyBoxToken(token);
-  if (!boxId) notFound();
+  const verified = verifyBoxToken(token);
+  if (!verified) notFound();
 
   const supabase = createAdminClient();
-  const box = await getBoxById(supabase, boxId);
-  // A share link must stop working once the box is trashed or archived —
-  // getBoxById returns rows of any status, so gate on active here.
-  if (!box || box.status !== BOX_STATUS.ACTIVE) notFound();
+  const box = await getBoxById(supabase, verified.id);
+  // A share link must stop working once the box is trashed/archived
+  // (getBoxById returns rows of any status) OR once it's been revoked /
+  // superseded — making a box private (or an explicit revoke) bumps
+  // share_version, so the token's version no longer matches.
+  if (
+    !box ||
+    box.status !== BOX_STATUS.ACTIVE ||
+    box.share_version !== verified.version
+  ) {
+    notFound();
+  }
 
-  const notes = await listNotesByBox(supabase, boxId, { limit: 100, branchId: null });
+  const notes = await listNotesByBox(supabase, verified.id, { limit: 100, branchId: null });
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-12">

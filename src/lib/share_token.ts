@@ -17,25 +17,66 @@ function getShareSecret(): string {
 
 const secret = getShareSecret;
 
-export function signBoxToken(boxId: string): string {
-  const mac = createHmac("sha256", secret()).update(boxId).digest("hex");
-  // token = base64url(boxId:mac)
-  return Buffer.from(`${boxId}:${mac}`).toString("base64url");
+/**
+ * Share tokens encode a per-resource `share_version` alongside the id so a
+ * link can be revoked. The HMAC is computed over `id:version`; bumping the
+ * row's share_version changes the signature, so every link issued against the
+ * old version stops verifying against the live row (the share page requires
+ * `row.share_version === token.version`).
+ *
+ * verify*Token is still pure — it parses the payload and checks the HMAC. It
+ * does NOT read the database; the version comparison happens on the page after
+ * the row is fetched.
+ */
+export interface VerifiedShareToken {
+  id: string;
+  version: number;
 }
 
-export function verifyBoxToken(token: string): string | null {
+function timingSafeEqual(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return diff === 0;
+}
+
+function parseVersion(raw: string): number | null {
+  // Versions are positive integers. Reject anything non-canonical so a
+  // forged payload can't sneak past via NaN / leading-zero ambiguity.
+  if (!/^[1-9][0-9]*$/.test(raw)) return null;
+  return Number(raw);
+}
+
+export function signBoxToken(boxId: string, version: number): string {
+  const payload = `box:${boxId}:${version}`;
+  const mac = createHmac("sha256", secret()).update(payload).digest("hex");
+  // token = base64url(box:boxId:version:mac)
+  return Buffer.from(`${payload}:${mac}`).toString("base64url");
+}
+
+export function verifyBoxToken(token: string): VerifiedShareToken | null {
   try {
     const decoded = Buffer.from(token, "base64url").toString("utf8");
-    const colonIdx = decoded.indexOf(":");
-    if (colonIdx === -1) return null;
-    const boxId = decoded.slice(0, colonIdx);
-    const mac = decoded.slice(colonIdx + 1);
-    const expected = createHmac("sha256", secret()).update(boxId).digest("hex");
-    // Timing-safe compare
-    if (mac.length !== expected.length) return null;
-    let diff = 0;
-    for (let i = 0; i < mac.length; i++) diff |= mac.charCodeAt(i) ^ expected.charCodeAt(i);
-    return diff === 0 ? boxId : null;
+    // The `box:` prefix keeps the box and note payload spaces disjoint, so a
+    // note token can never verify as a box token (and vice versa).
+    if (!decoded.startsWith("box:")) return null;
+    const stripped = decoded.slice("box:".length);
+    // Split from the right: the mac is the last field, version the one before
+    // it, and everything ahead is the (colon-free) box id.
+    const lastColon = stripped.lastIndexOf(":");
+    if (lastColon === -1) return null;
+    const mac = stripped.slice(lastColon + 1);
+    const idAndVersion = stripped.slice(0, lastColon);
+    const versionColon = idAndVersion.lastIndexOf(":");
+    if (versionColon === -1) return null;
+    const boxId = idAndVersion.slice(0, versionColon);
+    const version = parseVersion(idAndVersion.slice(versionColon + 1));
+    if (version === null) return null;
+    const expected = createHmac("sha256", secret())
+      .update(`box:${idAndVersion}`)
+      .digest("hex");
+    if (!timingSafeEqual(mac, expected)) return null;
+    return { id: boxId, version };
   } catch {
     return null;
   }
@@ -44,25 +85,33 @@ export function verifyBoxToken(token: string): string | null {
 // Note token: uses a distinct prefix so tokens can't be mixed up
 // (a box share token should not accidentally verify as a note token and vice versa).
 
-export function signNoteToken(noteId: string): string {
-  const mac = createHmac("sha256", secret()).update(`note:${noteId}`).digest("hex");
-  return Buffer.from(`note:${noteId}:${mac}`).toString("base64url");
+export function signNoteToken(noteId: string, version: number): string {
+  const payload = `note:${noteId}:${version}`;
+  const mac = createHmac("sha256", secret()).update(payload).digest("hex");
+  return Buffer.from(`${payload}:${mac}`).toString("base64url");
 }
 
-export function verifyNoteToken(token: string): string | null {
+export function verifyNoteToken(token: string): VerifiedShareToken | null {
   try {
     const decoded = Buffer.from(token, "base64url").toString("utf8");
     if (!decoded.startsWith("note:")) return null;
     const stripped = decoded.slice("note:".length);
-    const colonIdx = stripped.indexOf(":");
-    if (colonIdx === -1) return null;
-    const noteId = stripped.slice(0, colonIdx);
-    const mac = stripped.slice(colonIdx + 1);
-    const expected = createHmac("sha256", secret()).update(`note:${noteId}`).digest("hex");
-    if (mac.length !== expected.length) return null;
-    let diff = 0;
-    for (let i = 0; i < mac.length; i++) diff |= mac.charCodeAt(i) ^ expected.charCodeAt(i);
-    return diff === 0 ? noteId : null;
+    const lastColon = stripped.lastIndexOf(":");
+    if (lastColon === -1) return null;
+    const mac = stripped.slice(lastColon + 1);
+    const idAndVersion = stripped.slice(0, lastColon);
+    const versionColon = idAndVersion.lastIndexOf(":");
+    if (versionColon === -1) return null;
+    const noteId = idAndVersion.slice(0, versionColon);
+    const version = parseVersion(idAndVersion.slice(versionColon + 1));
+    if (version === null) return null;
+    // The signed payload includes the `note:` prefix so it can't collide
+    // with a box token's payload space.
+    const expected = createHmac("sha256", secret())
+      .update(`note:${idAndVersion}`)
+      .digest("hex");
+    if (!timingSafeEqual(mac, expected)) return null;
+    return { id: noteId, version };
   } catch {
     return null;
   }

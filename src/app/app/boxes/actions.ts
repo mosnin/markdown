@@ -159,6 +159,14 @@ export async function updateBoxAction(
         if (Object.keys(directChanges).length > 0) {
           await updateBox(supabase, userId, boxId, workspaceId, directChanges);
         }
+        // Making a box private revokes its share link: bump share_version so
+        // every previously issued box link 404s. Mirrors the non-branch path.
+        if (changes.is_public === false) {
+          const { bumpBoxShareVersion } = await import(
+            "@/server/repositories/box_repository"
+          );
+          await bumpBoxShareVersion(supabase, boxId);
+        }
         revalidatePath(`/app/boxes/${boxId}`);
         revalidatePath("/app");
         return { ok: true, data: undefined };
@@ -166,6 +174,13 @@ export async function updateBoxAction(
     }
 
     await updateBox(supabase, userId, boxId, workspaceId, changes);
+    // Making a box private revokes its share link (see above).
+    if (changes.is_public === false) {
+      const { bumpBoxShareVersion } = await import(
+        "@/server/repositories/box_repository"
+      );
+      await bumpBoxShareVersion(supabase, boxId);
+    }
     revalidatePath(`/app/boxes/${boxId}`);
     revalidatePath("/app");
     return { ok: true, data: undefined };
