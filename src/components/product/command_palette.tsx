@@ -158,14 +158,14 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
             keywords={["chat", "conversation", "pog", "assistant"]}
             onSelect={() => navigate("/app")}
             icon={Bot}
-            label="Start Atlas AI"
+            label="Start Pog"
           />
           {hasQuery && (
             <PaletteItem
               value="action:ask-pog"
               onSelect={() => navigate("/app")}
               icon={Sparkles}
-              label={`Ask Atlas AI: ${trimmedQuery}`}
+              label={`Ask Pog: ${trimmedQuery}`}
             />
           )}
         </Command.Group>

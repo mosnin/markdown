@@ -22,7 +22,7 @@ const steps = [
     number: 1,
     title: "Connect over MCP",
     description:
-      "Atlas AI and any MCP-capable agent connect to your workspace with a scoped token.",
+      "Pog and any MCP-capable agent connect to your workspace with a scoped token.",
     icon: Plug,
   },
   {

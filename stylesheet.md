@@ -68,7 +68,7 @@ Enterprise palettes are primarily neutral. Color is deployed surgically: one bra
 All Tailwind `violet-*` utilities are remapped to the Iris ramp (centered on `oklch(0.50 0.17 265)`). This gives a restrained, professional indigo used for:
 - Focus rings
 - Interactive state hints (hover, active)
-- AI/Atlas sparkle moments
+- AI/Pog sparkle moments
 - Links
 
 | Token | Value | Use |
@@ -346,7 +346,7 @@ Entrance: `slideRight` variant.
 4. **Section headers are whispers.** `.text-overline` — small, muted, uppercase. They organize; they don't compete.
 5. **Icons are 16px (h-4) in lists, 14px (h-3.5) in dense rows, never larger than 20px in chrome.**
 6. **Destructive actions are red-tinted but not alarming** — `destructive` button is a muted red fill, not a saturated alarm-red.
-7. **Iris accent is reserved for interactive signal** — links, focus rings, the AI/Atlas brand mark. Never used decoratively.
+7. **Iris accent is reserved for interactive signal** — links, focus rings, the AI/Pog brand mark. Never used decoratively.
 8. **Status badges live at the edge** — right-aligned in list rows, top-right in cards. Never inline in a sentence.
 9. **Empty states earn their space** — title, description, one action CTA, optional illustration. All centered.
 10. **Dark mode is equal, not inverted** — every token has an explicit dark value. Never use CSS `filter: invert()`.
@@ -429,7 +429,7 @@ Use `<PageStagger>` + `<StaggerItem>` (from `src/components/product/page_transit
 
 ## 11. Dashboard / Home Screen
 
-The home screen IS the Atlas AI conversation (`mode="page"` OperatorPanel). No widgets, no sidebars, no panels on top of panels.
+The home screen IS the Pog conversation (`mode="page"` OperatorPanel). No widgets, no sidebars, no panels on top of panels.
 
 ### Layout
 

@@ -16,7 +16,7 @@ export function OnboardingMilestoneBar(_props: OnboardingMilestoneBarProps) {
     <div className="flex items-center justify-center rounded-lg border border-dashed border-border/60 px-6 py-8 text-center">
       <div>
         <p className="text-sm font-medium text-foreground">
-          Ask Atlas AI to get started.
+          Ask Pog to get started.
         </p>
         <p className="mt-1 text-xs text-muted-foreground">
           Try: &quot;Summarize what I&apos;ve been working on&quot; or &quot;Help me draft a note about...&quot;

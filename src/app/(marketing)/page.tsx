@@ -31,7 +31,7 @@ const LOOP = [
     icon: Plug,
     step: "01",
     title: "Connect over MCP",
-    body: "Atlas AI and any MCP-capable agent connect to your workspace with a scoped token. One protocol, no bespoke integrations.",
+    body: "Pog and any MCP-capable agent connect to your workspace with a scoped token. One protocol, no bespoke integrations.",
   },
   {
     icon: BookOpen,
@@ -223,7 +223,7 @@ export default async function HomePage() {
               <div className="flex items-center gap-2">
                 <GitPullRequestArrow className="h-4 w-4 text-violet-400" aria-hidden="true" />
                 <span className="text-sm font-medium text-foreground">
-                  Proposal from Atlas AI
+                  Proposal from Pog
                 </span>
               </div>
               <span className="rounded-full bg-violet-500/10 px-2.5 py-0.5 text-xs font-medium text-violet-400">

@@ -46,7 +46,7 @@ Explore
 └── Knowledge Graph
 
 [Footer]
-├── Atlas AI          ← still accessible but secondary, not the homepage
+├── Pog          ← still accessible but secondary, not the homepage
 ├── Connections       ← new: MCP endpoints, connected external agents
 ├── Settings
 └── User menu
@@ -55,7 +55,7 @@ Explore
 ### Key decisions:
 - **"Home" → "Contexts"**: The Box grid is now the first thing you see. This is the control plane.
 - **"AI Edits" → "Approvals"**: The rename positions this as the trust mechanism, not a feature. Approvals are infrastructure, not notifications.
-- **Atlas AI demoted from home**: Still first-class, accessible via footer or keyboard shortcut (`Cmd+K` → "Open Atlas AI"). But it's a tool you reach for, not the landing surface.
+- **Pog demoted from home**: Still first-class, accessible via footer or keyboard shortcut (`Cmd+K` → "Open Pog"). But it's a tool you reach for, not the landing surface.
 - **"Connections" added to footer**: The MCP endpoints and external agent management surface. This is where engineers connect their agents to Poggle.
 - **Build section stays full visibility**: Skills, Agents, Workflows, Branches remain as first-class nav items — right call for this audience.
 
@@ -85,8 +85,8 @@ Explore
 │                                                          │
 │  Recent Activity                         [View all →]    │
 │  ─────────────────────────────────────────────────────  │
-│  Atlas AI read "API Architecture" · 2 min ago           │
-│  Atlas AI proposed update to "Pricing" · 5 min ago  ●  │
+│  Pog read "API Architecture" · 2 min ago           │
+│  Pog proposed update to "Pricing" · 5 min ago  ●  │
 │  ExternalAgent read "Customer Personas" · 12 min ago    │
 └─────────────────────────────────────────────────────────┘
 ```
@@ -97,7 +97,7 @@ Explore
 - Agent count (how many agents have access)
 - Last context read timestamp (agent activity signal)
 - Pending proposals count (with alert dot if > 0)
-- Quick action: Open Box / Open in Atlas AI
+- Quick action: Open Box / Open in Pog
 
 ### The "pending proposals" signal is critical:
 This is the primary call-to-action for the non-technical curator. One glance at the home screen tells them: *"Two of your context domains have agent-proposed changes waiting for your review."* That is the job.
@@ -138,12 +138,12 @@ This is the primary call-to-action for the non-technical curator. One glance at 
 │  PENDING                                                 │
 │  ─────────────────────────────────────────────────────  │
 │  ● Update "Pricing Strategy"                             │
-│    Atlas AI · Product Specs box · 3 min ago              │
+│    Pog · Product Specs box · 3 min ago              │
 │    Proposed: added Q3 pricing tiers from context search  │
 │    [Preview diff]  [Approve]  [Reject]                   │
 │                                                          │
 │  ● Create "Competitor Analysis — Segment"                │
-│    Atlas AI · Customer Intel box · 8 min ago             │
+│    Pog · Customer Intel box · 8 min ago             │
 │    Proposed: new note synthesizing 4 retrieved notes     │
 │    [Preview diff]  [Approve]  [Reject]                   │
 ├──────────────────────────────────────────────────────────┤
@@ -213,7 +213,7 @@ The note editor stays. The right panel changes.
 ```
 Agent Activity
 ─────────────────────────────
-Atlas AI read · 2 min ago     (from: "pricing analysis" run)
+Pog read · 2 min ago     (from: "pricing analysis" run)
 ExternalAgent read · 1h ago   (from: MCP context request)
 ```
 
@@ -221,14 +221,14 @@ Small, informational, non-intrusive. Tells the curator: *"This note is being use
 
 ---
 
-## Phase 7 — Atlas AI: Repositioned as a Tool
+## Phase 7 — Pog: Repositioned as a Tool
 
 **Current**: Homepage. The first thing you see.
 
 **New**: Accessible via:
 - Sidebar footer button
-- Global keyboard shortcut (`Cmd+J` or `Cmd+K` → "Open Atlas AI")
-- "Open in Atlas AI" button on Box cards and notes
+- Global keyboard shortcut (`Cmd+J` or `Cmd+K` → "Open Pog")
+- "Open in Pog" button on Box cards and notes
 - Persistent floating button (optional, settings-controlled)
 
 The conversation UI itself doesn't change — it's already well-built. What changes is its position in the hierarchy. It's a power tool you reach for, not a lobby you walk through.
@@ -278,8 +278,8 @@ Every instance of the old language gets updated to agent-first framing.
 | AI Edits | Approvals | It's a governance surface, not a diff viewer |
 | Box | Context Domain | More precise; reinforces infrastructure framing |
 | Notes | Context Notes | Subtle — keeps "notes" but adds the qualifier |
-| Workspace Operator | Atlas AI | Already done; consistent everywhere |
-| "Ask AI" button | "Atlas AI" button | Name the thing |
+| Workspace Operator | Pog | Already done; consistent everywhere |
+| "Ask AI" button | "Pog" button | Name the thing |
 | AI tab (note panel) | Proposals | What it actually shows |
 
 ---
@@ -303,7 +303,7 @@ Every instance of the old language gets updated to agent-first framing.
 - [ ] Phase 6: Note detail → agent reads, proposal scoping
 
 ### Week 5 — Positioning + Polish
-- [ ] Phase 7: Atlas AI repositioned (footer, keyboard shortcut, contextual open)
+- [ ] Phase 7: Pog repositioned (footer, keyboard shortcut, contextual open)
 - [ ] Phase 8: Onboarding flows (developer track + curator track)
 - [ ] Marketing/sign-in page: "Context OS for AI agents" positioning
 
@@ -316,6 +316,6 @@ Every instance of the old language gets updated to agent-first framing.
 - The Knowledge Graph — keep as Explore section
 - The underlying data model — Boxes, Notes, links, versions, branches are correct
 - The Quiet Power design system — enterprise aesthetic is right for this audience
-- Atlas AI conversation UX — plan/approve/execute flow is correct
+- Pog conversation UX — plan/approve/execute flow is correct
 
 The architecture is sound. The rework is a story problem, not an engineering problem. We're not rebuilding — we're re-labeling and re-prioritizing.

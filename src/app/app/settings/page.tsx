@@ -281,7 +281,7 @@ export default async function SettingsPage() {
                 </CardTitle>
                 <CardDescription className="text-sm text-muted-foreground">
                   Entity and relationship extraction from your notes. Powers
-                  GraphRAG context in the Atlas AI agent.
+                  GraphRAG context in the Pog agent.
                 </CardDescription>
               </CardHeader>
               <Separator />

@@ -90,7 +90,7 @@ This is your capture zone. Anything you save quickly — from your phone, browse
 - Use the "Ask AI" conversation to triage: "Organize my inbox notes into the right collections"
 - Notes here show up in workspace-wide searches immediately
 
-**Tip:** Keep this collection for unprocessed captures. When it grows past ~20 notes, ask Atlas AI to help you sort them.`;
+**Tip:** Keep this collection for unprocessed captures. When it grows past ~20 notes, ask Pog to help you sort them.`;
         try {
           await createNote(supabase, ctx.user.id, ctx.workspace.id, {
             boxId: created.id,

@@ -57,7 +57,7 @@ The relationships between notes form a knowledge graph that agents traverse — 
 ### Context Bundles
 The crown jewel. When an agent requests context, Poggle assembles a **deterministic, bounded context bundle**: the target note + its typed relationships + ancestor summaries + guide note, deduplicated and capped at hard token limits. This is reliable, auditable retrieval — not a probabilistic RAG guess.
 
-### Atlas AI — The Workspace Operator
+### Pog — The Workspace Operator
 The first-party AI agent that ships with Poggle. Operates against the context layer with three tools: `hybrid_search` (vector + graph traversal), `draft_note` (write to context), `analysis` (reasoning over retrieved context). Flow: plan → human approval → execute. Every action is auditable.
 
 ### Skills — Reusable Context Instructions

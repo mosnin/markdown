@@ -128,7 +128,7 @@ export function BoxEditDialog({
               className="text-xs font-medium text-foreground/80"
               htmlFor="box-edit-agent-instructions"
             >
-              Atlas AI instructions{" "}
+              Pog instructions{" "}
               <span className="font-normal text-muted-foreground">
                 (optional)
               </span>
@@ -137,13 +137,13 @@ export function BoxEditDialog({
               id="box-edit-agent-instructions"
               value={agentInstructions}
               onChange={(e) => setAgentInstructions(e.target.value)}
-              placeholder="Rules or tone guidance Atlas AI should follow when working inside this box."
+              placeholder="Rules or tone guidance Pog should follow when working inside this box."
               rows={4}
               maxLength={4000}
               disabled={isPending}
             />
             <p className="text-[11px] text-muted-foreground">
-              Auto-injected into every Atlas AI run scoped to this box. Great for
+              Auto-injected into every Pog run scoped to this box. Great for
               style rules, required tags, or domain shorthand.
             </p>
           </div>

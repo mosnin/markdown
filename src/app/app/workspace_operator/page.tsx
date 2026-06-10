@@ -85,7 +85,7 @@ export default async function WorkspaceOperatorHistoryPage({
               AI
             </h1>
             <p className="mt-1 text-sm text-muted-foreground">
-              History of your Atlas AI runs in this workspace.
+              History of your Pog runs in this workspace.
             </p>
           </div>
           <div className="flex items-center gap-2">

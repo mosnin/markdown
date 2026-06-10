@@ -309,7 +309,7 @@ export async function startConversationTurnAction(
     if (!isWorkspaceOperatorEnabled()) {
       return {
         ok: false,
-        error: "Atlas AI is not enabled for this deployment.",
+        error: "Pog is not enabled for this deployment.",
       };
     }
 
@@ -342,7 +342,7 @@ export async function startConversationTurnAction(
         return {
           ok: false,
           error:
-            "Create your first collection before starting a conversation — Atlas AI drafts notes into a collection.",
+            "Create your first collection before starting a conversation — Pog drafts notes into a collection.",
         };
       }
       boxId = boxes[0].id;
@@ -821,7 +821,7 @@ This is your capture zone. Anything you save quickly — from your phone, browse
 - Use the "Ask AI" conversation to triage: "Organize my inbox notes into the right collections"
 - Notes here show up in workspace-wide searches immediately
 
-**Tip:** Keep this collection for unprocessed captures. When it grows past ~20 notes, ask Atlas AI to help you sort them.`;
+**Tip:** Keep this collection for unprocessed captures. When it grows past ~20 notes, ask Pog to help you sort them.`;
       try {
         await createNote(supabase, userId, workspaceId, {
           boxId: inboxBox.id,
