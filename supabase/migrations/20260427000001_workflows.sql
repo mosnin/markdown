@@ -182,3 +182,73 @@ CREATE POLICY workflow_node_runs_member_select ON public.workflow_node_runs
       WHERE wr.id = workflow_node_runs.workflow_run_id
     )
   );
+
+-- ─── Write policies ───────────────────────────────────────────────────────
+-- The SELECT policies above only grant reads. Without INSERT/UPDATE/DELETE
+-- policies every write to an RLS-enabled table is denied, which broke the
+-- workflow designer entirely (createWorkflowAction / replaceWorkflowGraph go
+-- through the RLS-active cookie client). These add member-write access gated
+-- on can_write_workspace() — which excludes viewers — mirroring the rest of
+-- the schema. Permissive policies are OR'd, so reads still work via the
+-- *_member_select policies above.
+
+CREATE POLICY workflows_member_write ON public.workflows
+  FOR ALL
+  USING (public.can_write_workspace(workspace_id))
+  WITH CHECK (public.can_write_workspace(workspace_id));
+
+CREATE POLICY workflow_runs_member_write ON public.workflow_runs
+  FOR ALL
+  USING (public.can_write_workspace(workspace_id))
+  WITH CHECK (public.can_write_workspace(workspace_id));
+
+CREATE POLICY workflow_nodes_member_write ON public.workflow_nodes
+  FOR ALL
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.workflows w
+      WHERE w.id = workflow_nodes.workflow_id
+        AND public.can_write_workspace(w.workspace_id)
+    )
+  )
+  WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM public.workflows w
+      WHERE w.id = workflow_nodes.workflow_id
+        AND public.can_write_workspace(w.workspace_id)
+    )
+  );
+
+CREATE POLICY workflow_edges_member_write ON public.workflow_edges
+  FOR ALL
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.workflows w
+      WHERE w.id = workflow_edges.workflow_id
+        AND public.can_write_workspace(w.workspace_id)
+    )
+  )
+  WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM public.workflows w
+      WHERE w.id = workflow_edges.workflow_id
+        AND public.can_write_workspace(w.workspace_id)
+    )
+  );
+
+CREATE POLICY workflow_node_runs_member_write ON public.workflow_node_runs
+  FOR ALL
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.workflow_runs wr
+      WHERE wr.id = workflow_node_runs.workflow_run_id
+        AND public.can_write_workspace(wr.workspace_id)
+    )
+  )
+  WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM public.workflow_runs wr
+      WHERE wr.id = workflow_node_runs.workflow_run_id
+        AND public.can_write_workspace(wr.workspace_id)
+    )
+  );

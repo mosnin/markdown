@@ -28,7 +28,7 @@ CREATE INDEX IF NOT EXISTS idx_operator_sessions_workspace_user
 -- Auto-update updated_at on row change
 CREATE OR REPLACE TRIGGER trg_operator_sessions_updated_at
   BEFORE UPDATE ON public.workspace_operator_sessions
-  FOR EACH ROW EXECUTE FUNCTION moddatetime(updated_at);
+  FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
 
 -- ─── FK on runs table ─────────────────────────────────────────────────────────
 

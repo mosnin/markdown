@@ -51,7 +51,7 @@ CREATE TABLE IF NOT EXISTS public.entity_mentions (
   context         text,
   position_start  integer,
   position_end    integer,
-  branch_id       uuid REFERENCES public.branches(id) ON DELETE SET NULL,
+  branch_id       uuid REFERENCES public.draft_branches(id) ON DELETE SET NULL,
   created_at      timestamptz NOT NULL DEFAULT now()
 );
 

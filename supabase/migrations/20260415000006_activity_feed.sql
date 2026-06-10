@@ -21,8 +21,7 @@ CREATE TABLE IF NOT EXISTS public.user_notification_preferences (
   email_digest  text        NOT NULL DEFAULT 'none'
     CHECK (email_digest IN ('none', 'daily', 'weekly')),
   updated_at    timestamptz NOT NULL DEFAULT now(),
-  PRIMARY KEY (user_id),
-  UNIQUE (user_id, workspace_id)
+  PRIMARY KEY (user_id, workspace_id)
 );
 
 ALTER TABLE public.user_notification_preferences ENABLE ROW LEVEL SECURITY;
@@ -45,8 +44,7 @@ CREATE TABLE IF NOT EXISTS public.user_feed_read_cursors (
   user_id       uuid        NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   workspace_id  uuid        NOT NULL REFERENCES public.workspaces(id) ON DELETE CASCADE,
   last_read_at  timestamptz NOT NULL DEFAULT now(),
-  PRIMARY KEY (user_id),
-  UNIQUE (user_id, workspace_id)
+  PRIMARY KEY (user_id, workspace_id)
 );
 
 ALTER TABLE public.user_feed_read_cursors ENABLE ROW LEVEL SECURITY;
