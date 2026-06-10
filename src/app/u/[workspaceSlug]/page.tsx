@@ -18,6 +18,13 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
     return { title: "Not found" };
   }
 
+  // A workspace only has a public profile once it shares ≥1 public box —
+  // otherwise don't disclose its name/existence (no public-profile opt-in flag).
+  const publicBoxes = await listPublicBoxesByWorkspace(supabase, workspace.id);
+  if (publicBoxes.length === 0) {
+    return { title: "Not found" };
+  }
+
   return {
     title: `${workspace.name} — Public Boxes`,
     description: `Browse public knowledge boxes shared by ${workspace.name}.`,
@@ -41,6 +48,9 @@ export default async function UserProfilePage({ params }: PageProps) {
   if (!workspace) notFound();
 
   const publicBoxes = await listPublicBoxesByWorkspace(supabase, workspace.id);
+  // Only expose the profile (incl. the workspace name) when something is
+  // actually shared publicly — no public boxes means no public profile.
+  if (publicBoxes.length === 0) notFound();
 
   return (
     <div className="mx-auto max-w-2xl px-4 py-12">

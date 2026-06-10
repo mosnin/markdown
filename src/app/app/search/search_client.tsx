@@ -86,18 +86,11 @@ export function WorkspaceSearchClient({
   const [hasSearched, setHasSearched] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // Focus search input on mount and on Cmd/Ctrl+K.
+  // Focus the search input on mount. Cmd/Ctrl+K is owned by the global
+  // CommandPalette (see CommandPaletteProvider), so we don't bind it here —
+  // it previously fired this focus handler and opened the palette together.
   useEffect(() => {
     inputRef.current?.focus();
-    function onKey(e: KeyboardEvent) {
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
-        e.preventDefault();
-        inputRef.current?.focus();
-        inputRef.current?.select();
-      }
-    }
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
   }, []);
 
   // Debounced search on query change. Only schedules a fetch when the

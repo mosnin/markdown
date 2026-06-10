@@ -4,6 +4,7 @@ import Link from "next/link";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { verifyNoteToken } from "@/lib/share_token";
 import { getNoteById } from "@/server/repositories/note_repository";
+import { NOTE_STATUS } from "@/server/domain/constants/content_status";
 
 interface PageProps {
   params: Promise<{ token: string }>;
@@ -18,7 +19,8 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 
   const supabase = createAdminClient();
   const note = await getNoteById(supabase, noteId);
-  if (!note) {
+  // Don't surface trashed/archived notes through a share link, even in metadata.
+  if (!note || note.status !== NOTE_STATUS.ACTIVE) {
     return { title: "Shared note — Poggle" };
   }
 
@@ -48,7 +50,9 @@ export default async function SharedNotePage({ params }: PageProps) {
 
   const supabase = createAdminClient();
   const note = await getNoteById(supabase, noteId);
-  if (!note) notFound();
+  // A share link must stop working once the note is trashed or archived —
+  // getNoteById returns rows of any status, so gate on active here.
+  if (!note || note.status !== NOTE_STATUS.ACTIVE) notFound();
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-12">

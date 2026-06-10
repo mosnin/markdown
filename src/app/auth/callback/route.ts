@@ -20,9 +20,24 @@ import { createClient } from "@/lib/supabase/server";
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url);
   const code = searchParams.get("code");
-  // Allow a `next` override so future flows can deep-link after auth.
+
+  // Allow a `next` override so future flows can deep-link after auth, but only
+  // to a SAME-ORIGIN destination. An attacker-supplied absolute or protocol-
+  // relative value (`//evil.com`, `/\evil.com`, `https://evil.com`) would
+  // otherwise turn this into an open redirect once a (valid) code is exchanged.
   // Default to /welcome so the intro animation plays on first sign-in.
-  const next = searchParams.get("next") ?? "/welcome";
+  const requestedNext = searchParams.get("next");
+  let next = "/welcome";
+  if (requestedNext) {
+    try {
+      const candidate = new URL(requestedNext, origin);
+      if (candidate.origin === origin) {
+        next = candidate.pathname + candidate.search + candidate.hash;
+      }
+    } catch {
+      // Malformed `next` — keep the safe default.
+    }
+  }
 
   if (code) {
     const supabase = await createClient();

@@ -654,25 +654,10 @@ export function OperatorPanel({
   handleCancelRef.current = handleCancel;
   handleGeneratePlanRef.current = handleGeneratePlan;
 
-  // Global Cmd/Ctrl+K: focus the prompt textarea, opening the panel if it
-  // isn't already. This mirrors common "focus search" shortcuts and keeps
-  // the panel reachable from anywhere in the app when the trigger is
-  // mounted at the layout root.
-  useEffect(() => {
-    function onGlobalKeyDown(e: KeyboardEvent) {
-      const modifier = e.metaKey || e.ctrlKey;
-      if (modifier && (e.key === "k" || e.key === "K")) {
-        e.preventDefault();
-        if (!open) onOpenChange(true);
-        // Defer focus until the sheet mounts the textarea.
-        setTimeout(() => {
-          promptTextareaRef.current?.focus();
-        }, 0);
-      }
-    }
-    window.addEventListener("keydown", onGlobalKeyDown);
-    return () => window.removeEventListener("keydown", onGlobalKeyDown);
-  }, [open, onOpenChange]);
+  // Cmd/Ctrl+K is owned by the global CommandPalette (see
+  // CommandPaletteProvider), not the operator panel — binding it here too made
+  // the shortcut open the command palette and this sheet at the same time. The
+  // panel stays reachable via its trigger button and the OPEN_OPERATOR_EVENT.
 
   // Esc while a cancellable run is running: send cancel. Only active when
   // the panel is open so it doesn't stomp on other "Esc" handlers elsewhere

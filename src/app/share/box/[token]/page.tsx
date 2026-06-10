@@ -4,6 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { verifyBoxToken } from "@/lib/share_token";
 import { getBoxById } from "@/server/repositories/box_repository";
 import { listNotesByBox } from "@/server/repositories/note_repository";
+import { BOX_STATUS } from "@/server/domain/constants/content_status";
 import Link from "next/link";
 import { FileText } from "lucide-react";
 
@@ -20,7 +21,8 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 
   const supabase = createAdminClient();
   const box = await getBoxById(supabase, boxId);
-  if (!box) {
+  // Don't surface trashed/archived boxes through a share link, even in metadata.
+  if (!box || box.status !== BOX_STATUS.ACTIVE) {
     return { title: "Shared box — Poggle" };
   }
 
@@ -50,7 +52,9 @@ export default async function SharedBoxPage({ params }: PageProps) {
 
   const supabase = createAdminClient();
   const box = await getBoxById(supabase, boxId);
-  if (!box) notFound();
+  // A share link must stop working once the box is trashed or archived —
+  // getBoxById returns rows of any status, so gate on active here.
+  if (!box || box.status !== BOX_STATUS.ACTIVE) notFound();
 
   const notes = await listNotesByBox(supabase, boxId, { limit: 100, branchId: null });
 

@@ -10,7 +10,10 @@ import { resolve } from "node:path";
 //
 //   - Cmd/Ctrl+Enter in the prompt textarea → handleGeneratePlan
 //   - Esc while a run is cancellable       → handleCancel
-//   - Cmd/Ctrl+K anywhere                  → open panel + focus textarea
+//
+// Cmd/Ctrl+K is intentionally NOT handled here — it is owned by the global
+// CommandPalette (CommandPaletteProvider). Binding it here too used to open
+// the command palette and this sheet at once; the guard below locks that out.
 //
 // Because the repo's vitest runs under node (no jsdom), we assert the
 // source-level wiring — same pattern as operator_panel_cancel_wiring and
@@ -42,21 +45,13 @@ describe("operator_panel.tsx — keyboard shortcuts wiring", () => {
     );
   });
 
-  it("installs a global Cmd/Ctrl+K listener that focuses the prompt textarea", () => {
-    // Global listener, not per-textarea — the spec calls for "opens the
-    // panel if closed". Assert the addEventListener wiring and the
-    // focus call.
-    expect(panelSource).toMatch(
-      /window\.addEventListener\s*\(\s*"keydown"/
-    );
-    expect(panelSource).toMatch(/e\.key\s*===\s*"k"|e\.key\s*===\s*"K"/);
-    expect(panelSource).toMatch(/promptTextareaRef\.current\?\.focus\(\)/);
-  });
-
-  it("Cmd/Ctrl+K opens the panel if closed via onOpenChange(true)", () => {
-    // The global-K handler calls onOpenChange(true) when the panel is
-    // closed — this is how the shortcut reaches a closed panel.
-    expect(panelSource).toMatch(
+  it("does NOT bind a global Cmd/Ctrl+K listener (owned by the CommandPalette)", () => {
+    // Cmd/Ctrl+K is owned by the global CommandPalette (CommandPaletteProvider).
+    // The operator panel used to bind it too, which opened the command palette
+    // and this sheet simultaneously (plus the legacy GlobalSearch dialog).
+    // Guard against that regression — no "k"/"K" keydown handling lives here.
+    expect(panelSource).not.toMatch(/e\.key\s*===\s*"[kK]"/);
+    expect(panelSource).not.toMatch(
       /if\s*\(\s*!open\s*\)\s*onOpenChange\s*\(\s*true\s*\)/
     );
   });
@@ -91,23 +86,22 @@ describe("operator_panel.tsx — keyboard shortcuts wiring", () => {
     expect(panelSource).toMatch(/↵ generates a plan to review/);
   });
 
-  it("attaches a ref to the prompt textarea so Cmd/Ctrl+K can focus it", () => {
+  it("attaches a ref to the prompt textarea (for programmatic focus)", () => {
     expect(panelSource).toMatch(/promptTextareaRef/);
     expect(panelSource).toMatch(/ref=\{\s*promptTextareaRef\s*\}/);
   });
 
-  it("adds and removes the global keydown listeners (no leak across remounts)", () => {
-    // Each useEffect that adds a global listener must return a cleanup
-    // that removes it — the panel's trigger is mounted at the layout
-    // root and stays for the whole session, so a leak here would
-    // compound across navigations.
+  it("adds and removes its global keydown listener (no leak across remounts)", () => {
+    // The panel installs one global keydown listener (Esc-to-cancel while a
+    // run is cancellable). Its trigger is mounted at the layout root for the
+    // whole session, so every add must be balanced by a cleanup remove.
     const addCalls = panelSource.match(
       /window\.addEventListener\s*\(\s*"keydown"/g
     );
     const removeCalls = panelSource.match(
       /window\.removeEventListener\s*\(\s*"keydown"/g
     );
-    expect(addCalls && addCalls.length).toBeGreaterThanOrEqual(2);
+    expect(addCalls && addCalls.length).toBeGreaterThanOrEqual(1);
     expect(removeCalls && removeCalls.length).toBe(
       addCalls ? addCalls.length : 0
     );

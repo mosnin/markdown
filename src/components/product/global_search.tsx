@@ -56,16 +56,10 @@ export function GlobalSearch({ boxes, onOpenOperator }: GlobalSearchProps) {
   const router = useRouter();
   const [open, setOpen] = React.useState(false);
 
-  React.useEffect(() => {
-    const down = (e: KeyboardEvent) => {
-      if (e.key === "k" && (e.metaKey || e.ctrlKey)) {
-        e.preventDefault();
-        setOpen((v) => !v);
-      }
-    };
-    document.addEventListener("keydown", down);
-    return () => document.removeEventListener("keydown", down);
-  }, []);
+  // Cmd/Ctrl+K is owned by the global CommandPalette (see
+  // CommandPaletteProvider). This search opens from its toolbar button instead —
+  // binding the shortcut here too used to fire three overlays at once (this
+  // dialog, the command palette, and the operator panel).
 
   function go(path: string) {
     setOpen(false);

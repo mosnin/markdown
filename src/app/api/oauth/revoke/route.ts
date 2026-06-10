@@ -99,6 +99,17 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  // RFC 7009 §2.1: a client may only revoke tokens issued to itself. If the
+  // presented token belongs to a different client, respond 200 without
+  // revoking — so we neither reveal that the token exists nor let one client
+  // tear down another client's sessions (a refresh token revokes its family).
+  if (tokenOwner && tokenOwner.clientId !== clientId) {
+    return new NextResponse(null, {
+      status: 200,
+      headers: { "Cache-Control": "no-store", Pragma: "no-cache" },
+    });
+  }
+
   await revokeToken(admin, token);
 
   // Audit every revocation. userId may be null when the presented
@@ -124,7 +135,12 @@ export async function POST(req: NextRequest) {
 async function lookupTokenOwner(
   admin: ReturnType<typeof createAdminClient>,
   rawToken: string
-): Promise<{ userId: string; workspaceId: string; tokenId: string } | null> {
+): Promise<{
+  userId: string;
+  workspaceId: string;
+  tokenId: string;
+  clientId: string;
+} | null> {
   try {
     // Avoid importing the hashing helper into this route; compute the
     // prefix-based lookup directly via the admin client. SHA-256 of
@@ -134,7 +150,7 @@ async function lookupTokenOwner(
     if (rawToken.startsWith("cso_a_")) {
       const { data } = await admin
         .from("oauth_access_tokens")
-        .select("id, user_id, workspace_id")
+        .select("id, user_id, workspace_id, client_id")
         .eq("token_hash", hash)
         .maybeSingle();
       if (!data) return null;
@@ -142,12 +158,13 @@ async function lookupTokenOwner(
         userId: data.user_id,
         workspaceId: data.workspace_id,
         tokenId: data.id,
+        clientId: data.client_id,
       };
     }
     if (rawToken.startsWith("cso_r_")) {
       const { data } = await admin
         .from("oauth_refresh_tokens")
-        .select("id, user_id, workspace_id")
+        .select("id, user_id, workspace_id, client_id")
         .eq("token_hash", hash)
         .maybeSingle();
       if (!data) return null;
@@ -155,6 +172,7 @@ async function lookupTokenOwner(
         userId: data.user_id,
         workspaceId: data.workspace_id,
         tokenId: data.id,
+        clientId: data.client_id,
       };
     }
     return null;

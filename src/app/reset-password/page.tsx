@@ -1,3 +1,4 @@
+import { connection } from "next/server";
 import Link from "next/link";
 import { ResetPasswordForm } from "./reset_password_form";
 
@@ -14,7 +15,13 @@ export const metadata = {
  * in the "recovery" token scope — they must set a new password to get full
  * access.
  */
-export default function ResetPasswordPage() {
+export default async function ResetPasswordPage() {
+  // Opt out of static prerendering so the proxy's per-request CSP nonce is
+  // injected into the framework scripts; otherwise the strict nonce +
+  // 'strict-dynamic' policy blocks this client form's JS in production and the
+  // "set new password" submit never runs. See proxy.ts.
+  await connection();
+
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-6 py-12">
       <div className="w-full max-w-sm space-y-6">

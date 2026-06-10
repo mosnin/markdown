@@ -307,19 +307,10 @@ function ProposalCard({
       )}
     >
       <CardHeader className="pb-2">
-        {/* Checkbox for batch selection — only on pending proposals */}
-        {isPendingProposal && onToggleSelect && (
-          <div className="absolute top-3 left-3">
-            <input
-              type="checkbox"
-              checked={isSelected ?? false}
-              onChange={() => onToggleSelect(proposal.id)}
-              aria-label={`Select proposal for ${proposal.proposed_title ?? current_note?.title ?? "this note"}`}
-              className="h-4 w-4 rounded border-border accent-violet-500 cursor-pointer"
-            />
-          </div>
-        )}
-        <div className={cn("flex flex-col gap-1.5", isPendingProposal && onToggleSelect && "pl-7")}>
+        {/* Batch-selection checkbox (pending proposals only) lives inline in
+            the header row below — a second, absolutely-positioned copy used to
+            render here too, which showed two checkboxes per card. */}
+        <div className="flex flex-col gap-1.5">
           <div className="flex flex-wrap items-center gap-2">
             {isPendingProposal && onToggleSelect && (
               <input

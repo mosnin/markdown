@@ -166,6 +166,32 @@ function getWebhookHandler() {
       metadata,
     });
   },
+
+  // ── subscription.paused ────────────────────────────────────────────────────
+  // Creem's contract for a paused subscription is to revoke access. Drop the
+  // workspace off paid provisioning (status != 'active') until it resumes;
+  // leave the plan so the row stays linked for the eventual resume.
+  onSubscriptionPaused: async ({ id, customer, metadata }) => {
+    await upsertSubscription({
+      subscriptionId: id,
+      customerId: typeof customer === "object" ? customer.id : undefined,
+      status: "past_due",
+      metadata,
+    });
+  },
+
+  // ── subscription.unpaid ────────────────────────────────────────────────────
+  // Dunning exhausted (payment never recovered) — treat as cancelled so the
+  // workspace loses paid access, mirroring subscription.canceled/expired.
+  onSubscriptionUnpaid: async ({ id, customer, metadata }) => {
+    await upsertSubscription({
+      subscriptionId: id,
+      customerId: typeof customer === "object" ? customer.id : undefined,
+      plan: "free",
+      status: "cancelled",
+      metadata,
+    });
+  },
   });
 }
 
