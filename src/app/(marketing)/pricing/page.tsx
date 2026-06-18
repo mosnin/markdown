@@ -5,6 +5,8 @@ import Link from "next/link";
 import { ArrowRight, Check, Minus, CheckCircle2, Users, Briefcase, Building2 } from "lucide-react";
 import { PageHeroSection } from "@/components/marketing/hero";
 import { UpgradeButton } from "@/components/marketing/upgrade_button";
+import { Faq } from "@/components/marketing/faq";
+import { MarketingSection, SectionHeader, BentoCard } from "@/components/marketing/sections";
 import * as PricingCard from "@/components/ui/pricing-card";
 import { Button } from "@/components/ui/button";
 
@@ -250,7 +252,7 @@ export default async function PricingPage() {
       {/* Comparison table */}
       <section className="border-y border-border/50 bg-muted/10 py-16">
         <div className="mx-auto max-w-5xl px-6">
-          <h2 className="mb-8 text-xl font-bold tracking-tight text-foreground">
+          <h2 className="mb-8 font-hero text-2xl font-bold tracking-tight text-foreground">
             Full comparison
           </h2>
           <div className="overflow-x-auto">
@@ -315,13 +317,13 @@ export default async function PricingPage() {
       {/* Enterprise */}
       <section className="py-16">
         <div className="mx-auto max-w-5xl px-6">
-          <div className="rounded-xl border border-border/60 bg-card p-8">
+          <div className="rounded-3xl border border-border/60 bg-card p-8">
             <div className="flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <p className="text-xs font-semibold uppercase tracking-widest text-violet-400">
+                <p className="font-mono text-[11px] font-medium uppercase tracking-[0.18em] text-violet-500">
                   Enterprise
                 </p>
-                <h3 className="mt-1 text-xl font-bold tracking-tight text-foreground">
+                <h3 className="mt-1.5 font-hero text-xl font-bold tracking-tight text-foreground">
                   Custom deployment for large teams
                 </h3>
                 <p className="mt-2 text-sm text-muted-foreground">
@@ -342,28 +344,37 @@ export default async function PricingPage() {
       </section>
 
       {/* FAQ */}
-      <section className="border-t border-border/50 py-16">
-        <div className="mx-auto max-w-2xl px-6">
-          <h2 className="mb-8 text-xl font-bold tracking-tight text-foreground">
-            Pricing FAQ
-          </h2>
-          <div className="divide-y divide-border/60">
-            {FAQS.map((faq) => (
-              <details key={faq.q} className="group py-4">
-                <summary className="flex cursor-pointer list-none items-center justify-between gap-4 text-sm font-medium text-foreground">
-                  {faq.q}
-                  <span className="shrink-0 text-muted-foreground transition-transform group-open:rotate-45">
-                    +
-                  </span>
-                </summary>
-                <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
-                  {faq.a}
-                </p>
-              </details>
-            ))}
-          </div>
+      <MarketingSection className="border-t border-border/50">
+        <div className="mx-auto max-w-3xl">
+          <SectionHeader align="center" eyebrow="FAQ" title="Pricing questions." className="mb-10" />
+          <Faq items={FAQS} />
         </div>
-      </section>
+      </MarketingSection>
+
+      {/* CTA */}
+      <MarketingSection>
+        <BentoCard tone="gradient" className="px-6 py-16 text-center sm:px-12 sm:py-20">
+          <div className="pointer-events-none absolute -left-10 -top-10 size-48 rounded-full bg-white/10 blur-3xl" />
+          <div className="relative mx-auto max-w-2xl">
+            <h2 className="font-hero text-3xl font-bold tracking-tight text-white sm:text-4xl">
+              Start free. Govern at scale.
+            </h2>
+            <p className="mx-auto mt-4 max-w-xl text-base text-white/80 sm:text-lg">
+              Connect your first agent today — no credit card required.
+            </p>
+            <div className="mt-9 flex justify-center">
+              <Button
+                size="lg"
+                className="rounded-full bg-white text-violet-700 hover:bg-white/90"
+                render={<Link href="/sign_in?mode=signup" />}
+              >
+                Get started free
+                <ArrowRight className="ml-2 size-4" data-icon="inline-end" />
+              </Button>
+            </div>
+          </div>
+        </BentoCard>
+      </MarketingSection>
     </div>
   );
 }

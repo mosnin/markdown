@@ -1,14 +1,14 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import {
-  ArrowRight,
-  Check,
-  Plug,
-  BookOpen,
-  GitPullRequestArrow,
-  ShieldCheck,
-} from "lucide-react";
+import { ArrowRight, GitPullRequestArrow, ScrollText, SlidersHorizontal } from "lucide-react";
 import { PageHeroSection } from "@/components/marketing/hero";
+import { LoopStepper } from "@/components/marketing/loop_stepper";
+import {
+  MarketingSection,
+  SectionHeader,
+  BentoCard,
+  IconTile,
+} from "@/components/marketing/sections";
 import { Button } from "@/components/ui/button";
 
 export const metadata: Metadata = {
@@ -17,34 +17,21 @@ export const metadata: Metadata = {
     "The governed loop in four steps: agents connect over MCP, read your context, propose changes, and you approve.",
 };
 
-const steps = [
+const WHY = [
   {
-    number: 1,
-    title: "Connect over MCP",
-    description:
-      "Pog and any MCP-capable agent connect to your workspace with a scoped token.",
-    icon: Plug,
-  },
-  {
-    number: 2,
-    title: "Read your context",
-    description:
-      "Agents read the notes, files, and decisions you grant them — your live source of truth.",
-    icon: BookOpen,
-  },
-  {
-    number: 3,
-    title: "Propose changes",
-    description:
-      "Agents never write directly. Every change arrives as a reviewable diff against your workspace.",
     icon: GitPullRequestArrow,
+    title: "Proposals, not writes",
+    body: "Agents submit reviewable diffs. You see exactly what would change, in context, before anything happens.",
   },
   {
-    number: 4,
-    title: "You approve",
-    description:
-      "A human reviews and approves before anything lands. The trust gate stays closed until you open it.",
-    icon: ShieldCheck,
+    icon: SlidersHorizontal,
+    title: "Scoped, least-privilege access",
+    body: "Each agent gets a token scoped to specific boxes and capabilities — read here, propose there, nothing more.",
+  },
+  {
+    icon: ScrollText,
+    title: "Auditable and reversible",
+    body: "Every step lands on an append-only log, with full version history and one-click rollback on every object.",
   },
 ];
 
@@ -52,63 +39,74 @@ export default function HowItWorksPage() {
   return (
     <div className="min-h-screen bg-background">
       <PageHeroSection
-        eyebrow="How It Works"
-        title="The governed loop, in four steps"
-        description="Agents connect, read, and propose. You approve. Here's how the trust gate works."
-        ctaPrimary={{ label: "Get started free", href: "/sign_in" }}
+        eyebrow="How it works"
+        title="The governed loop, in four steps."
+        description="Agents connect, read, and propose. You approve. Here's the trust gate, end to end — try it below."
+        ctaPrimary={{ label: "Get started free", href: "/sign_in?mode=signup" }}
+        ctaSecondary={{ label: "Connect an agent", href: "/connections" }}
       />
 
-      <section className="mx-auto w-full max-w-5xl px-6 py-24">
-        <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
-          {steps.map((step) => (
-            <div
-              key={step.number}
-              className="rounded-xl border border-border/50 bg-card p-6"
-            >
-              <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-lg bg-muted">
-                <step.icon className="h-5 w-5 text-muted-foreground" />
-              </div>
-              <div className="mb-1 text-xs font-semibold uppercase tracking-widest text-violet-400">
-                Step {step.number}
-              </div>
-              <h3 className="text-sm font-semibold text-foreground">
-                {step.title}
-              </h3>
-              <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">
-                {step.description}
-              </p>
-            </div>
-          ))}
-        </div>
-      </section>
+      {/* Interactive loop */}
+      <MarketingSection className="border-b border-border/30">
+        <SectionHeader
+          eyebrow="The loop"
+          title="One path, every agent, every time."
+          lede="Click through each step, or let it play. The gate stays closed until a human opens it."
+        />
+        <LoopStepper />
+      </MarketingSection>
 
-      {/* Bottom CTA */}
-      <section className="border-t border-border/50 py-20">
-        <div className="mx-auto max-w-2xl px-6 text-center">
-          <h2 className="text-2xl font-bold tracking-tight text-foreground">
-            Ready to get started?
-          </h2>
-          <p className="mt-3 text-muted-foreground">
-            Connect your first agent in minutes. No credit card needed.
-          </p>
-          <div className="mt-6 flex flex-col items-center gap-2">
-            <Button size="lg" render={<Link href="/sign_in" />}>Get started free
-              <ArrowRight className="h-4 w-4" /></Button>
-            <ul className="mt-4 flex flex-wrap justify-center gap-4 text-xs text-muted-foreground">
-              {[
-                "Free plan forever",
-                "Human-in-the-loop by default",
-                "No vendor lock-in",
-              ].map((item) => (
-                <li key={item} className="flex items-center gap-1.5">
-                  <Check className="h-3 w-3 text-violet-400" />
-                  {item}
-                </li>
-              ))}
-            </ul>
-          </div>
+      {/* Why it's safe */}
+      <MarketingSection muted className="border-b border-border/30">
+        <SectionHeader eyebrow="Why it's safe" title="Guardrails that aren't optional." />
+        <div className="mt-12 grid grid-cols-1 gap-5 md:grid-cols-3">
+          {WHY.map((w) => {
+            const Icon = w.icon;
+            return (
+              <BentoCard key={w.title}>
+                <IconTile>
+                  <Icon className="size-5" aria-hidden="true" />
+                </IconTile>
+                <h3 className="mt-5 font-hero text-lg font-semibold text-foreground">{w.title}</h3>
+                <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{w.body}</p>
+              </BentoCard>
+            );
+          })}
         </div>
-      </section>
+      </MarketingSection>
+
+      {/* CTA */}
+      <MarketingSection>
+        <BentoCard tone="gradient" className="px-6 py-16 text-center sm:px-12 sm:py-20">
+          <div className="pointer-events-none absolute -left-10 -top-10 size-48 rounded-full bg-white/10 blur-3xl" />
+          <div className="relative mx-auto max-w-2xl">
+            <h2 className="font-hero text-3xl font-bold tracking-tight text-white sm:text-4xl">
+              Ready to put a human in the loop?
+            </h2>
+            <p className="mx-auto mt-4 max-w-xl text-base text-white/80 sm:text-lg">
+              Connect your first agent in minutes. No credit card needed.
+            </p>
+            <div className="mt-9 flex flex-col items-center justify-center gap-3 sm:flex-row">
+              <Button
+                size="lg"
+                className="rounded-full bg-white text-violet-700 hover:bg-white/90"
+                render={<Link href="/sign_in?mode=signup" />}
+              >
+                Get started free
+                <ArrowRight className="ml-2 size-4" data-icon="inline-end" />
+              </Button>
+              <Button
+                size="lg"
+                variant="ghost"
+                className="rounded-full text-white hover:bg-white/10 hover:text-white"
+                render={<Link href="/pricing" />}
+              >
+                View pricing
+              </Button>
+            </div>
+          </div>
+        </BentoCard>
+      </MarketingSection>
     </div>
   );
 }
