@@ -102,10 +102,10 @@ export default function ChangelogPage() {
         <BentoCard tone="gradient" className="px-6 py-14 text-center sm:px-12 sm:py-16">
           <div className="relative mx-auto max-w-2xl">
             <h2 className="font-hero text-2xl font-bold tracking-tight text-white sm:text-3xl">
-              Want it before it's in the changelog?
+              Want it before it’s in the changelog?
             </h2>
             <p className="mx-auto mt-3 max-w-lg text-base text-white/80">
-              Start free and you're always on the latest.
+              Start free and you’re always on the latest.
             </p>
             <div className="mt-7 flex justify-center">
               <Button

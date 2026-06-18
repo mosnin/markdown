@@ -63,10 +63,10 @@ export default function AboutPage() {
               something important.
             </p>
             <p className="mt-4 text-pretty text-[15px] leading-relaxed text-foreground/85">
-              The fix isn't a smarter model. It's a <span className="font-medium text-foreground">trust gate</span> —
+              The fix isn’t a smarter model. It’s a <span className="font-medium text-foreground">trust gate</span> —
               a place where agents read freely, propose changes, and wait for a
-              human to approve. That's the entire idea behind Poggle, and we think
-              it's how serious teams will run agents for years to come.
+              human to approve. That’s the entire idea behind Poggle, and we think
+              it’s how serious teams will run agents for years to come.
             </p>
           </BentoCard>
         </div>

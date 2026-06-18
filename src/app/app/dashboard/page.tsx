@@ -17,7 +17,7 @@ import { DashboardCard } from "@/components/product/dashboard_card";
 import { CreateBoxDialog } from "@/components/product/create/create_box_dialog";
 import { OnboardingCallout } from "@/components/product/onboarding_callout";
 import { QuickStartPanel } from "@/components/product/quick_start_panel";
-import { OnboardingMilestoneBar } from "@/components/product/onboarding_milestone_bar";
+import { OnboardingChecklist } from "@/components/product/onboarding_checklist";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
@@ -85,6 +85,15 @@ export default async function AppHomePage() {
   // the fetched set (first 6 boxes × 6 notes).
   const totalFetchedNoteCount = notesByBox.flat().length;
 
+  // Activation step 3 ("review an AI Edit") is done once at least one proposal
+  // has left the pending state (approved or rejected) — a single cheap count.
+  const { count: reviewedProposalCount } = await adminClient
+    .from("write_proposals")
+    .select("id", { count: "exact", head: true })
+    .eq("workspace_id", ctx.workspace.id)
+    .neq("status", "pending");
+  const editReviewed = (reviewedProposalCount ?? 0) > 0;
+
   const milestones = computeMilestones({
     noteCount: totalFetchedNoteCount,
     boxCount: boxes.length,
@@ -120,12 +129,15 @@ export default async function AppHomePage() {
       <ScrollArea className="flex-1">
         <div className="mx-auto max-w-3xl space-y-8 px-6 py-6">
 
-          {/* Onboarding milestone bar — hidden once all done */}
-          <Suspense fallback={<div className="animate-pulse h-10 rounded-lg bg-muted/20" />}>
-            {!allMilestonesDone && (
-              <OnboardingMilestoneBar milestones={milestones} />
-            )}
-          </Suspense>
+          {/* First-run activation checklist — self-hides once activated */}
+          {!allMilestonesDone && (
+            <OnboardingChecklist
+              box={boxes.length > 0}
+              agent={activeConnections.length > 0}
+              edit={editReviewed}
+              pendingCount={pendingCount}
+            />
+          )}
 
           {/* First-run: no boxes */}
           {!hasBoxes && <OnboardingCallout />}
