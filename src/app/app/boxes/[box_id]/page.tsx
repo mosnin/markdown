@@ -1,12 +1,10 @@
 import { notFound } from "next/navigation";
-import { Suspense, type ReactNode } from "react";
+import { Suspense, cache } from "react";
 import {
   Archive,
   BookOpen,
-  Bot,
   FileText,
   Folder,
-  RotateCcw,
   Search,
 } from "lucide-react";
 import Link from "next/link";
@@ -283,6 +281,70 @@ async function BoxContextPanel({
   );
 }
 
+// ─── Deferred tab content ────────────────────────────────────────────────────
+// Streamed inside <Suspense> so the page shell + the default Notes tab paint
+// immediately; the heavier per-tab work (box overview, guide-note links) loads
+// independently instead of blocking first paint.
+
+type LoadedBox = NonNullable<Awaited<ReturnType<typeof getBoxById>>>;
+
+// Per-request memoized overview. The Overview and Graph tabs both render
+// server-side, but pass the SAME box reference, so cache() runs the (heavier)
+// overview computation exactly once per request.
+const loadOverview = cache(async (box: LoadedBox, branchId: string | null) =>
+  getBoxOverview(await createClient(), box, { branchId })
+);
+
+async function OverviewTabContent({
+  box,
+  branchId,
+}: {
+  box: LoadedBox;
+  branchId: string | null;
+}) {
+  return <BoxOverviewPanel overview={await loadOverview(box, branchId)} />;
+}
+
+async function GraphTabContent({
+  box,
+  branchId,
+}: {
+  box: LoadedBox;
+  branchId: string | null;
+}) {
+  return <GraphPanel overview={await loadOverview(box, branchId)} />;
+}
+
+async function GuideTabContent({
+  box,
+  guideNote,
+  notes,
+  folders,
+  branchId,
+}: {
+  box: LoadedBox;
+  guideNote: Note | null;
+  notes: Note[];
+  folders: FolderType[];
+  branchId: string | null;
+}) {
+  const supabase = await createClient();
+  const allLinks: NoteLink[] = await listLinksFromNotes(
+    supabase,
+    notes.map((n) => n.id),
+    { branchId }
+  );
+  return (
+    <BoxGuidePanel
+      box={box}
+      guideNote={guideNote ?? null}
+      allNotes={notes}
+      allLinks={allLinks}
+      folders={folders}
+    />
+  );
+}
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 const VALID_BOX_TABS = ["notes", "overview", "tree", "guide", "graph", "search", "archived", "trashed"] as const;
@@ -331,17 +393,6 @@ export default async function BoxPage({
   const guideNote = box.guide_note_id
     ? await getNoteById(supabase, box.guide_note_id)
     : null;
-
-  // Batched: one `source_note_id IN (...)` query instead of one per note (N+1).
-  const allLinks: NoteLink[] = await listLinksFromNotes(
-    supabase,
-    notes.map((n) => n.id),
-    { branchId: ctx.activeBranchId }
-  );
-
-  const overview = await getBoxOverview(supabase, box, {
-    branchId: ctx.activeBranchId,
-  });
 
   const sortedNotes = [...notes].sort((a, b) =>
     b.updated_at.localeCompare(a.updated_at)
@@ -558,7 +609,7 @@ export default async function BoxPage({
             <ScrollArea className="h-full">
               <Suspense fallback={<TabSkeleton />}>
                 <div className="mx-auto max-w-3xl px-6 py-6">
-                  <BoxOverviewPanel overview={overview} />
+                  <OverviewTabContent box={box} branchId={ctx.activeBranchId} />
                 </div>
               </Suspense>
             </ScrollArea>
@@ -579,15 +630,17 @@ export default async function BoxPage({
           {/* ── Guide tab ── */}
           <TabsContent value="guide" className="flex-1 overflow-hidden">
             <ScrollArea className="h-full">
-              <div className="mx-auto max-w-3xl px-6 py-6">
-                <BoxGuidePanel
-                  box={box}
-                  guideNote={guideNote ?? null}
-                  allNotes={notes}
-                  allLinks={allLinks}
-                  folders={folders}
-                />
-              </div>
+              <Suspense fallback={<TabSkeleton />}>
+                <div className="mx-auto max-w-3xl px-6 py-6">
+                  <GuideTabContent
+                    box={box}
+                    guideNote={guideNote}
+                    notes={notes}
+                    folders={folders}
+                    branchId={ctx.activeBranchId}
+                  />
+                </div>
+              </Suspense>
             </ScrollArea>
           </TabsContent>
 
@@ -596,7 +649,7 @@ export default async function BoxPage({
             <ScrollArea className="h-full">
               <Suspense fallback={<TabSkeleton />}>
                 <div className="mx-auto max-w-3xl px-6 py-6">
-                  <GraphPanel overview={overview} />
+                  <GraphTabContent box={box} branchId={ctx.activeBranchId} />
                 </div>
               </Suspense>
             </ScrollArea>
