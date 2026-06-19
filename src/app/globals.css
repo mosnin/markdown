@@ -512,3 +512,15 @@
     animation: none !important;
   }
 }
+
+/* Logo marquee — the MCP compatibility band (src/components/marketing/mcp_compat.tsx).
+   The track holds two identical copies, so translating by -50% scrolls exactly
+   one copy width for a seamless, infinite loop. */
+@keyframes logo-marquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
