@@ -15,6 +15,7 @@ import {
   ArrowRight,
 } from "lucide-react";
 import { HeroSection } from "@/components/marketing/hero";
+import { McpCompat } from "@/components/marketing/mcp_compat";
 import { LoopStepper } from "@/components/marketing/loop_stepper";
 import {
   MarketingSection,
@@ -131,6 +132,9 @@ export default async function HomePage() {
   return (
     <div className="min-h-screen bg-background">
       <HeroSection />
+
+      {/* ── Compatibility (works with any MCP client) ──────────────────────── */}
+      <McpCompat />
 
       {/* ── The loop (interactive) ─────────────────────────────────────────── */}
       <MarketingSection className="border-b border-border/30">
