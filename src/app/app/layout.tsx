@@ -14,6 +14,7 @@ import { ActivityBell } from "@/components/product/activity_bell";
 import { LegalStickyFooter } from "@/components/legal/legal_modal";
 import { CommandPaletteProviderLoader } from "@/components/product/command_palette_provider_loader";
 import { ToastProvider } from "@/components/product/toast_provider";
+import { QuickActionsFab } from "@/components/product/quick_actions_fab";
 
 /**
  * Authenticated app layout.
@@ -155,6 +156,10 @@ export default async function AppLayout({
 
       {/* Global Cmd/Ctrl+K command palette — renders a portal dialog */}
       <CommandPaletteProviderLoader />
+
+      {/* Floating quick-actions surface — review queue (with live count),
+          connect an agent, new box — reachable from any page. */}
+      <QuickActionsFab pendingProposalsCount={pendingProposalsCount} />
     </div>
     </ToastProvider>
   );
