@@ -24,7 +24,7 @@ import {
   listArchivedFoldersByBox,
   listTrashedFoldersByBox,
 } from "@/server/repositories/folder_repository";
-import { listLinksFromNote } from "@/server/repositories/note_link_repository";
+import { listLinksFromNotes } from "@/server/repositories/note_link_repository";
 import { getBoxOverview } from "@/server/services/overview_service";
 import { EmptyState } from "@/components/product/empty_state";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -332,10 +332,12 @@ export default async function BoxPage({
     ? await getNoteById(supabase, box.guide_note_id)
     : null;
 
-  const linkArrays = await Promise.all(
-    notes.map((n) => listLinksFromNote(supabase, n.id, { branchId: ctx.activeBranchId }))
+  // Batched: one `source_note_id IN (...)` query instead of one per note (N+1).
+  const allLinks: NoteLink[] = await listLinksFromNotes(
+    supabase,
+    notes.map((n) => n.id),
+    { branchId: ctx.activeBranchId }
   );
-  const allLinks: NoteLink[] = linkArrays.flat();
 
   const overview = await getBoxOverview(supabase, box, {
     branchId: ctx.activeBranchId,
@@ -370,8 +372,8 @@ export default async function BoxPage({
 
         {/* Box header */}
         <div className="border-b border-border px-4 py-4 md:px-6">
-          <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between md:gap-4">
-            <div className="min-w-0 flex-1">
+          <div className="flex flex-col gap-3">
+            <div className="min-w-0">
               <div className="flex items-center gap-2 mb-0.5">
                 <p className="text-xs text-muted-foreground">{ctx.workspace.name}</p>
                 {box.status === "archived" && (

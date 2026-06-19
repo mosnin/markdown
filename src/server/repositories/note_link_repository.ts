@@ -74,6 +74,30 @@ export async function listLinksFromNote(
   return data as NoteLink[];
 }
 
+/**
+ * All links whose source is any of the given notes — batched into ONE query.
+ *
+ * Semantically identical to calling listLinksFromNote() per note and
+ * concatenating, but collapses an N+1 (one round-trip per note) into a single
+ * `source_note_id IN (...)` query. Branch filter matches listLinksFromNote.
+ */
+export async function listLinksFromNotes(
+  supabase: SupabaseClient,
+  sourceNoteIds: string[],
+  { branchId = null }: BranchFilter = {}
+): Promise<NoteLink[]> {
+  if (sourceNoteIds.length === 0) return [];
+  let query = supabase
+    .from("note_links")
+    .select("*")
+    .in("source_note_id", sourceNoteIds);
+  query = applyBranchFilter(query, branchId);
+  const { data, error } = await query.order("created_at", { ascending: true });
+
+  if (error || !data) return [];
+  return data as NoteLink[];
+}
+
 /** All links where this note is the target. */
 export async function listLinksToNote(
   supabase: SupabaseClient,
