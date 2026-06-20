@@ -18,6 +18,7 @@ import {
   BentoCard,
   IconTile,
 } from "@/components/marketing/sections";
+import { CollabSection } from "@/components/marketing/collab_section";
 import { Button } from "@/components/ui/button";
 
 export const metadata: Metadata = {
@@ -133,6 +134,12 @@ export default function NotesAndFilesPage() {
           })}
         </div>
       </MarketingSection>
+
+      {/* Collaboration */}
+      <CollabSection
+        title="Edit together, live."
+        lede="Live presence and cursors on every note — co-edit with your team while agents propose changes you approve."
+      />
 
       {/* CTA */}
       <MarketingSection>

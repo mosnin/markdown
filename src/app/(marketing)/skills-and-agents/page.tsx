@@ -18,6 +18,7 @@ import {
   BentoCard,
   IconTile,
 } from "@/components/marketing/sections";
+import { CollabSection } from "@/components/marketing/collab_section";
 import { Button } from "@/components/ui/button";
 
 export const metadata: Metadata = {
@@ -130,6 +131,12 @@ export default function SkillsAndAgentsPage() {
           })}
         </div>
       </MarketingSection>
+
+      {/* Collaboration */}
+      <CollabSection
+        title="Work alongside your agents."
+        lede="Agents and humans share one governed context — they propose, you review and refine, together in real time."
+      />
 
       {/* CTA */}
       <MarketingSection>
