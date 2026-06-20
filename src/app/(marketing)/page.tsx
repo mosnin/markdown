@@ -17,6 +17,7 @@ import {
 import { HeroSection } from "@/components/marketing/hero";
 import { McpCompat } from "@/components/marketing/mcp_compat";
 import { MatrixCta } from "@/components/marketing/matrix_cta";
+import { TiltCard } from "@/components/marketing/tilt_card";
 import { LoopStepper } from "@/components/marketing/loop_stepper";
 import {
   MarketingSection,
@@ -240,7 +241,7 @@ export default async function HomePage() {
           {PILLARS.map((pillar) => {
             const Icon = pillar.icon;
             return (
-              <BentoCard key={pillar.title}>
+              <TiltCard key={pillar.title}>
                 <IconTile>
                   <Icon className="size-5" aria-hidden="true" />
                 </IconTile>
@@ -250,7 +251,7 @@ export default async function HomePage() {
                 <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
                   {pillar.body}
                 </p>
-              </BentoCard>
+              </TiltCard>
             );
           })}
         </div>

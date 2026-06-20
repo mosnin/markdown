@@ -19,6 +19,7 @@ import {
 } from "@/components/marketing/sections";
 import { FeatureTabs, type FeatureTab } from "@/components/marketing/feature_tabs";
 import { ConnectionTopology } from "@/components/marketing/connection_topology";
+import { TiltCard } from "@/components/marketing/tilt_card";
 import { Button } from "@/components/ui/button";
 
 export const metadata: Metadata = {
@@ -134,13 +135,13 @@ export default function ApiPage() {
           {FEATURES.map((f) => {
             const Icon = f.icon;
             return (
-              <BentoCard key={f.title}>
+              <TiltCard key={f.title}>
                 <IconTile>
                   <Icon className="size-5" aria-hidden="true" />
                 </IconTile>
                 <h3 className="mt-5 font-hero text-lg font-semibold text-foreground">{f.title}</h3>
                 <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{f.body}</p>
-              </BentoCard>
+              </TiltCard>
             );
           })}
         </div>

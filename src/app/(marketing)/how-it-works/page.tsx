@@ -5,6 +5,7 @@ import { PageHeroSection } from "@/components/marketing/hero";
 import { LoopStepper } from "@/components/marketing/loop_stepper";
 import { ArchitectureDiagram } from "@/components/marketing/architecture_diagram";
 import { TerminalShowcase } from "@/components/marketing/terminal_showcase";
+import { TiltCard } from "@/components/marketing/tilt_card";
 import {
   MarketingSection,
   SectionHeader,
@@ -77,13 +78,13 @@ export default function HowItWorksPage() {
           {WHY.map((w) => {
             const Icon = w.icon;
             return (
-              <BentoCard key={w.title}>
+              <TiltCard key={w.title}>
                 <IconTile>
                   <Icon className="size-5" aria-hidden="true" />
                 </IconTile>
                 <h3 className="mt-5 font-hero text-lg font-semibold text-foreground">{w.title}</h3>
                 <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{w.body}</p>
-              </BentoCard>
+              </TiltCard>
             );
           })}
         </div>
