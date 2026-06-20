@@ -1,25 +1,25 @@
 "use client";
 
 import * as React from "react";
-import { Dithering } from "@paper-design/shaders-react";
 import { useReducedMotion } from "motion/react";
 
+import { PixelGridShader } from "@/components/shaders/pixelgrid-shader";
 import { cn } from "@/lib/utils";
 
 /**
- * Ambient dithering-shader backdrop for the homepage hero.
+ * Ambient hero backdrop — a light-blue pixel-grid **ripple**.
  *
- * A single WebGL swirl rendered in the brand violet, pooled toward the
- * right/demo side and then knocked back behind a radial mask + gradient
- * scrims so it reads as atmosphere, never noise — the headline and the
- * interactive demo always stay crisp on top.
+ * Concentric rings ripple out across a dithered pixel grid in sky blue, knocked
+ * back behind a centre vignette so the headline and demo stay crisp, then faded
+ * to the page background at the bottom (white in light mode) so it hands off
+ * cleanly into the "compatible with" marquee beneath.
  *
  * Robustness:
- *   - Mounts the canvas only after hydration, so it never blocks first paint
- *     and can't cause an SSR/WebGL mismatch; it fades in once ready.
- *   - Respects reduced-motion by freezing the shader (speed 0) — the texture
- *     stays, the motion stops.
- *   - Purely decorative: aria-hidden and pointer-events-none.
+ *   - Mounts the canvas only after hydration (no SSR canvas mismatch, never
+ *     blocks first paint).
+ *   - The shader is a CPU pixel loop, so we use a chunky pixel size and skip it
+ *     entirely under reduced-motion — the scrims alone remain.
+ *   - Decorative: aria-hidden + pointer-events-none (no pointer theft from CTAs).
  */
 export function HeroBackdrop({ className }: { className?: string }) {
   const reduceMotion = useReducedMotion();
@@ -35,37 +35,26 @@ export function HeroBackdrop({ className }: { className?: string }) {
         className,
       )}
     >
-      {/* The shader, masked to a soft circle and pooled toward the demo. */}
-      <div
-        className={cn(
-          "absolute -top-1/4 left-1/2 aspect-square w-[150%] -translate-x-1/2 transition-opacity duration-[1200ms] ease-out sm:w-[120%] lg:left-[68%] lg:w-[85%]",
-          mounted ? "opacity-100" : "opacity-0",
-        )}
-        style={{
-          maskImage: "radial-gradient(closest-side, black 28%, transparent 76%)",
-          WebkitMaskImage:
-            "radial-gradient(closest-side, black 28%, transparent 76%)",
-        }}
-      >
-        {mounted ? (
-          <Dithering
-            className="size-full opacity-60 mix-blend-screen"
-            style={{ width: "100%", height: "100%" }}
-            colorBack="#00000000"
-            colorFront="#7c5cff"
-            shape="swirl"
-            type="4x4"
-            size={2}
-            scale={0.72}
-            speed={reduceMotion ? 0 : 0.55}
+      {/* Light-blue ripple */}
+      {mounted && !reduceMotion ? (
+        <div className="absolute inset-0 opacity-60">
+          <PixelGridShader
+            shape="ripple"
+            matrix="bayer8"
+            colorFg="#7dd3fc"
+            pxSize={5}
+            amplitude={0.45}
+            frequency={1}
+            speed={0.45}
+            rings={5}
           />
-        ) : null}
-      </div>
+        </div>
+      ) : null}
 
-      {/* Legibility scrims: fade from the header, into the next section, and a
-          centre vignette so text never competes with the swirl. */}
-      <div className="absolute inset-0 bg-gradient-to-b from-background via-background/30 to-background" />
-      <div className="absolute inset-0 bg-[radial-gradient(70%_60%_at_42%_42%,var(--color-background)_0%,transparent_55%)]" />
+      {/* Centre vignette — protects headline + demo legibility */}
+      <div className="absolute inset-0 bg-[radial-gradient(58%_55%_at_50%_38%,var(--color-background)_0%,transparent_62%)]" />
+      {/* White (background) fade at the bottom → into the marquee below */}
+      <div className="absolute inset-x-0 bottom-0 h-2/3 bg-gradient-to-b from-transparent via-background/75 to-background" />
     </div>
   );
 }

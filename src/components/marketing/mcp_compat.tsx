@@ -16,13 +16,21 @@ type Logo = { slug: string; name: string };
 
 const LOGOS: Logo[] = [
   { slug: "claude", name: "Claude" },
-  { slug: "deepseek", name: "DeepSeek" },
+  { slug: "openai", name: "ChatGPT" },
+  { slug: "cursor", name: "Cursor" },
+  { slug: "github-copilot", name: "Copilot" },
+  { slug: "windsurf", name: "Windsurf" },
+  { slug: "gemini", name: "Gemini" },
+  { slug: "cline", name: "Cline" },
+  { slug: "kimi", name: "Kimi" },
   { slug: "grok", name: "Grok" },
+  { slug: "deepseek", name: "DeepSeek" },
   { slug: "qwen", name: "Qwen" },
-  { slug: "mcp", name: "Model Context Protocol" },
-  { slug: "openclaw", name: "OpenClaw" },
-  { slug: "hermesagent", name: "Hermes" },
   { slug: "manus", name: "Manus" },
+  { slug: "hermesagent", name: "Hermes" },
+  { slug: "opencode", name: "OpenCode" },
+  { slug: "kilocode", name: "Kilo Code" },
+  { slug: "vscode", name: "VS Code" },
 ];
 
 export function McpCompat() {
@@ -30,7 +38,7 @@ export function McpCompat() {
     <section className="border-b border-border/30 px-6 py-14">
       <Reveal className="mx-auto flex max-w-5xl flex-col items-center gap-8 text-center">
         <p className="font-mono text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground/70">
-          Works with the models &amp; agents you already use
+          Compatible with
         </p>
 
         <LogoMarquee />
