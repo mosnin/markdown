@@ -23,6 +23,7 @@ import {
   IconTile,
 } from "@/components/marketing/sections";
 import { FeatureTabs, type FeatureTab } from "@/components/marketing/feature_tabs";
+import { TiltCard } from "@/components/marketing/tilt_card";
 import { Button } from "@/components/ui/button";
 
 export const metadata: Metadata = {
@@ -204,13 +205,13 @@ export default function FeaturesPage() {
           {CAPABILITIES.map((c) => {
             const Icon = c.icon;
             return (
-              <BentoCard key={c.title}>
+              <TiltCard key={c.title}>
                 <IconTile>
                   <Icon className="size-5" aria-hidden="true" />
                 </IconTile>
-                <h3 className="mt-5 font-hero text-lg font-semibold text-foreground">{c.title}</h3>
-                <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{c.body}</p>
-              </BentoCard>
+                <h3 className="mt-4 font-hero text-lg font-semibold text-foreground">{c.title}</h3>
+                <p className="text-sm leading-relaxed text-muted-foreground">{c.body}</p>
+              </TiltCard>
             );
           })}
         </div>
