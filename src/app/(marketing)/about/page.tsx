@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
-import Link from "next/link";
-import { ArrowRight, Compass, GitPullRequestArrow, LockOpen, ShieldCheck } from "lucide-react";
+import { Compass, GitPullRequestArrow, LockOpen, ShieldCheck } from "lucide-react";
 import { PageHeroSection } from "@/components/marketing/hero";
 import {
   MarketingSection,
@@ -8,7 +7,7 @@ import {
   BentoCard,
   IconTile,
 } from "@/components/marketing/sections";
-import { Button } from "@/components/ui/button";
+import { MatrixCta } from "@/components/marketing/matrix_cta";
 
 export const metadata: Metadata = {
   title: "About — Poggle",
@@ -92,29 +91,11 @@ export default function AboutPage() {
       </MarketingSection>
 
       {/* CTA */}
-      <MarketingSection>
-        <BentoCard tone="gradient" className="px-6 py-16 text-center sm:px-12 sm:py-20">
-          <div className="pointer-events-none absolute -left-10 -top-10 size-48 rounded-full bg-white/10 blur-3xl" />
-          <div className="relative mx-auto max-w-2xl">
-            <h2 className="font-hero text-3xl font-bold tracking-tight text-white sm:text-4xl">
-              Run agents like you mean it.
-            </h2>
-            <p className="mx-auto mt-4 max-w-xl text-base text-white/80 sm:text-lg">
-              Give them context. Keep the gate. Start free.
-            </p>
-            <div className="mt-9 flex justify-center">
-              <Button
-                size="lg"
-                className="rounded-full bg-white text-violet-700 hover:bg-white/90"
-                render={<Link href="/sign_in?mode=signup" />}
-              >
-                Get started free
-                <ArrowRight className="ml-2 size-4" data-icon="inline-end" />
-              </Button>
-            </div>
-          </div>
-        </BentoCard>
-      </MarketingSection>
+      <MatrixCta
+        title="Run agents like you mean it."
+        subtitle="Give them context. Keep the gate. Start free."
+        primary={{ label: "Get started free", href: "/sign_in?mode=signup" }}
+      />
     </div>
   );
 }

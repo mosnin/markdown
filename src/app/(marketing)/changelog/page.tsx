@@ -1,9 +1,7 @@
 import type { Metadata } from "next";
-import Link from "next/link";
-import { ArrowRight } from "lucide-react";
 import { PageHeroSection } from "@/components/marketing/hero";
-import { MarketingSection, BentoCard } from "@/components/marketing/sections";
-import { Button } from "@/components/ui/button";
+import { MarketingSection } from "@/components/marketing/sections";
+import { MatrixCta } from "@/components/marketing/matrix_cta";
 
 export const metadata: Metadata = {
   title: "Changelog — Poggle",
@@ -98,28 +96,11 @@ export default function ChangelogPage() {
         </ol>
       </MarketingSection>
 
-      <MarketingSection>
-        <BentoCard tone="gradient" className="px-6 py-14 text-center sm:px-12 sm:py-16">
-          <div className="relative mx-auto max-w-2xl">
-            <h2 className="font-hero text-2xl font-bold tracking-tight text-white sm:text-3xl">
-              Want it before it’s in the changelog?
-            </h2>
-            <p className="mx-auto mt-3 max-w-lg text-base text-white/80">
-              Start free and you’re always on the latest.
-            </p>
-            <div className="mt-7 flex justify-center">
-              <Button
-                size="lg"
-                className="rounded-full bg-white text-violet-700 hover:bg-white/90"
-                render={<Link href="/sign_in?mode=signup" />}
-              >
-                Get started free
-                <ArrowRight className="ml-2 size-4" data-icon="inline-end" />
-              </Button>
-            </div>
-          </div>
-        </BentoCard>
-      </MarketingSection>
+      <MatrixCta
+        title="Want it before it’s in the changelog?"
+        subtitle="Start free and you’re always on the latest."
+        primary={{ label: "Get started free", href: "/sign_in?mode=signup" }}
+      />
     </div>
   );
 }
