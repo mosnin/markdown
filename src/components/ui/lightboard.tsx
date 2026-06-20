@@ -221,24 +221,11 @@ function LightBoard({
     })
   }, [basePattern, offset, columns, lightSize, gap, mergedColors])
 
-  // This makes our text move across the board
-  useEffect(() => {
-    let animationFrameId: number
-
-    const animate = () => {
-      if (!isHovered) {
-        // If the mouse isn't over the board, we move the text
-        setOffset((prevOffset) => (prevOffset + 1) % basePattern[0].length)
-      }
-      drawToCanvas()
-      animationFrameId = requestAnimationFrame(animate)
-    }
-
-    animationFrameId = requestAnimationFrame(animate)
-
-    // We clean up our animation when we're done
-    return () => cancelAnimationFrame(animationFrameId)
-  }, [basePattern, isHovered, drawToCanvas])
+  // NOTE: the original component shipped a SECOND, ungated rAF loop here that
+  // advanced the scroll offset every frame — which overrode `updateInterval`
+  // entirely and made the board scroll at ~60fps regardless of the prop. It was
+  // removed; the `updateInterval`-gated loop below is the single source of the
+  // scroll speed.
 
   // This updates our light pattern when the text changes
   useEffect(() => {
