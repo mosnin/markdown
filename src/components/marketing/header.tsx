@@ -178,7 +178,7 @@ export function MarketingHeader() {
 
   return (
     <header className="pointer-events-none sticky top-0 z-50 w-full">
-      <div className="mx-auto flex w-full max-w-6xl justify-center px-4 pt-4 sm:pt-5">
+      <div className="mx-auto flex w-full max-w-6xl justify-center px-4 pt-2.5">
         <div ref={navRef} className="pointer-events-auto relative w-full md:w-fit">
           {/* ── The pill ─────────────────────────────────────────────────── */}
           <nav
