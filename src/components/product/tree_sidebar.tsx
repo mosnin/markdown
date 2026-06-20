@@ -1138,14 +1138,21 @@ export function TreeSidebar({
       .on("postgres_changes", { event: "*", schema: "public", table: "skills", filter: `workspace_id=eq.${workspaceId}` }, makeHandler)
       .on("postgres_changes", { event: "*", schema: "public", table: "agents", filter: `workspace_id=eq.${workspaceId}` }, makeHandler)
       .on("postgres_changes", { event: "*", schema: "public", table: "boxes", filter: `workspace_id=eq.${workspaceId}` }, () => {
-        // Throttle box-level refreshes (name/status changes update sidebar labels)
+        // Debounce box-level refreshes (name/status changes update sidebar
+        // labels). router.refresh() re-runs the /app layout's four DB queries
+        // (boxes, workspaces, recent notes, pending proposals), so a burst of
+        // realtime events — e.g. a bulk import or an agent writing many boxes —
+        // can otherwise fire many full refreshes and cause multi-second
+        // navigation lag. Trailing-edge debounce coalesces a burst into at most
+        // one refresh per ~1500ms. The timer is held in realtimeDebounceRef and
+        // cleared on unmount (see the cleanup effect below).
         const debounceMap = realtimeDebounceRef.current;
         const existing = debounceMap.get("__boxes__");
         if (existing) clearTimeout(existing);
         const timer = setTimeout(() => {
           debounceMap.delete("__boxes__");
           router.refresh();
-        }, 500);
+        }, 1500);
         debounceMap.set("__boxes__", timer);
       })
       .on("postgres_changes", { event: "*", schema: "public", table: "box_object_attachments", filter: `workspace_id=eq.${workspaceId}` }, makeHandler)

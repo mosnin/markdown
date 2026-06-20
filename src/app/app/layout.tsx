@@ -5,8 +5,7 @@ import { listBoxesByWorkspace } from "@/server/repositories/box_repository";
 import { listRecentNotesByWorkspace } from "@/server/repositories/note_repository";
 import { listWorkspacesByOwner } from "@/server/repositories/workspace_repository";
 import { listWriteProposalsByWorkspace } from "@/server/repositories/write_proposal_repository";
-import { AppShellSidebar } from "@/components/product/shell/app_shell_sidebar";
-import { MobileShellSidebar } from "@/components/product/shell/mobile_shell_sidebar";
+import { FloatingShell } from "@/components/product/shell/floating_shell";
 import { ThemeToggle } from "@/components/product/theme_toggle";
 import { AppBreadcrumbs } from "@/components/product/shell/app_breadcrumbs";
 import { OperatorPanelTrigger } from "@/components/product/operator/operator_panel_trigger";
@@ -20,18 +19,22 @@ import { QuickActionsFab } from "@/components/product/quick_actions_fab";
  * Authenticated app layout.
  *
  * Primary auth gate for the /app route tree. Verifies the session
- * server-side and bootstraps the workspace on first access. Loads
- * the box list for the sidebar so every route in /app has real navigation.
+ * server-side and bootstraps the workspace on first access. Loads the box
+ * list, owned workspaces, recent notes, and pending-proposal count so the
+ * navigation shell has real data on every route.
  *
- * Shell structure:
+ * Shell structure (the single global chrome is FloatingShell):
  *   [skip link]
- *   [sidebar 240px | [top bar] [main content]]
+ *   [FloatingShell:
+ *      floating sidebar  ⇄  bottom dock   (desktop)
+ *      mobile bottom tab bar + drawer     (mobile)
+ *      └─ main column: [top bar] [<main id=main-content>] [legal footer] ]
  *
- * The top bar spans the content column on all screen sizes and contains:
- *   - Mobile: hamburger trigger + workspace name
- *   - Desktop: breadcrumb area (left) + theme toggle + user menu (right)
- *
- * The sidebar is desktop-only; mobile navigation uses a sheet drawer.
+ * The top bar (breadcrumbs, operator panel, activity bell, Docs, theme
+ * toggle) renders at the top of the main column in both nav modes. Mobile
+ * navigation — primary routes + the collections/box tree — lives in the
+ * FloatingShell's bottom tab bar and drawer, so there is exactly one shell
+ * (no double-sidebar rendering).
  */
 export default async function AppLayout({
   children,
@@ -73,18 +76,17 @@ export default async function AppLayout({
 
   return (
     <ToastProvider>
-    <div className="flex h-full w-full overflow-hidden bg-background">
-      {/* Skip to main content — visually hidden until focused (accessibility) */}
-      <a
-        href="#main-content"
-        className="sr-only focus:not-sr-only focus:absolute focus:z-[100] focus:left-4 focus:top-4 focus:rounded-md focus:bg-background focus:px-3 focus:py-2 focus:text-sm focus:font-medium focus:shadow-md focus:ring-2 focus:ring-ring"
-      >
-        Skip to content
-      </a>
+      <div className="h-full w-full overflow-hidden bg-background">
+        {/* Skip to main content — visually hidden until focused (accessibility) */}
+        <a
+          href="#main-content"
+          className="sr-only focus:not-sr-only focus:absolute focus:z-[100] focus:left-4 focus:top-4 focus:rounded-md focus:bg-background focus:px-3 focus:py-2 focus:text-sm focus:font-medium focus:shadow-md focus:ring-2 focus:ring-ring"
+        >
+          Skip to content
+        </a>
 
-      {/* Left sidebar — desktop only, fixed width with border separator */}
-      <div className="hidden md:flex md:h-full md:shrink-0">
-        <AppShellSidebar
+        {/* Single global chrome — floating sidebar ⇄ bottom dock + mobile bar */}
+        <FloatingShell
           userEmail={userEmail}
           workspaceName={workspaceName}
           workspaceId={ctx.workspace.id}
@@ -92,75 +94,57 @@ export default async function AppLayout({
           workspaces={workspaces}
           recentNotes={recentNotesMini}
           pendingProposalsCount={pendingProposalsCount}
-        />
-      </div>
-
-      {/* Main content column — flex column filling remaining width */}
-      <div className="flex flex-1 flex-col overflow-hidden min-w-0">
-        {/* ── Top bar ────────────────────────────────────────────────────────── */}
-        <header className="flex h-12 shrink-0 items-center gap-3 border-b border-border/40 bg-background px-3 md:px-4">
-          {/* Mobile: hamburger + workspace name */}
-          <div className="flex items-center gap-3 md:hidden">
-            <MobileShellSidebar
-              userEmail={userEmail}
-              workspaceName={workspaceName}
-              workspaceId={ctx.workspace.id}
-              boxes={boxes}
-              workspaces={workspaces}
-              pendingProposalsCount={pendingProposalsCount}
-            />
-            <span className="text-sm font-semibold tracking-tight truncate">
-              {workspaceName ?? "Context Store"}
-            </span>
-          </div>
-
-          {/* Desktop: breadcrumb area (left) */}
-          <div className="hidden md:flex md:flex-1 md:items-center md:min-w-0">
-            <AppBreadcrumbs />
-          </div>
-
-          {/* Desktop: global search + utility links + theme toggle (right) */}
-          <div
-            className="hidden md:flex md:items-center md:gap-2 md:ml-auto"
-            role="toolbar"
-            aria-label="User actions"
-          >
-            <OperatorPanelTrigger
-              boxes={boxes.map((b) => ({ id: b.id, name: b.name }))}
-            />
-            <ActivityBell />
-            <a
-              href="https://docs.contextstore.app"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-xs text-foreground/50 hover:text-foreground transition-fast focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded"
-            >
-              Docs
-            </a>
-            <ThemeToggle />
-          </div>
-        </header>
-
-        {/* Page content — <main> landmark, scroll and overflow managed per-page */}
-        <main
-          id="main-content"
-          className="flex flex-1 flex-col overflow-hidden"
-          tabIndex={-1}
         >
-          {children}
-        </main>
+          {/* ── Top bar — remains in both nav modes ────────────────────────── */}
+          <header className="flex h-12 shrink-0 items-center gap-3 border-b border-border/40 bg-background px-3 md:px-4">
+            {/* Breadcrumb area (left) */}
+            <div className="flex min-w-0 flex-1 items-center">
+              <AppBreadcrumbs />
+            </div>
 
-        {/* Sticky legal footer — clicking any link opens the full document in a modal */}
-        <LegalStickyFooter />
+            {/* Operator panel + activity + docs + theme (right) */}
+            <div
+              className="flex items-center gap-2"
+              role="toolbar"
+              aria-label="User actions"
+            >
+              <OperatorPanelTrigger
+                boxes={boxes.map((b) => ({ id: b.id, name: b.name }))}
+              />
+              <ActivityBell />
+              <a
+                href="https://docs.contextstore.app"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="hidden rounded text-xs text-foreground/50 transition-fast hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:inline"
+              >
+                Docs
+              </a>
+              <ThemeToggle />
+            </div>
+          </header>
+
+          {/* Page content — <main> landmark, scroll/overflow managed per-page.
+              Extra bottom padding on mobile clears the fixed bottom tab bar. */}
+          <main
+            id="main-content"
+            className="flex flex-1 flex-col overflow-hidden pb-16 lg:pb-0"
+            tabIndex={-1}
+          >
+            {children}
+          </main>
+
+          {/* Sticky legal footer — clicking any link opens the full document in a modal */}
+          <LegalStickyFooter />
+        </FloatingShell>
+
+        {/* Global Cmd/Ctrl+K command palette — renders a portal dialog */}
+        <CommandPaletteProviderLoader />
+
+        {/* Floating quick-actions surface — review queue (with live count),
+            connect an agent, new box — reachable from any page. */}
+        <QuickActionsFab pendingProposalsCount={pendingProposalsCount} />
       </div>
-
-      {/* Global Cmd/Ctrl+K command palette — renders a portal dialog */}
-      <CommandPaletteProviderLoader />
-
-      {/* Floating quick-actions surface — review queue (with live count),
-          connect an agent, new box — reachable from any page. */}
-      <QuickActionsFab pendingProposalsCount={pendingProposalsCount} />
-    </div>
     </ToastProvider>
   );
 }

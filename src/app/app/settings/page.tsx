@@ -1,4 +1,3 @@
-import { Bell, Building2, CreditCard, Key, Palette, Shield, User } from "lucide-react";
 import {
   Card,
   CardContent,
@@ -30,6 +29,7 @@ import {
 } from "./settings_client";
 import type { Theme, NotificationPreferences } from "./actions";
 import { DeleteAccountButton } from "./delete_account_button";
+import { SettingsSubnav } from "./settings_subnav";
 import { KgBackfillButton } from "@/components/product/kg_backfill_button";
 import { WebBudgetCard } from "@/components/product/shell/web_budget_card";
 import { MembersSection } from "./members_section";
@@ -154,10 +154,12 @@ export default async function SettingsPage() {
       </div>
 
       <div className="flex flex-1 overflow-hidden">
-        {/* Settings navigation moved into the main sidebar. When the user
-            is on /app/settings the AppShellSidebar swaps in the
-            SettingsSidebar, which handles anchor navigation to these
-            sections — so there's no in-page left nav or mobile strip. */}
+        {/* In-page settings sub-nav. The global chrome is now a single
+            FloatingShell (no per-route sidebar swap), so the settings
+            section nav lives here, scoped to this page — anchor jumps for
+            account sections plus links to the developer / workspace /
+            security routes. */}
+        <SettingsSubnav />
 
         {/* Main settings area */}
         <ScrollArea className="flex-1">
