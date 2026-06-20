@@ -190,7 +190,8 @@ export function MarketingHeader() {
                 : 'bg-background/55 shadow-[0_6px_24px_-18px_rgba(0,0,0,0.25)]',
             )}
           >
-            <div className="flex flex-1 items-center">
+            {/* Left: logo + nav, grouped together */}
+            <div className="flex items-center gap-1">
               <Link
                 href="/"
                 className="flex items-center gap-2 rounded-full px-2.5 py-1.5 transition-colors hover:bg-accent/60"
@@ -198,10 +199,8 @@ export function MarketingHeader() {
               >
                 <WordmarkLogo />
               </Link>
-            </div>
 
-            {/* Desktop nav triggers — centered */}
-            <ul className="hidden items-center gap-0.5 md:flex">
+              <ul className="hidden items-center gap-0.5 md:flex">
               {MEGA_MENUS.map((mm) => {
                 const isOpen = active === mm.key;
                 return (
@@ -247,9 +246,10 @@ export function MarketingHeader() {
                 </li>
               ))}
             </ul>
+            </div>
 
             {/* Desktop CTAs */}
-            <div className="hidden flex-1 items-center justify-end gap-1 md:flex">
+            <div className="hidden items-center gap-1 md:flex">
               <Link
                 href="/sign_in"
                 className="rounded-full px-3.5 py-2 text-sm font-medium text-foreground/75 transition-colors hover:bg-accent/60 hover:text-foreground"
