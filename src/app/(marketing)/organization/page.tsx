@@ -17,6 +17,7 @@ import {
   IconTile,
 } from "@/components/marketing/sections";
 import { ContextModel } from "@/components/marketing/context_model";
+import { DataConnections } from "@/components/marketing/data_connections";
 import { TiltCard } from "@/components/marketing/tilt_card";
 import { Button } from "@/components/ui/button";
 
@@ -118,6 +119,18 @@ export default function OrganizationPage() {
         />
         <div className="mt-12">
           <ContextModel />
+        </div>
+      </MarketingSection>
+
+      {/* How knowledge connects */}
+      <MarketingSection className="border-b border-border/30">
+        <SectionHeader
+          eyebrow="Connected knowledge"
+          title="Not a pile of docs — a graph."
+          lede="Entities tie notes together, every change traces back to its decision, and one thread can span boxes. Here's how data connects inside Poggle."
+        />
+        <div className="mt-12">
+          <DataConnections />
         </div>
       </MarketingSection>
 

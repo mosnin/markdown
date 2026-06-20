@@ -25,6 +25,7 @@ import {
 import { FeatureTabs, type FeatureTab } from "@/components/marketing/feature_tabs";
 import { TiltCard } from "@/components/marketing/tilt_card";
 import { FeatureGlyph, type GlyphKind } from "@/components/marketing/feature_glyph";
+import { DataConnections } from "@/components/marketing/data_connections";
 import { Button } from "@/components/ui/button";
 
 export const metadata: Metadata = {
@@ -220,6 +221,18 @@ export default function FeaturesPage() {
               <p className="text-sm leading-relaxed text-muted-foreground">{c.body}</p>
             </TiltCard>
           ))}
+        </div>
+      </MarketingSection>
+
+      {/* How knowledge connects */}
+      <MarketingSection className="border-b border-border/30">
+        <SectionHeader
+          eyebrow="The knowledge graph"
+          title="How your data connects together."
+          lede="Entities tie notes together, every change traces back to its decision, and a single thread can span boxes. A few real examples from inside Poggle."
+        />
+        <div className="mt-12">
+          <DataConnections />
         </div>
       </MarketingSection>
 
