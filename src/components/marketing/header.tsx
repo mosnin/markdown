@@ -16,16 +16,20 @@ import {
   GitBranch,
   LayoutGrid,
   LifeBuoy,
+  Moon,
   Network,
   Plug,
   Puzzle,
   Rocket,
   ShieldCheck,
   Sparkles,
+  Sun,
+  X,
   type LucideIcon,
 } from 'lucide-react';
 import * as m from 'motion/react-m';
 import { AnimatePresence } from 'motion/react';
+import { useTheme } from 'next-themes';
 import { Button } from '@/components/ui/button';
 import { MenuToggleIcon } from '@/components/ui/menu-toggle-icon';
 import { cn } from '@/lib/utils';
@@ -150,7 +154,10 @@ export function MarketingHeader() {
   // Escape closes the mega menu; click-outside collapses it.
   React.useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      if (e.key === 'Escape') setActive(null);
+      if (e.key === 'Escape') {
+        setActive(null);
+        setMobileOpen(false);
+      }
     }
     function onClick(e: MouseEvent) {
       if (navRef.current && !navRef.current.contains(e.target as Node)) {
@@ -250,6 +257,7 @@ export function MarketingHeader() {
 
             {/* Desktop CTAs */}
             <div className="hidden items-center gap-1 md:flex">
+              <ThemeToggleButton />
               <Link
                 href="/sign_in"
                 className="rounded-full px-3.5 py-2 text-sm font-medium text-foreground/75 transition-colors hover:bg-accent/60 hover:text-foreground"
@@ -386,6 +394,29 @@ function FeaturedTile({ featured }: { featured: Featured }) {
   );
 }
 
+// ─── Theme toggle ────────────────────────────────────────────────────────────
+// Sun/Moon swap driven purely by the `dark` class (next-themes attribute="class"),
+// so it renders identically on server and client — no hydration flash, no mounted
+// guard needed. The click handler reads the resolved theme to decide the flip.
+
+function ThemeToggleButton({ className }: { className?: string }) {
+  const { resolvedTheme, setTheme } = useTheme();
+  return (
+    <button
+      type="button"
+      aria-label="Toggle light and dark theme"
+      onClick={() => setTheme(resolvedTheme === 'dark' ? 'light' : 'dark')}
+      className={cn(
+        'relative inline-flex size-9 items-center justify-center rounded-full text-foreground/70 transition-colors hover:bg-accent/60 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+        className,
+      )}
+    >
+      <Sun className="size-[18px] rotate-0 scale-100 transition-transform duration-300 dark:-rotate-90 dark:scale-0" aria-hidden="true" />
+      <Moon className="absolute size-[18px] rotate-90 scale-0 transition-transform duration-300 dark:rotate-0 dark:scale-100" aria-hidden="true" />
+    </button>
+  );
+}
+
 // ─── Full-page mobile menu ───────────────────────────────────────────────────
 
 function MobileMenu({ open, onClose }: { open: boolean; onClose: () => void }) {
@@ -402,6 +433,22 @@ function MobileMenu({ open, onClose }: { open: boolean; onClose: () => void }) {
         >
           {/* Violet bloom backdrop */}
           <div className="pointer-events-none absolute -top-24 left-1/2 h-72 w-72 -translate-x-1/2 rounded-full bg-violet-600/15 blur-3xl" />
+
+          {/* Top bar: theme toggle + an unmistakable close button */}
+          <div
+            className="absolute right-4 z-10 flex items-center gap-1"
+            style={{ top: 'calc(env(safe-area-inset-top) + 0.9rem)' }}
+          >
+            <ThemeToggleButton />
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="Close menu"
+              className="inline-flex size-9 items-center justify-center rounded-full text-foreground/70 transition-colors hover:bg-accent/60 hover:text-foreground"
+            >
+              <X className="size-5" aria-hidden="true" />
+            </button>
+          </div>
 
           <m.div
             variants={staggerContainer(0.05, 0.04)}
