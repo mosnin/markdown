@@ -24,6 +24,7 @@ import {
 } from "@/components/marketing/sections";
 import { FeatureTabs, type FeatureTab } from "@/components/marketing/feature_tabs";
 import { TiltCard } from "@/components/marketing/tilt_card";
+import { FeatureGlyph, type GlyphKind } from "@/components/marketing/feature_glyph";
 import { Button } from "@/components/ui/button";
 
 export const metadata: Metadata = {
@@ -63,6 +64,16 @@ const CAPABILITIES = [
     title: "Audit log & rollback",
     body: "Connect, read, propose, approve — all on an append-only log with full version history and one-click rollback on every object.",
   },
+];
+
+// 3D glyph per capability (same order as CAPABILITIES above).
+const CAPABILITY_KINDS: GlyphKind[] = [
+  "markdown",
+  "branches",
+  "graph",
+  "skills",
+  "mcp",
+  "audit",
 ];
 
 // ── Interactive explorer tabs (static visuals; interaction lives in FeatureTabs)
@@ -202,18 +213,13 @@ export default function FeaturesPage() {
           lede="The building blocks of a context layer agents can use and you can trust."
         />
         <div className="mt-12 grid grid-cols-1 gap-5 md:grid-cols-3">
-          {CAPABILITIES.map((c) => {
-            const Icon = c.icon;
-            return (
-              <TiltCard key={c.title}>
-                <IconTile>
-                  <Icon className="size-5" aria-hidden="true" />
-                </IconTile>
-                <h3 className="mt-4 font-hero text-lg font-semibold text-foreground">{c.title}</h3>
-                <p className="text-sm leading-relaxed text-muted-foreground">{c.body}</p>
-              </TiltCard>
-            );
-          })}
+          {CAPABILITIES.map((c, i) => (
+            <TiltCard key={c.title}>
+              <FeatureGlyph kind={CAPABILITY_KINDS[i]} />
+              <h3 className="mt-4 font-hero text-lg font-semibold text-foreground">{c.title}</h3>
+              <p className="text-sm leading-relaxed text-muted-foreground">{c.body}</p>
+            </TiltCard>
+          ))}
         </div>
       </MarketingSection>
 
