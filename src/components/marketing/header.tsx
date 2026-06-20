@@ -183,7 +183,7 @@ export function MarketingHeader() {
           {/* ── The pill ─────────────────────────────────────────────────── */}
           <nav
             className={cn(
-              'relative flex h-14 items-center justify-between gap-2 rounded-full px-2.5 md:gap-7',
+              'relative flex h-12 items-center justify-between gap-2 rounded-full px-2 md:gap-7',
               'backdrop-blur-xl transition-[background-color,box-shadow] duration-300',
               scrolled
                 ? 'bg-background/80 shadow-[0_12px_40px_-14px_rgba(0,0,0,0.35)]'

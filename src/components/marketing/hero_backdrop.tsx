@@ -25,10 +25,21 @@ export function HeroBackdrop({
   className,
   shape = "ripple",
   colorFg = "#7dd3fc",
+  intensity = 0.9,
+  scrimClassName = "bg-background/35",
+  centerScrim = false,
 }: {
   className?: string;
   shape?: Shape;
   colorFg?: string;
+  /** Opacity of the shader layer (0–1). Lower it on pages where text sits
+   *  directly over the field. @default 0.9 */
+  intensity?: number;
+  /** Flat legibility scrim laid over the whole field. @default bg-background/35 */
+  scrimClassName?: string;
+  /** Pool the page background behind centred hero text so it stays crisp.
+   *  Use on interior pages whose headline sits on top of the field. */
+  centerScrim?: boolean;
 }) {
   const reduceMotion = useReducedMotion();
   const [mounted, setMounted] = React.useState(false);
@@ -45,7 +56,7 @@ export function HeroBackdrop({
     >
       {/* Pixel-grid shader (home: ripple/blue · interior pages: swirl/violet) */}
       {mounted && !reduceMotion ? (
-        <div className="absolute inset-0 opacity-90">
+        <div className="absolute inset-0" style={{ opacity: intensity }}>
           <PixelGridShader
             shape={shape}
             matrix="bayer8"
@@ -60,8 +71,21 @@ export function HeroBackdrop({
       ) : null}
 
       {/* Soft legibility scrim — keeps the headline + demo crisp but lets the
-          ripple read through. */}
-      <div className="absolute inset-0 bg-background/35" />
+          field read through. */}
+      <div className={cn("absolute inset-0", scrimClassName)} />
+
+      {/* Centre vignette — pools the page background behind centred hero text so
+          the headline + copy never fight the shader. */}
+      {centerScrim && (
+        <div
+          className="absolute inset-0"
+          style={{
+            background:
+              "radial-gradient(75% 65% at 50% 45%, var(--background) 0%, color-mix(in oklab, var(--background) 55%, transparent) 42%, transparent 80%)",
+          }}
+        />
+      )}
+
       {/* Fade to the page background at the bottom → into the marquee below. */}
       <div className="absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-b from-transparent to-background" />
     </div>

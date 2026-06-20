@@ -107,7 +107,13 @@ export function PageHeroSection({
 }) {
   return (
     <section className="relative isolate overflow-hidden border-b border-border/50 bg-muted/20 py-20 pt-32">
-      <HeroBackdrop shape="swirl" colorFg="#a78bfa" />
+      <HeroBackdrop
+        shape="swirl"
+        colorFg="#8b5cf6"
+        intensity={0.5}
+        scrimClassName="bg-background/45"
+        centerScrim
+      />
       <div className="relative mx-auto max-w-3xl px-6 text-center">
         <NeumorphEyebrow className="mx-auto mb-3 uppercase tracking-[0.12em]">
           {eyebrow}
