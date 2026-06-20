@@ -6,6 +6,7 @@ import { TrustBar } from "@/components/marketing/trust_bar";
 import { HeroDemo } from "@/components/marketing/hero_demo";
 import { HeroBackdrop } from "@/components/marketing/hero_backdrop";
 import { HeroRotator } from "@/components/marketing/hero_rotator";
+import { NeumorphEyebrow } from "@/components/ui/neumorph-eyebrow";
 
 // ─── Homepage hero ──────────────────────────────────────────────────────────
 //
@@ -99,7 +100,9 @@ export function PageHeroSection({
   return (
     <section className="relative overflow-hidden border-b border-border/50 bg-muted/20 py-20 pt-32">
       <div className="relative mx-auto max-w-3xl px-6 text-center">
-        <p className="text-overline mb-3 text-violet-400">{eyebrow}</p>
+        <NeumorphEyebrow className="mx-auto mb-3 uppercase tracking-[0.12em]">
+          {eyebrow}
+        </NeumorphEyebrow>
 
         <h1 className="font-hero text-4xl font-bold tracking-tight text-foreground sm:text-5xl">
           {title}

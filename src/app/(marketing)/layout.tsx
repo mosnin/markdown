@@ -1,4 +1,5 @@
 import { connection } from "next/server";
+import { AnnouncementBar } from "@/components/marketing/announcement_bar";
 import { MarketingHeader } from "@/components/marketing/header";
 import { MarketingFooter } from "@/components/marketing/footer";
 
@@ -17,6 +18,7 @@ export default async function MarketingLayout({
 
   return (
     <>
+      <AnnouncementBar />
       <MarketingHeader />
       <main>{children}</main>
       <MarketingFooter />

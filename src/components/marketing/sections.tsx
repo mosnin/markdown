@@ -8,6 +8,7 @@ import {
   revealTransition,
   revealViewport,
 } from '@/components/marketing/reveal';
+import { NeumorphEyebrow } from '@/components/ui/neumorph-eyebrow';
 
 // ─── Shared marketing section primitives ─────────────────────────────────────
 // One vocabulary every marketing page composes from, so the whole logged-out
@@ -67,9 +68,9 @@ export function SectionHeader({
       transition={revealTransition}
     >
       {eyebrow && (
-        <p className="font-mono text-[11px] font-medium uppercase tracking-[0.18em] text-violet-500">
+        <NeumorphEyebrow className="uppercase tracking-[0.12em]">
           {eyebrow}
-        </p>
+        </NeumorphEyebrow>
       )}
       <h2 className="font-hero text-balance text-3xl font-bold leading-[1.1] tracking-tight text-foreground sm:text-4xl">
         {title}
