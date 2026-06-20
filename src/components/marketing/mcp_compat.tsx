@@ -69,7 +69,7 @@ function LogoMarquee() {
               <img
                 src={`/logos/${logo.slug}.svg`}
                 alt={copy === 0 ? logo.name : ""}
-                className="h-7 w-7 shrink-0 object-contain"
+                className="h-7 w-7 shrink-0 object-contain [filter:brightness(0)]"
                 loading="lazy"
                 draggable={false}
               />

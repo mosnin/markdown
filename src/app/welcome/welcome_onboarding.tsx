@@ -41,7 +41,7 @@ export function WelcomeOnboarding() {
   }, [leaving, router]);
 
   return (
-    <main className="relative flex min-h-screen items-center justify-center overflow-hidden bg-background px-6 py-12">
+    <main className="relative isolate flex min-h-screen items-center justify-center overflow-hidden bg-background px-6 py-12">
       <HeroBackdrop />
 
       <m.div

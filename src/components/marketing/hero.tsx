@@ -21,7 +21,7 @@ import { NeumorphEyebrow } from "@/components/ui/neumorph-eyebrow";
 
 export function HeroSection() {
   return (
-    <section className="relative w-full overflow-hidden border-b border-border/30">
+    <section className="relative isolate w-full overflow-hidden border-b border-border/30">
       <HeroBackdrop />
 
       <div className="mx-auto grid w-full max-w-6xl items-center gap-12 px-6 pb-20 pt-16 sm:pt-24 lg:grid-cols-[1.05fr_0.95fr] lg:gap-10 lg:pb-28 lg:pt-28">

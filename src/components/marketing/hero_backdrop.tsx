@@ -37,7 +37,7 @@ export function HeroBackdrop({ className }: { className?: string }) {
     >
       {/* Light-blue ripple */}
       {mounted && !reduceMotion ? (
-        <div className="absolute inset-0 opacity-60">
+        <div className="absolute inset-0 opacity-90">
           <PixelGridShader
             shape="ripple"
             matrix="bayer8"
@@ -51,10 +51,11 @@ export function HeroBackdrop({ className }: { className?: string }) {
         </div>
       ) : null}
 
-      {/* Centre vignette — protects headline + demo legibility */}
-      <div className="absolute inset-0 bg-[radial-gradient(58%_55%_at_50%_38%,var(--color-background)_0%,transparent_62%)]" />
-      {/* White (background) fade at the bottom → into the marquee below */}
-      <div className="absolute inset-x-0 bottom-0 h-2/3 bg-gradient-to-b from-transparent via-background/75 to-background" />
+      {/* Soft legibility scrim — keeps the headline + demo crisp but lets the
+          ripple read through. */}
+      <div className="absolute inset-0 bg-background/35" />
+      {/* Fade to the page background at the bottom → into the marquee below. */}
+      <div className="absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-b from-transparent to-background" />
     </div>
   );
 }
