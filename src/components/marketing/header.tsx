@@ -184,21 +184,23 @@ export function MarketingHeader() {
           <nav
             className={cn(
               'relative flex h-14 items-center justify-between gap-2 rounded-full px-2.5',
-              'border backdrop-blur-xl transition-[background-color,box-shadow,border-color] duration-300',
+              'backdrop-blur-xl transition-[background-color,box-shadow] duration-300',
               scrolled
-                ? 'border-border/70 bg-background/80 shadow-[0_12px_40px_-14px_rgba(0,0,0,0.35)]'
-                : 'border-border/50 bg-background/55 shadow-[0_6px_24px_-18px_rgba(0,0,0,0.25)]',
+                ? 'bg-background/80 shadow-[0_12px_40px_-14px_rgba(0,0,0,0.35)]'
+                : 'bg-background/55 shadow-[0_6px_24px_-18px_rgba(0,0,0,0.25)]',
             )}
           >
-            <Link
-              href="/"
-              className="flex items-center gap-2 rounded-full px-2.5 py-1.5 transition-colors hover:bg-accent/60"
-              onMouseEnter={() => setActive(null)}
-            >
-              <WordmarkLogo />
-            </Link>
+            <div className="flex flex-1 items-center">
+              <Link
+                href="/"
+                className="flex items-center gap-2 rounded-full px-2.5 py-1.5 transition-colors hover:bg-accent/60"
+                onMouseEnter={() => setActive(null)}
+              >
+                <WordmarkLogo />
+              </Link>
+            </div>
 
-            {/* Desktop nav triggers */}
+            {/* Desktop nav triggers — centered */}
             <ul className="hidden items-center gap-0.5 md:flex">
               {MEGA_MENUS.map((mm) => {
                 const isOpen = active === mm.key;
@@ -247,7 +249,7 @@ export function MarketingHeader() {
             </ul>
 
             {/* Desktop CTAs */}
-            <div className="hidden items-center gap-1 md:flex">
+            <div className="hidden flex-1 items-center justify-end gap-1 md:flex">
               <Link
                 href="/sign_in"
                 className="rounded-full px-3.5 py-2 text-sm font-medium text-foreground/75 transition-colors hover:bg-accent/60 hover:text-foreground"

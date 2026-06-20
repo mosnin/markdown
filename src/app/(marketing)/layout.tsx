@@ -32,7 +32,7 @@ export default async function MarketingLayout({
           rows={9}
           lightSize={6}
           gap={2}
-          updateInterval={250}
+          updateInterval={1250}
           colors={{
             textBright: "rgba(56,189,248,0.95)",
             drawLine: "rgba(56,189,248,0.5)",
