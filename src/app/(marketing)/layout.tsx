@@ -22,25 +22,24 @@ export default async function MarketingLayout({
       <AnnouncementBar />
       <MarketingHeader />
       <main>{children}</main>
-      {/* Lightboard marquee above the footer */}
+      {/* Lightboard marquee above the footer — full-bleed, slow blue crawl */}
       <section
         aria-hidden="true"
-        className="overflow-hidden border-t border-border/40 bg-background px-6 py-8"
+        className="overflow-hidden border-t border-border/40 bg-background py-8"
       >
-        <div className="mx-auto max-w-6xl">
-          <LightBoard
-            text="POGGLE   GOVERNED CONTEXT FOR AI AGENTS   "
-            rows={9}
-            lightSize={6}
-            gap={2}
-            colors={{
-              textBright: "rgba(167,139,250,0.95)",
-              drawLine: "rgba(167,139,250,0.55)",
-              textDim: "rgba(130,120,170,0.45)",
-              background: "rgba(130,120,170,0.10)",
-            }}
-          />
-        </div>
+        <LightBoard
+          text="POGGLE   GOVERNED CONTEXT FOR AI AGENTS   "
+          rows={9}
+          lightSize={6}
+          gap={2}
+          updateInterval={250}
+          colors={{
+            textBright: "rgba(56,189,248,0.95)",
+            drawLine: "rgba(56,189,248,0.5)",
+            textDim: "rgba(14,165,233,0.4)",
+            background: "rgba(56,189,248,0.08)",
+          }}
+        />
       </section>
       <MarketingFooter />
     </>
