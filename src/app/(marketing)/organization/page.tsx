@@ -16,6 +16,7 @@ import {
   BentoCard,
   IconTile,
 } from "@/components/marketing/sections";
+import { ContextModel } from "@/components/marketing/context_model";
 import { Button } from "@/components/ui/button";
 
 export const metadata: Metadata = {
@@ -104,6 +105,18 @@ export default function OrganizationPage() {
               </p>
             </div>
           </BentoCard>
+        </div>
+      </MarketingSection>
+
+      {/* Context model */}
+      <MarketingSection className="border-b border-border/30">
+        <SectionHeader
+          eyebrow="The shape of your context"
+          title="Workspace, boxes, folders, notes."
+          lede="A structure agents can navigate and teams can maintain — with one guide note per box that agents read first."
+        />
+        <div className="mt-12">
+          <ContextModel />
         </div>
       </MarketingSection>
 

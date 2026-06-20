@@ -18,6 +18,7 @@ import {
   IconTile,
 } from "@/components/marketing/sections";
 import { FeatureTabs, type FeatureTab } from "@/components/marketing/feature_tabs";
+import { ConnectionTopology } from "@/components/marketing/connection_topology";
 import { Button } from "@/components/ui/button";
 
 export const metadata: Metadata = {
@@ -112,6 +113,18 @@ export default function ApiPage() {
           lede="REST for your services, MCP for your agents, webhooks for your automations — all scope-checked and audited."
         />
         <FeatureTabs tabs={TABS} />
+      </MarketingSection>
+
+      {/* Topology */}
+      <MarketingSection className="border-b border-border/30">
+        <SectionHeader
+          eyebrow="Topology"
+          title="Many agents. One scoped door."
+          lede="Every client connects through a single OAuth-scoped MCP endpoint that grants read and propose on only the boxes you choose — never write, never delete."
+        />
+        <div className="mt-12">
+          <ConnectionTopology />
+        </div>
       </MarketingSection>
 
       {/* Capabilities */}
