@@ -106,7 +106,8 @@ export function PageHeroSection({
   ctaSecondary?: { label: string; href: string };
 }) {
   return (
-    <section className="relative overflow-hidden border-b border-border/50 bg-muted/20 py-20 pt-32">
+    <section className="relative isolate overflow-hidden border-b border-border/50 bg-muted/20 py-20 pt-32">
+      <HeroBackdrop shape="swirl" colorFg="#a78bfa" />
       <div className="relative mx-auto max-w-3xl px-6 text-center">
         <NeumorphEyebrow className="mx-auto mb-3 uppercase tracking-[0.12em]">
           {eyebrow}

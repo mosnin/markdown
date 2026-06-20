@@ -3,7 +3,7 @@
 import * as React from "react";
 import { useReducedMotion } from "motion/react";
 
-import { PixelGridShader } from "@/components/shaders/pixelgrid-shader";
+import { PixelGridShader, type Shape } from "@/components/shaders/pixelgrid-shader";
 import { cn } from "@/lib/utils";
 
 /**
@@ -21,7 +21,15 @@ import { cn } from "@/lib/utils";
  *     entirely under reduced-motion — the scrims alone remain.
  *   - Decorative: aria-hidden + pointer-events-none (no pointer theft from CTAs).
  */
-export function HeroBackdrop({ className }: { className?: string }) {
+export function HeroBackdrop({
+  className,
+  shape = "ripple",
+  colorFg = "#7dd3fc",
+}: {
+  className?: string;
+  shape?: Shape;
+  colorFg?: string;
+}) {
   const reduceMotion = useReducedMotion();
   const [mounted, setMounted] = React.useState(false);
 
@@ -35,13 +43,13 @@ export function HeroBackdrop({ className }: { className?: string }) {
         className,
       )}
     >
-      {/* Light-blue ripple */}
+      {/* Pixel-grid shader (home: ripple/blue · interior pages: swirl/violet) */}
       {mounted && !reduceMotion ? (
         <div className="absolute inset-0 opacity-90">
           <PixelGridShader
-            shape="ripple"
+            shape={shape}
             matrix="bayer8"
-            colorFg="#7dd3fc"
+            colorFg={colorFg}
             pxSize={5}
             amplitude={0.45}
             frequency={1}
