@@ -60,7 +60,6 @@ import {
 } from "hugeicons-react";
 import { cn } from "@/lib/utils";
 import { type Box as BoxType } from "@/server/domain/types/box";
-import { AsciiField } from "@/components/product/ascii_field";
 import { ThemeToggle } from "@/components/product/theme_toggle";
 import { UserMenu } from "@/components/product/user_menu";
 import { TreeSidebar } from "@/components/product/tree_sidebar";
@@ -265,7 +264,7 @@ function Dock({
       <div
         onMouseMove={(e) => mouseX.set(e.clientX)}
         onMouseLeave={() => mouseX.set(Infinity)}
-        className="flex items-end gap-2 rounded-full border border-border/60 bg-background/80 px-3 py-2 shadow-xl shadow-black/10 backdrop-blur-2xl"
+        className="flex items-end gap-2 rounded-full border border-border/60 bg-background/90 px-3 py-2 shadow-xl shadow-black/10 backdrop-blur-md"
       >
         {NAV_ITEMS.map((item) => (
           <DockNavButton
@@ -354,15 +353,11 @@ function Sidebar({
       animate={{ x: 0, opacity: 1 }}
       exit={{ x: -(SIDEBAR_WIDTH + 24), opacity: 0 }}
       transition={MORPH_SPRING}
-      className="fixed inset-y-3 left-3 z-50 flex flex-col overflow-hidden rounded-2xl border border-border bg-background/95 shadow-xl backdrop-blur-2xl"
+      className="fixed inset-y-3 left-3 z-50 flex flex-col overflow-hidden rounded-2xl border border-border bg-background shadow-xl"
       style={{ width: SIDEBAR_WIDTH }}
       aria-label="Primary sidebar"
     >
-      {/* Subtle ASCII texture behind the nav content */}
-      <AsciiField className="pointer-events-none absolute inset-0 opacity-[0.06] dark:opacity-25" />
-
-      {/* All nav content sits on top of the ASCII field */}
-      <div className="relative z-10 flex flex-1 flex-col overflow-hidden">
+      <div className="relative flex flex-1 flex-col overflow-hidden">
         {/* ── Brand / workspace switcher ── */}
         <div className="shrink-0 px-3 pb-2 pt-3">
           <WorkspaceSwitcher
@@ -569,7 +564,7 @@ function MobileBottomNav({
       className="fixed inset-x-0 bottom-0 z-50 px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] lg:hidden"
       aria-label="Primary"
     >
-      <div className="mx-auto flex max-w-md items-center justify-around gap-0.5 rounded-2xl border border-border/60 bg-background/90 px-1.5 py-1.5 shadow-xl shadow-black/10 backdrop-blur-2xl">
+      <div className="mx-auto flex max-w-md items-center justify-around gap-0.5 rounded-2xl border border-border/60 bg-background/95 px-1.5 py-1.5 shadow-xl shadow-black/10 backdrop-blur-md">
         {NAV_ITEMS.map((item) => {
           const Icon = item.icon;
           const active = isActivePath(pathname, item.href);

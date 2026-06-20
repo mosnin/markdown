@@ -41,6 +41,7 @@ function readSource(relPath: string): string {
 const operatorPanelSrc = readSource("src/components/product/operator/operator_panel.tsx");
 const mobileSidebarSrc = readSource("src/components/product/shell/mobile_sidebar.tsx");
 const layoutSrc = readSource("src/app/app/layout.tsx");
+const floatingShellSrc = readSource("src/components/product/shell/floating_shell.tsx");
 
 // ─── 1. mobile_sidebar.tsx must not import or render OperatorPanel ───────────
 
@@ -115,49 +116,48 @@ describe("OperatorPanelTrigger is mounted at the layout root", () => {
   });
 });
 
-// ─── 3. MobileShellSidebar (wrapping MobileSidebar) and OperatorPanelTrigger
-//        share the layout root ────────────────────────────────────────────────
+// ─── 3. The mobile sidebar now lives inside FloatingShell; OperatorPanelTrigger
+//        is supplied to FloatingShell via children — they are siblings, never
+//        nested, so their Sheet portals cannot stack ───────────────────────────
 
-describe("Mobile sidebar mount and OperatorPanelTrigger share the layout root", () => {
-  it("both mounts appear in the layout file", () => {
-    // The layout imports MobileShellSidebar, which is the production
-    // wrapper that renders <MobileSidebar />. That indirection is what
-    // makes them de-facto siblings rather than nested.
-    expect(layoutSrc).toMatch(/<\s*MobileShellSidebar(\s|\/|>)/);
+describe("Mobile sidebar (in FloatingShell) and OperatorPanelTrigger are not nested", () => {
+  it("layout renders FloatingShell as the single chrome, with the trigger", () => {
+    // OperatorPanelTrigger sits in the top bar the layout passes to
+    // FloatingShell as children — so the trigger lives in the layout file and
+    // the mobile Sheet lives in the shell; they can never share a Sheet subtree.
+    expect(layoutSrc).toMatch(/<\s*FloatingShell(\s|>)/);
     expect(layoutSrc).toMatch(/<\s*OperatorPanelTrigger(\s|\/|>)/);
   });
 
-  it("neither mount nests the other", () => {
-    // Same JSX-depth check as above, applied symmetrically: the mobile
-    // sidebar mount must not contain the operator trigger, and vice versa.
-    const mobileMountBlocks =
-      layoutSrc.match(/<MobileShellSidebar[^/]*?>[\s\S]*?<\/MobileShellSidebar>/g) ??
-      [];
-    for (const block of mobileMountBlocks) {
-      expect(block).not.toMatch(/OperatorPanelTrigger/);
-    }
+  it("the mobile sidebar Sheet mount lives in FloatingShell, not the layout", () => {
+    expect(floatingShellSrc).toMatch(/<\s*MobileSidebar(\s|\/|>)/);
+    expect(layoutSrc).not.toMatch(/<\s*MobileSidebar(\s|\/|>)/);
+    expect(layoutSrc).not.toMatch(/<\s*MobileShellSidebar(\s|\/|>)/);
+  });
 
-    const triggerBlocks =
-      layoutSrc.match(
-        /<OperatorPanelTrigger[^/]*?>[\s\S]*?<\/OperatorPanelTrigger>/g
-      ) ?? [];
-    for (const block of triggerBlocks) {
-      expect(block).not.toMatch(/MobileShellSidebar|MobileSidebar/);
+  it("FloatingShell never embeds the OperatorPanel or its trigger", () => {
+    // The operator panel's Sheet must not be mounted inside the shell (which
+    // also renders the mobile sidebar's Sheet) — it arrives only via children.
+    expect(floatingShellSrc).not.toMatch(/<\s*OperatorPanel(\s|\/|>)/);
+    expect(floatingShellSrc).not.toMatch(/<\s*OperatorPanelTrigger(\s|\/|>)/);
+  });
+
+  it("FloatingShell does not nest page children inside the MobileSidebar subtree", () => {
+    // If MobileSidebar is ever rendered as a paired element, it must not wrap
+    // {children} (which carries the OperatorPanelTrigger) or the operator panel.
+    const mobileBlocks =
+      floatingShellSrc.match(/<MobileSidebar[^/]*?>[\s\S]*?<\/MobileSidebar>/g) ?? [];
+    for (const block of mobileBlocks) {
+      expect(block).not.toMatch(/\{children\}/);
+      expect(block).not.toMatch(/OperatorPanel/);
     }
   });
 
-  it("both mounts share the same top-level <header>/layout root container", () => {
-    // The header element of the layout contains both — neither is nested
-    // inside a <Sheet>/<Dialog>/<Popover> portal-bearing primitive at the
-    // layout root.
-    const headerMatch = layoutSrc.match(/<header[\s\S]*?<\/header>/);
-    expect(headerMatch).not.toBeNull();
-    const header = headerMatch![0];
-    expect(header).toMatch(/MobileShellSidebar/);
-    expect(header).toMatch(/OperatorPanelTrigger/);
-    // Sanity: no Sheet/Dialog wraps either inside the header.
-    expect(header).not.toMatch(/<\s*Sheet(\s|>)/);
-    expect(header).not.toMatch(/<\s*Dialog(\s|>)/);
+  it("FloatingShell renders no raw <Sheet> wrapping the page children", () => {
+    const sheetBlocks = floatingShellSrc.match(/<Sheet[\s\S]*?<\/Sheet>/g) ?? [];
+    for (const block of sheetBlocks) {
+      expect(block).not.toMatch(/\{children\}/);
+    }
   });
 });
 
