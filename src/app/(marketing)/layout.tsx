@@ -1,5 +1,5 @@
 import { connection } from "next/server";
-import { AnnouncementBar } from "@/components/marketing/announcement_bar";
+import AnnouncementRibbon from "@/components/animata/container/announcement-ribbon";
 import { MarketingHeader } from "@/components/marketing/header";
 import { MarketingFooter } from "@/components/marketing/footer";
 import { LightBoard } from "@/components/ui/lightboard";
@@ -20,7 +20,7 @@ export default async function MarketingLayout({
 
   return (
     <>
-      <AnnouncementBar />
+      <AnnouncementRibbon />
       <MarketingHeader />
       <main>{children}</main>
       {/* Blue matrix-rain band above the footer */}
