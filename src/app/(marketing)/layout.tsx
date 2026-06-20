@@ -3,7 +3,6 @@ import AnnouncementRibbon from "@/components/animata/container/announcement-ribb
 import { MarketingHeader } from "@/components/marketing/header";
 import { MarketingFooter } from "@/components/marketing/footer";
 import { LightBoard } from "@/components/ui/lightboard";
-import { MatrixRain } from "@/components/ui/matrix-rain";
 
 export default async function MarketingLayout({
   children,
@@ -23,14 +22,6 @@ export default async function MarketingLayout({
       <AnnouncementRibbon />
       <MarketingHeader />
       <main>{children}</main>
-      {/* Blue matrix-rain band above the footer */}
-      <section
-        aria-hidden="true"
-        className="relative h-56 w-full overflow-hidden border-t border-border/40"
-      >
-        <MatrixRain fixedColor="#38bdf8" fontSize={16} speed={55} className="opacity-80" />
-        <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-background via-transparent to-background" />
-      </section>
       {/* Lightboard marquee above the footer — full-bleed, slow blue crawl */}
       <section
         aria-hidden="true"
