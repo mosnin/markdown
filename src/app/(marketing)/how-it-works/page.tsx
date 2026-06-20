@@ -3,6 +3,7 @@ import Link from "next/link";
 import { ArrowRight, GitPullRequestArrow, ScrollText, SlidersHorizontal } from "lucide-react";
 import { PageHeroSection } from "@/components/marketing/hero";
 import { LoopStepper } from "@/components/marketing/loop_stepper";
+import { ArchitectureDiagram } from "@/components/marketing/architecture_diagram";
 import {
   MarketingSection,
   SectionHeader,
@@ -72,6 +73,18 @@ export default function HowItWorksPage() {
               </BentoCard>
             );
           })}
+        </div>
+      </MarketingSection>
+
+      {/* Architecture */}
+      <MarketingSection className="border-b border-border/30">
+        <SectionHeader
+          eyebrow="Architecture"
+          title="From any agent to your source of truth."
+          lede="Agents connect over MCP and propose changes. Nothing is written to your governed store until you approve — and every step is versioned and audited."
+        />
+        <div className="mt-12">
+          <ArchitectureDiagram />
         </div>
       </MarketingSection>
 
