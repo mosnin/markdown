@@ -2,6 +2,7 @@ import { connection } from "next/server";
 import { AnnouncementBar } from "@/components/marketing/announcement_bar";
 import { MarketingHeader } from "@/components/marketing/header";
 import { MarketingFooter } from "@/components/marketing/footer";
+import { LightBoard } from "@/components/ui/lightboard";
 
 export default async function MarketingLayout({
   children,
@@ -21,6 +22,26 @@ export default async function MarketingLayout({
       <AnnouncementBar />
       <MarketingHeader />
       <main>{children}</main>
+      {/* Lightboard marquee above the footer */}
+      <section
+        aria-hidden="true"
+        className="overflow-hidden border-t border-border/40 bg-background px-6 py-8"
+      >
+        <div className="mx-auto max-w-6xl">
+          <LightBoard
+            text="POGGLE   GOVERNED CONTEXT FOR AI AGENTS   "
+            rows={9}
+            lightSize={6}
+            gap={2}
+            colors={{
+              textBright: "rgba(167,139,250,0.95)",
+              drawLine: "rgba(167,139,250,0.55)",
+              textDim: "rgba(130,120,170,0.45)",
+              background: "rgba(130,120,170,0.10)",
+            }}
+          />
+        </div>
+      </section>
       <MarketingFooter />
     </>
   );

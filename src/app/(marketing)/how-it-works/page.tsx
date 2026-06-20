@@ -4,6 +4,7 @@ import { ArrowRight, GitPullRequestArrow, ScrollText, SlidersHorizontal } from "
 import { PageHeroSection } from "@/components/marketing/hero";
 import { LoopStepper } from "@/components/marketing/loop_stepper";
 import { ArchitectureDiagram } from "@/components/marketing/architecture_diagram";
+import { TerminalShowcase } from "@/components/marketing/terminal_showcase";
 import {
   MarketingSection,
   SectionHeader,
@@ -55,6 +56,18 @@ export default function HowItWorksPage() {
           lede="Click through each step, or let it play. The gate stays closed until a human opens it."
         />
         <LoopStepper />
+      </MarketingSection>
+
+      {/* Live terminal */}
+      <MarketingSection className="border-b border-border/30">
+        <SectionHeader
+          eyebrow="Live"
+          title="Watch the loop run."
+          lede="Connect, read, propose, approve — the same gate, in your terminal. Click a step to replay it."
+        />
+        <div className="mt-12">
+          <TerminalShowcase />
+        </div>
       </MarketingSection>
 
       {/* Why it's safe */}

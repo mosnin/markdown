@@ -2,6 +2,7 @@ import React from "react";
 import Link from "next/link";
 import { ArrowRightIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { MetalButton } from "@/components/ui/metal-button";
 import { TrustBar } from "@/components/marketing/trust_bar";
 import { HeroDemo } from "@/components/marketing/hero_demo";
 import { HeroBackdrop } from "@/components/marketing/hero_backdrop";
@@ -52,10 +53,17 @@ export function HeroSection() {
           </p>
 
           <div className="flex flex-col items-stretch gap-3 pt-1 sm:flex-row sm:items-center">
-            <Button size="lg" className="rounded-full" render={<Link href="/sign_in?mode=signup" />}>
+            <MetalButton
+              size="lg"
+              preset="silver"
+              borderRadius={9999}
+              className="rounded-full"
+              metalFxClassName="w-full rounded-full sm:w-fit"
+              render={<Link href="/sign_in?mode=signup" />}
+            >
               Get started free
               <ArrowRightIcon className="size-4 ml-2" data-icon="inline-end" />
-            </Button>
+            </MetalButton>
             <Button size="lg" variant="outline" className="rounded-full" render={<Link href="/how-it-works" />}>
               See how it works
             </Button>
@@ -117,10 +125,10 @@ export function PageHeroSection({
         {(ctaPrimary ?? ctaSecondary) && (
           <div className="mt-8 flex flex-col items-center gap-3 sm:flex-row sm:justify-center">
             {ctaPrimary && (
-              <Button render={<Link href={ctaPrimary.href} />}>
+              <MetalButton preset="silver" render={<Link href={ctaPrimary.href} />}>
                 {ctaPrimary.label}
                 <ArrowRightIcon className="size-4 ml-2" data-icon="inline-end" />
-              </Button>
+              </MetalButton>
             )}
             {ctaSecondary && (
               <Button variant="ghost" render={<Link href={ctaSecondary.href} />}>
