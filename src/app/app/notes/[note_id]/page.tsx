@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import { after } from "next/server";
 import {
   Archive,
   BookOpen,
@@ -58,6 +59,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 import { WorkspaceLiveRefresh } from "@/components/product/workspace/workspace_live_refresh";
+import { BoxPerfBadge } from "../../boxes/[box_id]/box_perf_badge";
 import { ActiveBranchBannerServer } from "@/components/product/active_branch_banner_server";
 import { formatRelativeDate } from "@/lib/format_date";
 
@@ -578,6 +580,7 @@ export default async function NotePage({
   // output on both sides and hydration passes. See
   // src/lib/format_date.ts.
   const nowIso = new Date().toISOString();
+  const __pt0 = performance.now();
   const ctx = await requireAuthenticatedUser();
   const supabase = await createClient();
   const adminClient = createAdminClient();
@@ -646,13 +649,17 @@ export default async function NotePage({
     note_id
   );
 
-  await auditBundleRead(supabase, ctx.workspace.id, ctx.user!.id, note_id, {
-    box_id: box.id,
-    linked_count: initialBundle.linked_notes.length,
-    guide_included: initialBundle.guide_note !== null,
-    ancestor_summary_included: initialBundle.ancestor_summary_note !== null,
-    truncated: initialBundle.truncated,
-  });
+  // Audit the bundle read OFF the critical path. It's a fire-and-forget write
+  // that must not add a DB round-trip to every note open; failure is non-critical.
+  after(() =>
+    auditBundleRead(supabase, ctx.workspace.id, ctx.user!.id, note_id, {
+      box_id: box.id,
+      linked_count: initialBundle.linked_notes.length,
+      guide_included: initialBundle.guide_note !== null,
+      ancestor_summary_included: initialBundle.ancestor_summary_note !== null,
+      truncated: initialBundle.truncated,
+    }).catch(() => {}),
+  );
 
   const isGuideNote = box.guide_note_id === note_id;
 
@@ -676,8 +683,15 @@ export default async function NotePage({
       ? userEmail.split("@")[0]
       : userEmail ?? ctx.user.id;
 
+  const __pt4 = performance.now();
+  const __serverEndEpoch = Date.now();
+  // [perf] TEMP instrumentation — remove once box/note open latency is fixed.
+  console.log(`[perf] note ${note_id} serverTotal=${(__pt4 - __pt0).toFixed(0)}ms`);
+
   return (
     <div className="flex h-full flex-col overflow-hidden">
+      {/* [perf] TEMP on-screen timing — remove once latency is fixed. */}
+      <BoxPerfBadge serverMs={Math.round(__pt4 - __pt0)} serverEndEpoch={__serverEndEpoch} />
       <ActiveBranchBannerServer objectType="note" objectId={note_id} />
       <div className="flex flex-1 overflow-hidden">
       <WorkspaceLiveRefresh
