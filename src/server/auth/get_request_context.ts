@@ -86,9 +86,11 @@ export const ACTIVE_BRANCH_COOKIE = "active_branch_id";
  */
 async function resolveRequestContext(): Promise<RequestContext> {
   const supabase = await createClient();
+  const __c0 = performance.now();
   const {
     data: { user },
   } = await supabase.auth.getUser();
+  const __cAuth = performance.now();
 
   if (!user) {
     return { user: null, isAuthenticated: false, workspace: null, activeBranchId: null };
@@ -115,6 +117,7 @@ async function resolveRequestContext(): Promise<RequestContext> {
     user.id,
     preferredWorkspaceId,
   );
+  const __cWs = performance.now();
 
   // Validate the branch cookie: it must reference an OPEN draft branch
   // inside the active workspace. A stale cookie (branch deleted /
@@ -138,6 +141,13 @@ async function resolveRequestContext(): Promise<RequestContext> {
     owner_id: workspace.owner_id,
     role: workspace.role,
   };
+
+  // [perf] TEMP instrumentation — remove once box-open latency is diagnosed.
+  console.log(
+    `[perf] ctx authGetUser=${(__cAuth - __c0).toFixed(0)}ms ` +
+      `workspace=${(__cWs - __cAuth).toFixed(0)}ms ` +
+      `branch=${(performance.now() - __cWs).toFixed(0)}ms`,
+  );
 
   return {
     user,
