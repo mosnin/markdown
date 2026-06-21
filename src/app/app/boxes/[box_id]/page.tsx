@@ -422,6 +422,29 @@ export default async function BoxPage({
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
+      {/* [perf] TEMP on-screen server-render timing — remove after diagnosis.
+          serverTotal is how long the SERVER took to render this box. If it's
+          small (e.g. ~200ms) but the box still felt slow, the delay is the
+          client bundle/network; if it's large (~4000ms), it's the server. */}
+      <div
+        style={{
+          position: "fixed",
+          bottom: 8,
+          left: 8,
+          zIndex: 9999,
+          background: "rgba(0,0,0,0.88)",
+          color: "#22ff88",
+          font: "12px ui-monospace, monospace",
+          padding: "5px 10px",
+          borderRadius: 6,
+          pointerEvents: "none",
+          whiteSpace: "nowrap",
+        }}
+      >
+        ⏱ server {Math.round(__pt4 - __pt0)}ms — auth+ctx {Math.round(__pt1 - __pt0)} · getBox{" "}
+        {Math.round(__pt2 - __pt1)} · lists {Math.round(__pt3 - __pt2)} · guide{" "}
+        {Math.round(__pt4 - __pt3)}
+      </div>
       <ActiveBranchBannerServer />
       <div className="flex flex-1 overflow-hidden">
       <WorkspaceLiveRefresh
