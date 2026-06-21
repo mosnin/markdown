@@ -208,7 +208,9 @@ export function OperatorPanel({
   // Session management — Codex-style thread isolation.
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [sessionHistoryRefreshKey, setSessionHistoryRefreshKey] = useState(0);
-  const [showSessionsSidebar, setShowSessionsSidebar] = useState(true);
+  // Collapsed by default — the conversation gets the full panel width; the
+  // header toggle (PanelLeft) slides the 180px sessions rail in on demand.
+  const [showSessionsSidebar, setShowSessionsSidebar] = useState(false);
 
   // Prompt-history recall state. `historyIndex === -1` means "not recalling"
   // (the textarea contents are user-typed, not a recalled entry). Any other
