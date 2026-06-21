@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { after } from "next/server";
+import dynamic from "next/dynamic";
 import {
   Archive,
   BookOpen,
@@ -32,10 +33,6 @@ import { auditBundleRead } from "@/server/services/audit_service";
 import { listVersionsForNote } from "@/server/services/version_history_service";
 import { listPendingProposalsForNote } from "@/server/repositories/write_proposal_repository";
 import { NoteEditor } from "@/components/product/notes/note_editor";
-import { SemanticLinksPanel } from "@/components/product/semantic_links_panel";
-import { LinkSuggestionsPanel } from "@/components/product/link_suggestions_panel";
-import { ContextBundleViewer } from "@/components/product/context_bundle_viewer";
-import { NoteHistoryPanel } from "@/components/product/notes/note_history_panel";
 import { NoteAiCopilotTab, type PendingProposalRef } from "@/components/product/notes/note_ai_copilot_tab";
 import { type AiTimelineEntry } from "@/components/product/notes/note_ai_timeline";
 import { NoteExportMenu } from "@/components/product/export_menu";
@@ -60,6 +57,22 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 import { WorkspaceLiveRefresh } from "@/components/product/workspace/workspace_live_refresh";
 import { BoxPerfBadge } from "../../boxes/[box_id]/box_perf_badge";
+
+// Secondary-tab panels are code-split so they're not in the note's initial JS
+// bundle — they load only when their (non-default) tab is opened. The default
+// "ai" tab (NoteAiCopilotTab) and the editor stay eager.
+const SemanticLinksPanel = dynamic(() =>
+  import("@/components/product/semantic_links_panel").then((m) => ({ default: m.SemanticLinksPanel })),
+);
+const LinkSuggestionsPanel = dynamic(() =>
+  import("@/components/product/link_suggestions_panel").then((m) => ({ default: m.LinkSuggestionsPanel })),
+);
+const ContextBundleViewer = dynamic(() =>
+  import("@/components/product/context_bundle_viewer").then((m) => ({ default: m.ContextBundleViewer })),
+);
+const NoteHistoryPanel = dynamic(() =>
+  import("@/components/product/notes/note_history_panel").then((m) => ({ default: m.NoteHistoryPanel })),
+);
 import { ActiveBranchBannerServer } from "@/components/product/active_branch_banner_server";
 import { formatRelativeDate } from "@/lib/format_date";
 
