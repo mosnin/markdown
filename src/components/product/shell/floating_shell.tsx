@@ -48,6 +48,7 @@ import {
 import {
   ChevronRight,
   FileText,
+  LayoutGrid,
   PanelLeft,
   PanelLeftClose,
   Plug,
@@ -84,6 +85,7 @@ type NavItem = {
 // Routes + icons match exactly so every existing link is honoured.
 const NAV_ITEMS: NavItem[] = [
   { label: "Home", href: "/app", icon: Home01Icon },
+  { label: "Boxes", href: "/app/boxes", icon: LayoutGrid },
   { label: "Connect agent", href: "/app/connect", icon: Plug },
   { label: "AI Edits", href: "/app/proposals", icon: Alert01Icon, badgeKey: "proposals" },
 ];
