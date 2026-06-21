@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { Suspense, cache } from "react";
+import dynamic from "next/dynamic";
 import {
   Archive,
   BookOpen,
@@ -27,9 +28,6 @@ import { getBoxOverview } from "@/server/services/overview_service";
 import { EmptyState } from "@/components/product/empty_state";
 import { Skeleton } from "@/components/ui/skeleton";
 import { BoxContentsTree } from "@/components/product/boxes/box_contents_tree";
-import { BoxGuidePanel } from "@/components/product/boxes/box_guide_panel";
-import { GraphPanel } from "@/components/product/graph_panel";
-import { BoxSearchPanel } from "@/components/product/boxes/box_search_panel";
 import { CreateFolderDialog } from "@/components/product/create/create_folder_dialog";
 import { CreateNoteDialog } from "@/components/product/create/create_note_dialog";
 import { GuideNotePicker } from "@/components/product/guide_note_picker";
@@ -50,7 +48,6 @@ import { AskPogInlineButton } from "@/components/product/ask_pog_inline_button";
 import { listTemplates } from "@/server/services/note_template_service";
 import { FolderPolicyToggle } from "@/components/product/folders/folder_policy_toggle";
 import { BoxEditDialog } from "@/components/product/boxes/box_edit_dialog";
-import { BoxOverviewPanel } from "@/components/product/boxes/box_overview_panel";
 import { BoxTemplateSetup } from "@/components/product/boxes/box_template_setup";
 import { BoxChatPanel } from "@/components/product/boxes/box_chat_panel";
 import { WorkspaceLiveRefresh } from "@/components/product/workspace/workspace_live_refresh";
@@ -60,6 +57,30 @@ import { BoxPublicToggle } from "@/components/product/boxes/box_public_toggle";
 import { type Folder as FolderType } from "@/server/domain/types/folder";
 import { type Note } from "@/server/domain/types/note";
 import { formatAbsoluteDate, formatRelativeDate } from "@/lib/format_date";
+import { BoxPerfBadge } from "./box_perf_badge";
+
+// Heavy, tab-only panels are code-split (next/dynamic) so they stay OUT of the
+// box route's initial JS bundle — they download only when their tab is opened,
+// not on every box open. Radix unmounts inactive tabs, so on the default Notes
+// tab these never load. This removes the bulk of the client-side box-open cost.
+const GraphPanel = dynamic(() =>
+  import("@/components/product/graph_panel").then((m) => ({ default: m.GraphPanel })),
+);
+const BoxSearchPanel = dynamic(() =>
+  import("@/components/product/boxes/box_search_panel").then((m) => ({
+    default: m.BoxSearchPanel,
+  })),
+);
+const BoxOverviewPanel = dynamic(() =>
+  import("@/components/product/boxes/box_overview_panel").then((m) => ({
+    default: m.BoxOverviewPanel,
+  })),
+);
+const BoxGuidePanel = dynamic(() =>
+  import("@/components/product/boxes/box_guide_panel").then((m) => ({
+    default: m.BoxGuidePanel,
+  })),
+);
 
 // ─── Tab skeleton (generic loading state for heavy tabs) ─────────────────────
 
@@ -371,11 +392,12 @@ export default async function BoxPage({
   const __pt1 = performance.now();
   const supabase = await createClient();
 
-  const box = await getBoxById(supabase, box_id);
-  const __pt2 = performance.now();
-  if (!box || box.workspace_id !== ctx.workspace.id) notFound();
-
+  // Fetch the box AND its contents in ONE parallel batch. The list queries key
+  // off the route's box_id (identical to box.id), so they no longer wait for
+  // getBoxById first — this overlaps what used to be two sequential ~300ms
+  // round-trips. Box existence/ownership is validated immediately after.
   const [
+    box,
     folders,
     notes,
     archivedNotes,
@@ -384,26 +406,28 @@ export default async function BoxPage({
     trashedFolders,
     savedTemplates,
   ] = await Promise.all([
-    listFoldersByBox(supabase, box.id, { branchId: ctx.activeBranchId }),
-    listNotesByBox(supabase, box.id, { branchId: ctx.activeBranchId }),
-    listArchivedNotesByBox(supabase, box.id, { branchId: ctx.activeBranchId }),
-    listTrashedNotesByBox(supabase, box.id, { branchId: ctx.activeBranchId }),
-    listArchivedFoldersByBox(supabase, box.id, { branchId: ctx.activeBranchId }),
-    listTrashedFoldersByBox(supabase, box.id, { branchId: ctx.activeBranchId }),
-    listTemplates(supabase, box.id),
+    getBoxById(supabase, box_id),
+    listFoldersByBox(supabase, box_id, { branchId: ctx.activeBranchId }),
+    listNotesByBox(supabase, box_id, { branchId: ctx.activeBranchId }),
+    listArchivedNotesByBox(supabase, box_id, { branchId: ctx.activeBranchId }),
+    listTrashedNotesByBox(supabase, box_id, { branchId: ctx.activeBranchId }),
+    listArchivedFoldersByBox(supabase, box_id, { branchId: ctx.activeBranchId }),
+    listTrashedFoldersByBox(supabase, box_id, { branchId: ctx.activeBranchId }),
+    listTemplates(supabase, box_id),
   ]);
+  const __pt2 = performance.now();
+  if (!box || box.workspace_id !== ctx.workspace.id) notFound();
 
-  const __pt3 = performance.now();
   const guideNote = box.guide_note_id
     ? await getNoteById(supabase, box.guide_note_id)
     : null;
   const __pt4 = performance.now();
-  // [perf] TEMP instrumentation — remove once box-open latency is diagnosed.
+  const __serverEndEpoch = Date.now();
+  // [perf] TEMP instrumentation — remove once box-open latency is fixed.
   console.log(
     `[perf] box ${box_id} notes=${notes.length} folders=${folders.length} ` +
-      `ctx=${(__pt1 - __pt0).toFixed(0)}ms getBox=${(__pt2 - __pt1).toFixed(0)}ms ` +
-      `lists=${(__pt3 - __pt2).toFixed(0)}ms guide=${(__pt4 - __pt3).toFixed(0)}ms ` +
-      `serverTotal=${(__pt4 - __pt0).toFixed(0)}ms`,
+      `ctx=${(__pt1 - __pt0).toFixed(0)}ms fetch=${(__pt2 - __pt1).toFixed(0)}ms ` +
+      `guide=${(__pt4 - __pt2).toFixed(0)}ms serverTotal=${(__pt4 - __pt0).toFixed(0)}ms`,
   );
 
   const sortedNotes = [...notes].sort((a, b) =>
@@ -422,29 +446,8 @@ export default async function BoxPage({
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
-      {/* [perf] TEMP on-screen server-render timing — remove after diagnosis.
-          serverTotal is how long the SERVER took to render this box. If it's
-          small (e.g. ~200ms) but the box still felt slow, the delay is the
-          client bundle/network; if it's large (~4000ms), it's the server. */}
-      <div
-        style={{
-          position: "fixed",
-          bottom: 8,
-          left: 8,
-          zIndex: 9999,
-          background: "rgba(0,0,0,0.88)",
-          color: "#22ff88",
-          font: "12px ui-monospace, monospace",
-          padding: "5px 10px",
-          borderRadius: 6,
-          pointerEvents: "none",
-          whiteSpace: "nowrap",
-        }}
-      >
-        ⏱ server {Math.round(__pt4 - __pt0)}ms — auth+ctx {Math.round(__pt1 - __pt0)} · getBox{" "}
-        {Math.round(__pt2 - __pt1)} · lists {Math.round(__pt3 - __pt2)} · guide{" "}
-        {Math.round(__pt4 - __pt3)}
-      </div>
+      {/* [perf] TEMP on-screen timing — remove once box-open latency is fixed. */}
+      <BoxPerfBadge serverMs={Math.round(__pt4 - __pt0)} serverEndEpoch={__serverEndEpoch} />
       <ActiveBranchBannerServer />
       <div className="flex flex-1 overflow-hidden">
       <WorkspaceLiveRefresh
