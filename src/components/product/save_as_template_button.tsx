@@ -14,10 +14,17 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { createTemplateFromNoteAction } from "@/app/app/boxes/template_actions";
+import { cn } from "@/lib/utils";
 
 interface SaveAsTemplateButtonProps {
   noteId: string;
   noteTitle: string;
+  /**
+   * Optional trigger styling override. Defaults to a quiet toolbar button.
+   * The redesigned note page passes a full-width menu-row style so this can
+   * live inside the overflow (•••) menu.
+   */
+  triggerClassName?: string;
 }
 
 /**
@@ -27,6 +34,7 @@ interface SaveAsTemplateButtonProps {
 export function SaveAsTemplateButton({
   noteId,
   noteTitle,
+  triggerClassName,
 }: SaveAsTemplateButtonProps) {
   const [open, setOpen] = useState(false);
   const [name, setName] = useState(`Template from ${noteTitle}`);
@@ -68,14 +76,17 @@ export function SaveAsTemplateButton({
       <DialogTrigger
         render={
           <button
-            className="flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs transition-fast text-muted-foreground hover:text-foreground hover:bg-accent"
+            className={cn(
+              "flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs transition-fast text-muted-foreground hover:text-foreground hover:bg-accent",
+              triggerClassName,
+            )}
             aria-label="Save as template"
             title="Save as template"
           />
         }
       >
         <BookTemplate className="h-3.5 w-3.5" aria-hidden="true" />
-        <span className="hidden sm:inline">Save as template</span>
+        <span className={triggerClassName ? undefined : "hidden sm:inline"}>Save as template</span>
       </DialogTrigger>
 
       <DialogContent>

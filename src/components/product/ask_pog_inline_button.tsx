@@ -16,6 +16,8 @@ interface AskPogInlineButtonProps {
   prompt: string;
   /** Optional styling override — defaults to a pill that matches note/box toolbars. */
   className?: string;
+  /** Optional icon color override (e.g. white on a solid violet pill). */
+  iconClassName?: string;
 }
 
 /**
@@ -29,6 +31,7 @@ export function AskPogInlineButton({
   label,
   prompt,
   className,
+  iconClassName,
 }: AskPogInlineButtonProps) {
   function handleClick() {
     try {
@@ -50,7 +53,7 @@ export function AskPogInlineButton({
         className,
       )}
     >
-      <Sparkles className="h-3.5 w-3.5 text-foreground/70" aria-hidden="true" />
+      <Sparkles className={cn("h-3.5 w-3.5 text-foreground/70", iconClassName)} aria-hidden="true" />
       {label}
     </button>
   );

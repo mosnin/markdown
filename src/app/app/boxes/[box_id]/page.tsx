@@ -57,7 +57,6 @@ import { BoxPublicToggle } from "@/components/product/boxes/box_public_toggle";
 import { type Folder as FolderType } from "@/server/domain/types/folder";
 import { type Note } from "@/server/domain/types/note";
 import { formatAbsoluteDate, formatRelativeDate } from "@/lib/format_date";
-import { BoxPerfBadge } from "./box_perf_badge";
 
 // Heavy, tab-only panels are code-split (next/dynamic) so they stay OUT of the
 // box route's initial JS bundle — they download only when their tab is opened,
@@ -422,8 +421,7 @@ export default async function BoxPage({
     ? await getNoteById(supabase, box.guide_note_id)
     : null;
   const __pt4 = performance.now();
-  const __serverEndEpoch = Date.now();
-  // [perf] TEMP instrumentation — remove once box-open latency is fixed.
+  // [perf] server timing (invisible — server log only).
   console.log(
     `[perf] box ${box_id} notes=${notes.length} folders=${folders.length} ` +
       `ctx=${(__pt1 - __pt0).toFixed(0)}ms fetch=${(__pt2 - __pt1).toFixed(0)}ms ` +
@@ -446,8 +444,6 @@ export default async function BoxPage({
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
-      {/* [perf] TEMP on-screen timing — remove once box-open latency is fixed. */}
-      <BoxPerfBadge serverMs={Math.round(__pt4 - __pt0)} serverEndEpoch={__serverEndEpoch} />
       <ActiveBranchBannerServer />
       <div className="flex flex-1 overflow-hidden">
       <WorkspaceLiveRefresh

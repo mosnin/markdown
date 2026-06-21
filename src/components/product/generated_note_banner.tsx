@@ -53,7 +53,7 @@ export function GeneratedNoteBanner({
   }
 
   return (
-    <div className="mx-6 mt-3 rounded-md border border-border bg-muted/30 px-4 py-3">
+    <div className="mx-4 mt-4 rounded-2xl border border-border/50 bg-muted/30 px-4 py-3 sm:mx-6 lg:mx-8">
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-start gap-2.5 min-w-0">
           <Bot className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground/70" />
@@ -86,8 +86,8 @@ export function GeneratedNoteBanner({
           <button
             onClick={() => setConfirmOpen(true)}
             className={cn(
-              "flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-fast",
-              "border border-border hover:border-foreground/20 hover:bg-background",
+              "flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-medium transition-fast",
+              "border border-border/60 hover:border-foreground/20 hover:bg-background",
               "text-foreground/80"
             )}
           >
@@ -96,7 +96,7 @@ export function GeneratedNoteBanner({
           </button>
         </div>
       ) : (
-        <div className="mt-3 rounded-md border border-border bg-background px-3 py-2.5 flex flex-col gap-2">
+        <div className="mt-3 rounded-2xl border border-border/50 bg-background px-3.5 py-3 flex flex-col gap-2">
           <p className="text-xs text-foreground/80">
             This will mark the note as user-managed. A new version will be recorded.
             All prior history and attribution remain unchanged.
@@ -106,8 +106,8 @@ export function GeneratedNoteBanner({
               onClick={handlePromote}
               disabled={isPending}
               className={cn(
-                "flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-fast",
-                "bg-foreground text-background hover:bg-foreground/80",
+                "flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-medium transition-fast",
+                "bg-primary text-primary-foreground hover:bg-primary/90",
                 "disabled:cursor-not-allowed disabled:opacity-50"
               )}
             >

@@ -255,9 +255,12 @@ export function NoteImportDialog({
 export function NoteImportButton({
   noteId,
   noteTitle,
+  triggerClassName,
 }: {
   noteId: string;
   noteTitle: string;
+  /** Optional trigger styling override (e.g. full-width menu row in the ••• menu). */
+  triggerClassName?: string;
 }) {
   const [open, setOpen] = useState(false);
 
@@ -269,11 +272,12 @@ export function NoteImportButton({
         title="Import into note"
         className={cn(
           "flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs transition-fast",
-          "text-muted-foreground hover:text-foreground hover:bg-accent"
+          "text-muted-foreground hover:text-foreground hover:bg-accent",
+          triggerClassName
         )}
       >
         <Upload className="h-3.5 w-3.5" aria-hidden="true" />
-        <span className="hidden sm:inline">Import</span>
+        <span className={triggerClassName ? undefined : "hidden sm:inline"}>Import</span>
       </button>
       {open && (
         <NoteImportDialog

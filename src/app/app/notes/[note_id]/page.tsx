@@ -8,8 +8,6 @@ import {
   ChevronRight,
   Clock,
   GitBranch,
-  History,
-  MessageSquare,
   Trash2,
 } from "lucide-react";
 import Link from "next/link";
@@ -35,28 +33,22 @@ import { listPendingProposalsForNote } from "@/server/repositories/write_proposa
 import { NoteEditor } from "@/components/product/notes/note_editor";
 import { NoteAiCopilotTab, type PendingProposalRef } from "@/components/product/notes/note_ai_copilot_tab";
 import { type AiTimelineEntry } from "@/components/product/notes/note_ai_timeline";
-import { NoteExportMenu } from "@/components/product/export_menu";
-import { AskPogInlineButton } from "@/components/product/ask_pog_inline_button";
-import { NoteImportButton } from "@/components/product/notes/note_import_dialog";
-import { NoteLifecycleMenu } from "@/components/product/notes/note_lifecycle_menu";
-import { SaveAsTemplateButton } from "@/components/product/save_as_template_button";
 import { NoteCommentsPanel } from "@/components/product/notes/note_comments_panel";
 import { NoteEntitiesPanel } from "@/components/product/notes/note_entities_panel";
 import { NoteBacklinksPanel } from "@/components/product/notes/note_backlinks_panel";
 import { CopyFrontmatterButton } from "@/components/product/notes/copy_frontmatter_button";
 import type { EntityChipType } from "@/components/product/entity_chip";
-import { ShareNoteButton } from "@/components/product/share_note_button";
 import { GeneratedNoteBanner } from "@/components/product/generated_note_banner";
 import { NoteAiReadinessBadge } from "@/components/product/notes/note_ai_readiness_badge";
 import { NoteMetadataChecklist } from "@/components/product/notes/note_metadata_checklist";
 import { NoteBundleExportButton } from "@/components/product/notes/note_bundle_export_button";
 import { RetrievalPrioritySlider, ReadHintSelector } from "@/components/product/notes/note_retrieval_editor";
+import { NoteActionBar } from "@/components/product/notes/note_action_bar";
+import { NoteContextTabs } from "@/components/product/notes/note_context_tabs";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 import { WorkspaceLiveRefresh } from "@/components/product/workspace/workspace_live_refresh";
-import { BoxPerfBadge } from "../../boxes/[box_id]/box_perf_badge";
 
 // Secondary-tab panels are code-split so they're not in the note's initial JS
 // bundle — they load only when their (non-default) tab is opened. The default
@@ -75,6 +67,16 @@ const NoteHistoryPanel = dynamic(() =>
 );
 import { ActiveBranchBannerServer } from "@/components/product/active_branch_banner_server";
 import { formatRelativeDate } from "@/lib/format_date";
+
+// ─── Shared tokens ──────────────────────────────────────────────────────────
+//
+// The app's NEW aesthetic (see boxes_bento / floating_shell / spotlight_card):
+// soft rounded `bg-card` surfaces, a single quiet shadow, no hard borders.
+
+const SOFT_SHADOW =
+  "shadow-[0_2px_12px_-2px_rgba(0,0,0,0.07),0_1px_4px_-1px_rgba(0,0,0,0.05)]";
+const SECTION_LABEL =
+  "text-[11px] font-medium uppercase tracking-[0.2em] text-muted-foreground";
 
 // ─── Breadcrumb ───────────────────────────────────────────────────────────────
 
@@ -99,20 +101,20 @@ function Breadcrumb({
   ];
 
   return (
-    <nav aria-label="Breadcrumb" className="flex items-center gap-1 text-xs text-muted-foreground">
+    <nav aria-label="Breadcrumb" className="flex items-center gap-1.5 text-xs text-muted-foreground">
       {parts.map((part, i) => (
-        <span key={`${part.label}-${i}`} className="flex items-center gap-1">
-          {i > 0 && <ChevronRight className="h-3 w-3 shrink-0" aria-hidden="true" />}
+        <span key={`${part.label}-${i}`} className="flex items-center gap-1.5">
+          {i > 0 && <ChevronRight className="h-3 w-3 shrink-0 text-muted-foreground/40" aria-hidden="true" />}
           {part.href ? (
             <Link
               href={part.href}
-              className="hover:text-foreground hover:underline underline-offset-2 transition-fast"
+              className="rounded-md transition-fast hover:text-foreground"
             >
               {part.label}
             </Link>
           ) : i === parts.length - 1 ? (
             /* Current page — note title shown with stronger contrast */
-            <span className="max-w-[180px] truncate text-foreground/80 font-medium" title={part.label}>
+            <span className="max-w-[200px] truncate font-medium text-foreground/80" title={part.label}>
               {part.label}
             </span>
           ) : (
@@ -124,7 +126,22 @@ function Breadcrumb({
   );
 }
 
-// ─── Info tab sections ────────────────────────────────────────────────────────
+// ─── Right-panel building blocks ────────────────────────────────────────────
+
+/** A soft rounded card used to group a section of the right context panel. */
+function PanelCard({
+  children,
+  className,
+}: {
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <div className={cn("rounded-2xl bg-card", SOFT_SHADOW, className)}>
+      {children}
+    </div>
+  );
+}
 
 function InfoSection({
   children,
@@ -134,7 +151,7 @@ function InfoSection({
   border?: boolean;
 }) {
   return (
-    <div className={cn("px-4 py-3", border && "border-b border-border")}>
+    <div className={cn("px-4 py-3.5", border && "border-b border-border/50")}>
       {children}
     </div>
   );
@@ -142,9 +159,38 @@ function InfoSection({
 
 function InfoLabel({ children }: { children: React.ReactNode }) {
   return (
-    <p className="mb-1.5 text-[10px] font-medium uppercase tracking-wider text-muted-foreground/60">
+    <p className="mb-1.5 text-[10px] font-medium uppercase tracking-[0.15em] text-muted-foreground/70">
       {children}
     </p>
+  );
+}
+
+/** A soft, collapsible group for the "History" tab (replaces sharp <details>). */
+function PanelDisclosure({
+  summary,
+  children,
+  defaultOpen = false,
+}: {
+  summary: React.ReactNode;
+  children: React.ReactNode;
+  defaultOpen?: boolean;
+}) {
+  return (
+    <details className="group rounded-2xl bg-card transition-shadow open:shadow-[0_2px_12px_-2px_rgba(0,0,0,0.07),0_1px_4px_-1px_rgba(0,0,0,0.05)]" open={defaultOpen}>
+      <summary
+        className={cn(
+          "flex cursor-pointer select-none items-center justify-between rounded-2xl px-4 py-3 text-xs font-medium text-foreground transition-fast",
+          "hover:bg-accent/50 group-open:rounded-b-none"
+        )}
+      >
+        {summary}
+        <ChevronRight
+          className="h-3.5 w-3.5 shrink-0 text-muted-foreground/60 transition-transform group-open:rotate-90"
+          aria-hidden="true"
+        />
+      </summary>
+      <div className="border-t border-border/50">{children}</div>
+    </details>
   );
 }
 
@@ -223,351 +269,334 @@ function NoteContextPanel({
 
   const linkCount = links.outgoing.length + links.incoming.length;
 
-  return (
-    <div className="flex h-full flex-col overflow-hidden">
-      {/* Panel header */}
-      <div className="border-b border-border px-4 py-2.5">
-        <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
-          Note context
-        </p>
-      </div>
-
-      {/* Tabs */}
-      <Tabs defaultValue={defaultTab} className="flex flex-1 flex-col overflow-hidden">
-        <div className="border-b border-border px-4">
-          <TabsList variant="line" className="h-auto pb-0">
-            <TabsTrigger value="context" className="pb-2.5 text-xs">
-              Context
-            </TabsTrigger>
-            <TabsTrigger value="ai" className="relative pb-2.5 text-xs">
-              AI
-              {pendingProposals.length > 0 && (
-                <span className="ml-1 rounded-full bg-primary px-1 text-[10px] text-primary-foreground">
-                  {pendingProposals.length}
-                </span>
-              )}
-            </TabsTrigger>
-            <TabsTrigger value="more" className="pb-2.5 text-xs">
-              History
-            </TabsTrigger>
-          </TabsList>
-        </div>
-
-        {/* ── Context tab (Info + Links + Backlinks merged) ── */}
-        <TabsContent value="context" className="flex-1 overflow-hidden">
-          <ScrollArea className="h-full">
-
-            {/* ── About section ── */}
-            <div className="px-4 pt-3 pb-1">
-              <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground/60">About</p>
-            </div>
-
-            {/* Guide note callout — shown prominently when this IS the guide */}
-            {isGuideNote && (
-              <div className="border-b border-amber-300/50 bg-amber-50/40 px-4 py-3 dark:border-amber-600/30 dark:bg-amber-900/10">
-                <div className="flex items-center gap-2">
-                  <BookOpen
-                    className="h-3.5 w-3.5 shrink-0 text-amber-600 dark:text-amber-500"
-                    aria-hidden="true"
-                  />
-                  <p className="text-xs font-medium text-amber-700 dark:text-amber-400">
-                    This is the guide note for{" "}
-                    <Link
-                      href={`/app/boxes/${boxId}`}
-                      className="underline underline-offset-2 hover:text-amber-800 dark:hover:text-amber-300 transition-fast"
-                    >
-                      {boxName}
-                    </Link>
-                  </p>
-                </div>
-                <p className="mt-1 pl-5 text-[11px] text-amber-700/70 dark:text-amber-400/70">
-                  AI agents read this note first when assembling context for
-                  this box.
-                </p>
-              </div>
-            )}
-
-            {/* Identity */}
-            <InfoSection>
-              <div className="flex items-center gap-2 flex-wrap mb-1">
-                {note.kind === "guide" ? (
-                  <Badge
-                    variant="secondary"
-                    className="flex items-center gap-1 text-[10px] font-normal border-amber-300/60 bg-amber-50/60 text-amber-700 dark:border-amber-600/40 dark:bg-amber-900/20 dark:text-amber-400"
-                  >
-                    <BookOpen className="h-2.5 w-2.5" aria-hidden="true" />
-                    Guide note
-                  </Badge>
-                ) : note.kind !== "note" ? (
-                  <Badge variant="secondary" className="text-[10px] font-normal capitalize">
-                    {kindLabel[note.kind] ?? note.kind}
-                  </Badge>
-                ) : null}
-                <NoteAiReadinessBadge
-                  summary={note.summary}
-                  tags={note.tags}
-                  linkCount={linkCount}
-                  readHint={note.read_hint}
-                  retrievalPriority={note.retrieval_priority}
-                />
-              </div>
-              <p className="line-clamp-3 text-sm font-medium text-foreground">
-                {note.title}
+  // ── Context tab — About / Retrieval / Links / Backlinks ──
+  const contextPanel = (
+    <ScrollArea className="h-full">
+      <div className="space-y-4 px-4 pb-6">
+        {/* Guide note callout — shown prominently when this IS the guide */}
+        {isGuideNote && (
+          <div className="rounded-2xl border border-amber-300/50 bg-amber-50/50 px-4 py-3 dark:border-amber-600/30 dark:bg-amber-900/10">
+            <div className="flex items-center gap-2">
+              <BookOpen
+                className="h-3.5 w-3.5 shrink-0 text-amber-600 dark:text-amber-500"
+                aria-hidden="true"
+              />
+              <p className="text-xs font-medium text-amber-700 dark:text-amber-400">
+                This is the guide note for{" "}
+                <Link
+                  href={`/app/boxes/${boxId}`}
+                  className="underline underline-offset-2 transition-fast hover:text-amber-800 dark:hover:text-amber-300"
+                >
+                  {boxName}
+                </Link>
               </p>
-            </InfoSection>
+            </div>
+            <p className="mt-1 pl-5 text-[11px] text-amber-700/70 dark:text-amber-400/70">
+              AI agents read this note first when assembling context for this box.
+            </p>
+          </div>
+        )}
 
-            {/* Summary — first-class, not buried at bottom */}
-            {note.summary && (
-              <InfoSection>
-                <InfoLabel>Summary</InfoLabel>
-                <p className="text-xs leading-relaxed text-foreground/80">
-                  {note.summary}
-                </p>
-              </InfoSection>
-            )}
-
-            {/* Retrieval signals — interactive editors */}
-            <InfoSection>
-              <InfoLabel>Retrieval</InfoLabel>
-              <div className="flex flex-col gap-4">
-                <RetrievalPrioritySlider
-                  noteId={note.id}
-                  initialPriority={note.retrieval_priority}
-                />
-                <ReadHintSelector
-                  noteId={note.id}
-                  initialReadHint={note.read_hint}
-                />
-              </div>
-            </InfoSection>
-
-            {/* AI Context Checklist */}
-            <InfoSection>
-              <NoteMetadataChecklist
+        {/* About card */}
+        <PanelCard>
+          {/* Identity */}
+          <InfoSection>
+            <div className="mb-1.5 flex flex-wrap items-center gap-2">
+              {note.kind === "guide" ? (
+                <Badge
+                  variant="secondary"
+                  className="flex items-center gap-1 rounded-full border-amber-300/60 bg-amber-50/60 text-[10px] font-normal text-amber-700 dark:border-amber-600/40 dark:bg-amber-900/20 dark:text-amber-400"
+                >
+                  <BookOpen className="h-2.5 w-2.5" aria-hidden="true" />
+                  Guide note
+                </Badge>
+              ) : note.kind !== "note" ? (
+                <Badge variant="secondary" className="rounded-full text-[10px] font-normal capitalize">
+                  {kindLabel[note.kind] ?? note.kind}
+                </Badge>
+              ) : null}
+              <NoteAiReadinessBadge
                 summary={note.summary}
                 tags={note.tags}
                 linkCount={linkCount}
                 readHint={note.read_hint}
                 retrievalPriority={note.retrieval_priority}
               />
-            </InfoSection>
+            </div>
+            <p className="line-clamp-3 text-sm font-medium text-foreground">
+              {note.title}
+            </p>
+          </InfoSection>
 
-            {/* Tags */}
-            {note.tags.length > 0 && (
-              <InfoSection>
-                <InfoLabel>Tags</InfoLabel>
-                <div className="flex flex-wrap gap-1">
-                  {note.tags.map((tag) => (
-                    <Badge key={tag} variant="secondary" className="text-xs font-normal">
-                      {tag}
-                    </Badge>
-                  ))}
-                </div>
-              </InfoSection>
-            )}
-
-            {/* Location */}
+          {/* Summary — first-class, not buried at bottom */}
+          {note.summary && (
             <InfoSection>
-              <InfoLabel>Location</InfoLabel>
-              <nav
-                aria-label="Note location"
-                className="flex items-center gap-1 flex-wrap text-xs text-muted-foreground"
-              >
-                <Link
-                  href="/app"
-                  className="hover:text-foreground hover:underline underline-offset-2 transition-fast"
-                >
-                  {workspaceName}
-                </Link>
-                <ChevronRight className="h-3 w-3 shrink-0 text-muted-foreground/40" aria-hidden="true" />
-                <Link
-                  href={`/app/boxes/${boxId}`}
-                  className="hover:text-foreground hover:underline underline-offset-2 transition-fast"
-                >
-                  {boxName}
-                </Link>
-                {folderName && (
-                  <>
-                    <ChevronRight className="h-3 w-3 shrink-0 text-muted-foreground/40" aria-hidden="true" />
-                    <span>{folderName}</span>
-                  </>
-                )}
-              </nav>
-              {note.path_cache && (
-                <p className="mt-1.5 font-mono text-[10px] text-muted-foreground/50">
-                  {note.path_cache}
-                </p>
-              )}
+              <InfoLabel>Summary</InfoLabel>
+              <p className="text-xs leading-relaxed text-foreground/80">
+                {note.summary}
+              </p>
             </InfoSection>
+          )}
 
-            {/* Machine origin — shown when note is generated */}
-            {note.is_generated && (
-              <InfoSection>
-                <InfoLabel>Machine origin</InfoLabel>
-                <div className="flex flex-col gap-1.5">
-                  <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                    <Bot className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-                    <span>
-                      Generated by{" "}
-                      {generatingConnectionName ? (
-                        <span className="font-medium text-foreground/80">
-                          {generatingConnectionName}
-                        </span>
-                      ) : (
-                        "an external tool"
-                      )}
-                    </span>
-                  </div>
-                  <p className="text-[11px] text-muted-foreground/60">
-                    Promote this note to take ownership. Provenance and history
-                    are preserved.
-                  </p>
-                </div>
-              </InfoSection>
-            )}
-
-            {/* Entities */}
-            <InfoSection>
-              <NoteEntitiesPanel entities={noteEntities} />
-            </InfoSection>
-
-            {/* Version */}
-            <InfoSection border={false}>
-              <InfoLabel>Version</InfoLabel>
-              <div className="flex flex-col gap-1.5 text-xs">
-                <div className="flex items-center gap-2">
-                  <GitBranch
-                    className="h-3.5 w-3.5 shrink-0 text-muted-foreground/60"
-                    aria-hidden="true"
-                  />
-                  <span className="font-mono text-[11px] text-foreground/70">
-                    {note.current_version_id
-                      ? note.current_version_id.slice(0, 8) + "…"
-                      : "—"}
-                  </span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Clock
-                    className="h-3.5 w-3.5 shrink-0 text-muted-foreground/60"
-                    aria-hidden="true"
-                  />
-                  <span className="text-foreground/70">
-                    {formatRelativeDate(note.updated_at, nowIso)}
-                  </span>
-                </div>
-                {note.origin_type && note.origin_type !== "user_created" && (
-                  <div className="flex items-center gap-2">
-                    <span className="text-muted-foreground/50">Origin:</span>
-                    <span className="text-foreground/70">
-                      {ORIGIN_TYPE_LABEL[note.origin_type] ?? note.origin_type}
-                    </span>
-                  </div>
-                )}
-              </div>
-            </InfoSection>
-
-            {/* ── Links section ── */}
-            <div className="border-t border-border px-4 pt-3 pb-1">
-              <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground/60">Links</p>
-            </div>
-            <div className="px-4 py-3">
-              <SemanticLinksPanel
-                sourceNoteId={note.id}
-                outgoing={links.outgoing}
-                incoming={links.incoming}
-                allBoxNotes={allBoxNotes}
-              />
-            </div>
-            <div className="border-t border-border px-4 py-3">
-              <LinkSuggestionsPanel noteId={note.id} />
-            </div>
-            {links.outgoing.length > 0 && (
-              <div className="border-t border-border px-4 py-3">
-                <CopyFrontmatterButton
-                  outgoing={links.outgoing}
-                  allBoxNotes={allBoxNotes}
-                />
-              </div>
-            )}
-
-            {/* ── Backlinks section ── */}
-            <div className="border-t border-border px-4 pt-3 pb-1">
-              <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground/60">Backlinks</p>
-            </div>
-            <div className="px-4 py-3">
-              <NoteBacklinksPanel
+          {/* Retrieval signals — interactive editors */}
+          <InfoSection>
+            <InfoLabel>Retrieval</InfoLabel>
+            <div className="flex flex-col gap-4">
+              <RetrievalPrioritySlider
                 noteId={note.id}
-                incoming={links.incoming}
+                initialPriority={note.retrieval_priority}
+              />
+              <ReadHintSelector noteId={note.id} initialReadHint={note.read_hint} />
+            </div>
+          </InfoSection>
+
+          {/* AI Context Checklist */}
+          <InfoSection>
+            <NoteMetadataChecklist
+              summary={note.summary}
+              tags={note.tags}
+              linkCount={linkCount}
+              readHint={note.read_hint}
+              retrievalPriority={note.retrieval_priority}
+            />
+          </InfoSection>
+
+          {/* Tags */}
+          {note.tags.length > 0 && (
+            <InfoSection>
+              <InfoLabel>Tags</InfoLabel>
+              <div className="flex flex-wrap gap-1.5">
+                {note.tags.map((tag) => (
+                  <Badge key={tag} variant="secondary" className="rounded-full text-xs font-normal">
+                    {tag}
+                  </Badge>
+                ))}
+              </div>
+            </InfoSection>
+          )}
+
+          {/* Location */}
+          <InfoSection>
+            <InfoLabel>Location</InfoLabel>
+            <nav
+              aria-label="Note location"
+              className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground"
+            >
+              <Link
+                href="/app"
+                className="transition-fast hover:text-foreground"
+              >
+                {workspaceName}
+              </Link>
+              <ChevronRight className="h-3 w-3 shrink-0 text-muted-foreground/40" aria-hidden="true" />
+              <Link
+                href={`/app/boxes/${boxId}`}
+                className="transition-fast hover:text-foreground"
+              >
+                {boxName}
+              </Link>
+              {folderName && (
+                <>
+                  <ChevronRight className="h-3 w-3 shrink-0 text-muted-foreground/40" aria-hidden="true" />
+                  <span>{folderName}</span>
+                </>
+              )}
+            </nav>
+            {note.path_cache && (
+              <p className="mt-1.5 font-mono text-[10px] text-muted-foreground/50">
+                {note.path_cache}
+              </p>
+            )}
+          </InfoSection>
+
+          {/* Machine origin — shown when note is generated */}
+          {note.is_generated && (
+            <InfoSection>
+              <InfoLabel>Machine origin</InfoLabel>
+              <div className="flex flex-col gap-1.5">
+                <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <Bot className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                  <span>
+                    Generated by{" "}
+                    {generatingConnectionName ? (
+                      <span className="font-medium text-foreground/80">
+                        {generatingConnectionName}
+                      </span>
+                    ) : (
+                      "an external tool"
+                    )}
+                  </span>
+                </div>
+                <p className="text-[11px] text-muted-foreground/60">
+                  Promote this note to take ownership. Provenance and history are
+                  preserved.
+                </p>
+              </div>
+            </InfoSection>
+          )}
+
+          {/* Entities */}
+          <InfoSection>
+            <NoteEntitiesPanel entities={noteEntities} />
+          </InfoSection>
+
+          {/* Version */}
+          <InfoSection border={false}>
+            <InfoLabel>Version</InfoLabel>
+            <div className="flex flex-col gap-1.5 text-xs">
+              <div className="flex items-center gap-2">
+                <GitBranch
+                  className="h-3.5 w-3.5 shrink-0 text-muted-foreground/60"
+                  aria-hidden="true"
+                />
+                <span className="font-mono text-[11px] text-foreground/70">
+                  {note.current_version_id
+                    ? note.current_version_id.slice(0, 8) + "…"
+                    : "—"}
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Clock
+                  className="h-3.5 w-3.5 shrink-0 text-muted-foreground/60"
+                  aria-hidden="true"
+                />
+                <span className="text-foreground/70">
+                  {formatRelativeDate(note.updated_at, nowIso)}
+                </span>
+              </div>
+              {note.origin_type && note.origin_type !== "user_created" && (
+                <div className="flex items-center gap-2">
+                  <span className="text-muted-foreground/50">Origin:</span>
+                  <span className="text-foreground/70">
+                    {ORIGIN_TYPE_LABEL[note.origin_type] ?? note.origin_type}
+                  </span>
+                </div>
+              )}
+            </div>
+          </InfoSection>
+        </PanelCard>
+
+        {/* Links card */}
+        <PanelCard>
+          <div className="px-4 pb-1 pt-3.5">
+            <p className={SECTION_LABEL}>Links</p>
+          </div>
+          <div className="px-4 py-3">
+            <SemanticLinksPanel
+              sourceNoteId={note.id}
+              outgoing={links.outgoing}
+              incoming={links.incoming}
+              allBoxNotes={allBoxNotes}
+            />
+          </div>
+          <div className="border-t border-border/50 px-4 py-3">
+            <LinkSuggestionsPanel noteId={note.id} />
+          </div>
+          {links.outgoing.length > 0 && (
+            <div className="border-t border-border/50 px-4 py-3">
+              <CopyFrontmatterButton
+                outgoing={links.outgoing}
                 allBoxNotes={allBoxNotes}
-                markdownContent={markdownContent}
               />
             </div>
-          </ScrollArea>
-        </TabsContent>
+          )}
+        </PanelCard>
 
-        {/* ── AI copilot tab ── */}
-        <TabsContent value="ai" className="flex-1 overflow-hidden">
-          <ScrollArea className="h-full">
-            <NoteAiCopilotTab
+        {/* Backlinks card */}
+        <PanelCard>
+          <div className="px-4 pb-1 pt-3.5">
+            <p className={SECTION_LABEL}>Backlinks</p>
+          </div>
+          <div className="px-4 py-3">
+            <NoteBacklinksPanel
+              noteId={note.id}
+              incoming={links.incoming}
+              allBoxNotes={allBoxNotes}
+              markdownContent={markdownContent}
+            />
+          </div>
+        </PanelCard>
+      </div>
+    </ScrollArea>
+  );
+
+  // ── AI copilot tab ──
+  // NoteAiCopilotTab owns its own <ScrollArea> (h-full), so we frame it in a
+  // full-height card rather than nesting a second scroll container.
+  const aiPanel = (
+    <div className="h-full px-4 pb-4">
+      <PanelCard className="h-full overflow-hidden">
+        <NoteAiCopilotTab
+          noteId={note.id}
+          noteTitle={note.title}
+          aiTimelineEntries={aiTimelineEntries}
+          pendingProposals={pendingProposals}
+        />
+      </PanelCard>
+    </div>
+  );
+
+  // ── More tab (Bundle + History + Comments) ──
+  const morePanel = (
+    <ScrollArea className="h-full">
+      <div className="space-y-3 px-4 pb-6">
+        <PanelDisclosure summary="Bundle & Export">
+          <div className="space-y-4 px-4 py-3">
+            <NoteBundleExportButton
               noteId={note.id}
               noteTitle={note.title}
-              aiTimelineEntries={aiTimelineEntries}
-              pendingProposals={pendingProposals}
+              noteSlug={note.slug}
             />
-          </ScrollArea>
-        </TabsContent>
+            <ContextBundleViewer initialBundle={initialBundle} noteId={note.id} />
+          </div>
+        </PanelDisclosure>
 
-        {/* ── More tab (Bundle + History + Comments) ── */}
-        <TabsContent value="more" className="flex-1 overflow-hidden">
-          <ScrollArea className="h-full">
-            <details className="border-b border-border">
-              <summary className="cursor-pointer select-none px-4 py-3 text-xs font-medium text-foreground hover:bg-accent">
-                Bundle &amp; Export
-              </summary>
-              <div className="px-4 py-3 space-y-4">
-                <NoteBundleExportButton
-                  noteId={note.id}
-                  noteTitle={note.title}
-                  noteSlug={note.slug}
-                />
-                <ContextBundleViewer
-                  initialBundle={initialBundle}
-                  noteId={note.id}
-                />
-              </div>
-            </details>
-            <details className="border-b border-border">
-              <summary className="cursor-pointer select-none px-4 py-3 text-xs font-medium text-foreground hover:bg-accent">
-                Version History
-              </summary>
-              <div className="px-0 py-0">
-                <NoteHistoryPanel
-                  noteId={note.id}
-                  initialVersions={historyResult.versions}
-                  currentVersionId={historyResult.current_version_id}
-                />
-              </div>
-            </details>
-            <details className="border-b border-border">
-              <summary className="cursor-pointer select-none px-4 py-3 text-xs font-medium text-foreground hover:bg-accent">
-                Comments
-                {unresolvedCommentCount > 0 && (
-                  <span className="ml-1 rounded-full bg-muted px-1 text-[10px] text-muted-foreground">
-                    {unresolvedCommentCount}
-                  </span>
-                )}
-              </summary>
-              <div>
-                <NoteCommentsPanel
-                  noteId={note.id}
-                  threads={commentThreads}
-                  currentUserId={currentUserId}
-                />
-              </div>
-            </details>
-          </ScrollArea>
-        </TabsContent>
-      </Tabs>
+        <PanelDisclosure summary="Version history">
+          <NoteHistoryPanel
+            noteId={note.id}
+            initialVersions={historyResult.versions}
+            currentVersionId={historyResult.current_version_id}
+          />
+        </PanelDisclosure>
+
+        <PanelDisclosure
+          summary={
+            <span className="flex items-center gap-1.5">
+              Comments
+              {unresolvedCommentCount > 0 && (
+                <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-muted px-1 text-[10px] text-muted-foreground">
+                  {unresolvedCommentCount}
+                </span>
+              )}
+            </span>
+          }
+        >
+          <NoteCommentsPanel
+            noteId={note.id}
+            threads={commentThreads}
+            currentUserId={currentUserId}
+          />
+        </PanelDisclosure>
+      </div>
+    </ScrollArea>
+  );
+
+  return (
+    <div className="flex h-full flex-col overflow-hidden">
+      {/* Panel header */}
+      <div className="shrink-0 px-4 pb-3 pt-4">
+        <p className={SECTION_LABEL}>Note context</p>
+      </div>
+
+      <div className="min-h-0 flex-1 overflow-hidden">
+        <NoteContextTabs
+          defaultTab={defaultTab}
+          pendingProposalsCount={pendingProposals.length}
+          contextPanel={contextPanel}
+          aiPanel={aiPanel}
+          morePanel={morePanel}
+        />
+      </div>
     </div>
   );
 }
@@ -697,189 +726,153 @@ export default async function NotePage({
       : userEmail ?? ctx.user.id;
 
   const __pt4 = performance.now();
-  const __serverEndEpoch = Date.now();
-  // [perf] TEMP instrumentation — remove once box/note open latency is fixed.
+  // [perf] server timing (invisible — server log only).
   console.log(`[perf] note ${note_id} serverTotal=${(__pt4 - __pt0).toFixed(0)}ms`);
 
   return (
-    <div className="flex h-full flex-col overflow-hidden">
-      {/* [perf] TEMP on-screen timing — remove once latency is fixed. */}
-      <BoxPerfBadge serverMs={Math.round(__pt4 - __pt0)} serverEndEpoch={__serverEndEpoch} />
+    <div className="flex h-full flex-col overflow-hidden bg-background">
       <ActiveBranchBannerServer objectType="note" objectId={note_id} />
       <div className="flex flex-1 overflow-hidden">
-      <WorkspaceLiveRefresh
-        workspaceId={ctx.workspace.id}
-        scope="object"
-        objectType="note"
-        objectId={note_id}
-        protectWhileEditing
-      />
-      {/* Center — note editor */}
-      <div className="flex flex-1 flex-col overflow-hidden min-w-0">
-        {/* Top bar: breadcrumb + badges + actions */}
-        <div className="flex items-center justify-between gap-3 border-b border-border px-6 py-2.5">
-          <div className="flex items-center gap-3 min-w-0">
-            <Breadcrumb
-              workspaceName={ctx.workspace.name}
-              boxId={box.id}
-              boxName={box.name}
-              folderName={folder?.name ?? null}
-              noteTitle={note.title}
-            />
-            {isGuideNote && (
-              <Badge
-                variant="secondary"
-                className="flex shrink-0 items-center gap-1 border-amber-300/60 bg-amber-50/60 text-[10px] font-normal text-amber-700 dark:border-amber-600/40 dark:bg-amber-900/20 dark:text-amber-400"
-              >
-                <BookOpen className="h-3 w-3" aria-hidden="true" />
-                Guide
-              </Badge>
-            )}
-            {note.is_generated && (
-              <Badge
-                variant="outline"
-                className="flex shrink-0 items-center gap-1 text-[10px] font-normal"
-              >
-                <Bot className="h-3 w-3" aria-hidden="true" />
-                Generated
-              </Badge>
-            )}
-          </div>
-          <div className="flex shrink-0 items-center gap-1.5">
-            {/* Quick-jump to history in the More tab */}
-            <Link
-              href="?tab=more"
-              aria-label="Version history"
-              title="Version history"
-              className="flex items-center justify-center rounded-md p-1.5 text-muted-foreground hover:text-foreground hover:bg-accent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            >
-              <Clock className="h-4 w-4" />
-            </Link>
-
-            {/* Quick-jump to comments in the More tab */}
-            <Link
-              href="?tab=more"
-              aria-label="Comments"
-              title="Comments"
-              className="flex items-center justify-center rounded-md p-1.5 text-muted-foreground hover:text-foreground hover:bg-accent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            >
-              <MessageSquare className="h-4 w-4" />
-            </Link>
-
-            {/* Version history — opens the History tab in the context panel */}
-            <Link
-              href="?tab=more"
-              aria-label="Version history"
-              title="Version history"
-              className={cn(
-                "flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs transition-fast",
-                "text-muted-foreground hover:text-foreground hover:bg-accent"
-              )}
-            >
-              <History className="h-3.5 w-3.5" aria-hidden="true" />
-              <span className="hidden sm:inline">History</span>
-            </Link>
-            <NoteLifecycleMenu
-              noteId={note_id}
-              noteStatus={
-                note.status as "draft" | "active" | "archived" | "trashed"
-              }
-            />
-            <AskPogInlineButton
-              label="Ask AI about this note"
-              prompt={`Looking at the note titled "${note.title}". Summarize the key ideas and suggest follow-up notes, missing links, or open questions worth exploring.`}
-            />
-            <SaveAsTemplateButton noteId={note_id} noteTitle={note.title} />
-            <NoteImportButton noteId={note_id} noteTitle={note.title} />
-            <NoteExportMenu noteId={note_id} noteTitle={note.title} />
-            <ShareNoteButton noteId={note.id} />
-          </div>
-        </div>
-
-        {/* Mobile metadata strip — visible only on small screens where right panel is hidden */}
-        {(note.kind !== "note" || note.status === "archived" || note.status === "trashed" || note.tags.length > 0) && (
-          <div className="flex items-center gap-2 flex-wrap border-b border-border px-6 py-1.5 lg:hidden">
-            {note.kind !== "note" && (
-              <Badge
-                variant="secondary"
-                className={cn(
-                  "text-[10px] font-normal capitalize",
-                  note.kind === "guide" && "border-amber-300/60 bg-amber-50/60 text-amber-700 dark:border-amber-600/40 dark:bg-amber-900/20 dark:text-amber-400"
-                )}
-              >
-                {note.kind}
-              </Badge>
-            )}
-            {note.status === "archived" && (
-              <Badge variant="secondary" className="flex items-center gap-1 text-[10px] font-normal">
-                <Archive className="h-2.5 w-2.5" aria-hidden="true" />
-                Archived
-              </Badge>
-            )}
-            {note.status === "trashed" && (
-              <Badge variant="secondary" className="flex items-center gap-1 text-[10px] font-normal text-destructive">
-                <Trash2 className="h-2.5 w-2.5" aria-hidden="true" />
-                Trash
-              </Badge>
-            )}
-            {note.tags.slice(0, 3).map((tag) => (
-              <Badge key={tag} variant="secondary" className="text-[10px] font-normal">
-                {tag}
-              </Badge>
-            ))}
-          </div>
-        )}
-
-        {/* Generated note banner */}
-        {note.is_generated && (
-          <GeneratedNoteBanner
-            noteId={note_id}
-            connectionName={generatingConnection?.name ?? null}
-          />
-        )}
-
-        {/* Note editor — fills remaining space */}
-        <div className="flex-1 overflow-hidden">
-          <NoteEditor
-            note={note}
-            initialMode="document"
-            currentUser={{
-              userId: ctx.user.id,
-              displayName: currentUserDisplayName,
-            }}
-            workspaceId={ctx.workspace.id}
-          />
-        </div>
-      </div>
-
-      {/* Right panel — note context */}
-      <aside
-        aria-label="Note context panel"
-        className="hidden lg:flex lg:h-full lg:w-72 lg:shrink-0 lg:flex-col lg:border-l lg:border-border lg:bg-background"
-      >
-        <NoteContextPanel
-          note={note}
-          boxId={box.id}
-          boxName={box.name}
-          folderName={folder?.name ?? null}
-          workspaceName={ctx.workspace.name}
-          isGuideNote={isGuideNote}
-          generatingConnectionName={generatingConnection?.name ?? null}
-          links={links}
-          allBoxNotes={allBoxNotes}
-          initialBundle={initialBundle}
-          historyResult={historyResult}
-          commentThreads={commentThreads}
-          unresolvedCommentCount={unresolvedCommentCount}
-          currentUserId={ctx.user!.id}
-          noteEntities={noteEntities}
-          defaultTab={defaultTab}
-          markdownContent={note.markdown_content}
-          aiTimelineEntries={aiTimelineEntries}
-          pendingProposals={pendingProposals}
-          nowIso={nowIso}
+        <WorkspaceLiveRefresh
+          workspaceId={ctx.workspace.id}
+          scope="object"
+          objectType="note"
+          objectId={note_id}
+          protectWhileEditing
         />
-      </aside>
+
+        {/* Center — note editor column */}
+        <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+          {/* ── Header: breadcrumb + title label + actions ── */}
+          <div className="shrink-0 px-4 pt-5 sm:px-6 lg:px-8">
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+              <div className="flex min-w-0 flex-col gap-1.5">
+                <Breadcrumb
+                  workspaceName={ctx.workspace.name}
+                  boxId={box.id}
+                  boxName={box.name}
+                  folderName={folder?.name ?? null}
+                  noteTitle={note.title}
+                />
+                <div className="flex items-center gap-2">
+                  <p className={SECTION_LABEL}>Note</p>
+                  {isGuideNote && (
+                    <Badge
+                      variant="secondary"
+                      className="flex shrink-0 items-center gap-1 rounded-full border-amber-300/60 bg-amber-50/60 text-[10px] font-normal text-amber-700 dark:border-amber-600/40 dark:bg-amber-900/20 dark:text-amber-400"
+                    >
+                      <BookOpen className="h-3 w-3" aria-hidden="true" />
+                      Guide
+                    </Badge>
+                  )}
+                  {note.is_generated && (
+                    <Badge
+                      variant="outline"
+                      className="flex shrink-0 items-center gap-1 rounded-full text-[10px] font-normal"
+                    >
+                      <Bot className="h-3 w-3" aria-hidden="true" />
+                      Generated
+                    </Badge>
+                  )}
+                </div>
+              </div>
+
+              <NoteActionBar
+                noteId={note_id}
+                noteTitle={note.title}
+                noteStatus={
+                  note.status as "draft" | "active" | "archived" | "trashed"
+                }
+              />
+            </div>
+          </div>
+
+          {/* Mobile metadata strip — visible only on small screens where right panel is hidden */}
+          {(note.kind !== "note" || note.status === "archived" || note.status === "trashed" || note.tags.length > 0) && (
+            <div className="flex flex-wrap items-center gap-2 px-4 pt-3 sm:px-6 lg:hidden">
+              {note.kind !== "note" && (
+                <Badge
+                  variant="secondary"
+                  className={cn(
+                    "rounded-full text-[10px] font-normal capitalize",
+                    note.kind === "guide" && "border-amber-300/60 bg-amber-50/60 text-amber-700 dark:border-amber-600/40 dark:bg-amber-900/20 dark:text-amber-400"
+                  )}
+                >
+                  {note.kind}
+                </Badge>
+              )}
+              {note.status === "archived" && (
+                <Badge variant="secondary" className="flex items-center gap-1 rounded-full text-[10px] font-normal">
+                  <Archive className="h-2.5 w-2.5" aria-hidden="true" />
+                  Archived
+                </Badge>
+              )}
+              {note.status === "trashed" && (
+                <Badge variant="secondary" className="flex items-center gap-1 rounded-full text-[10px] font-normal text-destructive">
+                  <Trash2 className="h-2.5 w-2.5" aria-hidden="true" />
+                  Trash
+                </Badge>
+              )}
+              {note.tags.slice(0, 3).map((tag) => (
+                <Badge key={tag} variant="secondary" className="rounded-full text-[10px] font-normal">
+                  {tag}
+                </Badge>
+              ))}
+            </div>
+          )}
+
+          {/* Generated note banner */}
+          {note.is_generated && (
+            <GeneratedNoteBanner
+              noteId={note_id}
+              connectionName={generatingConnection?.name ?? null}
+            />
+          )}
+
+          {/* ── Editor frame — soft rounded card, generous breathing room ── */}
+          <div className="min-h-0 flex-1 px-4 pb-4 pt-4 sm:px-6 sm:pb-6 lg:px-8">
+            <div className={cn("h-full overflow-hidden rounded-3xl bg-card", SOFT_SHADOW)}>
+              <NoteEditor
+                note={note}
+                initialMode="document"
+                currentUser={{
+                  userId: ctx.user.id,
+                  displayName: currentUserDisplayName,
+                }}
+                workspaceId={ctx.workspace.id}
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Right panel — note context */}
+        <aside
+          aria-label="Note context panel"
+          className="hidden lg:flex lg:h-full lg:w-[22rem] lg:shrink-0 lg:flex-col lg:overflow-hidden lg:pr-4"
+        >
+          <NoteContextPanel
+            note={note}
+            boxId={box.id}
+            boxName={box.name}
+            folderName={folder?.name ?? null}
+            workspaceName={ctx.workspace.name}
+            isGuideNote={isGuideNote}
+            generatingConnectionName={generatingConnection?.name ?? null}
+            links={links}
+            allBoxNotes={allBoxNotes}
+            initialBundle={initialBundle}
+            historyResult={historyResult}
+            commentThreads={commentThreads}
+            unresolvedCommentCount={unresolvedCommentCount}
+            currentUserId={ctx.user!.id}
+            noteEntities={noteEntities}
+            defaultTab={defaultTab}
+            markdownContent={note.markdown_content}
+            aiTimelineEntries={aiTimelineEntries}
+            pendingProposals={pendingProposals}
+            nowIso={nowIso}
+          />
+        </aside>
       </div>
     </div>
   );
