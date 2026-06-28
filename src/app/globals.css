@@ -292,7 +292,7 @@
 
   h1, h2, h3, .text-display, .text-headline, .text-title {
     letter-spacing: -0.018em;
-    font-family: var(--font-display);
+    font-family: var(--font-hero);
   }
 
   [data-scroll-area] {

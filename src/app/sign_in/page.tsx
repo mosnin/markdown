@@ -53,11 +53,11 @@ export default async function SignInPage({
 
           {/* Heading */}
           <div className="mb-6 text-center">
-            <p className="text-2xl font-semibold tracking-tight text-foreground">
-              Your AI knows your notes.
+            <p className="font-hero text-2xl font-semibold tracking-tight text-foreground">
+              Govern your AI agents.
             </p>
             <p className="mt-1.5 text-sm text-muted-foreground">
-              Notes that remember. AI that understands.
+              Agents propose changes; you approve every one.
             </p>
           </div>
 
