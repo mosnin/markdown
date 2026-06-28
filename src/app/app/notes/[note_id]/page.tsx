@@ -622,7 +622,6 @@ export default async function NotePage({
   // output on both sides and hydration passes. See
   // src/lib/format_date.ts.
   const nowIso = new Date().toISOString();
-  const __pt0 = performance.now();
   const ctx = await requireAuthenticatedUser();
   const supabase = await createClient();
   const adminClient = createAdminClient();
@@ -724,10 +723,6 @@ export default async function NotePage({
     userEmail && userEmail.includes("@")
       ? userEmail.split("@")[0]
       : userEmail ?? ctx.user.id;
-
-  const __pt4 = performance.now();
-  // [perf] server timing (invisible — server log only).
-  console.log(`[perf] note ${note_id} serverTotal=${(__pt4 - __pt0).toFixed(0)}ms`);
 
   return (
     <div className="flex h-full flex-col overflow-hidden bg-background">

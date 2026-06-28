@@ -471,9 +471,7 @@ export default async function BoxPage({
   // React hydrates the client with this frozen ISO string, so server
   // and client produce identical output. See src/lib/format_date.ts.
   const nowIso = new Date().toISOString();
-  const __pt0 = performance.now();
   const ctx = await requireAuthenticatedUser();
-  const __pt1 = performance.now();
   const supabase = await createClient();
 
   // Fetch the box AND its contents in ONE parallel batch. The list queries key
@@ -499,19 +497,11 @@ export default async function BoxPage({
     listTrashedFoldersByBox(supabase, box_id, { branchId: ctx.activeBranchId }),
     listTemplates(supabase, box_id),
   ]);
-  const __pt2 = performance.now();
   if (!box || box.workspace_id !== ctx.workspace.id) notFound();
 
   const guideNote = box.guide_note_id
     ? await getNoteById(supabase, box.guide_note_id)
     : null;
-  const __pt4 = performance.now();
-  // [perf] server timing (invisible — server log only).
-  console.log(
-    `[perf] box ${box_id} notes=${notes.length} folders=${folders.length} ` +
-      `ctx=${(__pt1 - __pt0).toFixed(0)}ms fetch=${(__pt2 - __pt1).toFixed(0)}ms ` +
-      `guide=${(__pt4 - __pt2).toFixed(0)}ms serverTotal=${(__pt4 - __pt0).toFixed(0)}ms`,
-  );
 
   const sortedNotes = [...notes].sort((a, b) =>
     b.updated_at.localeCompare(a.updated_at)

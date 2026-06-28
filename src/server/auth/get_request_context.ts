@@ -86,11 +86,46 @@ export const ACTIVE_BRANCH_COOKIE = "active_branch_id";
  */
 async function resolveRequestContext(): Promise<RequestContext> {
   const supabase = await createClient();
-  const __c0 = performance.now();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  const __cAuth = performance.now();
+
+  // Resolve the user from the JWT. getClaims() verifies the token locally (no
+  // network round-trip when the project uses asymmetric signing keys), which is
+  // far cheaper than getUser() on every render — and getUser() ran on every
+  // navigation. The proxy (refreshSession) already refreshes the token each
+  // request, so the access token is fresh by render time. Downstream code only
+  // reads id, email, and user_metadata off this user. If getClaims is
+  // unavailable or fails for any reason, we fall back to getUser() so behaviour
+  // is never worse than before.
+  let user: User | null = null;
+  try {
+    const { data } = await supabase.auth.getClaims();
+    const claims = data?.claims as
+      | {
+          sub?: string;
+          email?: string;
+          phone?: string;
+          app_metadata?: Record<string, unknown>;
+          user_metadata?: Record<string, unknown>;
+          aud?: string | string[];
+        }
+      | undefined;
+    if (claims?.sub && claims.email) {
+      user = {
+        id: claims.sub,
+        email: claims.email,
+        phone: claims.phone ?? "",
+        app_metadata: claims.app_metadata ?? {},
+        user_metadata: claims.user_metadata ?? {},
+        aud: Array.isArray(claims.aud) ? (claims.aud[0] ?? "") : (claims.aud ?? ""),
+        created_at: "",
+      } as User;
+    }
+  } catch {
+    // Fall through to the getUser() path below.
+  }
+  if (!user) {
+    const { data } = await supabase.auth.getUser();
+    user = data.user;
+  }
 
   if (!user) {
     return { user: null, isAuthenticated: false, workspace: null, activeBranchId: null };
@@ -117,7 +152,6 @@ async function resolveRequestContext(): Promise<RequestContext> {
     user.id,
     preferredWorkspaceId,
   );
-  const __cWs = performance.now();
 
   // Validate the branch cookie: it must reference an OPEN draft branch
   // inside the active workspace. A stale cookie (branch deleted /
@@ -141,13 +175,6 @@ async function resolveRequestContext(): Promise<RequestContext> {
     owner_id: workspace.owner_id,
     role: workspace.role,
   };
-
-  // [perf] TEMP instrumentation — remove once box-open latency is diagnosed.
-  console.log(
-    `[perf] ctx authGetUser=${(__cAuth - __c0).toFixed(0)}ms ` +
-      `workspace=${(__cWs - __cAuth).toFixed(0)}ms ` +
-      `branch=${(performance.now() - __cWs).toFixed(0)}ms`,
-  );
 
   return {
     user,
