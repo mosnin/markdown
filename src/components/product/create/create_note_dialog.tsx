@@ -105,7 +105,7 @@ export function CreateNoteDialog({ boxId, folders, savedTemplates = [] }: Create
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogTrigger render={<Button size="sm" className="gap-1.5" />}>
+      <DialogTrigger render={<Button size="sm" className="gap-1.5 rounded-full" />}>
         <Plus className="h-3.5 w-3.5" aria-hidden="true" />
         New note
       </DialogTrigger>
