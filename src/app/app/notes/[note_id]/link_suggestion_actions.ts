@@ -121,6 +121,7 @@ export async function acceptLinkSuggestionAction(
       .from("link_suggestions")
       .select("*")
       .eq("id", suggestionId)
+      .eq("workspace_id", ctx.workspace.id)
       .single();
 
     if (fetchErr || !suggestion) {
@@ -146,7 +147,8 @@ export async function acceptLinkSuggestionAction(
     const { error: updateErr } = await adminClient
       .from("link_suggestions")
       .update({ status: "accepted" })
-      .eq("id", suggestionId);
+      .eq("id", suggestionId)
+      .eq("workspace_id", ctx.workspace.id);
 
     if (updateErr) {
       log.warn("link_suggestion_accept_update_error", {
@@ -194,17 +196,25 @@ export async function dismissLinkSuggestionAction(
     const supabase = await createClient();
     const adminClient = createAdminClient();
 
-    // Fetch the suggestion to get note_id for revalidation
+    // Fetch the suggestion (scoped to the caller's workspace) — this gets
+    // note_id for revalidation AND confirms the suggestion belongs to the
+    // caller before we mutate it.
     const { data: suggestion } = await adminClient
       .from("link_suggestions")
       .select("note_id, target_note_id")
       .eq("id", suggestionId)
+      .eq("workspace_id", ctx.workspace.id)
       .maybeSingle();
+
+    if (!suggestion) {
+      return { success: false, error: "Suggestion not found" };
+    }
 
     const { error } = await adminClient
       .from("link_suggestions")
       .update({ status: "dismissed" })
-      .eq("id", suggestionId);
+      .eq("id", suggestionId)
+      .eq("workspace_id", ctx.workspace.id);
 
     if (error) {
       return { success: false, error: error.message };
@@ -218,12 +228,12 @@ export async function dismissLinkSuggestionAction(
       object_id: suggestionId,
       event_type: "link.suggestion.dismissed",
       metadata: {
-        note_id: suggestion?.note_id ?? null,
-        target_note_id: suggestion?.target_note_id ?? null,
+        note_id: suggestion.note_id,
+        target_note_id: suggestion.target_note_id,
       },
     });
 
-    if (suggestion?.note_id) {
+    if (suggestion.note_id) {
       revalidatePath(`/app/notes/${suggestion.note_id}`);
     }
 
@@ -249,13 +259,14 @@ export async function fetchPendingSuggestionsAction(
   noteId: string
 ): Promise<ActionResult<LinkSuggestionRow[]>> {
   try {
-    await requireAuthenticatedUser();
+    const ctx = await requireAuthenticatedUser();
     const adminClient = createAdminClient();
 
     const { data, error } = await adminClient
       .from("link_suggestions")
       .select("*")
       .eq("note_id", noteId)
+      .eq("workspace_id", ctx.workspace.id)
       .eq("status", "pending")
       .order("confidence", { ascending: false });
 

@@ -187,7 +187,7 @@ export async function semanticSearch(
   supabase: SupabaseClient,
   workspaceId: string,
   query: string,
-  opts: { limit?: number; branchId?: string | null } = {}
+  opts: { limit?: number; branchId?: string | null; allowedBoxIds?: Set<string> | null } = {}
 ): Promise<SemanticSearchResult[]> {
   const limit = opts.limit ?? 20;
   const queryEmbedding = await generateEmbedding(query);
@@ -200,10 +200,15 @@ export async function semanticSearch(
   // computes cosine similarity as 1 - (embedding <=> query_embedding).
   const embeddingStr = `[${queryEmbedding.join(",")}]`;
 
+  // The RPC scopes by workspace but not by box. When the caller is limited to
+  // specific boxes (e.g. a box-scoped OAuth token), over-fetch and post-filter
+  // by box below so we still return close to `limit` in-scope results.
+  const rpcLimit = opts.allowedBoxIds ? Math.min(limit * 4, 200) : limit;
+
   const { data, error } = await supabase.rpc("match_note_embeddings", {
     query_embedding: embeddingStr,
     match_workspace_id: workspaceId,
-    match_limit: limit,
+    match_limit: rpcLimit,
     match_branch_id: opts.branchId ?? null,
   });
 
@@ -216,13 +221,38 @@ export async function semanticSearch(
     return [];
   }
 
-  return ((data as Array<{
-    note_id: string;
-    title: string;
-    summary: string | null;
-    markdown_content: string | null;
-    similarity: number;
-  }>) ?? []).map((r) => ({
+  let rows =
+    (data as Array<{
+      note_id: string;
+      title: string;
+      summary: string | null;
+      markdown_content: string | null;
+      similarity: number;
+    }>) ?? [];
+
+  // Narrow to the caller's accessible boxes. Without this, a box-scoped token
+  // would see semantic matches from every box in its workspace.
+  if (opts.allowedBoxIds) {
+    const allowed = opts.allowedBoxIds;
+    const noteIds = rows.map((r) => r.note_id);
+    if (noteIds.length === 0) return [];
+    const { data: noteBoxes } = await supabase
+      .from("notes")
+      .select("id, box_id")
+      .in("id", noteIds);
+    const boxByNote = new Map(
+      (noteBoxes ?? []).map((n: { id: string; box_id: string }) => [
+        n.id,
+        n.box_id,
+      ])
+    );
+    rows = rows.filter((r) => {
+      const boxId = boxByNote.get(r.note_id);
+      return boxId != null && allowed.has(boxId);
+    });
+  }
+
+  return rows.slice(0, limit).map((r) => ({
     noteId: r.note_id,
     title: r.title,
     snippet: clampSnippet(r.summary ?? r.markdown_content),
@@ -243,14 +273,18 @@ export async function hybridSearch(
   supabase: SupabaseClient,
   workspaceId: string,
   query: string,
-  opts: { limit?: number; branchId?: string | null } = {}
+  opts: { limit?: number; branchId?: string | null; allowedBoxIds?: Set<string> | null } = {}
 ): Promise<HybridSearchResult[]> {
   const limit = opts.limit ?? 20;
 
   // Run both searches in parallel.
   const [semanticResults, keywordResults] = await Promise.all([
-    semanticSearch(supabase, workspaceId, query, { limit, branchId: opts.branchId }),
-    fetchKeywordResults(supabase, workspaceId, query, limit),
+    semanticSearch(supabase, workspaceId, query, {
+      limit,
+      branchId: opts.branchId,
+      allowedBoxIds: opts.allowedBoxIds,
+    }),
+    fetchKeywordResults(supabase, workspaceId, query, limit, opts.allowedBoxIds),
   ]);
 
   // Build a map of note_id → best scores from each source, tracking
@@ -349,7 +383,8 @@ async function fetchKeywordResults(
   supabase: SupabaseClient,
   workspaceId: string,
   query: string,
-  limit: number
+  limit: number,
+  allowedBoxIds?: Set<string> | null
 ): Promise<KeywordHit[]> {
   const q = query.trim();
   if (!q) return [];
@@ -364,7 +399,8 @@ async function fetchKeywordResults(
     .select("id")
     .eq("workspace_id", workspaceId);
 
-  const boxIds = (boxes ?? []).map((b: { id: string }) => b.id);
+  let boxIds = (boxes ?? []).map((b: { id: string }) => b.id);
+  if (allowedBoxIds) boxIds = boxIds.filter((id) => allowedBoxIds.has(id));
   if (boxIds.length === 0) return [];
 
   const { data } = await supabase
