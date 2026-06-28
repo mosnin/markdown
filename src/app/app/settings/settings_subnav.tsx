@@ -6,6 +6,7 @@ import {
   AppWindow,
   ArrowLeft,
   ArrowRightLeft,
+  BarChart3,
   Bell,
   Building2,
   Code2,
@@ -58,6 +59,7 @@ const operatorNav = [
 ];
 
 const workspaceAdminNav = [
+  { href: "/app/analytics", label: "Analytics", subLabel: "Workspace health & content metrics", icon: BarChart3 },
   { href: "/app/settings/workspace/members", label: "Members", subLabel: "Invite & manage team members", icon: Users },
   { href: "/app/settings/workspace/branch_retention", label: "Branch retention", subLabel: "Auto-discard idle branches", icon: GitBranch },
   { href: "/app/settings/workspace/semantic_search", label: "Semantic search", subLabel: "Reindex vector embeddings", icon: Sparkles },
