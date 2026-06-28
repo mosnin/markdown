@@ -124,6 +124,13 @@ export async function POST(request: NextRequest) {
       supabase,
       body.parent_invocation_id
     );
+    if (parent && parent.workspace_id !== ctx.workspaceId) {
+      return apiError(
+        "forbidden",
+        "Parent invocation is not in this workspace",
+        403
+      );
+    }
     if (parent) depth = parent.depth + 1;
   }
   if (depth > MAX_DEPTH) {

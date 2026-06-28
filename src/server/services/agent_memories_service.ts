@@ -224,16 +224,21 @@ export async function getMemory(
 /**
  * Stamp `last_used_at = now()` on a memory row to signal the agent pulled
  * it into a recent prompt. No-op (returns silently) when the row is
- * missing / hidden by RLS — "touch" is advisory, not a correctness gate.
+ * missing or outside `workspaceId` — "touch" is advisory, not a correctness
+ * gate. The workspace filter prevents one workspace's agent from touching
+ * (and probing the existence of) another workspace's memory via the admin
+ * client, which bypasses RLS.
  */
 export async function touchMemory(
   supabase: SupabaseClient,
-  memoryId: string
+  memoryId: string,
+  workspaceId: string
 ): Promise<void> {
   const { error } = await supabase
     .from("agent_memories")
     .update({ last_used_at: new Date().toISOString() })
-    .eq("id", memoryId);
+    .eq("id", memoryId)
+    .eq("workspace_id", workspaceId);
 
   if (error) throw new Error(`Failed to touch agent memory: ${error.message}`);
 }

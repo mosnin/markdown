@@ -70,7 +70,10 @@ export const POST = withApiHandler(async (request: NextRequest) => {
 
   try {
     if (mode === "hybrid") {
-      const results = await hybridSearch(admin, workspaceId, query, { limit });
+      const results = await hybridSearch(admin, workspaceId, query, {
+        limit,
+        allowedBoxIds: ctx.allowedBoxIds,
+      });
       return apiOk({
         query,
         mode: "hybrid",
@@ -87,7 +90,10 @@ export const POST = withApiHandler(async (request: NextRequest) => {
       });
     }
 
-    const results = await semanticSearch(admin, workspaceId, query, { limit });
+    const results = await semanticSearch(admin, workspaceId, query, {
+      limit,
+      allowedBoxIds: ctx.allowedBoxIds,
+    });
     return apiOk({
       query,
       mode: "semantic",

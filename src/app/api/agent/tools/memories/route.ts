@@ -160,7 +160,7 @@ export async function POST(request: NextRequest) {
     if (!body.memory_id || typeof body.memory_id !== "string") {
       return apiError("bad_request", "memory_id is required for boost", 400);
     }
-    await touchMemory(admin, body.memory_id);
+    await touchMemory(admin, body.memory_id, ctx.workspaceId);
     return apiOk({ ok: true });
   } catch (err) {
     console.error("[agent_tools_memories] failed", err);

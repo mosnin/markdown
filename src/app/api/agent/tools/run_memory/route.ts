@@ -89,10 +89,14 @@ export async function POST(request: NextRequest) {
     );
     const noteTitles = new Map<string, string>();
     if (allNoteIds.length > 0) {
+      // Constrain to notes whose box is in this workspace. `notes` has no
+      // workspace_id column, so we filter via the boxes inner-join — this
+      // hardens against any stale/poisoned note id in `notes_created`.
       const { data: noteRows } = await admin
         .from("notes")
-        .select("id, title")
-        .in("id", allNoteIds);
+        .select("id, title, boxes!inner(workspace_id)")
+        .in("id", allNoteIds)
+        .eq("boxes.workspace_id", ctx.workspaceId);
       for (const n of noteRows ?? []) {
         noteTitles.set(n.id as string, (n.title as string) ?? "");
       }
