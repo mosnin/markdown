@@ -16,7 +16,7 @@ import {
   BentoCard,
   IconTile,
 } from "@/components/marketing/sections";
-import { Button } from "@/components/ui/button";
+import { MatrixCta } from "@/components/marketing/matrix_cta";
 
 export const metadata: Metadata = {
   title: "Blog — Poggle",
@@ -67,29 +67,11 @@ export default function BlogPage() {
         </div>
       </MarketingSection>
 
-      <MarketingSection>
-        <BentoCard tone="gradient" className="px-6 py-14 text-center sm:px-12 sm:py-16">
-          <div className="relative mx-auto max-w-2xl">
-            <h2 className="font-hero text-2xl font-bold tracking-tight text-white sm:text-3xl">
-              Dispatches, when they land.
-            </h2>
-            <p className="mx-auto mt-3 max-w-lg text-base text-white/80">
-              The fastest way to follow along is to use it. Start free, and the
-              product itself is the best dispatch we publish.
-            </p>
-            <div className="mt-7 flex justify-center">
-              <Button
-                size="lg"
-                className="rounded-full bg-white text-violet-700 hover:bg-white/90"
-                render={<Link href="/sign_in?mode=signup" />}
-              >
-                Get started free
-                <ArrowRight className="ml-2 size-4" data-icon="inline-end" />
-              </Button>
-            </div>
-          </div>
-        </BentoCard>
-      </MarketingSection>
+      <MatrixCta
+        title="Dispatches, when they land."
+        subtitle="The fastest way to follow along is to use it. Start free, and the product itself is the best dispatch we publish."
+        primary={{ label: "Get started free", href: "/sign_in?mode=signup" }}
+      />
     </div>
   );
 }

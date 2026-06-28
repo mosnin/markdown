@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { getRequestContext } from "@/server/auth/get_request_context";
 import { AuthPanel } from "./sign_in_form";
 import { BrandPanel } from "./brand_panel";
+import { BorderGlow } from "@/components/border-glow";
 import Link from "next/link";
 
 export const metadata = {
@@ -24,7 +25,16 @@ export default async function SignInPage({
   const defaultMode = mode === "signup" ? "signup" : "signin";
 
   return (
-    <div className="flex min-h-screen">
+    <BorderGlow
+      colorPreset="royal"
+      innerGlow
+      animationDuration={9}
+      glowIntensity={0.5}
+      borderWidth="2em"
+      blurAmount="2.75rem"
+      className="min-h-screen rounded-none"
+    >
+    <div className="flex min-h-[calc(100svh-2rem)]">
       {/* ── Left panel: branding ─────────────────────────────────────────── */}
       <BrandPanel />
 
@@ -43,11 +53,11 @@ export default async function SignInPage({
 
           {/* Heading */}
           <div className="mb-6 text-center">
-            <p className="text-2xl font-semibold tracking-tight text-foreground">
-              Your AI knows your notes.
+            <p className="font-hero text-2xl font-semibold tracking-tight text-foreground">
+              Govern your AI agents.
             </p>
             <p className="mt-1.5 text-sm text-muted-foreground">
-              Notes that remember. AI that understands.
+              Agents propose changes; you approve every one.
             </p>
           </div>
 
@@ -87,5 +97,6 @@ export default async function SignInPage({
         </div>
       </div>
     </div>
+    </BorderGlow>
   );
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { OperatorPanel } from "@/components/product/operator/operator_panel";
+import { AiChat } from "@/components/product/ai_chat";
 import { OnboardingChecklist } from "@/components/product/onboarding_checklist";
 
 export interface ConversationHomeClientProps {
@@ -21,7 +21,6 @@ export interface ConversationHomeClientProps {
 }
 
 export function ConversationHomeClient({
-  defaultBoxId,
   isFirstRun = false,
   onboarding = null,
 }: ConversationHomeClientProps) {
@@ -40,7 +39,7 @@ export function ConversationHomeClient({
         </div>
       )}
       <div className="min-h-0 flex-1">
-        <OperatorPanel mode="page" defaultBoxId={defaultBoxId ?? undefined} />
+        <AiChat />
       </div>
     </div>
   );

@@ -1,6 +1,8 @@
 import { connection } from "next/server";
+import AnnouncementRibbon from "@/components/animata/container/announcement-ribbon";
 import { MarketingHeader } from "@/components/marketing/header";
 import { MarketingFooter } from "@/components/marketing/footer";
+import { LightBoard } from "@/components/ui/lightboard";
 
 export default async function MarketingLayout({
   children,
@@ -17,8 +19,28 @@ export default async function MarketingLayout({
 
   return (
     <>
+      <AnnouncementRibbon />
       <MarketingHeader />
       <main>{children}</main>
+      {/* Lightboard marquee above the footer — full-bleed, slow blue crawl */}
+      <section
+        aria-hidden="true"
+        className="overflow-hidden border-t border-border/40 bg-background py-8"
+      >
+        <LightBoard
+          text="POGGLE   GOVERNED CONTEXT FOR AI AGENTS   "
+          rows={9}
+          lightSize={6}
+          gap={2}
+          updateInterval={120}
+          colors={{
+            textBright: "rgba(56,189,248,0.95)",
+            drawLine: "rgba(56,189,248,0.5)",
+            textDim: "rgba(14,165,233,0.4)",
+            background: "rgba(56,189,248,0.08)",
+          }}
+        />
+      </section>
       <MarketingFooter />
     </>
   );

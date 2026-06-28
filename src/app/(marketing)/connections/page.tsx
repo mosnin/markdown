@@ -1,13 +1,10 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import {
-  ArrowRight,
   KeyRound,
   Lock,
   Plug,
   RefreshCw,
   ScrollText,
-  ShieldCheck,
   SlidersHorizontal,
   Terminal,
   GitPullRequestArrow,
@@ -21,7 +18,7 @@ import {
   IconTile,
 } from "@/components/marketing/sections";
 import { FeatureTabs, type FeatureTab } from "@/components/marketing/feature_tabs";
-import { Button } from "@/components/ui/button";
+import { MatrixCta } from "@/components/marketing/matrix_cta";
 
 export const metadata: Metadata = {
   title: "Connections — Poggle",
@@ -216,34 +213,11 @@ export default function ConnectionsPage() {
       </MarketingSection>
 
       {/* CTA */}
-      <MarketingSection>
-        <BentoCard tone="gradient" className="px-6 py-16 text-center sm:px-12 sm:py-20">
-          <div className="pointer-events-none absolute -right-10 -top-10 size-48 rounded-full bg-white/10 blur-3xl" />
-          <div className="relative mx-auto max-w-2xl">
-            <span className="flex justify-center">
-              <span className="flex size-12 items-center justify-center rounded-2xl bg-white/15 text-white backdrop-blur-sm">
-                <ShieldCheck className="size-6" aria-hidden="true" />
-              </span>
-            </span>
-            <h2 className="mt-5 font-hero text-3xl font-bold tracking-tight text-white sm:text-4xl">
-              Bring your agents. Keep the keys.
-            </h2>
-            <p className="mx-auto mt-4 max-w-xl text-base text-white/80 sm:text-lg">
-              Connect your first agent free and scope it in under a minute.
-            </p>
-            <div className="mt-9 flex justify-center">
-              <Button
-                size="lg"
-                className="rounded-full bg-white text-violet-700 hover:bg-white/90"
-                render={<Link href="/sign_in?mode=signup" />}
-              >
-                Connect an agent
-                <ArrowRight className="ml-2 size-4" data-icon="inline-end" />
-              </Button>
-            </div>
-          </div>
-        </BentoCard>
-      </MarketingSection>
+      <MatrixCta
+        title="Bring your agents. Keep the keys."
+        subtitle="Connect your first agent free and scope it in under a minute."
+        primary={{ label: "Connect an agent", href: "/sign_in?mode=signup" }}
+      />
     </div>
   );
 }

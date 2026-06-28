@@ -8,7 +8,6 @@ import {
   listWorkspaceMembers,
   upsertMembership,
   removeMembership,
-  type WorkspaceMembership,
   type WorkspaceRole,
 } from "@/server/repositories/workspace_membership_repository";
 import { createAuditEvent } from "@/server/repositories/audit_event_repository";
@@ -246,6 +245,3 @@ export async function removeMemberAction(
     return { ok: false, error: err instanceof Error ? err.message : "Failed to remove member" };
   }
 }
-
-// Re-export the type for client callers so they don't have to double-import.
-export type { WorkspaceMembership };

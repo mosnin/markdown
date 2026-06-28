@@ -23,8 +23,6 @@ import {
   type OperatorRunStatusFilter,
 } from "./history_filters";
 
-export type { OperatorRunStatusFilter } from "./history_filters";
-
 /**
  * History/detail/rollback/retry server actions for the Workspace Operator
  * history surface.

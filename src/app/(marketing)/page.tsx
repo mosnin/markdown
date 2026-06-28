@@ -15,6 +15,9 @@ import {
   ArrowRight,
 } from "lucide-react";
 import { HeroSection } from "@/components/marketing/hero";
+import { McpCompat } from "@/components/marketing/mcp_compat";
+import { MatrixCta } from "@/components/marketing/matrix_cta";
+import { TiltCard } from "@/components/marketing/tilt_card";
 import { LoopStepper } from "@/components/marketing/loop_stepper";
 import {
   MarketingSection,
@@ -132,6 +135,9 @@ export default async function HomePage() {
     <div className="min-h-screen bg-background">
       <HeroSection />
 
+      {/* ── Compatibility (works with any MCP client) ──────────────────────── */}
+      <McpCompat />
+
       {/* ── The loop (interactive) ─────────────────────────────────────────── */}
       <MarketingSection className="border-b border-border/30">
         <SectionHeader
@@ -235,7 +241,7 @@ export default async function HomePage() {
           {PILLARS.map((pillar) => {
             const Icon = pillar.icon;
             return (
-              <BentoCard key={pillar.title}>
+              <TiltCard key={pillar.title}>
                 <IconTile>
                   <Icon className="size-5" aria-hidden="true" />
                 </IconTile>
@@ -245,7 +251,7 @@ export default async function HomePage() {
                 <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
                   {pillar.body}
                 </p>
-              </BentoCard>
+              </TiltCard>
             );
           })}
         </div>
@@ -330,40 +336,13 @@ export default async function HomePage() {
         </div>
       </MarketingSection>
 
-      {/* ── Final CTA ──────────────────────────────────────────────────────── */}
-      <MarketingSection>
-        <BentoCard tone="gradient" className="px-6 py-16 text-center sm:px-12 sm:py-20">
-          <div className="pointer-events-none absolute -left-10 -top-10 size-48 rounded-full bg-white/10 blur-3xl" />
-          <div className="pointer-events-none absolute -bottom-12 -right-8 size-56 rounded-full bg-white/10 blur-3xl" />
-          <div className="relative mx-auto max-w-2xl">
-            <h2 className="font-hero text-3xl font-bold tracking-tight text-white sm:text-5xl">
-              Put a human in the loop.
-            </h2>
-            <p className="mx-auto mt-5 max-w-xl text-base text-white/80 sm:text-lg">
-              Give your agents the context they need — and the trust gate they
-              can&apos;t cross. Free to start.
-            </p>
-            <div className="mt-9 flex flex-col items-center justify-center gap-3 sm:flex-row">
-              <Button
-                size="lg"
-                className="rounded-full bg-white text-violet-700 hover:bg-white/90"
-                render={<Link href="/sign_in?mode=signup" />}
-              >
-                Get started free
-                <ArrowRight className="ml-2 size-4" data-icon="inline-end" />
-              </Button>
-              <Button
-                size="lg"
-                variant="ghost"
-                className="rounded-full text-white hover:bg-white/10 hover:text-white"
-                render={<Link href="/how-it-works" />}
-              >
-                See how it works
-              </Button>
-            </div>
-          </div>
-        </BentoCard>
-      </MarketingSection>
+      {/* ── Final CTA (matrix-rain background) ─────────────────────────────── */}
+      <MatrixCta
+        title="Put a human in the loop."
+        subtitle="Give your agents the context they need — and the trust gate they can't cross. Free to start."
+        primary={{ label: "Get started free", href: "/sign_in?mode=signup" }}
+        secondary={{ label: "See how it works", href: "/how-it-works" }}
+      />
     </div>
   );
 }

@@ -20,9 +20,22 @@ import {
 interface BoxLifecycleMenuProps {
   boxId: string;
   boxStatus: "active" | "archived";
+  /**
+   * Optional trigger styling override. When set (e.g. by the box header's
+   * ••• overflow menu) it replaces the default icon-only button so this can
+   * render as a full-width menu row.
+   */
+  triggerClassName?: string;
+  /** Optional visible label for the trigger (used with triggerClassName). */
+  triggerLabel?: string;
 }
 
-export function BoxLifecycleMenu({ boxId, boxStatus }: BoxLifecycleMenuProps) {
+export function BoxLifecycleMenu({
+  boxId,
+  boxStatus,
+  triggerClassName,
+  triggerLabel,
+}: BoxLifecycleMenuProps) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [confirmArchive, setConfirmArchive] = useState(false);
@@ -49,26 +62,40 @@ export function BoxLifecycleMenu({ boxId, boxStatus }: BoxLifecycleMenuProps) {
     <div className="relative">
       <button
         onClick={() => { setOpen((o) => !o); setError(null); setConfirmArchive(false); }}
-        className={cn(
-          "flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm transition-fast",
-          "text-muted-foreground hover:text-foreground hover:bg-accent",
-          open && "bg-accent text-foreground"
-        )}
+        className={
+          triggerClassName ??
+          cn(
+            "flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm transition-fast",
+            "text-muted-foreground hover:text-foreground hover:bg-accent",
+            open && "bg-accent text-foreground"
+          )
+        }
         aria-label="Box actions"
         aria-expanded={open}
         aria-haspopup="menu"
       >
-        <MoreHorizontal className="h-4 w-4" />
+        {triggerLabel ? (
+          <>
+            {isArchived ? (
+              <ArchiveRestore className="h-3.5 w-3.5" aria-hidden="true" />
+            ) : (
+              <Archive className="h-3.5 w-3.5" aria-hidden="true" />
+            )}
+            {triggerLabel}
+          </>
+        ) : (
+          <MoreHorizontal className="h-4 w-4" />
+        )}
       </button>
 
       {open && (
         <>
           <div
-            className="fixed inset-0 z-40"
+            className="fixed inset-0 z-[55]"
             onClick={() => { setOpen(false); setConfirmArchive(false); }}
             aria-hidden
           />
-          <div role="menu" aria-label="Box actions" className="absolute right-0 top-full z-50 mt-1 min-w-52 rounded-md border border-border bg-background shadow-md">
+          <div role="menu" aria-label="Box actions" className="absolute right-0 top-full z-[60] mt-1.5 min-w-52 rounded-2xl bg-popover p-1 text-popover-foreground shadow-[0_8px_32px_-4px_rgba(0,0,0,0.18),0_2px_8px_-2px_rgba(0,0,0,0.08)] ring-1 ring-border/60">
           <div className="p-1">
             {isArchived ? (
               <button
@@ -76,7 +103,7 @@ export function BoxLifecycleMenu({ boxId, boxStatus }: BoxLifecycleMenuProps) {
                 onClick={() => act(() => unarchiveBoxAction(boxId))}
                 disabled={isPending}
                 className={cn(
-                  "flex w-full items-center gap-2 rounded-sm px-3 py-2 text-sm transition-fast",
+                  "flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm transition-fast",
                   "hover:bg-accent disabled:opacity-50"
                 )}
               >
@@ -89,7 +116,7 @@ export function BoxLifecycleMenu({ boxId, boxStatus }: BoxLifecycleMenuProps) {
                 onClick={() => setConfirmArchive(true)}
                 disabled={isPending}
                 className={cn(
-                  "flex w-full items-center gap-2 rounded-sm px-3 py-2 text-sm transition-fast",
+                  "flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm transition-fast",
                   "hover:bg-accent disabled:opacity-50"
                 )}
               >
@@ -123,7 +150,7 @@ export function BoxLifecycleMenu({ boxId, boxStatus }: BoxLifecycleMenuProps) {
           </div>
 
           {error && (
-            <div className="border-t border-border px-3 py-2">
+            <div className="mt-1 border-t border-border/60 px-3 py-2">
               <p className="text-xs text-destructive">{error}</p>
             </div>
           )}

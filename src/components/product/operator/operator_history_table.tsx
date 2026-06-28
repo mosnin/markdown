@@ -12,10 +12,8 @@ import {
   FALLBACK_MODEL,
 } from "@/server/services/workspace_operator_usage_service";
 import type { WorkspaceOperatorRunRow } from "@/server/services/workspace_operator_runs_service";
-import {
-  listMyOperatorRunsAction,
-  type OperatorRunStatusFilter,
-} from "@/app/app/workspace_operator/history_actions";
+import { listMyOperatorRunsAction } from "@/app/app/workspace_operator/history_actions";
+import { type OperatorRunStatusFilter } from "@/app/app/workspace_operator/history_filters";
 
 /**
  * Server-rendered list of the current user's Operator runs, with a

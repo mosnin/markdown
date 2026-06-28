@@ -1,8 +1,5 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import {
-  ArrowRight,
-  Check,
   Download,
   FileText,
   GitBranch,
@@ -23,7 +20,10 @@ import {
   IconTile,
 } from "@/components/marketing/sections";
 import { FeatureTabs, type FeatureTab } from "@/components/marketing/feature_tabs";
-import { Button } from "@/components/ui/button";
+import { TiltCard } from "@/components/marketing/tilt_card";
+import { FeatureGlyph, type GlyphKind } from "@/components/marketing/feature_glyph";
+import { DataConnections } from "@/components/marketing/data_connections";
+import { MatrixCta } from "@/components/marketing/matrix_cta";
 
 export const metadata: Metadata = {
   title: "Features — Poggle",
@@ -62,6 +62,16 @@ const CAPABILITIES = [
     title: "Audit log & rollback",
     body: "Connect, read, propose, approve — all on an append-only log with full version history and one-click rollback on every object.",
   },
+];
+
+// 3D glyph per capability (same order as CAPABILITIES above).
+const CAPABILITY_KINDS: GlyphKind[] = [
+  "markdown",
+  "branches",
+  "graph",
+  "skills",
+  "mcp",
+  "audit",
 ];
 
 // ── Interactive explorer tabs (static visuals; interaction lives in FeatureTabs)
@@ -201,18 +211,25 @@ export default function FeaturesPage() {
           lede="The building blocks of a context layer agents can use and you can trust."
         />
         <div className="mt-12 grid grid-cols-1 gap-5 md:grid-cols-3">
-          {CAPABILITIES.map((c) => {
-            const Icon = c.icon;
-            return (
-              <BentoCard key={c.title}>
-                <IconTile>
-                  <Icon className="size-5" aria-hidden="true" />
-                </IconTile>
-                <h3 className="mt-5 font-hero text-lg font-semibold text-foreground">{c.title}</h3>
-                <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{c.body}</p>
-              </BentoCard>
-            );
-          })}
+          {CAPABILITIES.map((c, i) => (
+            <TiltCard key={c.title}>
+              <FeatureGlyph kind={CAPABILITY_KINDS[i]} />
+              <h3 className="mt-4 font-hero text-lg font-semibold text-foreground">{c.title}</h3>
+              <p className="text-sm leading-relaxed text-muted-foreground">{c.body}</p>
+            </TiltCard>
+          ))}
+        </div>
+      </MarketingSection>
+
+      {/* How knowledge connects */}
+      <MarketingSection className="border-b border-border/30">
+        <SectionHeader
+          eyebrow="The knowledge graph"
+          title="How your data connects together."
+          lede="Entities tie notes together, every change traces back to its decision, and a single thread can span boxes. A few real examples from inside Poggle."
+        />
+        <div className="mt-12">
+          <DataConnections />
         </div>
       </MarketingSection>
 
@@ -274,40 +291,12 @@ export default function FeaturesPage() {
       </MarketingSection>
 
       {/* CTA */}
-      <MarketingSection>
-        <BentoCard tone="gradient" className="px-6 py-16 text-center sm:px-12 sm:py-20">
-          <div className="pointer-events-none absolute -left-10 -top-10 size-48 rounded-full bg-white/10 blur-3xl" />
-          <div className="relative mx-auto max-w-2xl">
-            <h2 className="font-hero text-3xl font-bold tracking-tight text-white sm:text-4xl">
-              Give your agents a workspace they can&apos;t break.
-            </h2>
-            <p className="mx-auto mt-5 max-w-xl text-base text-white/80 sm:text-lg">
-              Connect your first agent for free and watch the proposals roll in.
-            </p>
-            <div className="mt-9 flex flex-col items-center justify-center gap-3 sm:flex-row">
-              <Button
-                size="lg"
-                className="rounded-full bg-white text-violet-700 hover:bg-white/90"
-                render={<Link href="/sign_in?mode=signup" />}
-              >
-                Get started free
-                <ArrowRight className="ml-2 size-4" data-icon="inline-end" />
-              </Button>
-              <Button
-                size="lg"
-                variant="ghost"
-                className="rounded-full text-white hover:bg-white/10 hover:text-white"
-                render={<Link href="/pricing" />}
-              >
-                View pricing
-              </Button>
-            </div>
-            <p className="mt-6 inline-flex items-center gap-1.5 text-sm text-white/70">
-              <Check className="size-4" aria-hidden="true" /> Free to start · No credit card required
-            </p>
-          </div>
-        </BentoCard>
-      </MarketingSection>
+      <MatrixCta
+        title="Give your agents a workspace they can't break."
+        subtitle="Connect your first agent for free and watch the proposals roll in."
+        primary={{ label: "Get started free", href: "/sign_in?mode=signup" }}
+        secondary={{ label: "View pricing", href: "/pricing" }}
+      />
     </div>
   );
 }

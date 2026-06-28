@@ -1,12 +1,14 @@
 import { notFound } from "next/navigation";
-import { Suspense, type ReactNode } from "react";
+import { Suspense, cache } from "react";
+import dynamic from "next/dynamic";
 import {
   Archive,
   BookOpen,
-  Bot,
+  ChevronRight,
+  Clock,
   FileText,
   Folder,
-  RotateCcw,
+  Hash,
   Search,
 } from "lucide-react";
 import Link from "next/link";
@@ -24,44 +26,147 @@ import {
   listArchivedFoldersByBox,
   listTrashedFoldersByBox,
 } from "@/server/repositories/folder_repository";
-import { listLinksFromNote } from "@/server/repositories/note_link_repository";
+import { listLinksFromNotes } from "@/server/repositories/note_link_repository";
 import { getBoxOverview } from "@/server/services/overview_service";
 import { EmptyState } from "@/components/product/empty_state";
 import { Skeleton } from "@/components/ui/skeleton";
 import { BoxContentsTree } from "@/components/product/boxes/box_contents_tree";
-import { BoxGuidePanel } from "@/components/product/boxes/box_guide_panel";
-import { GraphPanel } from "@/components/product/graph_panel";
-import { BoxSearchPanel } from "@/components/product/boxes/box_search_panel";
-import { CreateFolderDialog } from "@/components/product/create/create_folder_dialog";
-import { CreateNoteDialog } from "@/components/product/create/create_note_dialog";
 import { GuideNotePicker } from "@/components/product/guide_note_picker";
 import { NoteStub, NoteStubSkeleton } from "@/components/product/notes/note_stub";
-import { BoxLifecycleMenu } from "@/components/product/boxes/box_lifecycle_menu";
 import { FolderLifecycleMenu } from "@/components/product/folders/folder_lifecycle_menu";
-import { PanelSection } from "@/components/product/panel_section";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { cn } from "@/lib/utils";
 import { type NoteLink } from "@/server/domain/types/note_link";
-import { BoxExportMenu } from "@/components/product/export_menu";
-import {
-  ImportTriggerButton,
-} from "@/components/product/import_dialog";
-import { AskPogInlineButton } from "@/components/product/ask_pog_inline_button";
+import { CreateNoteDialog } from "@/components/product/create/create_note_dialog";
 import { listTemplates } from "@/server/services/note_template_service";
 import { FolderPolicyToggle } from "@/components/product/folders/folder_policy_toggle";
 import { BoxEditDialog } from "@/components/product/boxes/box_edit_dialog";
-import { BoxOverviewPanel } from "@/components/product/boxes/box_overview_panel";
 import { BoxTemplateSetup } from "@/components/product/boxes/box_template_setup";
 import { BoxChatPanel } from "@/components/product/boxes/box_chat_panel";
+import { BoxActionBar } from "@/components/product/boxes/box_action_bar";
 import { WorkspaceLiveRefresh } from "@/components/product/workspace/workspace_live_refresh";
 import { ActiveBranchBannerServer } from "@/components/product/active_branch_banner_server";
-import { ShareBoxButton } from "@/components/product/share_box_button";
-import { BoxPublicToggle } from "@/components/product/boxes/box_public_toggle";
 import { type Folder as FolderType } from "@/server/domain/types/folder";
 import { type Note } from "@/server/domain/types/note";
 import { formatAbsoluteDate, formatRelativeDate } from "@/lib/format_date";
+
+// Heavy, tab-only panels are code-split (next/dynamic) so they stay OUT of the
+// box route's initial JS bundle — they download only when their tab is opened,
+// not on every box open. Radix unmounts inactive tabs, so on the default Notes
+// tab these never load. This removes the bulk of the client-side box-open cost.
+const GraphPanel = dynamic(() =>
+  import("@/components/product/graph_panel").then((m) => ({ default: m.GraphPanel })),
+);
+const BoxSearchPanel = dynamic(() =>
+  import("@/components/product/boxes/box_search_panel").then((m) => ({
+    default: m.BoxSearchPanel,
+  })),
+);
+const BoxOverviewPanel = dynamic(() =>
+  import("@/components/product/boxes/box_overview_panel").then((m) => ({
+    default: m.BoxOverviewPanel,
+  })),
+);
+const BoxGuidePanel = dynamic(() =>
+  import("@/components/product/boxes/box_guide_panel").then((m) => ({
+    default: m.BoxGuidePanel,
+  })),
+);
+
+// ─── Shared tokens ──────────────────────────────────────────────────────────
+//
+// The app's NEW aesthetic (see boxes_bento / floating_shell / the note page):
+// soft rounded `bg-card` surfaces, a single quiet shadow, no hard borders.
+
+const SOFT_SHADOW =
+  "shadow-[0_2px_12px_-2px_rgba(0,0,0,0.07),0_1px_4px_-1px_rgba(0,0,0,0.05)]";
+const SECTION_LABEL =
+  "text-[11px] font-medium uppercase tracking-[0.2em] text-muted-foreground";
+
+// ─── Soft tab strip ───────────────────────────────────────────────────────────
+// Uses Radix `Tabs` (so the Suspense-streamed per-tab content keeps mounting on
+// switch) but styled as the app's soft segmented control: a rounded `bg-muted`
+// track with rounded active pills — no sharp underline.
+
+const TAB_LIST =
+  "h-auto w-fit max-w-full flex-nowrap gap-1 overflow-x-auto rounded-full bg-muted/60 p-1";
+const TAB_TRIGGER =
+  "h-auto flex-none rounded-full px-3 py-1.5 text-xs font-medium data-active:bg-card data-active:text-foreground data-active:shadow-[0_1px_4px_-1px_rgba(0,0,0,0.12),0_1px_2px_-1px_rgba(0,0,0,0.06)]";
+
+// ─── Breadcrumb ───────────────────────────────────────────────────────────────
+
+function Breadcrumb({
+  workspaceName,
+  boxName,
+}: {
+  workspaceName: string;
+  boxName: string;
+}) {
+  const parts = [
+    { label: workspaceName, href: "/app" as string | null },
+    { label: boxName, href: null as string | null },
+  ];
+
+  return (
+    <nav aria-label="Breadcrumb" className="flex items-center gap-1.5 text-xs text-muted-foreground">
+      {parts.map((part, i) => (
+        <span key={`${part.label}-${i}`} className="flex items-center gap-1.5">
+          {i > 0 && <ChevronRight className="h-3 w-3 shrink-0 text-muted-foreground/40" aria-hidden="true" />}
+          {part.href ? (
+            <Link href={part.href} className="rounded-md transition-fast hover:text-foreground">
+              {part.label}
+            </Link>
+          ) : (
+            <span className="max-w-[220px] truncate font-medium text-foreground/80" title={part.label}>
+              {part.label}
+            </span>
+          )}
+        </span>
+      ))}
+    </nav>
+  );
+}
+
+// ─── Right-panel building blocks (mirrors the note page) ─────────────────────
+
+/** A soft rounded card used to group a section of the right context panel. */
+function PanelCard({
+  children,
+  className,
+}: {
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <div className={cn("rounded-2xl bg-card", SOFT_SHADOW, className)}>
+      {children}
+    </div>
+  );
+}
+
+function InfoSection({
+  children,
+  border = true,
+}: {
+  children: React.ReactNode;
+  border?: boolean;
+}) {
+  return (
+    <div className={cn("px-4 py-3.5", border && "border-b border-border/50")}>
+      {children}
+    </div>
+  );
+}
+
+function InfoLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <p className="mb-1.5 text-[10px] font-medium uppercase tracking-[0.15em] text-muted-foreground/70">
+      {children}
+    </p>
+  );
+}
 
 // ─── Tab skeleton (generic loading state for heavy tabs) ─────────────────────
 
@@ -69,7 +174,7 @@ function TabSkeleton() {
   return (
     <div className="mx-auto max-w-3xl px-6 py-6 space-y-4">
       {[0, 1, 2].map((i) => (
-        <Skeleton key={i} className="h-20 w-full rounded-lg" />
+        <Skeleton key={i} className="h-20 w-full rounded-2xl" />
       ))}
     </div>
   );
@@ -79,7 +184,7 @@ function TabSkeleton() {
 
 function NoteListSkeleton() {
   return (
-    <div className="mx-auto flex max-w-3xl flex-col gap-2 px-6 py-4">
+    <div className="mx-auto flex max-w-3xl flex-col gap-2 px-6 py-5">
       {[0, 1, 2, 3].map((i) => (
         <NoteStubSkeleton key={i} />
       ))}
@@ -110,176 +215,238 @@ async function BoxContextPanel({
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
-      <div className="border-b border-border px-4 py-2.5">
-        <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
-          Box context
-        </p>
+      {/* Panel header */}
+      <div className="shrink-0 px-4 pb-3 pt-4">
+        <p className={SECTION_LABEL}>Box context</p>
       </div>
-      <ScrollArea className="flex-1">
 
-        {/* Guide note — front door */}
-        <div className="border-b border-border px-4 py-3">
-          <p className="mb-2 text-[10px] font-medium uppercase tracking-wider text-muted-foreground/60">
-            Guide note
-          </p>
-          {guideNote ? (
-            <div className="flex flex-col gap-2">
-              {/* Guide note card */}
-              <Link
-                href={`/app/notes/${guideNote.id}`}
-                className="flex flex-col gap-1.5 rounded-md border border-amber-300/60 bg-amber-50/40 p-3 transition-fast hover:border-amber-400/60 hover:shadow-sm dark:border-amber-600/40 dark:bg-amber-900/10"
-                aria-label={`Open guide note: ${guideNote.title}`}
-              >
-                <div className="flex items-start gap-2">
-                  <BookOpen
-                    className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-600 dark:text-amber-500"
-                    aria-hidden="true"
-                  />
-                  <span className="flex-1 text-sm font-medium leading-snug text-foreground hover:underline underline-offset-2">
-                    {guideNote.title}
-                  </span>
-                </div>
-                {guideNote.summary && (
-                  <p className="pl-5 text-xs leading-relaxed text-muted-foreground line-clamp-3">
-                    {guideNote.summary}
+      <ScrollArea className="min-h-0 flex-1">
+        <div className="space-y-4 px-4 pb-6">
+          {/* Guide note — front door */}
+          <PanelCard>
+            <div className="px-4 pb-1 pt-3.5">
+              <p className={SECTION_LABEL}>Guide note</p>
+            </div>
+            {guideNote ? (
+              <div className="flex flex-col gap-2 px-4 pb-4 pt-2">
+                {/* Guide note card */}
+                <Link
+                  href={`/app/notes/${guideNote.id}`}
+                  className="flex flex-col gap-1.5 rounded-2xl border border-amber-300/50 bg-amber-50/50 p-3 transition-fast hover:border-amber-400/60 dark:border-amber-600/30 dark:bg-amber-900/10"
+                  aria-label={`Open guide note: ${guideNote.title}`}
+                >
+                  <div className="flex items-start gap-2">
+                    <BookOpen
+                      className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-600 dark:text-amber-500"
+                      aria-hidden="true"
+                    />
+                    <span className="flex-1 text-sm font-medium leading-snug text-foreground hover:underline underline-offset-2">
+                      {guideNote.title}
+                    </span>
+                  </div>
+                  {guideNote.summary && (
+                    <p className="pl-5 text-xs leading-relaxed text-muted-foreground line-clamp-3">
+                      {guideNote.summary}
+                    </p>
+                  )}
+                </Link>
+                {/* Assignment control inline below */}
+                <GuideNotePicker
+                  boxId={box.id}
+                  currentGuideNote={guideNote}
+                  notes={notes}
+                />
+              </div>
+            ) : (
+              <div className="flex flex-col gap-2 px-4 pb-4 pt-2">
+                {/* Empty state callout */}
+                <div className="flex flex-col gap-1.5 rounded-2xl border border-dashed border-border/70 px-3 py-3">
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <BookOpen className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                    <span className="font-medium">No guide note</span>
+                  </div>
+                  <p className="text-xs leading-relaxed text-muted-foreground/70">
+                    The guide note is read first by AI agents and orients retrieval
+                    for this box. Assign one below.
                   </p>
-                )}
-              </Link>
-              {/* Assignment control inline below */}
-              <GuideNotePicker
-                boxId={box.id}
-                currentGuideNote={guideNote}
-                notes={notes}
-              />
-            </div>
-          ) : (
-            <div className="flex flex-col gap-2">
-              {/* Empty state callout */}
-              <div className="flex flex-col gap-1.5 rounded-md border border-dashed border-border px-3 py-3">
-                <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                  <BookOpen className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-                  <span className="font-medium">No guide note</span>
                 </div>
-                <p className="text-xs leading-relaxed text-muted-foreground/70">
-                  The guide note is read first by AI agents and orients retrieval
-                  for this box. Assign one below.
+                <GuideNotePicker
+                  boxId={box.id}
+                  currentGuideNote={null}
+                  notes={notes}
+                />
+              </div>
+            )}
+          </PanelCard>
+
+          {/* About card — identity, stats, details */}
+          <PanelCard>
+            {/* Box identity */}
+            <InfoSection>
+              <InfoLabel>Box</InfoLabel>
+              <p className="text-sm font-medium text-foreground">{box.name}</p>
+              {box.description && (
+                <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                  {box.description}
                 </p>
-              </div>
-              <GuideNotePicker
-                boxId={box.id}
-                currentGuideNote={null}
-                notes={notes}
-              />
-            </div>
-          )}
-        </div>
+              )}
+              {box.status === "archived" && (
+                <Badge
+                  variant="secondary"
+                  className="mt-2 flex w-fit items-center gap-1 rounded-full text-[10px] font-normal"
+                >
+                  <Archive className="h-3 w-3" aria-hidden="true" />
+                  Archived
+                </Badge>
+              )}
+            </InfoSection>
 
-        {/* Box identity */}
-        <div className="border-b border-border px-4 py-3">
-          <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground/60">
-            Box
-          </p>
-          <p className="mt-0.5 text-sm font-medium text-foreground">
-            {box.name}
-          </p>
-          {box.description && (
-            <p className="mt-1 text-xs text-muted-foreground">
-              {box.description}
-            </p>
-          )}
-          {box.status === "archived" && (
-            <Badge
-              variant="secondary"
-              className="mt-2 flex w-fit items-center gap-1 text-[10px] font-normal"
-            >
-              <Archive className="h-3 w-3" aria-hidden="true" />
-              Archived
-            </Badge>
-          )}
-        </div>
-
-        {/* Stats */}
-        <PanelSection title="Contents" noSeparator>
-          <div className="flex flex-col gap-1 text-xs text-muted-foreground">
-            <div className="flex items-center justify-between py-0.5">
-              <div className="flex items-center gap-1.5">
-                <Folder className="h-3 w-3" aria-hidden="true" />
-                <span>Folders</span>
+            {/* Stats */}
+            <InfoSection>
+              <InfoLabel>Contents</InfoLabel>
+              <div className="flex flex-col gap-1 text-xs text-muted-foreground">
+                <div className="flex items-center justify-between py-0.5">
+                  <div className="flex items-center gap-1.5">
+                    <Folder className="h-3 w-3" aria-hidden="true" />
+                    <span>Folders</span>
+                  </div>
+                  <Badge variant="secondary" className="h-4 rounded-full px-1.5 text-[10px] font-normal">
+                    {folderCount}
+                  </Badge>
+                </div>
+                <div className="flex items-center justify-between py-0.5">
+                  <div className="flex items-center gap-1.5">
+                    <FileText className="h-3 w-3" aria-hidden="true" />
+                    <span>Notes</span>
+                  </div>
+                  <Badge variant="secondary" className="h-4 rounded-full px-1.5 text-[10px] font-normal">
+                    {noteCount}
+                  </Badge>
+                </div>
               </div>
-              <Badge variant="secondary" className="h-4 px-1.5 text-[10px] font-normal">
-                {folderCount}
-              </Badge>
-            </div>
-            <div className="flex items-center justify-between py-0.5">
-              <div className="flex items-center gap-1.5">
-                <FileText className="h-3 w-3" aria-hidden="true" />
-                <span>Notes</span>
-              </div>
-              <Badge variant="secondary" className="h-4 px-1.5 text-[10px] font-normal">
-                {noteCount}
-              </Badge>
-            </div>
-          </div>
-        </PanelSection>
+            </InfoSection>
 
-        {/* Folder AI policies */}
-        {folders.length > 0 && (
-          <>
-            <Separator />
-            <PanelSection title="Folder policies" noSeparator>
-              <div className="flex flex-col gap-1">
-                <p className="mb-1 text-[10px] text-muted-foreground/70">
+            {/* Details */}
+            <InfoSection border={false}>
+              <InfoLabel>Details</InfoLabel>
+              <div className="flex flex-col gap-2 text-xs">
+                <div className="flex items-center gap-2">
+                  <Clock className="h-3.5 w-3.5 shrink-0 text-muted-foreground/60" aria-hidden="true" />
+                  <span className="text-foreground/70">{formatAbsoluteDate(box.created_at)}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Hash className="h-3.5 w-3.5 shrink-0 text-muted-foreground/60" aria-hidden="true" />
+                  <span className="font-mono text-[11px] text-foreground/70">{box.slug}</span>
+                </div>
+              </div>
+            </InfoSection>
+          </PanelCard>
+
+          {/* Folder AI policies */}
+          {folders.length > 0 && (
+            <PanelCard>
+              <div className="px-4 pb-1 pt-3.5">
+                <p className={SECTION_LABEL}>Folder policies</p>
+              </div>
+              <div className="px-4 pb-3.5 pt-2">
+                <p className="mb-2 text-[11px] text-muted-foreground/70">
                   {hasGeneratedFolders
                     ? "Folders that accept AI-generated notes directly:"
                     : "No folders are open for direct AI writes."}
                 </p>
-                {folders.map((folder) => (
-                  <div
-                    key={folder.id}
-                    className="flex items-center justify-between gap-2 rounded-md px-1.5 py-1 text-xs"
-                  >
-                    <div className="flex min-w-0 items-center gap-1.5">
-                      <Folder
-                        className="h-3 w-3 shrink-0 text-muted-foreground/60"
-                        aria-hidden="true"
+                <div className="flex flex-col gap-0.5">
+                  {folders.map((folder) => (
+                    <div
+                      key={folder.id}
+                      className="flex items-center justify-between gap-2 rounded-lg px-1.5 py-1 text-xs"
+                    >
+                      <div className="flex min-w-0 items-center gap-1.5">
+                        <Folder
+                          className="h-3 w-3 shrink-0 text-muted-foreground/60"
+                          aria-hidden="true"
+                        />
+                        <span className="truncate text-muted-foreground">
+                          {folder.name}
+                        </span>
+                      </div>
+                      <FolderPolicyToggle
+                        folderId={folder.id}
+                        initialAccepts={folder.accepts_generated_notes}
+                        compact
                       />
-                      <span className="truncate text-muted-foreground">
-                        {folder.name}
-                      </span>
                     </div>
-                    <FolderPolicyToggle
-                      folderId={folder.id}
-                      initialAccepts={folder.accepts_generated_notes}
-                      compact
-                    />
-                  </div>
-                ))}
+                  ))}
+                </div>
               </div>
-            </PanelSection>
-          </>
-        )}
-
-        <Separator />
-
-        {/* Details */}
-        <PanelSection title="Details" noSeparator>
-          <div className="flex flex-col gap-2 text-xs">
-            <div>
-              <p className="text-[10px] uppercase tracking-wider text-muted-foreground/60">
-                Created
-              </p>
-              <p className="text-foreground/80">{formatAbsoluteDate(box.created_at)}</p>
-            </div>
-            <div>
-              <p className="text-[10px] uppercase tracking-wider text-muted-foreground/60">
-                Slug
-              </p>
-              <p className="font-mono text-foreground/80">{box.slug}</p>
-            </div>
-          </div>
-        </PanelSection>
+            </PanelCard>
+          )}
+        </div>
       </ScrollArea>
     </div>
+  );
+}
+
+// ─── Deferred tab content ────────────────────────────────────────────────────
+// Streamed inside <Suspense> so the page shell + the default Notes tab paint
+// immediately; the heavier per-tab work (box overview, guide-note links) loads
+// independently instead of blocking first paint.
+
+type LoadedBox = NonNullable<Awaited<ReturnType<typeof getBoxById>>>;
+
+// Per-request memoized overview. The Overview and Graph tabs both render
+// server-side, but pass the SAME box reference, so cache() runs the (heavier)
+// overview computation exactly once per request.
+const loadOverview = cache(async (box: LoadedBox, branchId: string | null) =>
+  getBoxOverview(await createClient(), box, { branchId })
+);
+
+async function OverviewTabContent({
+  box,
+  branchId,
+}: {
+  box: LoadedBox;
+  branchId: string | null;
+}) {
+  return <BoxOverviewPanel overview={await loadOverview(box, branchId)} />;
+}
+
+async function GraphTabContent({
+  box,
+  branchId,
+}: {
+  box: LoadedBox;
+  branchId: string | null;
+}) {
+  return <GraphPanel overview={await loadOverview(box, branchId)} />;
+}
+
+async function GuideTabContent({
+  box,
+  guideNote,
+  notes,
+  folders,
+  branchId,
+}: {
+  box: LoadedBox;
+  guideNote: Note | null;
+  notes: Note[];
+  folders: FolderType[];
+  branchId: string | null;
+}) {
+  const supabase = await createClient();
+  const allLinks: NoteLink[] = await listLinksFromNotes(
+    supabase,
+    notes.map((n) => n.id),
+    { branchId }
+  );
+  return (
+    <BoxGuidePanel
+      box={box}
+      guideNote={guideNote ?? null}
+      allNotes={notes}
+      allLinks={allLinks}
+      folders={folders}
+    />
   );
 }
 
@@ -307,10 +474,12 @@ export default async function BoxPage({
   const ctx = await requireAuthenticatedUser();
   const supabase = await createClient();
 
-  const box = await getBoxById(supabase, box_id);
-  if (!box || box.workspace_id !== ctx.workspace.id) notFound();
-
+  // Fetch the box AND its contents in ONE parallel batch. The list queries key
+  // off the route's box_id (identical to box.id), so they no longer wait for
+  // getBoxById first — this overlaps what used to be two sequential ~300ms
+  // round-trips. Box existence/ownership is validated immediately after.
   const [
+    box,
     folders,
     notes,
     archivedNotes,
@@ -319,31 +488,31 @@ export default async function BoxPage({
     trashedFolders,
     savedTemplates,
   ] = await Promise.all([
-    listFoldersByBox(supabase, box.id, { branchId: ctx.activeBranchId }),
-    listNotesByBox(supabase, box.id, { branchId: ctx.activeBranchId }),
-    listArchivedNotesByBox(supabase, box.id, { branchId: ctx.activeBranchId }),
-    listTrashedNotesByBox(supabase, box.id, { branchId: ctx.activeBranchId }),
-    listArchivedFoldersByBox(supabase, box.id, { branchId: ctx.activeBranchId }),
-    listTrashedFoldersByBox(supabase, box.id, { branchId: ctx.activeBranchId }),
-    listTemplates(supabase, box.id),
+    getBoxById(supabase, box_id),
+    listFoldersByBox(supabase, box_id, { branchId: ctx.activeBranchId }),
+    listNotesByBox(supabase, box_id, { branchId: ctx.activeBranchId }),
+    listArchivedNotesByBox(supabase, box_id, { branchId: ctx.activeBranchId }),
+    listTrashedNotesByBox(supabase, box_id, { branchId: ctx.activeBranchId }),
+    listArchivedFoldersByBox(supabase, box_id, { branchId: ctx.activeBranchId }),
+    listTrashedFoldersByBox(supabase, box_id, { branchId: ctx.activeBranchId }),
+    listTemplates(supabase, box_id),
   ]);
+  if (!box || box.workspace_id !== ctx.workspace.id) notFound();
 
   const guideNote = box.guide_note_id
     ? await getNoteById(supabase, box.guide_note_id)
     : null;
 
-  const linkArrays = await Promise.all(
-    notes.map((n) => listLinksFromNote(supabase, n.id, { branchId: ctx.activeBranchId }))
-  );
-  const allLinks: NoteLink[] = linkArrays.flat();
-
-  const overview = await getBoxOverview(supabase, box, {
-    branchId: ctx.activeBranchId,
-  });
-
   const sortedNotes = [...notes].sort((a, b) =>
     b.updated_at.localeCompare(a.updated_at)
   );
+
+  const savedTemplateRefs = savedTemplates.map((t) => ({
+    id: t.id,
+    name: t.name,
+    description: t.description,
+    markdown_content: t.markdown_content,
+  }));
 
   const archivedCount = archivedNotes.length + archivedFolders.length;
   const trashedCount = trashedNotes.length + trashedFolders.length;
@@ -356,404 +525,418 @@ export default async function BoxPage({
       : requestedTab;
 
   return (
-    <div className="flex h-full flex-col overflow-hidden">
+    <div className="flex h-full flex-col overflow-hidden bg-background">
       <ActiveBranchBannerServer />
       <div className="flex flex-1 overflow-hidden">
-      <WorkspaceLiveRefresh
-        workspaceId={ctx.workspace.id}
-        scope="box"
-        boxId={box.id}
-        protectWhileEditing
-      />
-      {/* Main content */}
-      <div className="flex flex-1 flex-col overflow-hidden min-w-0 pb-16">
+        <WorkspaceLiveRefresh
+          workspaceId={ctx.workspace.id}
+          scope="box"
+          boxId={box.id}
+          protectWhileEditing
+        />
 
-        {/* Box header */}
-        <div className="border-b border-border px-4 py-4 md:px-6">
-          <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between md:gap-4">
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-2 mb-0.5">
-                <p className="text-xs text-muted-foreground">{ctx.workspace.name}</p>
-                {box.status === "archived" && (
-                  <Badge variant="secondary" className="text-[10px] font-normal">
-                    Archived
-                  </Badge>
-                )}
-              </div>
-              <div className="flex items-center gap-1">
-                <h1 className="text-2xl font-semibold tracking-tight text-foreground truncate">
-                  {box.name}
-                </h1>
-                <BoxEditDialog
-                  boxId={box.id}
-                  initialName={box.name}
-                  initialDescription={box.description}
-                  initialAgentInstructions={box.agent_instructions}
-                />
-              </div>
-              {box.description && (
-                <p className="mt-1 text-sm text-muted-foreground">
-                  {box.description}
-                </p>
-              )}
-
-              {/* Background template setup — only rendered for new empty boxes.
-                  Guard: notes.length === 0 && folders.length === 0 prevents
-                  re-application to boxes that already have content. */}
-              {typeof resolvedSearch.setup === "string" &&
-                resolvedSearch.setup.length > 0 &&
-                notes.length === 0 &&
-                folders.length === 0 && (
-                  <BoxTemplateSetup
-                    boxId={box.id}
-                    templateId={resolvedSearch.setup}
-                  />
-                )}
-
-              {/* Guide note — front door strip */}
-              {guideNote ? (
-                <Link
-                  href={`/app/notes/${guideNote.id}`}
-                  className="mt-2 flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-fast group"
-                  aria-label={`Open guide note: ${guideNote.title}`}
-                >
-                  <BookOpen
-                    className="h-3.5 w-3.5 shrink-0 text-amber-600/80 dark:text-amber-500/80"
-                    aria-hidden="true"
-                  />
-                  <span className="text-muted-foreground/70">Guide —</span>
-                  <span className="font-medium text-foreground group-hover:underline underline-offset-2 truncate">
-                    {guideNote.title}
-                  </span>
-                </Link>
-              ) : (
-                <div className="mt-2 flex items-center gap-1.5 text-xs text-muted-foreground/50">
-                  <BookOpen className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-                  <span>No guide note — assign one in the box context panel</span>
+        {/* Main content */}
+        <div className="flex min-w-0 flex-1 flex-col overflow-hidden pb-16">
+          {/* ── Header: breadcrumb + title + actions ── */}
+          <div className="shrink-0 px-4 pt-5 sm:px-6 lg:px-8">
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+              <div className="flex min-w-0 flex-col gap-1.5">
+                <Breadcrumb workspaceName={ctx.workspace.name} boxName={box.name} />
+                <div className="flex items-center gap-2">
+                  <p className={SECTION_LABEL}>Box</p>
+                  {box.status === "archived" && (
+                    <Badge
+                      variant="secondary"
+                      className="flex shrink-0 items-center gap-1 rounded-full text-[10px] font-normal"
+                    >
+                      <Archive className="h-3 w-3" aria-hidden="true" />
+                      Archived
+                    </Badge>
+                  )}
                 </div>
-              )}
-            </div>
-            <div className="flex shrink-0 flex-wrap items-center gap-2">
-              <CreateNoteDialog boxId={box.id} folders={folders} savedTemplates={savedTemplates.map((t) => ({ id: t.id, name: t.name, description: t.description, markdown_content: t.markdown_content }))} />
-              <CreateFolderDialog boxId={box.id} />
-              <AskPogInlineButton
-                label="Ask AI about this collection"
-                prompt={`Working in the box "${box.name}". Start by summarizing what's already in this box and what's missing, then draft any follow-up notes I should have.`}
-              />
-              <ImportTriggerButton
-                boxId={box.id}
-                boxName={box.name}
-                folders={folders.map((f) => ({
-                  id: f.id,
-                  name: f.name,
-                  path_cache: f.path_cache,
-                }))}
-              />
-              <BoxExportMenu boxId={box.id} boxName={box.name} />
-              <Link
-                href={`/app/boxes/${box.id}/templates`}
-                className="inline-flex items-center gap-1.5 rounded-md border border-input bg-background px-3 py-1.5 text-xs font-medium text-foreground shadow-sm transition-fast hover:bg-accent hover:text-accent-foreground"
-              >
-                <FileText className="h-3.5 w-3.5" aria-hidden="true" />
-                Templates
-              </Link>
-              <BoxPublicToggle boxId={box.id} initialIsPublic={box.is_public} />
-              <ShareBoxButton boxId={box.id} />
-              <BoxLifecycleMenu
-                boxId={box.id}
-                boxStatus={box.status as "active" | "archived"}
-              />
-            </div>
-          </div>
-        </div>
 
-        {/* Tabs */}
-        <Tabs defaultValue={defaultTab} className="flex flex-1 flex-col overflow-hidden">
-          <div className="border-b border-border px-6">
-            <TabsList variant="line" className="h-auto pb-0">
-              <TabsTrigger value="notes" className="pb-3">
-                Notes
-              </TabsTrigger>
-              <TabsTrigger value="overview" className="pb-3">
-                Overview
-              </TabsTrigger>
-              <TabsTrigger value="tree" className="pb-3">
-                Tree
-              </TabsTrigger>
-              <TabsTrigger value="guide" className="pb-3">
-                Guide
-              </TabsTrigger>
-              <TabsTrigger value="graph" className="pb-3">
-                Graph
-              </TabsTrigger>
-              <TabsTrigger value="search" className="pb-3">
-                <Search className="mr-1 h-3.5 w-3.5" aria-hidden="true" />
-                Search
-              </TabsTrigger>
-              {archivedCount > 0 && (
-                <TabsTrigger value="archived" className="pb-3">
-                  <Archive className="mr-1 h-3.5 w-3.5" aria-hidden="true" />
-                  Archived
-                  <Badge
-                    variant="secondary"
-                    className="ml-1.5 h-4 px-1.5 text-[10px] font-normal"
-                  >
-                    {archivedCount}
-                  </Badge>
-                </TabsTrigger>
-              )}
-              {trashedCount > 0 && (
-                <TabsTrigger value="trashed" className="pb-3">
-                  Trash
-                  <Badge
-                    variant="secondary"
-                    className="ml-1.5 h-4 px-1.5 text-[10px] font-normal"
-                  >
-                    {trashedCount}
-                  </Badge>
-                </TabsTrigger>
-              )}
-            </TabsList>
-          </div>
-
-          {/* ── Notes tab ── */}
-          <TabsContent value="notes" className="flex-1 overflow-hidden">
-            <ScrollArea className="h-full">
-              <Suspense fallback={<NoteListSkeleton />}>
-                {sortedNotes.length === 0 ? (
-                  <EmptyState
-                    icon={<FileText className="h-5 w-5" />}
-                    title="No notes yet"
-                    description="Create your first note, choose a starter template, or use the Import button above to bring in existing Markdown content."
-                    action={<CreateNoteDialog boxId={box.id} folders={folders} savedTemplates={savedTemplates.map((t) => ({ id: t.id, name: t.name, description: t.description, markdown_content: t.markdown_content }))} />}
-                    className="h-full"
+                {/* Title + inline edit */}
+                <div className="flex items-center gap-1">
+                  <h1 className="truncate text-2xl font-semibold tracking-tight text-foreground">
+                    {box.name}
+                  </h1>
+                  <BoxEditDialog
+                    boxId={box.id}
+                    initialName={box.name}
+                    initialDescription={box.description}
+                    initialAgentInstructions={box.agent_instructions}
                   />
+                </div>
+                {box.description && (
+                  <p className="text-sm text-muted-foreground">{box.description}</p>
+                )}
+
+                {/* Background template setup — only rendered for new empty boxes.
+                    Guard: notes.length === 0 && folders.length === 0 prevents
+                    re-application to boxes that already have content. */}
+                {typeof resolvedSearch.setup === "string" &&
+                  resolvedSearch.setup.length > 0 &&
+                  notes.length === 0 &&
+                  folders.length === 0 && (
+                    <BoxTemplateSetup boxId={box.id} templateId={resolvedSearch.setup} />
+                  )}
+
+                {/* Guide note — front door strip */}
+                {guideNote ? (
+                  <Link
+                    href={`/app/notes/${guideNote.id}`}
+                    className="group mt-0.5 flex items-center gap-1.5 text-xs text-muted-foreground transition-fast hover:text-foreground"
+                    aria-label={`Open guide note: ${guideNote.title}`}
+                  >
+                    <BookOpen
+                      className="h-3.5 w-3.5 shrink-0 text-amber-600/80 dark:text-amber-500/80"
+                      aria-hidden="true"
+                    />
+                    <span className="text-muted-foreground/70">Guide —</span>
+                    <span className="truncate font-medium text-foreground underline-offset-2 group-hover:underline">
+                      {guideNote.title}
+                    </span>
+                  </Link>
                 ) : (
-                  <div className="mx-auto flex max-w-3xl flex-col gap-2 px-6 py-4">
-                    {sortedNotes.map((note) => (
-                      <Link
-                        key={note.id}
-                        href={`/app/notes/${note.id}`}
-                        className="block rounded-lg transition-colors hover:bg-accent/30"
-                      >
-                        <NoteStub
-                          title={note.title}
-                          kind={note.kind as "note" | "guide" | "bundle"}
-                          excerpt={note.summary ?? undefined}
-                          updatedAt={formatRelativeDate(note.updated_at, nowIso)}
-                          tags={note.tags.slice(0, 3)}
-                        />
-                      </Link>
-                    ))}
+                  <div className="mt-0.5 flex items-center gap-1.5 text-xs text-muted-foreground/50">
+                    <BookOpen className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                    <span>No guide note — assign one in the box context panel</span>
                   </div>
                 )}
-              </Suspense>
-            </ScrollArea>
-          </TabsContent>
-
-          {/* ── Overview tab ── */}
-          <TabsContent value="overview" className="flex-1 overflow-hidden">
-            <ScrollArea className="h-full">
-              <Suspense fallback={<TabSkeleton />}>
-                <div className="mx-auto max-w-3xl px-6 py-6">
-                  <BoxOverviewPanel overview={overview} />
-                </div>
-              </Suspense>
-            </ScrollArea>
-          </TabsContent>
-
-          {/* ── Tree tab ── */}
-          <TabsContent value="tree" className="flex-1 overflow-hidden">
-            <ScrollArea className="h-full">
-              <div className="mx-auto max-w-3xl px-6 py-4">
-                <BoxContentsTree
-                  folders={folders}
-                  notes={notes}
-                />
               </div>
-            </ScrollArea>
-          </TabsContent>
 
-          {/* ── Guide tab ── */}
-          <TabsContent value="guide" className="flex-1 overflow-hidden">
-            <ScrollArea className="h-full">
-              <div className="mx-auto max-w-3xl px-6 py-6">
-                <BoxGuidePanel
-                  box={box}
-                  guideNote={guideNote ?? null}
-                  allNotes={notes}
-                  allLinks={allLinks}
-                  folders={folders}
-                />
-              </div>
-            </ScrollArea>
-          </TabsContent>
+              <BoxActionBar
+                boxId={box.id}
+                boxName={box.name}
+                boxStatus={box.status as "active" | "archived"}
+                isPublic={box.is_public}
+                folders={folders}
+                savedTemplates={savedTemplateRefs}
+              />
+            </div>
+          </div>
 
-          {/* ── Graph tab ── */}
-          <TabsContent value="graph" className="flex-1 overflow-hidden">
-            <ScrollArea className="h-full">
-              <Suspense fallback={<TabSkeleton />}>
-                <div className="mx-auto max-w-3xl px-6 py-6">
-                  <GraphPanel overview={overview} />
-                </div>
-              </Suspense>
-            </ScrollArea>
-          </TabsContent>
+          {/* ── Tabs ── */}
+          <Tabs defaultValue={defaultTab} className="flex flex-1 flex-col overflow-hidden">
+            <div className="shrink-0 px-4 pt-4 sm:px-6 lg:px-8">
+              <TabsList className={TAB_LIST}>
+                <TabsTrigger value="notes" className={TAB_TRIGGER}>
+                  Notes
+                </TabsTrigger>
+                <TabsTrigger value="overview" className={TAB_TRIGGER}>
+                  Overview
+                </TabsTrigger>
+                <TabsTrigger value="tree" className={TAB_TRIGGER}>
+                  Tree
+                </TabsTrigger>
+                <TabsTrigger value="guide" className={TAB_TRIGGER}>
+                  Guide
+                </TabsTrigger>
+                <TabsTrigger value="graph" className={TAB_TRIGGER}>
+                  Graph
+                </TabsTrigger>
+                <TabsTrigger value="search" className={TAB_TRIGGER}>
+                  <Search className="mr-1 h-3.5 w-3.5" aria-hidden="true" />
+                  Search
+                </TabsTrigger>
+                {archivedCount > 0 && (
+                  <TabsTrigger value="archived" className={TAB_TRIGGER}>
+                    <Archive className="mr-1 h-3.5 w-3.5" aria-hidden="true" />
+                    Archived
+                    <Badge
+                      variant="secondary"
+                      className="ml-1.5 h-4 rounded-full px-1.5 text-[10px] font-normal"
+                    >
+                      {archivedCount}
+                    </Badge>
+                  </TabsTrigger>
+                )}
+                {trashedCount > 0 && (
+                  <TabsTrigger value="trashed" className={TAB_TRIGGER}>
+                    Trash
+                    <Badge
+                      variant="secondary"
+                      className="ml-1.5 h-4 rounded-full px-1.5 text-[10px] font-normal"
+                    >
+                      {trashedCount}
+                    </Badge>
+                  </TabsTrigger>
+                )}
+              </TabsList>
+            </div>
 
-          {/* ── Search tab ── */}
-          <TabsContent value="search" className="flex-1 overflow-hidden">
-            <ScrollArea className="h-full">
-              <div className="mx-auto max-w-2xl px-6 py-6">
-                <BoxSearchPanel
-                  boxId={box.id}
-                  guideNoteId={box.guide_note_id}
-                />
-              </div>
-            </ScrollArea>
-          </TabsContent>
-
-          {/* ── Archived tab ── */}
-          {archivedCount > 0 && (
-            <TabsContent value="archived" className="flex-1 overflow-hidden">
-              <ScrollArea className="h-full">
-                <div className="mx-auto max-w-3xl px-6 py-4">
-                  <p className="mb-3 text-xs text-muted-foreground">
-                    Archived content is hidden from active views and excluded from
-                    context bundles by default. Use the lifecycle menu to unarchive.
-                  </p>
-                  {archivedFolders.length > 0 && (
-                    <div className="mb-4">
-                      <p className="mb-2 text-xs font-medium uppercase tracking-wider text-muted-foreground/60">
-                        Folders ({archivedFolders.length})
-                      </p>
-                      <div className="flex flex-col gap-1">
-                        {archivedFolders.map((folder) => (
-                          <div
-                            key={folder.id}
-                            className="flex items-center justify-between gap-2 rounded-md border border-border px-3 py-2"
-                          >
-                            <div className="flex min-w-0 items-center gap-2">
-                              <Folder
-                                className="h-3.5 w-3.5 shrink-0 text-muted-foreground/60"
-                                aria-hidden="true"
+            {/* ── Notes tab ── */}
+            <TabsContent value="notes" className="min-h-0 flex-1 overflow-hidden">
+              <div className="h-full px-4 pb-4 pt-4 sm:px-6 sm:pb-6 lg:px-8">
+                <div className={cn("h-full overflow-hidden rounded-3xl bg-card", SOFT_SHADOW)}>
+                  <ScrollArea className="h-full">
+                    <Suspense fallback={<NoteListSkeleton />}>
+                      {sortedNotes.length === 0 ? (
+                        <EmptyState
+                          icon={<FileText className="h-5 w-5" />}
+                          title="No notes yet"
+                          description="Create your first note, choose a starter template, or use the Import button above to bring in existing Markdown content."
+                          action={
+                            <CreateNoteDialog
+                              boxId={box.id}
+                              folders={folders}
+                              savedTemplates={savedTemplateRefs}
+                            />
+                          }
+                          className="h-full"
+                        />
+                      ) : (
+                        <div className="mx-auto flex max-w-3xl flex-col gap-2 px-6 py-5">
+                          {sortedNotes.map((note) => (
+                            <Link
+                              key={note.id}
+                              href={`/app/notes/${note.id}`}
+                              className="block rounded-2xl transition-colors hover:bg-accent/40"
+                            >
+                              <NoteStub
+                                title={note.title}
+                                kind={note.kind as "note" | "guide" | "bundle"}
+                                excerpt={note.summary ?? undefined}
+                                updatedAt={formatRelativeDate(note.updated_at, nowIso)}
+                                tags={note.tags.slice(0, 3)}
                               />
-                              <span className="truncate text-sm text-foreground/80">
-                                {folder.name}
-                              </span>
-                            </div>
-                            <FolderLifecycleMenu
-                              folderId={folder.id}
-                              folderStatus="archived"
-                            />
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                  {archivedNotes.length > 0 && (
-                    <div>
-                      <p className="mb-2 text-xs font-medium uppercase tracking-wider text-muted-foreground/60">
-                        Notes ({archivedNotes.length})
-                      </p>
-                      <div className="flex flex-col gap-2">
-                        {archivedNotes.map((note) => (
-                          <Link key={note.id} href={`/app/notes/${note.id}`} className="block">
-                            <NoteStub
-                              title={note.title}
-                              kind={note.kind as "note" | "guide" | "bundle"}
-                              excerpt={note.summary ?? undefined}
-                              updatedAt={formatRelativeDate(note.updated_at, nowIso)}
-                              tags={note.tags.slice(0, 3)}
-                            />
-                          </Link>
-                        ))}
-                      </div>
-                    </div>
-                  )}
+                            </Link>
+                          ))}
+                        </div>
+                      )}
+                    </Suspense>
+                  </ScrollArea>
                 </div>
-              </ScrollArea>
+              </div>
             </TabsContent>
-          )}
 
-          {/* ── Trashed tab ── */}
-          {trashedCount > 0 && (
-            <TabsContent value="trashed" className="flex-1 overflow-hidden">
-              <ScrollArea className="h-full">
-                <div className="mx-auto max-w-3xl px-6 py-4">
-                  <p className="mb-3 text-xs text-muted-foreground">
-                    Trashed content is excluded from retrieval and context bundles.
-                    Restore to make it active again.
-                  </p>
-                  {trashedFolders.length > 0 && (
-                    <div className="mb-4">
-                      <p className="mb-2 text-xs font-medium uppercase tracking-wider text-muted-foreground/60">
-                        Folders ({trashedFolders.length})
-                      </p>
-                      <div className="flex flex-col gap-1">
-                        {trashedFolders.map((folder) => (
-                          <div
-                            key={folder.id}
-                            className="flex items-center justify-between gap-2 rounded-md border border-border px-3 py-2"
-                          >
-                            <div className="flex min-w-0 items-center gap-2">
-                              <Folder
-                                className="h-3.5 w-3.5 shrink-0 text-muted-foreground/60"
-                                aria-hidden="true"
-                              />
-                              <span className="truncate text-sm text-foreground/80">
-                                {folder.name}
-                              </span>
-                            </div>
-                            <FolderLifecycleMenu
-                              folderId={folder.id}
-                              folderStatus="trashed"
-                            />
-                          </div>
-                        ))}
+            {/* ── Overview tab ── */}
+            <TabsContent value="overview" className="min-h-0 flex-1 overflow-hidden">
+              <div className="h-full px-4 pb-4 pt-4 sm:px-6 sm:pb-6 lg:px-8">
+                <div className={cn("h-full overflow-hidden rounded-3xl bg-card", SOFT_SHADOW)}>
+                  <ScrollArea className="h-full">
+                    <Suspense fallback={<TabSkeleton />}>
+                      <div className="mx-auto max-w-3xl px-6 py-6">
+                        <OverviewTabContent box={box} branchId={ctx.activeBranchId} />
                       </div>
-                    </div>
-                  )}
-                  {trashedNotes.length > 0 && (
-                    <div>
-                      <p className="mb-2 text-xs font-medium uppercase tracking-wider text-muted-foreground/60">
-                        Notes ({trashedNotes.length})
-                      </p>
-                      <div className="flex flex-col gap-2">
-                        {trashedNotes.map((note) => (
-                          <Link key={note.id} href={`/app/notes/${note.id}`} className="block">
-                            <NoteStub
-                              title={note.title}
-                              kind={note.kind as "note" | "guide" | "bundle"}
-                              excerpt={note.summary ?? undefined}
-                              updatedAt={formatRelativeDate(note.updated_at, nowIso)}
-                              tags={note.tags.slice(0, 3)}
-                            />
-                          </Link>
-                        ))}
-                      </div>
-                    </div>
-                  )}
+                    </Suspense>
+                  </ScrollArea>
                 </div>
-              </ScrollArea>
+              </div>
             </TabsContent>
-          )}
-        </Tabs>
-      </div>
 
-      {/* Right panel */}
-      <aside
-        aria-label="Box context panel"
-        className="hidden lg:flex lg:h-full lg:w-72 lg:shrink-0 lg:flex-col lg:border-l lg:border-border lg:bg-background"
-      >
-        <BoxContextPanel
-          box={box}
-          guideNote={guideNote}
-          notes={notes}
-          folders={folders}
-          folderCount={folders.length}
-          noteCount={notes.length}
-        />
-      </aside>
+            {/* ── Tree tab ── */}
+            <TabsContent value="tree" className="min-h-0 flex-1 overflow-hidden">
+              <div className="h-full px-4 pb-4 pt-4 sm:px-6 sm:pb-6 lg:px-8">
+                <div className={cn("h-full overflow-hidden rounded-3xl bg-card", SOFT_SHADOW)}>
+                  <ScrollArea className="h-full">
+                    <div className="mx-auto max-w-3xl px-6 py-5">
+                      <BoxContentsTree folders={folders} notes={notes} />
+                    </div>
+                  </ScrollArea>
+                </div>
+              </div>
+            </TabsContent>
+
+            {/* ── Guide tab ── */}
+            <TabsContent value="guide" className="min-h-0 flex-1 overflow-hidden">
+              <div className="h-full px-4 pb-4 pt-4 sm:px-6 sm:pb-6 lg:px-8">
+                <div className={cn("h-full overflow-hidden rounded-3xl bg-card", SOFT_SHADOW)}>
+                  <ScrollArea className="h-full">
+                    <Suspense fallback={<TabSkeleton />}>
+                      <div className="mx-auto max-w-3xl px-6 py-6">
+                        <GuideTabContent
+                          box={box}
+                          guideNote={guideNote}
+                          notes={notes}
+                          folders={folders}
+                          branchId={ctx.activeBranchId}
+                        />
+                      </div>
+                    </Suspense>
+                  </ScrollArea>
+                </div>
+              </div>
+            </TabsContent>
+
+            {/* ── Graph tab ── */}
+            <TabsContent value="graph" className="min-h-0 flex-1 overflow-hidden">
+              <div className="h-full px-4 pb-4 pt-4 sm:px-6 sm:pb-6 lg:px-8">
+                <div className={cn("h-full overflow-hidden rounded-3xl bg-card", SOFT_SHADOW)}>
+                  <ScrollArea className="h-full">
+                    <Suspense fallback={<TabSkeleton />}>
+                      <div className="mx-auto max-w-3xl px-6 py-6">
+                        <GraphTabContent box={box} branchId={ctx.activeBranchId} />
+                      </div>
+                    </Suspense>
+                  </ScrollArea>
+                </div>
+              </div>
+            </TabsContent>
+
+            {/* ── Search tab ── */}
+            <TabsContent value="search" className="min-h-0 flex-1 overflow-hidden">
+              <div className="h-full px-4 pb-4 pt-4 sm:px-6 sm:pb-6 lg:px-8">
+                <div className={cn("h-full overflow-hidden rounded-3xl bg-card", SOFT_SHADOW)}>
+                  <ScrollArea className="h-full">
+                    <div className="mx-auto max-w-2xl px-6 py-6">
+                      <BoxSearchPanel boxId={box.id} guideNoteId={box.guide_note_id} />
+                    </div>
+                  </ScrollArea>
+                </div>
+              </div>
+            </TabsContent>
+
+            {/* ── Archived tab ── */}
+            {archivedCount > 0 && (
+              <TabsContent value="archived" className="min-h-0 flex-1 overflow-hidden">
+                <div className="h-full px-4 pb-4 pt-4 sm:px-6 sm:pb-6 lg:px-8">
+                  <div className={cn("h-full overflow-hidden rounded-3xl bg-card", SOFT_SHADOW)}>
+                    <ScrollArea className="h-full">
+                      <div className="mx-auto max-w-3xl px-6 py-5">
+                        <p className="mb-3 text-xs text-muted-foreground">
+                          Archived content is hidden from active views and excluded from
+                          context bundles by default. Use the lifecycle menu to unarchive.
+                        </p>
+                        {archivedFolders.length > 0 && (
+                          <div className="mb-4">
+                            <p className="mb-2 text-[11px] font-medium uppercase tracking-[0.15em] text-muted-foreground/70">
+                              Folders ({archivedFolders.length})
+                            </p>
+                            <div className="flex flex-col gap-1.5">
+                              {archivedFolders.map((folder) => (
+                                <div
+                                  key={folder.id}
+                                  className="flex items-center justify-between gap-2 rounded-2xl border border-border/50 px-3 py-2"
+                                >
+                                  <div className="flex min-w-0 items-center gap-2">
+                                    <Folder
+                                      className="h-3.5 w-3.5 shrink-0 text-muted-foreground/60"
+                                      aria-hidden="true"
+                                    />
+                                    <span className="truncate text-sm text-foreground/80">
+                                      {folder.name}
+                                    </span>
+                                  </div>
+                                  <FolderLifecycleMenu
+                                    folderId={folder.id}
+                                    folderStatus="archived"
+                                  />
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                        {archivedNotes.length > 0 && (
+                          <div>
+                            <p className="mb-2 text-[11px] font-medium uppercase tracking-[0.15em] text-muted-foreground/70">
+                              Notes ({archivedNotes.length})
+                            </p>
+                            <div className="flex flex-col gap-2">
+                              {archivedNotes.map((note) => (
+                                <Link key={note.id} href={`/app/notes/${note.id}`} className="block">
+                                  <NoteStub
+                                    title={note.title}
+                                    kind={note.kind as "note" | "guide" | "bundle"}
+                                    excerpt={note.summary ?? undefined}
+                                    updatedAt={formatRelativeDate(note.updated_at, nowIso)}
+                                    tags={note.tags.slice(0, 3)}
+                                  />
+                                </Link>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </ScrollArea>
+                  </div>
+                </div>
+              </TabsContent>
+            )}
+
+            {/* ── Trashed tab ── */}
+            {trashedCount > 0 && (
+              <TabsContent value="trashed" className="min-h-0 flex-1 overflow-hidden">
+                <div className="h-full px-4 pb-4 pt-4 sm:px-6 sm:pb-6 lg:px-8">
+                  <div className={cn("h-full overflow-hidden rounded-3xl bg-card", SOFT_SHADOW)}>
+                    <ScrollArea className="h-full">
+                      <div className="mx-auto max-w-3xl px-6 py-5">
+                        <p className="mb-3 text-xs text-muted-foreground">
+                          Trashed content is excluded from retrieval and context bundles.
+                          Restore to make it active again.
+                        </p>
+                        {trashedFolders.length > 0 && (
+                          <div className="mb-4">
+                            <p className="mb-2 text-[11px] font-medium uppercase tracking-[0.15em] text-muted-foreground/70">
+                              Folders ({trashedFolders.length})
+                            </p>
+                            <div className="flex flex-col gap-1.5">
+                              {trashedFolders.map((folder) => (
+                                <div
+                                  key={folder.id}
+                                  className="flex items-center justify-between gap-2 rounded-2xl border border-border/50 px-3 py-2"
+                                >
+                                  <div className="flex min-w-0 items-center gap-2">
+                                    <Folder
+                                      className="h-3.5 w-3.5 shrink-0 text-muted-foreground/60"
+                                      aria-hidden="true"
+                                    />
+                                    <span className="truncate text-sm text-foreground/80">
+                                      {folder.name}
+                                    </span>
+                                  </div>
+                                  <FolderLifecycleMenu
+                                    folderId={folder.id}
+                                    folderStatus="trashed"
+                                  />
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                        {trashedNotes.length > 0 && (
+                          <div>
+                            <p className="mb-2 text-[11px] font-medium uppercase tracking-[0.15em] text-muted-foreground/70">
+                              Notes ({trashedNotes.length})
+                            </p>
+                            <div className="flex flex-col gap-2">
+                              {trashedNotes.map((note) => (
+                                <Link key={note.id} href={`/app/notes/${note.id}`} className="block">
+                                  <NoteStub
+                                    title={note.title}
+                                    kind={note.kind as "note" | "guide" | "bundle"}
+                                    excerpt={note.summary ?? undefined}
+                                    updatedAt={formatRelativeDate(note.updated_at, nowIso)}
+                                    tags={note.tags.slice(0, 3)}
+                                  />
+                                </Link>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </ScrollArea>
+                  </div>
+                </div>
+              </TabsContent>
+            )}
+          </Tabs>
+        </div>
+
+        {/* Right panel — box context */}
+        <aside
+          aria-label="Box context panel"
+          className="hidden lg:flex lg:h-full lg:w-[22rem] lg:shrink-0 lg:flex-col lg:overflow-hidden lg:pr-4"
+        >
+          <BoxContextPanel
+            box={box}
+            guideNote={guideNote}
+            notes={notes}
+            folders={folders}
+            folderCount={folders.length}
+            noteCount={notes.length}
+          />
+        </aside>
       </div>
       <BoxChatPanel
         workspaceId={ctx.workspace.id}

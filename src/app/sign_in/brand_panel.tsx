@@ -6,10 +6,10 @@ import * as m from "motion/react-m";
 import { staggerContainer, fadeRiseHero, fadeRise } from "@/lib/motion";
 
 const FEATURES = [
-  "Unlimited structured boxes",
-  "AI-ready context bundles",
-  "Full version history",
-  "Plain markdown — always portable",
+  "Agents propose changes — you approve",
+  "Per-box, least-privilege access",
+  "Every change audited & reversible",
+  "Works with Claude, Cursor & any MCP agent",
 ];
 
 export function BrandPanel() {
@@ -40,10 +40,11 @@ export function BrandPanel() {
         {/* Headline */}
         <m.div variants={fadeRise}>
           <h2 className="text-2xl font-semibold tracking-tight text-white">
-            Your AI knows your notes.
+            Put a human in the loop.
           </h2>
           <p className="mt-2 text-sm text-white/60">
-            Organize knowledge. Package perfect context. Never lose a decision.
+            Your AI agents read the context you allow and propose changes —
+            nothing touches your work until you approve it.
           </p>
         </m.div>
 
@@ -72,8 +73,8 @@ export function BrandPanel() {
       {/* Bottom quote */}
       <blockquote className="relative space-y-2">
         <p className="text-sm italic leading-relaxed text-white/60">
-          &ldquo;Poggle changed how I work with AI. Every conversation
-          starts with the right knowledge, not a blank slate.&rdquo;
+          &ldquo;My agents finally work in my real notes — and I still approve
+          every single change before it lands.&rdquo;
         </p>
         <footer className="text-xs text-white/40">— Early beta user</footer>
       </blockquote>

@@ -19,6 +19,12 @@ interface CreateFolderDialogProps {
   boxId: string;
   /** If provided, the new folder will be created inside this parent. */
   parentFolderId?: string | null;
+  /**
+   * Optional trigger styling override. When set (e.g. by the box header's
+   * ••• overflow menu) it replaces the default bordered "New folder" button
+   * so this can render as a full-width menu row.
+   */
+  triggerClassName?: string;
 }
 
 /**
@@ -27,6 +33,7 @@ interface CreateFolderDialogProps {
 export function CreateFolderDialog({
   boxId,
   parentFolderId,
+  triggerClassName,
 }: CreateFolderDialogProps) {
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
@@ -69,7 +76,11 @@ export function CreateFolderDialog({
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger
         render={
-          <Button variant="outline" size="sm" className="gap-1.5" />
+          triggerClassName ? (
+            <button type="button" className={triggerClassName} />
+          ) : (
+            <Button variant="outline" size="sm" className="gap-1.5 rounded-full" />
+          )
         }
       >
         <FolderPlus className="h-3.5 w-3.5" />

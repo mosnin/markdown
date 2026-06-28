@@ -25,9 +25,22 @@ import {
 interface NoteLifecycleMenuProps {
   noteId: string;
   noteStatus: "draft" | "active" | "archived" | "trashed";
+  /**
+   * Optional trigger styling override. When set (e.g. by the note header's
+   * ••• overflow menu) it replaces the default icon-only button so this can
+   * render as a full-width menu row.
+   */
+  triggerClassName?: string;
+  /** Optional visible label for the trigger (used with triggerClassName). */
+  triggerLabel?: string;
 }
 
-export function NoteLifecycleMenu({ noteId, noteStatus }: NoteLifecycleMenuProps) {
+export function NoteLifecycleMenu({
+  noteId,
+  noteStatus,
+  triggerClassName,
+  triggerLabel,
+}: NoteLifecycleMenuProps) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [confirmTrash, setConfirmTrash] = useState(false);
@@ -55,26 +68,40 @@ export function NoteLifecycleMenu({ noteId, noteStatus }: NoteLifecycleMenuProps
     <div className="relative">
       <button
         onClick={() => { setOpen((o) => !o); setError(null); setConfirmTrash(false); }}
-        className={cn(
-          "flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm transition-fast",
-          "text-muted-foreground hover:text-foreground hover:bg-accent",
-          open && "bg-accent text-foreground"
-        )}
+        className={
+          triggerClassName ??
+          cn(
+            "flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm transition-fast",
+            "text-muted-foreground hover:text-foreground hover:bg-accent",
+            open && "bg-accent text-foreground"
+          )
+        }
         aria-label="Note actions"
         aria-expanded={open}
         aria-haspopup="menu"
       >
-        <MoreHorizontal className="h-4 w-4" />
+        {triggerLabel ? (
+          <>
+            {isArchived ? (
+              <ArchiveRestore className="h-3.5 w-3.5" aria-hidden="true" />
+            ) : (
+              <Archive className="h-3.5 w-3.5" aria-hidden="true" />
+            )}
+            {triggerLabel}
+          </>
+        ) : (
+          <MoreHorizontal className="h-4 w-4" />
+        )}
       </button>
 
       {open && (
         <>
           <div
-            className="fixed inset-0 z-40"
+            className="fixed inset-0 z-[55]"
             onClick={() => { setOpen(false); setConfirmTrash(false); }}
             aria-hidden
           />
-        <div role="menu" aria-label="Note actions" className="absolute right-0 top-full z-50 mt-1 min-w-48 rounded-md border border-border bg-background shadow-md">
+        <div role="menu" aria-label="Note actions" className="absolute right-0 top-full z-[60] mt-1.5 min-w-52 rounded-2xl bg-popover p-1 text-popover-foreground shadow-[0_8px_32px_-4px_rgba(0,0,0,0.18),0_2px_8px_-2px_rgba(0,0,0,0.08)] ring-1 ring-border/60">
           <div className="p-1">
             {!isTrashed && (
               <>
@@ -84,7 +111,7 @@ export function NoteLifecycleMenu({ noteId, noteStatus }: NoteLifecycleMenuProps
                     onClick={() => act(() => unarchiveNoteAction(noteId))}
                     disabled={isPending}
                     className={cn(
-                      "flex w-full items-center gap-2 rounded-sm px-3 py-2 text-sm transition-fast",
+                      "flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm transition-fast",
                       "hover:bg-accent disabled:opacity-50"
                     )}
                   >
@@ -97,7 +124,7 @@ export function NoteLifecycleMenu({ noteId, noteStatus }: NoteLifecycleMenuProps
                     onClick={() => act(() => archiveNoteAction(noteId))}
                     disabled={isPending}
                     className={cn(
-                      "flex w-full items-center gap-2 rounded-sm px-3 py-2 text-sm transition-fast",
+                      "flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm transition-fast",
                       "hover:bg-accent disabled:opacity-50"
                     )}
                   >
@@ -106,7 +133,7 @@ export function NoteLifecycleMenu({ noteId, noteStatus }: NoteLifecycleMenuProps
                   </button>
                 )}
 
-                <div className="my-1 border-t border-border" />
+                <div className="my-1 h-px bg-border/60" />
 
                 {!confirmTrash ? (
                   <button
@@ -114,7 +141,7 @@ export function NoteLifecycleMenu({ noteId, noteStatus }: NoteLifecycleMenuProps
                     onClick={() => setConfirmTrash(true)}
                     disabled={isPending}
                     className={cn(
-                      "flex w-full items-center gap-2 rounded-sm px-3 py-2 text-sm transition-fast",
+                      "flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm transition-fast",
                       "text-destructive hover:bg-destructive/10 disabled:opacity-50"
                     )}
                   >
@@ -163,7 +190,7 @@ export function NoteLifecycleMenu({ noteId, noteStatus }: NoteLifecycleMenuProps
           </div>
 
           {error && (
-            <div className="border-t border-border px-3 py-2">
+            <div className="mt-1 border-t border-border/60 px-3 py-2">
               <p className="text-xs text-destructive">{error}</p>
             </div>
           )}

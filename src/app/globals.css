@@ -292,7 +292,7 @@
 
   h1, h2, h3, .text-display, .text-headline, .text-title {
     letter-spacing: -0.018em;
-    font-family: var(--font-display);
+    font-family: var(--font-hero);
   }
 
   [data-scroll-area] {
@@ -509,6 +509,93 @@
 
 @media (prefers-reduced-motion: reduce) {
   .wrapper > .blur {
+    animation: none !important;
+  }
+}
+
+/* Logo marquee — the MCP compatibility band (src/components/marketing/mcp_compat.tsx).
+   The track holds two identical copies, so translating by -50% scrolls exactly
+   one copy width for a seamless, infinite loop. */
+@keyframes logo-marquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+/* Announcement bar — a sheen that sweeps across the bar
+   (src/components/marketing/announcement_bar.tsx). */
+@keyframes announce-sheen {
+  0% {
+    transform: translateX(-130%) skewX(-12deg);
+  }
+  100% {
+    transform: translateX(130%) skewX(-12deg);
+  }
+}
+
+/* Border glow — the rotating conic frame used by BorderGlow
+   (src/components/border-glow.tsx). The registry ships only the component, so
+   the animated gradient lives here. Animating the conic `from` angle via a
+   registered custom property rotates the gradient in place (no corner gaps). */
+@property --glow-angle {
+  syntax: "<angle>";
+  initial-value: 0deg;
+  inherits: false;
+}
+@keyframes border-glow-spin {
+  to {
+    --glow-angle: 360deg;
+  }
+}
+@keyframes border-glow-linear {
+  to {
+    background-position: 0 -200%;
+  }
+}
+.glow-border {
+  background: conic-gradient(
+    from var(--glow-angle) at 50% 50%,
+    var(--glow-color-1),
+    var(--glow-color-2),
+    var(--glow-color-3),
+    var(--glow-color-4),
+    var(--glow-color-5),
+    var(--glow-color-6),
+    var(--glow-color-7),
+    var(--glow-color-8),
+    var(--glow-color-9),
+    var(--glow-color-10),
+    var(--glow-color-1)
+  );
+  animation: border-glow-spin var(--glow-animation-duration, 5s) linear infinite;
+  animation-direction: var(--glow-direction, normal);
+}
+.glow-border[data-gradient-type="radial"] {
+  background: radial-gradient(
+    circle at 50% 50%,
+    var(--glow-color-1),
+    var(--glow-color-4),
+    var(--glow-color-7),
+    var(--glow-color-10)
+  );
+  animation: none;
+}
+.glow-border[data-gradient-type="linear"] {
+  background: linear-gradient(
+    var(--glow-color-1),
+    var(--glow-color-3),
+    var(--glow-color-5),
+    var(--glow-color-7),
+    var(--glow-color-9)
+  );
+  background-size: 100% 200%;
+  animation: border-glow-linear var(--glow-animation-duration, 5s) linear infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .glow-border {
     animation: none !important;
   }
 }

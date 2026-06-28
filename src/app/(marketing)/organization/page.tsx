@@ -1,7 +1,5 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import {
-  ArrowRight,
   Boxes,
   FolderTree,
   GitBranch,
@@ -16,7 +14,10 @@ import {
   BentoCard,
   IconTile,
 } from "@/components/marketing/sections";
-import { Button } from "@/components/ui/button";
+import { ContextModel } from "@/components/marketing/context_model";
+import { DataConnections } from "@/components/marketing/data_connections";
+import { TiltCard } from "@/components/marketing/tilt_card";
+import { MatrixCta } from "@/components/marketing/matrix_cta";
 
 export const metadata: Metadata = {
   title: "Organization — Poggle",
@@ -107,6 +108,30 @@ export default function OrganizationPage() {
         </div>
       </MarketingSection>
 
+      {/* Context model */}
+      <MarketingSection className="border-b border-border/30">
+        <SectionHeader
+          eyebrow="The shape of your context"
+          title="Workspace, boxes, folders, notes."
+          lede="A structure agents can navigate and teams can maintain — with one guide note per box that agents read first."
+        />
+        <div className="mt-12">
+          <ContextModel />
+        </div>
+      </MarketingSection>
+
+      {/* How knowledge connects */}
+      <MarketingSection className="border-b border-border/30">
+        <SectionHeader
+          eyebrow="Connected knowledge"
+          title="Not a pile of docs — a graph."
+          lede="Entities tie notes together, every change traces back to its decision, and one thread can span boxes. Here's how data connects inside Poggle."
+        />
+        <div className="mt-12">
+          <DataConnections />
+        </div>
+      </MarketingSection>
+
       {/* Capabilities bento */}
       <MarketingSection muted className="border-b border-border/30">
         <SectionHeader
@@ -117,42 +142,24 @@ export default function OrganizationPage() {
           {FEATURES.map((f) => {
             const Icon = f.icon;
             return (
-              <BentoCard key={f.title}>
+              <TiltCard key={f.title}>
                 <IconTile>
                   <Icon className="size-5" aria-hidden="true" />
                 </IconTile>
                 <h3 className="mt-5 font-hero text-lg font-semibold text-foreground">{f.title}</h3>
                 <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{f.body}</p>
-              </BentoCard>
+              </TiltCard>
             );
           })}
         </div>
       </MarketingSection>
 
       {/* CTA */}
-      <MarketingSection>
-        <BentoCard tone="gradient" className="px-6 py-16 text-center sm:px-12 sm:py-20">
-          <div className="pointer-events-none absolute -left-10 -top-10 size-48 rounded-full bg-white/10 blur-3xl" />
-          <div className="relative mx-auto max-w-2xl">
-            <h2 className="font-hero text-3xl font-bold tracking-tight text-white sm:text-4xl">
-              Organize once. Trust it forever.
-            </h2>
-            <p className="mx-auto mt-4 max-w-xl text-base text-white/80 sm:text-lg">
-              Boxes, branches, and a knowledge graph — free to start.
-            </p>
-            <div className="mt-9 flex justify-center">
-              <Button
-                size="lg"
-                className="rounded-full bg-white text-violet-700 hover:bg-white/90"
-                render={<Link href="/sign_in?mode=signup" />}
-              >
-                Get started free
-                <ArrowRight className="ml-2 size-4" data-icon="inline-end" />
-              </Button>
-            </div>
-          </div>
-        </BentoCard>
-      </MarketingSection>
+      <MatrixCta
+        title="Organize once. Trust it forever."
+        subtitle="Boxes, branches, and a knowledge graph — free to start."
+        primary={{ label: "Get started free", href: "/sign_in?mode=signup" }}
+      />
     </div>
   );
 }

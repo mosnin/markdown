@@ -344,6 +344,11 @@ export function HeroDemo() {
           </div>
         </div>
       </div>
+
+      {/* Interactivity cue — this loop is live; invite demo-joiners to drive it */}
+      <p className="mt-3 text-center text-[11px] text-muted-foreground/70">
+        This loop is live — approve or reject it yourself.
+      </p>
     </div>
   );
 }

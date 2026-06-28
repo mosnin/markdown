@@ -1,10 +1,20 @@
+'use client';
+
 import * as React from 'react';
+import * as m from 'motion/react-m';
 import { cn } from '@/lib/utils';
+import {
+  revealVariants,
+  revealTransition,
+  revealViewport,
+} from '@/components/marketing/reveal';
+import { NeumorphEyebrow } from '@/components/ui/neumorph-eyebrow';
 
 // ─── Shared marketing section primitives ─────────────────────────────────────
 // One vocabulary every marketing page composes from, so the whole logged-out
 // site reads as one designed surface: consistent rhythm, rounded "bento"
-// cards, mono eyebrows + Space Grotesk headlines.
+// cards, mono eyebrows + Space Grotesk headlines. Headers and cards reveal as
+// they scroll into view so every page breathes with the same quiet rhythm.
 
 export function MarketingSection({
   children,
@@ -45,17 +55,22 @@ export function SectionHeader({
   className?: string;
 }) {
   return (
-    <div
+    <m.div
       className={cn(
         'flex max-w-2xl flex-col gap-4',
         align === 'center' && 'mx-auto items-center text-center',
         className,
       )}
+      variants={revealVariants}
+      initial="hidden"
+      whileInView="visible"
+      viewport={revealViewport}
+      transition={revealTransition}
     >
       {eyebrow && (
-        <p className="font-mono text-[11px] font-medium uppercase tracking-[0.18em] text-violet-500">
+        <NeumorphEyebrow className="uppercase tracking-[0.12em]">
           {eyebrow}
-        </p>
+        </NeumorphEyebrow>
       )}
       <h2 className="font-hero text-balance text-3xl font-bold leading-[1.1] tracking-tight text-foreground sm:text-4xl">
         {title}
@@ -65,7 +80,7 @@ export function SectionHeader({
           {lede}
         </p>
       )}
-    </div>
+    </m.div>
   );
 }
 
@@ -83,21 +98,27 @@ export function BentoCard({
   tone?: 'plain' | 'gradient';
 }) {
   return (
-    <div
+    <m.div
       className={cn(
-        'group relative overflow-hidden rounded-3xl p-6 transition-all duration-300 sm:p-8',
+        'group relative overflow-hidden rounded-3xl p-6 transition-colors duration-300 sm:p-8',
         tone === 'gradient'
           ? 'bg-gradient-to-br from-violet-600 to-violet-500 text-white shadow-xl shadow-violet-600/20'
-          : 'border border-border/60 bg-card/50 backdrop-blur-sm hover:-translate-y-0.5 hover:border-border hover:bg-card/80 hover:shadow-lg hover:shadow-black/5',
+          : 'border border-border/60 bg-card/50 backdrop-blur-sm hover:border-border hover:bg-card/80 hover:shadow-lg hover:shadow-black/5',
         className,
       )}
+      variants={revealVariants}
+      initial="hidden"
+      whileInView="visible"
+      viewport={revealViewport}
+      transition={revealTransition}
+      whileHover={tone === 'plain' ? { y: -2 } : undefined}
     >
       {/* Subtle corner sheen on plain cards */}
       {tone === 'plain' && (
         <div className="pointer-events-none absolute -right-16 -top-16 size-40 rounded-full bg-violet-500/[0.07] opacity-0 blur-2xl transition-opacity duration-500 group-hover:opacity-100" />
       )}
       <div className="relative">{children}</div>
-    </div>
+    </m.div>
   );
 }
 

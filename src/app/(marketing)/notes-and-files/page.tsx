@@ -1,7 +1,5 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import {
-  ArrowRight,
   Boxes,
   Download,
   FileText,
@@ -18,7 +16,8 @@ import {
   BentoCard,
   IconTile,
 } from "@/components/marketing/sections";
-import { Button } from "@/components/ui/button";
+import { CollabSection } from "@/components/marketing/collab_section";
+import { MatrixCta } from "@/components/marketing/matrix_cta";
 
 export const metadata: Metadata = {
   title: "Notes & files — Poggle",
@@ -134,30 +133,18 @@ export default function NotesAndFilesPage() {
         </div>
       </MarketingSection>
 
+      {/* Collaboration */}
+      <CollabSection
+        title="Edit together, live."
+        lede="Live presence and cursors on every note — co-edit with your team while agents propose changes you approve."
+      />
+
       {/* CTA */}
-      <MarketingSection>
-        <BentoCard tone="gradient" className="px-6 py-16 text-center sm:px-12 sm:py-20">
-          <div className="pointer-events-none absolute -left-10 -top-10 size-48 rounded-full bg-white/10 blur-3xl" />
-          <div className="relative mx-auto max-w-2xl">
-            <h2 className="font-hero text-3xl font-bold tracking-tight text-white sm:text-4xl">
-              Build the knowledge base your agents deserve.
-            </h2>
-            <p className="mx-auto mt-4 max-w-xl text-base text-white/80 sm:text-lg">
-              Free to start, plain markdown forever, yours to export anytime.
-            </p>
-            <div className="mt-9 flex justify-center">
-              <Button
-                size="lg"
-                className="rounded-full bg-white text-violet-700 hover:bg-white/90"
-                render={<Link href="/sign_in?mode=signup" />}
-              >
-                Get started free
-                <ArrowRight className="ml-2 size-4" data-icon="inline-end" />
-              </Button>
-            </div>
-          </div>
-        </BentoCard>
-      </MarketingSection>
+      <MatrixCta
+        title="Build the knowledge base your agents deserve."
+        subtitle="Free to start, plain markdown forever, yours to export anytime."
+        primary={{ label: "Get started free", href: "/sign_in?mode=signup" }}
+      />
     </div>
   );
 }

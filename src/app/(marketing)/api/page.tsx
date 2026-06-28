@@ -1,7 +1,5 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import {
-  ArrowRight,
   BookText,
   Code2,
   Gauge,
@@ -14,11 +12,12 @@ import { PageHeroSection } from "@/components/marketing/hero";
 import {
   MarketingSection,
   SectionHeader,
-  BentoCard,
   IconTile,
 } from "@/components/marketing/sections";
 import { FeatureTabs, type FeatureTab } from "@/components/marketing/feature_tabs";
-import { Button } from "@/components/ui/button";
+import { ConnectionTopology } from "@/components/marketing/connection_topology";
+import { TiltCard } from "@/components/marketing/tilt_card";
+import { MatrixCta } from "@/components/marketing/matrix_cta";
 
 export const metadata: Metadata = {
   title: "API — Poggle",
@@ -114,6 +113,18 @@ export default function ApiPage() {
         <FeatureTabs tabs={TABS} />
       </MarketingSection>
 
+      {/* Topology */}
+      <MarketingSection className="border-b border-border/30">
+        <SectionHeader
+          eyebrow="Topology"
+          title="Many agents. One scoped door."
+          lede="Every client connects through a single OAuth-scoped MCP endpoint that grants read and propose on only the boxes you choose — never write, never delete."
+        />
+        <div className="mt-12">
+          <ConnectionTopology />
+        </div>
+      </MarketingSection>
+
       {/* Capabilities */}
       <MarketingSection muted className="border-b border-border/30">
         <SectionHeader eyebrow="What's in the box" title="A surface you can trust to stay put." />
@@ -121,42 +132,24 @@ export default function ApiPage() {
           {FEATURES.map((f) => {
             const Icon = f.icon;
             return (
-              <BentoCard key={f.title}>
+              <TiltCard key={f.title}>
                 <IconTile>
                   <Icon className="size-5" aria-hidden="true" />
                 </IconTile>
                 <h3 className="mt-5 font-hero text-lg font-semibold text-foreground">{f.title}</h3>
                 <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{f.body}</p>
-              </BentoCard>
+              </TiltCard>
             );
           })}
         </div>
       </MarketingSection>
 
       {/* CTA */}
-      <MarketingSection>
-        <BentoCard tone="gradient" className="px-6 py-16 text-center sm:px-12 sm:py-20">
-          <div className="pointer-events-none absolute -right-10 -top-10 size-48 rounded-full bg-white/10 blur-3xl" />
-          <div className="relative mx-auto max-w-2xl">
-            <h2 className="font-hero text-3xl font-bold tracking-tight text-white sm:text-4xl">
-              Start building in minutes.
-            </h2>
-            <p className="mx-auto mt-4 max-w-xl text-base text-white/80 sm:text-lg">
-              Create a workspace, mint a scoped token, and make your first call — free.
-            </p>
-            <div className="mt-9 flex justify-center">
-              <Button
-                size="lg"
-                className="rounded-full bg-white text-violet-700 hover:bg-white/90"
-                render={<Link href="/sign_in?mode=signup" />}
-              >
-                Get started free
-                <ArrowRight className="ml-2 size-4" data-icon="inline-end" />
-              </Button>
-            </div>
-          </div>
-        </BentoCard>
-      </MarketingSection>
+      <MatrixCta
+        title="Start building in minutes."
+        subtitle="Create a workspace, mint a scoped token, and make your first call — free."
+        primary={{ label: "Get started free", href: "/sign_in?mode=signup" }}
+      />
     </div>
   );
 }

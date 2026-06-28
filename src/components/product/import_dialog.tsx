@@ -399,10 +399,17 @@ export function ImportTriggerButton({
   boxId,
   boxName,
   folders,
+  triggerClassName,
 }: {
   boxId: string;
   boxName: string;
   folders: Array<{ id: string; name: string; path_cache: string }>;
+  /**
+   * Optional trigger styling override. When set (e.g. by the box header's
+   * ••• overflow menu) it replaces the default bordered toolbar button so this
+   * can render as a full-width menu row.
+   */
+  triggerClassName?: string;
 }) {
   const [open, setOpen] = useState(false);
 
@@ -410,10 +417,13 @@ export function ImportTriggerButton({
     <>
       <button
         onClick={() => setOpen(true)}
-        className={cn(
-          "flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-xs",
-          "text-muted-foreground hover:text-foreground hover:bg-muted/40 transition-colors"
-        )}
+        className={
+          triggerClassName ??
+          cn(
+            "flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-xs",
+            "text-muted-foreground hover:text-foreground hover:bg-muted/40 transition-colors"
+          )
+        }
       >
         <Upload className="h-3.5 w-3.5" />
         Import

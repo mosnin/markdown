@@ -54,13 +54,14 @@ export function PogAgentIntro() {
 
       {/* Heading */}
       <h2 className="text-xl font-semibold text-foreground">
-        Your AI knows your notes.
+        Put your AI to work.
       </h2>
 
       {/* Subtext */}
       <p className="mx-auto mt-2 max-w-sm text-sm text-muted-foreground">
-        Ask it anything. Tell it to research, write, or organize. Every change
-        it makes is reversible — it works on a safe copy first.
+        Ask it to research, write, or organize. Every change comes back as a
+        proposal you approve — it works on a safe copy, so nothing&apos;s
+        permanent until you say so.
       </p>
 
       {/* Example prompt cards */}

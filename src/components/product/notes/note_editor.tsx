@@ -278,7 +278,7 @@ export function NoteEditor({ note, initialMode = "document", currentUser, worksp
   return (
     <div className="flex h-full flex-col overflow-hidden">
       {/* ── Title ─────────────────────────────────────────────────────────── */}
-      <div className="px-8 pb-3 pt-6">
+      <div className="px-8 pb-3 pt-7">
         <input
           type="text"
           value={title}
@@ -286,10 +286,10 @@ export function NoteEditor({ note, initialMode = "document", currentUser, worksp
           placeholder="Untitled note"
           aria-label="Note title"
           className={cn(
-            "w-full bg-transparent text-3xl font-bold tracking-tight text-foreground",
+            "w-full bg-transparent text-2xl font-semibold tracking-tight text-foreground sm:text-3xl",
             "border-b-2 border-transparent pb-1",
             "transition-[border-color] duration-150",
-            "focus:border-border focus:outline-none",
+            "focus:border-border/60 focus:outline-none",
             "placeholder:text-muted-foreground/40"
           )}
         />
@@ -320,33 +320,35 @@ export function NoteEditor({ note, initialMode = "document", currentUser, worksp
       </div>
 
       {/* ── Toolbar: mode toggle + save state ─────────────────────────────── */}
-      <div className="flex items-center justify-between border-b border-border px-8 py-1.5">
-        {/* Mode toggle */}
-        <div
-          className="flex items-center gap-1"
-          role="tablist"
-          aria-label="Note view mode"
-        >
-          <ModeButton
-            mode="document"
-            current={mode}
-            icon={<Eye className="h-3.5 w-3.5" />}
-            label="Document"
-            onClick={() => setMode("document")}
-          />
-          <ModeButton
-            mode="markdown"
-            current={mode}
-            icon={<Code2 className="h-3.5 w-3.5" />}
-            label="Markdown"
-            onClick={() => setMode("markdown")}
-          />
+      <div className="flex items-center justify-between border-b border-border/50 px-8 py-2">
+        {/* Mode toggle — soft segmented control */}
+        <div className="flex items-center gap-2">
+          <div
+            className="flex items-center gap-1 rounded-full bg-muted/60 p-1"
+            role="tablist"
+            aria-label="Note view mode"
+          >
+            <ModeButton
+              mode="document"
+              current={mode}
+              icon={<Eye className="h-3.5 w-3.5" />}
+              label="Document"
+              onClick={() => setMode("document")}
+            />
+            <ModeButton
+              mode="markdown"
+              current={mode}
+              icon={<Code2 className="h-3.5 w-3.5" />}
+              label="Markdown"
+              onClick={() => setMode("markdown")}
+            />
+          </div>
           <button
             type="button"
             aria-pressed={tocOpen}
             onClick={() => setTocOpen((v) => !v)}
             className={cn(
-              "flex h-8 items-center gap-1.5 rounded-md px-2.5 text-xs transition-fast",
+              "flex h-8 items-center gap-1.5 rounded-full px-3 text-xs transition-fast",
               tocOpen
                 ? "bg-accent font-medium text-foreground"
                 : "text-muted-foreground hover:bg-accent/60 hover:text-foreground"
@@ -365,10 +367,10 @@ export function NoteEditor({ note, initialMode = "document", currentUser, worksp
             title="Outline (Table of Contents)"
             aria-pressed={tocOpen}
             className={cn(
-              "inline-flex items-center gap-1 rounded-md border border-border bg-background px-2 py-1 text-xs transition-colors",
+              "inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs transition-fast",
               tocOpen
-                ? "border-border bg-accent text-foreground"
-                : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                ? "bg-accent text-foreground"
+                : "text-muted-foreground hover:bg-accent/60 hover:text-foreground"
             )}
           >
             <List className="h-3.5 w-3.5" aria-hidden="true" />
@@ -378,7 +380,7 @@ export function NoteEditor({ note, initialMode = "document", currentUser, worksp
             type="button"
             onClick={() => setHistoryOpen(true)}
             title="Version history"
-            className="inline-flex items-center gap-1 rounded-md border border-border bg-background px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs text-muted-foreground transition-fast hover:bg-accent/60 hover:text-foreground"
           >
             <History className="h-3.5 w-3.5" aria-hidden="true" />
             History
@@ -589,10 +591,10 @@ function ModeButton({
       aria-selected={isActive}
       onClick={onClick}
       className={cn(
-        "flex h-8 items-center gap-1.5 rounded-md px-2.5 text-xs transition-fast",
+        "flex h-7 items-center gap-1.5 rounded-full px-3 text-xs transition-fast",
         isActive
-          ? "bg-accent font-medium text-foreground"
-          : "text-muted-foreground hover:bg-accent/60 hover:text-foreground"
+          ? "bg-card font-medium text-foreground shadow-[0_1px_4px_-1px_rgba(0,0,0,0.12),0_1px_2px_-1px_rgba(0,0,0,0.06)]"
+          : "text-muted-foreground hover:text-foreground"
       )}
     >
       {icon}

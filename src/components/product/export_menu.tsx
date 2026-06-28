@@ -68,9 +68,22 @@ function ExportMenuItem({ icon, label, description, onClick, loading }: ExportMe
 export function NoteExportMenu({
   noteId,
   noteTitle,
+  triggerClassName,
+  inline = false,
 }: {
   noteId: string;
   noteTitle: string;
+  /**
+   * Optional trigger styling override. When set, fully replaces the default
+   * bordered toolbar button (e.g. a full-width menu row inside the ••• menu).
+   */
+  triggerClassName?: string;
+  /**
+   * When true, render the two export options as flat menu rows (no trigger,
+   * no nested popover) so this can be embedded directly inside another menu —
+   * e.g. the note header's ••• overflow. All export logic is identical.
+   */
+  inline?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState<string | null>(null);
@@ -96,6 +109,32 @@ export function NoteExportMenu({
     }
   }
 
+  if (inline) {
+    return (
+      <div className="flex flex-col">
+        <button
+          type="button"
+          onClick={() => handleExport("note")}
+          disabled={loading === "note"}
+          className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-xs text-muted-foreground transition-fast hover:bg-accent hover:text-foreground disabled:opacity-50"
+        >
+          <FileText className="h-3.5 w-3.5" aria-hidden="true" />
+          {loading === "note" ? "Preparing…" : "Export note"}
+        </button>
+        <button
+          type="button"
+          onClick={() => handleExport("bundle")}
+          disabled={loading === "bundle"}
+          className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-xs text-muted-foreground transition-fast hover:bg-accent hover:text-foreground disabled:opacity-50"
+        >
+          <Layers className="h-3.5 w-3.5" aria-hidden="true" />
+          {loading === "bundle" ? "Preparing…" : "Export context bundle"}
+        </button>
+        {error && <p className="px-2.5 py-1 text-[11px] text-destructive">{error}</p>}
+      </div>
+    );
+  }
+
   return (
     <div className="relative">
       <button
@@ -103,10 +142,13 @@ export function NoteExportMenu({
           setOpen((o) => !o);
           setError(null);
         }}
-        className={cn(
-          "flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-xs",
-          "text-muted-foreground hover:text-foreground hover:bg-muted/40 transition-colors"
-        )}
+        className={
+          triggerClassName ??
+          cn(
+            "flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-xs",
+            "text-muted-foreground hover:text-foreground hover:bg-muted/40 transition-colors"
+          )
+        }
         aria-label="Export options"
         aria-haspopup="menu"
         aria-expanded={open}
@@ -163,11 +205,24 @@ export function BoxExportMenu({
   boxName,
   folderId,
   folderName,
+  triggerClassName,
+  inline = false,
 }: {
   boxId: string;
   boxName: string;
   folderId?: string;
   folderName?: string;
+  /**
+   * Optional trigger styling override. When set, fully replaces the default
+   * bordered toolbar button (e.g. a full-width menu row inside the ••• menu).
+   */
+  triggerClassName?: string;
+  /**
+   * When true, render the export options as flat menu rows (no trigger,
+   * no nested popover) so this can be embedded directly inside another menu —
+   * e.g. the box header's ••• overflow. All export logic is identical.
+   */
+  inline?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState<string | null>(null);
@@ -193,6 +248,34 @@ export function BoxExportMenu({
     }
   }
 
+  if (inline) {
+    return (
+      <div className="flex flex-col">
+        <button
+          type="button"
+          onClick={() => handleExport("box")}
+          disabled={loading === "box"}
+          className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-xs text-muted-foreground transition-fast hover:bg-accent hover:text-foreground disabled:opacity-50"
+        >
+          <Package className="h-3.5 w-3.5" aria-hidden="true" />
+          {loading === "box" ? "Preparing…" : "Export box"}
+        </button>
+        {folderId && folderName && (
+          <button
+            type="button"
+            onClick={() => handleExport("folder")}
+            disabled={loading === "folder"}
+            className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-xs text-muted-foreground transition-fast hover:bg-accent hover:text-foreground disabled:opacity-50"
+          >
+            <Folder className="h-3.5 w-3.5" aria-hidden="true" />
+            {loading === "folder" ? "Preparing…" : `Export folder "${folderName}"`}
+          </button>
+        )}
+        {error && <p className="px-2.5 py-1 text-[11px] text-destructive">{error}</p>}
+      </div>
+    );
+  }
+
   return (
     <div className="relative">
       <button
@@ -200,10 +283,13 @@ export function BoxExportMenu({
           setOpen((o) => !o);
           setError(null);
         }}
-        className={cn(
-          "flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-xs",
-          "text-muted-foreground hover:text-foreground hover:bg-muted/40 transition-colors"
-        )}
+        className={
+          triggerClassName ??
+          cn(
+            "flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-xs",
+            "text-muted-foreground hover:text-foreground hover:bg-muted/40 transition-colors"
+          )
+        }
         aria-label="Export options"
         aria-haspopup="menu"
         aria-expanded={open}
