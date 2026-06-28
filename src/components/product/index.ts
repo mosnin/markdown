@@ -30,9 +30,6 @@ export * from "./agents/agents_list_client";
 // ── App shell ────────────────────────────────────────────────────────────────
 export * from "./shell/app_breadcrumbs";
 export * from "./shell/app_header";
-export * from "./shell/app_shell";
-export * from "./shell/app_shell_sidebar";
-export * from "./shell/app_sidebar";
 
 // ── Approval / proposals ─────────────────────────────────────────────────────
 export * from "./approval_queue";
@@ -195,8 +192,6 @@ export * from "./memory_panel";
 export * from "./metadata_panel_stub";
 
 // ── Mobile ───────────────────────────────────────────────────────────────────
-export * from "./shell/mobile_settings_sidebar";
-export * from "./shell/mobile_shell_sidebar";
 export * from "./shell/mobile_sidebar";
 export * from "./shell/mobile_sidebar_footer";
 
@@ -267,9 +262,6 @@ export * from "./run_replay_view";
 
 // ── Save as template ─────────────────────────────────────────────────────────
 export * from "./save_as_template_button";
-
-// ── Settings ─────────────────────────────────────────────────────────────────
-export * from "./settings_sidebar";
 
 // ── Skill ────────────────────────────────────────────────────────────────────
 export * from "./skills/skill_children_panel";
