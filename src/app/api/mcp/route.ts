@@ -19,6 +19,16 @@ import { createAuditEvent } from "@/server/repositories/audit_event_repository";
 import { auditMcp } from "@/server/services/audit_service";
 import { getCanonicalBaseUrl } from "@/lib/canonical_url";
 import { apiWriteLimit } from "@/lib/api/rate_limit";
+import {
+  getProjectBySlug,
+  toProjectSlug,
+} from "@/server/repositories/project_repository";
+import { listSessionsForProject } from "@/server/repositories/agent_session_repository";
+import { createBriefForProject } from "@/server/services/handoff_brief_service";
+import {
+  ingestEvents,
+  openOrResumeSession,
+} from "@/server/services/session_ingest_service";
 
 /**
  * HTTP MCP endpoint.
@@ -329,6 +339,82 @@ const TOOLS: ToolDef[] = [
       properties: {
         status: { type: "string", enum: ["open", "promoted", "discarded"] },
       },
+      additionalProperties: false,
+    },
+  },
+  // ── Agent context relay ───────────────────────────────────────────────────
+  // These are the tools an agent uses to participate in a handoff: read what
+  // earlier sessions did, and log what this one is doing. They are the MCP
+  // equivalent of the hook shim, for runtimes that speak MCP but have no hooks.
+  {
+    name: "get_handoff_brief",
+    description:
+      "Read what earlier agent sessions did on a project before you: the goal, what is blocked or already failed, decisions taken, what was left in flight, and why the last session stopped. " +
+      "Call this FIRST on any project you have not worked on in this session — it is far cheaper than rediscovering the work by reading files. " +
+      "Returns markdown sized to a token budget.",
+    scope: "relay:read",
+    writes: false,
+    inputSchema: {
+      type: "object",
+      properties: {
+        project: {
+          type: "string",
+          description: "Project slug, repo URL, or directory name.",
+        },
+        budget_tokens: {
+          type: "number",
+          description: "Token budget for the brief. Default 4000, max 32000.",
+        },
+      },
+      required: ["project"],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "list_agent_sessions",
+    description:
+      "List recent agent sessions on a project — which tool and account ran them, when, and how each one ended (notably whether it stopped on a usage cap with work unfinished).",
+    scope: "relay:read",
+    writes: false,
+    inputSchema: {
+      type: "object",
+      properties: {
+        project: { type: "string" },
+        limit: { type: "number" },
+      },
+      required: ["project"],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "log_agent_event",
+    description:
+      "Append an entry to the shared agent session log so the next agent inherits it. " +
+      "Log decisions you make, approaches that failed, and blockers you hit — those are what a later session cannot recover on its own. " +
+      "Do not log routine file reads; the hooks capture mechanical activity already.",
+    scope: "relay:write",
+    writes: true,
+    inputSchema: {
+      type: "object",
+      properties: {
+        project: { type: "string" },
+        session_external_id: {
+          type: "string",
+          description:
+            "Stable id for this agent run. Reuse the same value for every event in one session.",
+        },
+        event_type: {
+          type: "string",
+          description:
+            "One of: decision, blocker, question, note, checkpoint, error, custom.",
+        },
+        summary: {
+          type: "string",
+          description: "One line. This is what the next agent reads.",
+        },
+        files: { type: "array", items: { type: "string" } },
+      },
+      required: ["project", "session_external_id", "event_type", "summary"],
       additionalProperties: false,
     },
   },
@@ -1176,6 +1262,69 @@ async function dispatchTool(
         }
         throw toolError(-32000, err instanceof Error ? err.message : "Failed to submit proposal");
       }
+    }
+
+    case "get_handoff_brief": {
+      const slug = toProjectSlug(String(args.project ?? ""));
+      if (!slug) throw toolError(-32602, "project is not a usable identifier");
+
+      const project = await getProjectBySlug(admin, ctx.workspaceId, slug);
+      if (!project) {
+        return {
+          found: false,
+          message: `No relay history for '${slug}'. You are the first session on this project — log what you do so the next one is not.`,
+        };
+      }
+
+      const { assembled } = await createBriefForProject(admin, ctx.workspaceId, {
+        project_id: project.id,
+        budget_tokens:
+          typeof args.budget_tokens === "number" ? args.budget_tokens : undefined,
+      });
+
+      return {
+        found: true,
+        project: project.slug,
+        brief: assembled.body,
+        state: assembled.state,
+        token_estimate: assembled.token_estimate,
+        source_sessions: assembled.source_session_ids.length,
+      };
+    }
+
+    case "list_agent_sessions": {
+      const slug = toProjectSlug(String(args.project ?? ""));
+      if (!slug) throw toolError(-32602, "project is not a usable identifier");
+
+      const project = await getProjectBySlug(admin, ctx.workspaceId, slug);
+      if (!project) return { project: null, sessions: [] };
+
+      const sessions = await listSessionsForProject(admin, project.id, {
+        limit: typeof args.limit === "number" ? Math.min(100, args.limit) : 25,
+      });
+      return { project: project.slug, sessions };
+    }
+
+    case "log_agent_event": {
+      const { session } = await openOrResumeSession(admin, ctx.workspaceId, {
+        project: String(args.project ?? ""),
+        external_id: String(args.session_external_id ?? ""),
+        agent_tool: "custom",
+      });
+
+      const result = await ingestEvents(admin, ctx.workspaceId, session.id, [
+        {
+          event_type: String(args.event_type ?? "note"),
+          summary: String(args.summary ?? ""),
+          files: Array.isArray(args.files) ? (args.files as string[]) : undefined,
+        },
+      ]);
+
+      return {
+        session_id: session.id,
+        logged: result.accepted,
+        sequence: result.last_sequence,
+      };
     }
 
     default:

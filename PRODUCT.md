@@ -2,99 +2,204 @@
 
 ## What Poggle Is
 
-Poggle is the **context operating system for AI agents.**
+Poggle is the **shared memory for coding agents.**
 
-Not a note-taking app. Not a knowledge base for humans to read.
+Agents log what they are doing, in real time, as they do it. The next agent —
+different tool, different account, different machine, hours later — picks up
+with everything the last one knew.
 
-Poggle is the persistent, structured, relational context layer that AI agents read from and write back to — with human oversight at every write. Teams use it to give their AI agents a reliable foundation of domain knowledge instead of starting every task from zero.
+Not a note-taking app. Not a knowledge base. Not a place humans curate content
+for agents to read. Poggle is **infrastructure that agents write to
+automatically, through hooks, and read from automatically, at session start.**
 
 ---
 
 ## The Problem We Solve
 
-An AI agent without organized context is a goldfish. It forgets. It hallucinates. It has no understanding of your domain, your decisions, or your team's accumulated knowledge.
+You are running several coding agents against one repo. Claude Code on one
+plan. Codex on another. Maybe Cursor open in a third window, maybe a teammate's
+session on the same branch.
 
-Current "solutions" fail:
-- **Vector DBs** — flat embedding search, no relationships, no curation, no agent write-back
-- **LangChain/LlamaIndex memory** — ephemeral session state, not persistent workspace context
-- **Notion AI** — designed for humans, not agent-optimized, no write-gate, no versioning
-- **RAG pipelines** — expensive to build, brittle in production, no approval workflow
+Three hours in, one of them hits a usage cap.
 
-Poggle solves all of this in one system.
+You switch to the next one. And it knows **nothing**. Not what the goal was.
+Not which approach already failed twice. Not that the migration was written but
+never run. Not that the retry middleware is half-applied in a file it has not
+opened. Not that the last agent already decided, with good reason, not to do
+the obvious thing you are about to watch it do again.
+
+So you spend the first twenty minutes of every fresh session re-explaining a
+problem you already explained, badly, from memory — and the agent still redoes
+work that was already done and re-walks paths that were already ruled out.
+
+**The context died with the session.** Every time.
+
+Existing tools do not solve this:
+
+- **CLAUDE.md / AGENTS.md** — static, hand-maintained, describes the repo but
+  not what is happening in it right now. Nobody updates it mid-task.
+- **The agent's own context window** — dies with the process, and is compacted
+  away long before that.
+- **`--continue` / `--resume`** — same tool, same account, same machine. Useless
+  the moment you switch to a different plan or a different agent.
+- **Session transcripts on disk** — per-tool, unshared, unstructured, and far
+  too large to hand to a fresh agent.
+- **Telling the next agent yourself** — you are the bottleneck, and you forget.
+
+Poggle makes the context outlive the session that produced it.
 
 ---
 
-## The Two Users
+## The Loop
 
-### 1. The AI Engineer / Developer
-Sets up the context layer. Connects agents via MCP or API. Defines Boxes (context domains), configures agent permissions, manages workflows. Comfortable with technical concepts. Wants a reliable, auditable context backend for the agents they deploy.
-
-### 2. The Context Curator / Approver
-Non-technical (or less technical). Responsible for the quality of the context layer. Reviews what agents propose to write. Curates notes, organizes Boxes, approves or rejects agent-generated changes. The human-in-the-loop.
-
-Both are first-class users. The UI must serve both without forcing either to compromise.
+```
+   ┌──────────────┐
+   │  CAPTURE     │  Hooks fire inside the agent's own process.
+   │              │  Prompts, edits, commands, test runs, commits,
+   │              │  decisions, blockers, caps — logged as they happen.
+   └──────┬───────┘
+          ↓
+   ┌──────────────┐
+   │  DISTIL      │  Events roll up into checkpoints: the goal, what is
+   │              │  done, what is in flight, what is blocked, what was
+   │              │  decided, what is next.
+   └──────┬───────┘
+          ↓
+   ┌──────────────┐
+   │  SERVE       │  The next agent's SessionStart hook fetches a
+   │              │  token-budgeted handoff brief and injects it into
+   │              │  context. Before it reads a single file.
+   └──────┬───────┘
+          ↓
+   ┌──────────────┐
+   │  FAN OUT     │  Realtime stream for the dashboard. Webhooks for
+   │              │  everything else — including "an agent just capped".
+   └──────────────┘
+```
 
 ---
 
 ## Core Concepts
 
-### Boxes — Context Domains
-A Box is a bounded, structured knowledge container — not a folder. Each Box represents a domain of context: a product area, a project, a team, a topic. Agents are granted access to Boxes, not to individual notes. Boxes have:
-- A guide note (what this domain is and how an agent should use it)
-- Agent instructions (system-level context for connected agents)
-- Linked objects (skills, agents, files)
-- Access controls per agent
+### Projects
+The unit context relays around — nearly always a repository. Sessions from a
+laptop, a CI runner, and a teammate's machine all land on one project, because
+the slug is derived from the git remote rather than the directory name.
 
-### Notes — Context Nodes
-Notes are not documents for humans to read. They are **context nodes** that agents traverse. Each note has:
-- Rich metadata: summary, tags, typed relationships to other notes, retrieval priority, read hints
-- Typed links to other notes (`depends_on`, `parent_of`, `derived_from`, `extends`, `related`, etc.)
-- Version history with full audit trail
-- Agent read/write telemetry
+### Sessions
+One run of one agent. Carries the two facts that make the relay legible:
+`account_label` (which plan burned the tokens) and `end_reason`.
 
-The relationships between notes form a knowledge graph that agents traverse — not just keyword-match.
+`usage_capped` is a first-class outcome, not an error. It is the strongest
+signal in the system: this work is unfinished and a handoff is imminent.
 
-### Context Bundles
-The crown jewel. When an agent requests context, Poggle assembles a **deterministic, bounded context bundle**: the target note + its typed relationships + ancestor summaries + guide note, deduplicated and capped at hard token limits. This is reliable, auditable retrieval — not a probabilistic RAG guess.
+### Events
+The append-only log. Every event carries a short `summary` — the line the next
+agent actually reads — plus the full structured `payload`, the files it touched,
+and a **salience** score from 0 to 5.
 
-### Pog — The Workspace Operator
-The first-party AI agent that ships with Poggle. Operates against the context layer with three tools: `hybrid_search` (vector + graph traversal), `draft_note` (write to context), `analysis` (reasoning over retrieved context). Flow: plan → human approval → execute. Every action is auditable.
+Salience is the product's central opinion: a decision made an hour ago outranks
+a file read a minute ago. `file_read` is 0. `decision`, `blocker` and
+`usage_limit` are 5. This is what makes a small brief useful instead of merely
+short.
 
-### Skills — Reusable Context Instructions
-Structured capability definitions (YAML, Markdown, Python, JSON) that agents pull from during execution. Think of them as the "prompt library" or "playbook" for your agents.
+### Checkpoints
+Distilled state over a range of events: goal, done, in flight, blocked,
+decisions, next steps, open questions. One checkpoint replaces the two hundred
+events it summarises, which is what makes briefs cheap.
 
-### Agents — Reusable Orchestration Logic
-Persistent agent definitions with model preferences, system prompts, and source content. Can be attached to Boxes, triggered by events, or run as workflow nodes.
+The hook shims force a checkpoint at the two moments context is otherwise lost
+forever: just before the agent compacts its own context, and as the run ends or
+is cut off.
 
-### Workflows — Agentic Pipelines
-DAG-based automation: chain sub-agents, searches, transforms, and conditions. Runs durably via Inngest. The automation layer on top of the context layer.
+### Handoff Briefs
+The output. A deterministic, token-budgeted markdown document assembled from
+prior sessions, spent in priority order:
 
-### Branches — Safe Context Experimentation
-Agents can draft changes to the context layer in an isolated branch. Humans review. Promote to main when approved. No agent can corrupt the canonical context — only propose changes to it.
+1. **Why the last session stopped.** A cap means unfinished, not done.
+2. **What is blocked, and what was already tried and failed.** Re-running a
+   failing approach is the most expensive mistake a fresh agent makes.
+3. **Decisions already taken.** Re-litigating them silently diverges the work.
+4. **What was in flight.** Half-applied edits, a migration written but not run.
+5. **What to do next.**
+6. **The timeline**, as evidence for all of the above.
+7. **Files touched** — last, because an agent can always read the repo, but it
+   cannot recover a decision nobody wrote down.
 
-### Proposals — The Write Gate
-The trust mechanism. External agents (via MCP or API) cannot directly modify context. They submit proposals with suggested content and rationale. Humans approve or reject. Approved proposals create a new version in the immutable version chain.
+No model call. The same log and the same budget produce the same brief, byte for
+byte. A brief you cannot reproduce is a brief you cannot debug, and an agent
+that gets a different story on each reconnect is worse off than one that gets
+none.
+
+### Hooks
+How capture happens without anyone remembering to do it.
+
+- **Claude Code** — `SessionStart`, `UserPromptSubmit`, `PostToolUse`,
+  `PreCompact`, `SessionEnd`. `SessionStart` is the one that matters: it returns
+  the brief as `additionalContext`, so a fresh agent starts already knowing.
+- **Codex CLI** — via its notify hook.
+- **Git** — `post-commit`, so commits land in the log even with no agent running.
+- **Generic HTTP + CLI** — one documented endpoint and a zero-dependency CLI, for
+  Cursor, custom harnesses, and CI.
+
+### Webhooks
+Outbound, HMAC-signed, retried. `session.capped` is the one teams wire to Slack:
+*"Claude Code on plan A just capped mid-task — here is the brief for whoever
+picks it up."*
 
 ---
 
-## The Context OS Stack
+## Design Principles
+
+1. **Never block the agent.** Hooks run inline in the agent's process. Every
+   call is timeout-bounded and every failure is swallowed. A relay outage must
+   be invisible to the person coding; the worst acceptable outcome is a missing
+   log entry.
+
+2. **Never lose the last five minutes.** Events spool to disk before they are
+   sent and flush on the next invocation. The single most important moment to
+   capture — an agent being killed by a usage cap — is exactly the moment its
+   in-flight request dies with it.
+
+3. **Capture is automatic; curation is optional.** If using Poggle requires
+   discipline, it will not be used at the moment it matters, because that moment
+   is always mid-task and under pressure.
+
+4. **The log is append-only.** No UI path rewrites history. The only mutation is
+   redaction, which is separate and audited. If you want to change what the log
+   says, add to it.
+
+5. **Redact twice.** Agent event payloads are the most secret-dense data this
+   product will ever hold — a `PostToolUse` hook can carry a `.env` file or an
+   `export AWS_SECRET=…` line. Scrub on the client so the secret never leaves the
+   machine, scrub again on the server because the client is code we do not
+   control once installed.
+
+6. **Deterministic beats clever.** The brief assembler is pure logic over a
+   priority order. Model-written prose belongs upstream, in checkpoint
+   distillation, where its output is stored and auditable.
+
+---
+
+## The Stack
 
 ```
 ┌─────────────────────────────────────────────────────┐
-│                  HUMAN INTERFACE                     │
-│     Context curation · Approvals · Monitoring        │
+│                    DASHBOARD                         │
+│    Live timeline · Sessions · Briefs · Relay chain   │
 ├─────────────────────────────────────────────────────┤
-│                   ATLAS AI                           │
-│     First-party agent · Plan/Approve/Execute         │
+│              HANDOFF BRIEF ASSEMBLER                 │
+│      Deterministic · Token-budgeted · Prioritised    │
 ├─────────────────────────────────────────────────────┤
-│              CONTEXT LAYER (Boxes + Notes)           │
-│   Structured · Relational · Versioned · Branched     │
+│           CHECKPOINTS  ·  SESSION EVENTS             │
+│         Append-only · Salience-scored · Realtime     │
 ├─────────────────────────────────────────────────────┤
-│              RETRIEVAL ENGINE                        │
-│   Context bundles · Hybrid search · Graph traversal  │
+│                  INGEST + RELAY API                  │
+│      Idempotent · Batched · Spooled · Redacted       │
 ├─────────────────────────────────────────────────────┤
-│            EXTERNAL AGENT INTERFACE                  │
-│         MCP endpoints · API · Proposals              │
+│      HOOKS          MCP          WEBHOOKS            │
+│  Claude Code    any agent    Slack / CI / anything   │
+│  Codex · git                                         │
 └─────────────────────────────────────────────────────┘
 ```
 
@@ -102,28 +207,21 @@ The trust mechanism. External agents (via MCP or API) cannot directly modify con
 
 ## What Poggle Is NOT
 
-- Not a note-taking app for humans
-- Not a general knowledge base (Notion, Confluence)
-- Not a session-level agent memory (Letta, MemGPT)
-- Not a raw vector database (Pinecone, Weaviate)
-- Not an AI assistant that happens to have memory
+- Not a note-taking app, or a knowledge base for humans (Notion, Confluence)
+- Not a static instructions file (CLAUDE.md, AGENTS.md, `.cursorrules`)
+- Not a vector database or a RAG pipeline
+- Not agent memory inside one runtime (Letta, MemGPT, `--resume`)
+- Not an observability or eval product — we optimise for *the next agent reading
+  this*, not for dashboards about token spend
 
-Poggle is **infrastructure** — the context backend that makes AI agents reliable, auditable, and domain-aware.
+Poggle is the layer that makes a fresh agent start where the last one stopped.
 
 ---
 
-## Design Principles for All UI/Code Work
+## Migration status
 
-1. **Agents are the primary consumers.** Every UI decision should serve the human who is curating context FOR agents, not a human writing for other humans.
-
-2. **The control plane comes first.** What agents are doing, what they've read, what they've proposed — this should be visible at a glance.
-
-3. **Boxes are context domains, not folders.** Language and UI treatment should reinforce this. A Box has agents attached to it. A Box has an access model. A Box is infrastructure.
-
-4. **Proposals are the trust layer.** Every agent write goes through a proposal. This is not a bug or a limitation — it is the core trust architecture. The UI should make approvals feel powerful, not tedious.
-
-5. **Context bundles are the product.** The retrieval engine is the crown jewel. Make it visible: show what was retrieved, why, how much context space was used.
-
-6. **Dual audience, one product.** The developer configures; the curator approves. Neither should have to navigate the other's primary surface to do their job.
-
-7. **Infrastructure aesthetics.** The UI should feel like Vercel, Linear, or Railway — confident, precise, information-dense. Not like a consumer note app.
+This document describes the product as of the pivot away from Context Store
+(boxes / notes / proposals / workflows). The relay core — schema, ingest, brief
+assembly, hooks CLI, MCP tools — is built and tested. The previous product's
+surface still exists in the codebase and is being removed; see
+`docs/agent_context_relay_v1.md` for what has landed and what has not.

@@ -430,7 +430,14 @@ describe("content_webhook_service", () => {
     expect(SUPPORTED_EVENT_TYPES).toContain("branch.promoted");
     expect(SUPPORTED_EVENT_TYPES).toContain("branch.discarded");
     expect(SUPPORTED_EVENT_TYPES).toContain("member.joined");
-    expect(SUPPORTED_EVENT_TYPES).toHaveLength(11);
+    // Agent context relay events.
+    expect(SUPPORTED_EVENT_TYPES).toContain("session.started");
+    expect(SUPPORTED_EVENT_TYPES).toContain("session.event");
+    expect(SUPPORTED_EVENT_TYPES).toContain("session.attention");
+    expect(SUPPORTED_EVENT_TYPES).toContain("session.ended");
+    // The one a team wires to Slack: work stopped unfinished on a usage cap.
+    expect(SUPPORTED_EVENT_TYPES).toContain("session.capped");
+    expect(SUPPORTED_EVENT_TYPES).toHaveLength(16);
   });
 
   // ── Send test event ───────────────────────────────────────────────────
