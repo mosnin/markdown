@@ -369,3 +369,148 @@ describe("parseTranscript — segmentation shape", () => {
     expect(totalTokens(segments)).toBe(200);
   });
 });
+
+/**
+ * Regression tests written against the shapes in a real Claude Code transcript
+ * (a 5.7MB, 2,000-line JSONL from an actual multi-hour session), not against
+ * what the format was assumed to look like. Every case here corresponds to
+ * something the parser got wrong on real data.
+ */
+describe("real Claude Code envelope shapes", () => {
+  /** Verbatim shapes, with the conversation content replaced. */
+  const QUEUE_OP = JSON.stringify({
+    type: "queue-operation",
+    operation: "enqueue",
+    timestamp: "2026-09-08T23:14:05.451Z",
+    sessionId: "de3233a3",
+    content: "Ship the migration before Friday",
+  });
+  const LAST_PROMPT = JSON.stringify({
+    type: "last-prompt",
+    lastPrompt: "Ship the migration before Friday",
+    leafUuid: "99e33c07",
+    sessionId: "de3233a3",
+  });
+  const MODE = JSON.stringify({ type: "mode", mode: "normal", sessionId: "x" });
+  const LATCH = JSON.stringify({ type: "atis-latch", atis: "", sessionId: "x" });
+  const ATTACHMENT = JSON.stringify({
+    type: "attachment",
+    attachment: { type: "environment", snapshot: { workingDirectory: "/repo" } },
+  });
+
+  it("never files the operator's own prompt as agent reasoning", () => {
+    // `queue-operation` carries the human's prompt in a bare `content` field
+    // with no role. Reading it as assistant output made the transcript claim
+    // the agent reasoned its way to an instruction it was given — a confident
+    // lie about who decided what, which is the worst thing this can store.
+    const { segments } = parseTranscript(
+      `${QUEUE_OP}\n${LAST_PROMPT}\n`,
+      "claude_code_jsonl"
+    );
+    expect(segments).toHaveLength(0);
+    expect(
+      segments.filter((s) => s.content.includes("Ship the migration"))
+    ).toHaveLength(0);
+  });
+
+  it("drops harness bookkeeping without dropping the messages around it", () => {
+    const transcript = [
+      MODE,
+      LATCH,
+      ATTACHMENT,
+      JSON.stringify({
+        type: "user",
+        timestamp: "2026-09-09T04:05:50.002Z",
+        message: { role: "user", content: "Ship the migration before Friday" },
+      }),
+      QUEUE_OP,
+      JSON.stringify({
+        type: "assistant",
+        timestamp: "2026-09-09T04:06:00.000Z",
+        message: {
+          role: "assistant",
+          content: [{ type: "text", text: "x".repeat(120) }],
+        },
+      }),
+      "",
+    ].join("\n");
+
+    const { segments } = parseTranscript(transcript, "claude_code_jsonl");
+    expect(segments.map((s) => `${s.role}:${s.kind}`)).toEqual([
+      "user:prompt",
+      "assistant:reasoning",
+    ]);
+  });
+
+  it("records a compaction boundary as a top-importance hole", () => {
+    // The single most valuable record in the file for a successor agent: it is
+    // the difference between "I could not find it" and "it is not there".
+    const boundary = JSON.stringify({
+      type: "system",
+      subtype: "compact_boundary",
+      timestamp: "2026-09-09T09:00:00.000Z",
+      content: "Conversation compacted",
+      compactMetadata: {
+        trigger: "auto",
+        preTokens: 791856,
+        postTokens: 15284,
+        cumulativeDroppedTokens: 776572,
+      },
+    });
+
+    const { segments } = parseTranscript(`${boundary}\n`, "claude_code_jsonl");
+    expect(segments).toHaveLength(1);
+
+    const [segment] = segments;
+    expect(segment.kind).toBe("summary");
+    expect(segment.role).toBe("system");
+    // Salience 5: a budgeted brief must drop this last, not first.
+    expect(segment.importance).toBe(5);
+    expect(segment.occurred_at).toBe("2026-09-09T09:00:00.000Z");
+    // The size of the loss is the point — an unquantified "compacted" tells
+    // the reader nothing about whether to go looking for the detail.
+    expect(segment.content).toContain("776,572");
+    expect(segment.content).toContain("NOT recoverable");
+  });
+
+  it("survives a compaction boundary with no metadata", () => {
+    const bare = JSON.stringify({
+      type: "system",
+      subtype: "compact_boundary",
+      content: "Conversation compacted",
+    });
+    const { segments } = parseTranscript(`${bare}\n`, "claude_code_jsonl");
+    expect(segments).toHaveLength(1);
+    expect(segments[0].kind).toBe("summary");
+    expect(segments[0].content).toBe("Conversation compacted");
+  });
+
+  it("ignores a system record that carries no content", () => {
+    const hook = JSON.stringify({
+      type: "system",
+      subtype: "stop_hook_summary",
+      level: "info",
+    });
+    expect(parseTranscript(`${hook}\n`, "claude_code_jsonl").segments).toEqual(
+      []
+    );
+  });
+
+  it("still accepts role-bearing records from harnesses we do not know", () => {
+    // The denylist must not become an allowlist: "any agent, any harness" is a
+    // real claim, so an unfamiliar envelope that names its speaker is kept.
+    const codex = JSON.stringify({
+      type: "message",
+      role: "assistant",
+      content: "y".repeat(120),
+    });
+    const roleless = JSON.stringify({ content: "z".repeat(120) });
+
+    expect(
+      parseTranscript(`${codex}\n`, "claude_code_jsonl").segments[0]?.role
+    ).toBe("assistant");
+    expect(
+      parseTranscript(`${roleless}\n`, "claude_code_jsonl").segments
+    ).toHaveLength(1);
+  });
+});

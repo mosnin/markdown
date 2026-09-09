@@ -396,7 +396,7 @@ function SignUpForm({ onSwitch }: { onSwitch: () => void }) {
           >
             Terms of Service
           </Link>
-          ,{" "}
+          , and{" "}
           <Link
             href="/privacy"
             target="_blank"
@@ -404,24 +404,6 @@ function SignUpForm({ onSwitch }: { onSwitch: () => void }) {
             className="font-medium text-foreground underline underline-offset-2 hover:text-violet-500"
           >
             Privacy Policy
-          </Link>
-          ,{" "}
-          <Link
-            href="/acceptable-use"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="font-medium text-foreground underline underline-offset-2 hover:text-violet-500"
-          >
-            Acceptable Use Policy
-          </Link>
-          , and{" "}
-          <Link
-            href="/cookies"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="font-medium text-foreground underline underline-offset-2 hover:text-violet-500"
-          >
-            Cookie Policy
           </Link>
           .
         </label>

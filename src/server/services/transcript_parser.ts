@@ -437,6 +437,76 @@ function timestampOf(record: Record<string, unknown>): string | null {
  * A trailing partial line — the normal case when shipping a file that is still
  * being appended to — is left unconsumed so the next send picks it up whole.
  */
+/**
+ * Envelope types that are harness bookkeeping, not conversation.
+ *
+ * Real Claude Code transcripts interleave the UI's own records with the
+ * messages. `queue-operation` is the dangerous one: it carries the operator's
+ * prompt text in a bare `content` field with no role, so the generic path read
+ * it as assistant output. The transcript then attributed the human's
+ * instructions to the agent, at high salience, duplicating every prompt. A
+ * brief built from that tells the next agent it *decided* something a person
+ * actually told it to do, which is the one class of error this product cannot
+ * make. None of these carry anything the messages do not already hold.
+ */
+const HARNESS_ENVELOPE_TYPES = new Set([
+  "attachment",
+  "atis-latch",
+  "file-history-snapshot",
+  "last-prompt",
+  "mode",
+  "queue-operation",
+]);
+
+/** Envelope types that genuinely name a speaker rather than a record kind. */
+const ROLE_WORDS = new Set([
+  "user",
+  "human",
+  "assistant",
+  "system",
+  "tool",
+  "message",
+]);
+
+/**
+ * Render a compaction boundary as the thing it actually is: a hole.
+ *
+ * When a harness compacts, everything before the boundary stops being verbatim
+ * and survives only as summary. That is the most valuable single fact in the
+ * file for a successor — the difference between "I could not find it" and "it
+ * is not there any more" — and the record states the exact size of the loss.
+ * Stored as `summary`, so it carries the top importance and is the last thing
+ * a budgeted brief drops.
+ */
+function compactionSummary(record: Record<string, unknown>): string {
+  const label = textOf(record.content).trim() || "Conversation compacted";
+  const meta = asRecord(record.compactMetadata);
+  if (!meta) return label;
+
+  const num = (value: unknown): number | null =>
+    typeof value === "number" && Number.isFinite(value) ? value : null;
+  const trigger = typeof meta.trigger === "string" ? meta.trigger : null;
+  const pre = num(meta.preTokens);
+  const post = num(meta.postTokens);
+  const dropped = num(meta.cumulativeDroppedTokens);
+
+  const parts = [trigger ? `${label} (${trigger}).` : `${label}.`];
+  if (pre !== null && post !== null) {
+    parts.push(
+      `Context went from ~${pre.toLocaleString("en-US")} to ` +
+        `~${post.toLocaleString("en-US")} tokens.`
+    );
+  }
+  if (dropped !== null && dropped > 0) {
+    parts.push(
+      `~${dropped.toLocaleString("en-US")} tokens of detail were dropped and ` +
+        `are NOT recoverable from this transcript.`
+    );
+  }
+  parts.push("Anything earlier survives only as summary.");
+  return parts.join(" ");
+}
+
 function parseJsonl(text: string): ParseResult {
   const segments: ParsedSegment[] = [];
   let messageCount = 0;
@@ -467,9 +537,23 @@ function parseJsonl(text: string): ParseResult {
     if (!record) continue;
 
     const envelopeType = typeof record.type === "string" ? record.type : "";
+
+    // Checked before anything looks for content: several of these carry a bare
+    // `content` string with no role, which is exactly what fooled the reader.
+    if (HARNESS_ENVELOPE_TYPES.has(envelopeType)) continue;
+
     // Claude Code nests the payload under `message`; Codex and others put the
     // role and content at the top level.
     const message = asRecord(record.message) ?? record;
+
+    // A compaction boundary marks context that no longer exists verbatim.
+    if (envelopeType === "system" && record.subtype === "compact_boundary") {
+      messageCount += 1;
+      pushSegment(segments, "system", "summary", compactionSummary(record), {
+        occurredAt: timestampOf(record),
+      });
+      continue;
+    }
 
     // Compaction summaries are the distilled memory the agent chose to keep.
     if (envelopeType === "summary") {
@@ -486,7 +570,21 @@ function parseJsonl(text: string): ParseResult {
     const content = message.content ?? record.content;
     if (content === undefined || content === null) continue;
 
-    const role = normaliseRole(message.role ?? record.role ?? envelopeType);
+    // An unrecognised envelope type is a harness record, not a message.
+    // Defaulting it to `assistant` is how the operator's own words ended up
+    // filed as agent reasoning, so an unresolvable role is skipped instead.
+    // A record with no type at all still falls through to the old behaviour,
+    // which is what keeps the generic "any harness" path working.
+    const rawRole = message.role ?? record.role ?? null;
+    if (
+      rawRole === null &&
+      envelopeType !== "" &&
+      !ROLE_WORDS.has(envelopeType.toLowerCase())
+    ) {
+      continue;
+    }
+
+    const role = normaliseRole(rawRole ?? envelopeType);
     const occurredAt = timestampOf(record) ?? timestampOf(message);
 
     messageCount += 1;

@@ -589,6 +589,54 @@ function summariseCheckIn(checkin) {
  * event rather than throwing. Losing detail is acceptable; breaking somebody's
  * hook chain is not.
  */
+/**
+ * Work out whether a tool call failed, and recover the text that says why.
+ *
+ * Checked against a real Claude Code transcript rather than the documented
+ * shape, because they differ in the case that matters. On success
+ * `tool_response` is an object (`{stdout, stderr, interrupted, ...}`); on
+ * failure it is a bare STRING beginning "Error: " — including for a non-zero
+ * Bash exit ("Error: Exit code 128\nfatal: ..."). Every failure in a 2,000
+ * line session took the string form; none carried `success`, `error` or
+ * `is_error` on an object.
+ *
+ * So the old object-only checks never fired, which meant `looksLikeCap` was
+ * always handed "" and the `usage_limit` event — the one signal this whole
+ * product is built to catch — could not be emitted by the Claude Code path.
+ *
+ * `stderr` is deliberately NOT a failure signal: successful commands routinely
+ * write to it, and treating that as an error would mark most of the log failed.
+ */
+function normaliseToolResponse(response) {
+  if (typeof response === "string") {
+    const text = response.trim();
+    // The runtime's own marker. Matched at the start so a command that merely
+    // prints the word "error" in its output is not counted as having failed.
+    const failed = /^error\b/i.test(text);
+    return { failed, errorText: failed ? text : "" };
+  }
+
+  if (!response || typeof response !== "object") {
+    return { failed: false, errorText: "" };
+  }
+
+  const failed =
+    response.success === false ||
+    response.interrupted === true ||
+    Boolean(response.error) ||
+    Boolean(response.is_error) ||
+    Boolean(response.isError);
+
+  const errorText = String(
+    response.error ||
+      response.message ||
+      (failed ? response.stderr || "" : "") ||
+      ""
+  );
+
+  return { failed, errorText };
+}
+
 function eventsFromClaudeCodeHook(hookName, payload) {
   const events = [];
   const toolName = payload.tool_name || payload.toolName;
@@ -630,17 +678,11 @@ function eventsFromClaudeCodeHook(hookName, payload) {
       break;
 
     case "PostToolUse": {
-      const response = payload.tool_response || payload.toolResponse || {};
-      const failed =
-        response?.success === false ||
-        Boolean(response?.error) ||
-        Boolean(response?.is_error);
+      const response = payload.tool_response ?? payload.toolResponse ?? {};
+      const { failed, errorText } = normaliseToolResponse(response);
 
       // A provider limit surfacing in a tool result is the clearest cap signal
       // available, and it arrives while the process is still alive.
-      const errorText = String(
-        response?.error || response?.stderr || response?.message || "",
-      );
       if (failed && looksLikeCap(errorText)) {
         events.push(
           makeEvent("usage_limit", "Provider reported a usage limit", {
@@ -659,7 +701,7 @@ function eventsFromClaudeCodeHook(hookName, payload) {
             files: filesFromToolInput(toolInput),
             importance: failed ? 4 : isMutatingTool(toolName) ? 3 : 1,
             payload: failed
-              ? { error: redact(String(response?.error || response?.stderr || "")).slice(0, 2000) }
+              ? { error: redact(errorText).slice(0, 2000) }
               : undefined,
           }
         )
@@ -675,10 +717,20 @@ function eventsFromClaudeCodeHook(hookName, payload) {
       );
       break;
 
+    // `Stop` fires when the assistant finishes a TURN, not when the session
+    // ends — it runs after every reply. Treating it as a session end marked a
+    // working agent "ended" after its first response: peers saw it as dead,
+    // its claims were released while it was still editing those files, and the
+    // brief reported its work finished when it had barely started. It is still
+    // a good moment to ship the transcript (the turn is complete), so it emits
+    // no event and is handled at the call site.
     case "Stop":
+    case "SubagentStop":
+      break;
+
     case "SessionEnd":
       events.push(
-        makeEvent("session_end", `Session ended (${payload.reason || "stop"})`, {
+        makeEvent("session_end", `Session ended (${payload.reason || "unknown"})`, {
           importance: 4,
         })
       );
@@ -854,6 +906,37 @@ async function cmdEnd(config, args) {
  * from the user's point of view — a fresh agent that already knows what the
  * last one was doing.
  */
+/**
+ * Translate the runtime's exit reason into one of ours.
+ *
+ * Claude Code reports `clear`, `logout`, `prompt_input_exit` or `other`. None
+ * of them is evidence the work was finished, so none of them maps to
+ * `completed` — the old code defaulted there, which is the exact lie the
+ * reaper is written to avoid: it tells the next agent the job is done when the
+ * operator merely closed a window. Unknown reasons stay `unknown`, which the
+ * brief renders honestly.
+ */
+function mapSessionEndReason(raw) {
+  const value = String(raw || "").toLowerCase();
+  switch (value) {
+    case "clear":
+    case "logout":
+    case "prompt_input_exit":
+    case "user_stopped":
+      return "user_stopped";
+    case "usage_capped":
+      return "usage_capped";
+    case "context_exhausted":
+      return "context_exhausted";
+    case "crashed":
+      return "crashed";
+    case "completed":
+      return "completed";
+    default:
+      return "unknown";
+  }
+}
+
 async function cmdHook(config, args) {
   const hookName = args[0] || "Unknown";
   const raw = await readStdin();
@@ -911,7 +994,8 @@ async function cmdHook(config, args) {
     const force =
       hookName === "PreCompact" ||
       hookName === "SessionEnd" ||
-      hookName === "Stop";
+      hookName === "Stop" ||
+      hookName === "SubagentStop";
     await shipTranscript(config, transcriptPath, { force });
   }
 
@@ -967,14 +1051,13 @@ async function cmdHook(config, args) {
     }
   }
 
-  if (hookName === "SessionEnd" || hookName === "Stop") {
+  // Only a real session end ends the session. `Stop` is a turn boundary.
+  if (hookName === "SessionEnd") {
     const state = readSessionState(config.cwd);
     if (state.session_id) {
-      // `reason` comes from the runtime; anything we do not recognise is
-      // normalised server-side to 'unknown' rather than guessed at here.
       await apiRequest(config, "PATCH", `/api/v1/relay/sessions/${state.session_id}`, {
         action: "end",
-        end_reason: payload.reason || "completed",
+        end_reason: mapSessionEndReason(payload.reason),
       });
     }
   }
@@ -1104,6 +1187,10 @@ function cmdInit(config, args) {
     "UserPromptSubmit",
     "PostToolUse",
     "PreCompact",
+    // End of every assistant turn: the cheapest reliable moment to flush the
+    // transcript, because the turn's reasoning is complete and on disk. It
+    // does not end the session — see the `Stop` case in the hook dispatcher.
+    "Stop",
     "SessionEnd",
   ]) {
     const existing = settings.hooks[event] || [];
