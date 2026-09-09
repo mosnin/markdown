@@ -1,37 +1,852 @@
 @import "tailwindcss";
 @import "tw-animate-css";
-@import "shadcn/tailwind.css";
+@import "./marketing.css";
 
-/* ─── Theme variant ─────────────────────────────────────────────────────── */
-@custom-variant dark (&:is(.dark *));
+@custom-variant dark (&:where(.dark, .dark *));
 
-/* ─── Brand accent: Iris (sophisticated indigo) ─────────────────────────── */
-/*
- * Quiet Power enterprise overhaul: every Tailwind v4 violet utility
- * (text-violet-600, bg-violet-500, etc.) now renders as restrained iris
- * indigo instead of yellow. The accent is used surgically — focus rings,
- * links, AI sparkle — never for primary buttons (flat black/white).
- *
- * Ramp anchored on oklch(0.50 0.17 265). Chroma held high in mid-stops
- * for confident interactive states; drifts toward deep navy at dark end.
- */
-@theme {
-  --color-violet-50:  oklch(0.97 0.020 265);
-  --color-violet-100: oklch(0.94 0.040 265);
-  --color-violet-200: oklch(0.88 0.075 265);
-  --color-violet-300: oklch(0.78 0.115 265);
-  --color-violet-400: oklch(0.68 0.150 265);
-  --color-violet-500: oklch(0.58 0.165 265);
-  --color-violet-600: oklch(0.50 0.170 265);
-  --color-violet-700: oklch(0.42 0.155 266);
-  --color-violet-800: oklch(0.34 0.130 266);
-  --color-violet-900: oklch(0.26 0.100 266);
-  --color-violet-950: oklch(0.18 0.070 266);
+/* ==========================================================================
+   LEDGER INSTRUMENT — the CompanyOS Web design language, version 2.
+   Normative spec: docs/DESIGN_LANGUAGE.md. Every value here comes from it.
+   The palette and scale follow the developer dashboard the product is
+   styled after: a #212121 ground with a darker #131313 rail in the dark
+   theme, a white page with a #f7f7f7 rail in the light one, 15px body
+   type, and a blue focus ring as the one hue chrome is allowed.
+
+   Four principles, ranked; the lower number wins a conflict:
+     P1  Structure is monochrome, signal is colour. Hue only ever means
+         status, series, delta, threshold, diff or validation.
+     P2  The ground is below, the object is above. The canvas is a recessive
+         neutral; cards are white (light) / lighter (dark) and sit ON it.
+     P3  Hierarchy comes from weight, size and surface — never from colour,
+         never from more borders. There are exactly three line weights.
+     P4  Elevation is earned, and empty is designed.
+   ========================================================================== */
+
+:root {
+  /* ---- Surfaces: the ladder. Each rung has a verb (§2.1). --------------
+     Values follow the neutral monochrome of the reference dashboard: a pure
+     white page, a rail one step below it, and every line an alpha-free grey
+     so a hairline reads the same on every rung. */
+  --surface-canvas: #ffffff; /* hosts    — everything scrolls on it */
+  --surface-rail: #f7f7f7; /* frames   — the persistent chassis */
+  --surface-raised: #ffffff; /* is an object */
+  --surface-inset: #fafafa; /* is a cavity cut into a raised surface */
+  --surface-selected: #ececec; /* the row you are on, read as fill not accent */
+  --surface-object: #f3f3f3; /* is a discrete thing inside a card */
+  --surface-overlay: #ffffff; /* is temporarily above */
+  --surface-inverse: #0d0d0d;
+  --track: #ececec;
+  /* The segmented control's track: a step below the canvas so the thumb reads as the raised piece. */
+  --segment-track: #f0f0f0;
+  --segment-thumb: #ffffff; /* a fill, not a rung — legal on any surface */
+  --surface-scrim: rgba(0, 0, 0, 0.4);
+
+  /* ---- State fills: always alpha, so they composite on every rung. ----- */
+  --state-hover: rgba(0, 0, 0, 0.045);
+  --state-active: rgba(0, 0, 0, 0.085);
+  --state-selected: rgba(0, 0, 0, 0.06);
+
+  /* ---- Lines: exactly three weights. A fourth is a P3 violation. ------- */
+  --line-hairline: #ececec; /* dividers INSIDE a card */
+  --line-border: #e3e3e3; /* the outer edge of a raised surface */
+  --line-strong: #c8c8c8; /* hover borders, crosshairs, neutral bars */
+
+  /* ---- Text ramp: colour marks importance, never category. ------------- */
+  --text-primary: #0d0d0d;
+  --text-secondary: #4b4b52; /* support text: lighter, not lighter-weight */
+  --text-tertiary: #66666e; /* 4.6:1 on --track, the darkest ground it sits on */
+  /* Rung four. The reference's muted-foreground, oklch(0.556 0 0), reads
+     4.7:1 on the white canvas and 4.5:1 on the rail, which is the floor
+     anti-slop.md rule 6 sets. It never sits on --surface-selected. */
+  --text-quaternary: #707077; /* 4.9:1 on white: small readings still clear AA */
+  --text-inverse: #f7f7f7;
+
+  /* ---- Monochrome action tokens (§4.2). ------------------------------- */
+  --accent: #2563eb; /* the brand's one hue: primary actions, links, checked controls, focus */
+  --accent-hover: #1d55d6;
+  --accent-active: #1a4bc0;
+  --accent-text: #1d4fd8; /* 6.3:1 on white */
+  --accent-wash: rgba(37, 99, 235, 0.1);
+  --accent-border: rgba(37, 99, 235, 0.32);
+  --action-fill: var(--accent);
+  --action-label: #ffffff;
+  --action-fill-hover: var(--accent-hover);
+  --action-fill-active: var(--accent-active);
+  --focus-ring: var(--accent);
+  --selection: rgba(37, 99, 235, 0.18);
+  --link-underline: rgba(37, 99, 235, 0.35);
+
+  /* ---- Semantic signal roles: the ONLY hue names that exist (§4.3).
+     positive  head revision · merged · succeeded · accepted · diff-add
+     caution   uncommitted · open branch · draft · expiring · stale
+     critical  failed · revoked · conflict · breached · destructive
+     agent     machine origin, and nothing else
+     info      in-review, second chart series. Teal, deliberately not blue.
+     neutral   archived · closed · not started · no data                  */
+  --positive-text: #0f6e3b;
+  --positive-mark: #14874a;
+  --positive-wash: rgba(20, 135, 74, 0.1);
+  --positive-border: rgba(20, 135, 74, 0.28);
+
+  /* CONTRIBUTION HEATMAP. Five rungs from "nothing happened" to "a full day",
+     built on the positive mark so a busy square reads as work that landed. */
+  --heat-0: #e6e8ec;
+  --heat-1: rgba(20, 135, 74, 0.22);
+  --heat-2: rgba(20, 135, 74, 0.42);
+  --heat-3: rgba(20, 135, 74, 0.68);
+  --heat-4: #14874a;
+  --caution-text: #875100;
+  --caution-mark: #b87708;
+  --caution-wash: rgba(184, 119, 8, 0.12);
+  --caution-border: rgba(184, 119, 8, 0.32);
+  --critical-text: #ae2217;
+  --critical-mark: #cc3227;
+  --critical-wash: rgba(204, 50, 39, 0.1);
+  --critical-border: rgba(204, 50, 39, 0.3);
+  --agent-text: #5b48c9;
+  --agent-mark: #6e60d7;
+  --agent-wash: rgba(110, 96, 215, 0.1);
+  --agent-border: rgba(110, 96, 215, 0.28);
+  --info-text: #0a6870;
+  --info-mark: #0c8a93;
+  --info-wash: rgba(12, 138, 147, 0.1);
+  --info-border: rgba(12, 138, 147, 0.28);
+  --neutral-text: #5c6470;
+  --neutral-mark: #98a0ac;
+  --neutral-wash: rgba(20, 22, 26, 0.06);
+  --neutral-border: rgba(20, 22, 26, 0.14);
+
+  /* ---- Data series. 1 is monochrome, so a one-series chart has no hue. -- */
+  --series-1: #6e60d7;
+  --series-2: #d6396a;
+  --series-3: #d97a2b;
+  --series-4: #2f9a7a;
+
+  /* ---- Diff: the only tinted CONTENT surfaces. Always doubled with a
+     +/− glyph and a gutter bar, never hue alone (§4.5). ------------------ */
+  --diff-add-bg: #e7f4ec;
+  --diff-add-strong: #c9e9d6;
+  --diff-add-gutter: #bce3cd;
+  --diff-add-ink: #0f5d34;
+  --diff-del-bg: #fbeae8;
+  --diff-del-strong: #f6d3cf;
+  --diff-del-gutter: #f0c8c4;
+  --diff-del-ink: #8f1c13;
+  --diff-move-bg: #f0ebfc;
+  --diff-move-gutter: #d9cdf4;
+  --diff-move-ink: #4a2a9e;
+
+  /* ---- Elevation. Objects in the flow carry a border, not a shadow: the
+     reference separates sections with rules and reserves shadow for what
+     is transiently above (menus, dialogs) and the segmented thumb. ------- */
+  --elev-0: none;
+  --elev-1: none;
+  --elev-1-hover: 0 1px 2px 0 oklch(0 0 0 / 6%);
+  --elev-2: 0 1px 2px 0 oklch(0 0 0 / 6%), 0 8px 24px -8px oklch(0 0 0 / 16%);
+  --elev-3:
+    0 12px 32px -12px oklch(0 0 0 / 24%), 0 2px 8px -2px oklch(0 0 0 / 10%);
+  --elev-sticky: 0 1px 0 0 var(--line-border);
+  --elev-sticky-up: 0 -1px 0 0 var(--line-border);
+  /* The segmented control's active pill (§9.3), the one flow element the
+     reference lets cast a shadow. */
+  --elev-thumb: 0 1px 2px 0 rgba(0, 0, 0, 0.12), 0 0 0 1px rgba(0, 0, 0, 0.04);
+
+  /* ---- Layout metrics (§6.3). ----------------------------------------- */
+  --page-max: 1440px;
+  --prose-max: 720px;
+  --sidebar-w: 288px;
+  --sidebar-w-collapsed: 48px;
+  --rail-w: 320px;
+  --facet-w: 200px;
+  --header-h: 56px; /* 32px control + 12px above and below */
+  --commitbar-h: 64px;
+  --rail-gutter: 28px;
+
+  /* ---- Motion (§7). No springs, no overshoot. -------------------------- */
+  --dur-1: 90ms;
+  --dur-2: 140ms;
+  --dur-3: 200ms;
+  --dur-4: 260ms;
+  --dur-chart: 300ms;
 }
 
-/* ─── Design tokens (mapped to Tailwind utilities) ──────────────────────── */
+:root.dark {
+  /* The reference's dark theme: one near-black ground for page, rail and
+     card alike, with alpha-white lines doing the separating. */
+  --surface-canvas: #212121;
+  --surface-rail: #131313;
+  --surface-raised: #212121;
+  --surface-inset: #1a1a1a;
+  --surface-selected: #303030;
+  --surface-object: #2a2a2a;
+  --surface-overlay: #2b2b2b;
+  --surface-inverse: #f3f3f3;
+  --track: #303030;
+  --segment-track: #0d0d0d;
+  --segment-thumb: #303030;
+  --surface-scrim: rgba(0, 0, 0, 0.62);
+
+  --state-hover: rgba(255, 255, 255, 0.06);
+  --state-active: rgba(255, 255, 255, 0.1);
+  --state-selected: rgba(255, 255, 255, 0.08);
+
+  --line-hairline: #2c2c2c;
+  --line-border: #353535;
+  --line-strong: #595959;
+
+  --text-primary: #f3f3f3;
+  --text-secondary: #b0b0b5; /* support text: darker than primary, same weight */
+  --text-tertiary: #98989d; /* 4.6:1 on --track */
+  --text-quaternary: #8a8a8f; /* 4.7:1 on the canvas */
+  --text-inverse: #0d0d0d;
+
+  --accent: #5b9cff;
+  --accent-hover: #6aa6ff;
+  --accent-active: #4d8ff5;
+  --accent-text: #86b6ff; /* 8.2:1 on the canvas */
+  --accent-wash: rgba(91, 156, 255, 0.16);
+  --accent-border: rgba(91, 156, 255, 0.36);
+  --action-fill: var(--accent);
+  --action-label: #0b1a33; /* ink on the accent: 7.1:1 */
+  --action-fill-hover: var(--accent-hover);
+  --action-fill-active: var(--accent-active);
+  --focus-ring: var(--accent);
+  --selection: rgba(91, 156, 255, 0.28);
+  --link-underline: rgba(91, 156, 255, 0.45);
+
+  --positive-text: #49d07f;
+  --positive-mark: #2fbe6b;
+  --positive-wash: rgba(47, 190, 107, 0.16);
+  --positive-border: rgba(47, 190, 107, 0.3);
+
+  --heat-0: #22262d;
+  --heat-1: rgba(47, 190, 107, 0.24);
+  --heat-2: rgba(47, 190, 107, 0.44);
+  --heat-3: rgba(47, 190, 107, 0.7);
+  --heat-4: #2fbe6b;
+  --caution-text: #f0b44a;
+  --caution-mark: #e3a02b;
+  --caution-wash: rgba(227, 160, 43, 0.16);
+  --caution-border: rgba(227, 160, 43, 0.3);
+  --critical-text: #ff867c;
+  --critical-mark: #ef5a4c;
+  --critical-wash: rgba(239, 90, 76, 0.16);
+  --critical-border: rgba(239, 90, 76, 0.32);
+  --agent-text: #b897f4;
+  --agent-mark: #815dda;
+  --agent-wash: rgba(129, 93, 218, 0.18);
+  --agent-border: rgba(129, 93, 218, 0.34);
+  --info-text: #4fd0d8;
+  --info-mark: #29b4be;
+  --info-wash: rgba(41, 180, 190, 0.16);
+  --info-border: rgba(41, 180, 190, 0.28);
+  --neutral-text: #8a93a0;
+  --neutral-mark: #6b7480;
+  --neutral-wash: rgba(255, 255, 255, 0.08);
+  --neutral-border: rgba(255, 255, 255, 0.16);
+
+  --series-1: #815dda;
+  --series-2: #e5537f;
+  --series-3: #ef9a5c;
+  --series-4: #53b596;
+
+  --diff-add-bg: #143524;
+  --diff-add-strong: #1e5238;
+  --diff-add-gutter: #22603f;
+  --diff-add-ink: #7ee0ac;
+  --diff-del-bg: #3f1d19;
+  --diff-del-strong: #5c2a24;
+  --diff-del-gutter: #6b322b;
+  --diff-del-ink: #ffa9a1;
+  --diff-move-bg: #2a2444;
+  --diff-move-gutter: #3e3566;
+  --diff-move-ink: #cbb8fd;
+
+  /* A drop shadow is invisible on a near-black ground, so an object in the
+     flow is carried by its 1px border alone; the haze survives only under
+     overlays, as a separating layer. */
+  --elev-0: none;
+  --elev-1: none;
+  --elev-1-hover: none;
+  --elev-2: 0 8px 24px -8px oklch(0 0 0 / 60%);
+  --elev-3: 0 24px 60px -20px oklch(0 0 0 / 75%);
+  --elev-sticky: 0 1px 0 0 var(--line-border);
+  --elev-sticky-up: 0 -1px 0 0 var(--line-border);
+  --elev-thumb:
+    0 1px 2px 0 rgba(0, 0, 0, 0.4), inset 0 1px 0 0 rgba(255, 255, 255, 0.06);
+}
+
+/* The theme flip must not crossfade any element through a wrong-mode
+   intermediate colour: set this for one frame, flip, then remove it. */
+[data-theme-switching] * {
+  transition: none !important;
+}
+
 @theme inline {
-  /* Color tokens */
+  /* surfaces */
+  --color-canvas: var(--surface-canvas);
+  --color-rail: var(--surface-rail);
+  --color-raised: var(--surface-raised);
+  --color-inset: var(--surface-inset);
+  --color-selected: var(--surface-selected);
+  --color-object: var(--surface-object);
+  --color-overlay: var(--surface-overlay);
+  --color-inverse: var(--surface-inverse);
+  --color-track: var(--track);
+  --color-segment-track: var(--segment-track);
+  --color-segment-thumb: var(--segment-thumb);
+  --color-scrim: var(--surface-scrim);
+
+  /* state fills */
+  --color-state-hover: var(--state-hover);
+  --color-state-active: var(--state-active);
+  --color-state-selected: var(--state-selected);
+
+  /* lines */
+  --color-hairline: var(--line-hairline);
+  --color-border: var(--line-border);
+  --color-strong: var(--line-strong);
+
+  /* text */
+  --color-ink: var(--text-primary);
+  --color-ink-2: var(--text-secondary);
+  --color-ink-3: var(--text-tertiary);
+  --color-ink-4: var(--text-quaternary);
+  --color-ink-inverse: var(--text-inverse);
+
+  /* monochrome action */
+  --color-action: var(--action-fill);
+  --color-action-label: var(--action-label);
+  --color-action-hover: var(--action-fill-hover);
+  --color-action-active: var(--action-fill-active);
+  --color-focus: var(--focus-ring);
+  --color-accent: var(--accent);
+  --color-accent-text: var(--accent-text);
+  --color-accent-wash: var(--accent-wash);
+  --color-accent-border: var(--accent-border);
+
+  /* signals — the ONLY hue names that exist */
+  --color-positive-text: var(--positive-text);
+  --color-positive: var(--positive-mark);
+  --color-positive-wash: var(--positive-wash);
+  --color-positive-border: var(--positive-border);
+  --color-caution-text: var(--caution-text);
+  --color-caution: var(--caution-mark);
+  --color-caution-wash: var(--caution-wash);
+  --color-caution-border: var(--caution-border);
+  --color-critical-text: var(--critical-text);
+  --color-critical: var(--critical-mark);
+  --color-critical-wash: var(--critical-wash);
+  --color-critical-border: var(--critical-border);
+  --color-agent-text: var(--agent-text);
+  --color-agent: var(--agent-mark);
+  --color-agent-wash: var(--agent-wash);
+  --color-agent-border: var(--agent-border);
+  --color-info-text: var(--info-text);
+  --color-info: var(--info-mark);
+  --color-info-wash: var(--info-wash);
+  --color-info-border: var(--info-border);
+  --color-neutral-text: var(--neutral-text);
+  --color-neutral: var(--neutral-mark);
+  --color-neutral-wash: var(--neutral-wash);
+  --color-neutral-border: var(--neutral-border);
+
+  /* series */
+  --color-series-1: var(--series-1);
+  --color-series-2: var(--series-2);
+  --color-series-3: var(--series-3);
+  --color-series-4: var(--series-4);
+
+  /* diff */
+  --color-diff-add: var(--diff-add-bg);
+  --color-diff-add-strong: var(--diff-add-strong);
+  --color-diff-add-gutter: var(--diff-add-gutter);
+  --color-diff-add-ink: var(--diff-add-ink);
+  --color-diff-del: var(--diff-del-bg);
+  --color-diff-del-strong: var(--diff-del-strong);
+  --color-diff-del-gutter: var(--diff-del-gutter);
+  --color-diff-del-ink: var(--diff-del-ink);
+  --color-diff-move: var(--diff-move-bg);
+  --color-diff-move-gutter: var(--diff-move-gutter);
+  --color-diff-move-ink: var(--diff-move-ink);
+
+  /* radius — pill acts, rounded rect reads, square compares */
+  --radius-0: 0px;
+  --radius-2: 2px;
+  --radius-4: 4px;
+  --radius-6: 6px;
+  --radius-8: 8px;
+  --radius-10: 10px;
+  --radius-12: 12px;
+  --radius-14: 14px;
+  --radius-16: 16px;
+  --radius-20: 20px;
+
+  /* elevation */
+  --shadow-elev-1: var(--elev-1);
+  --shadow-elev-1-hover: var(--elev-1-hover);
+  --shadow-elev-2: var(--elev-2);
+  --shadow-elev-3: var(--elev-3);
+  --shadow-sticky: var(--elev-sticky);
+  --shadow-sticky-up: var(--elev-sticky-up);
+  --shadow-thumb: var(--elev-thumb);
+
+  /* Spacing — the 4pt scale (§6.1). This REMAPS Tailwind's numeric spacing
+     utilities, so p-6 is 16px, gap-4 is 8px and so on. Every margin, padding
+     and gap in the product is one of these twelve steps; a value off the scale
+     is a review failure. Sizes (icon boxes, control heights) do NOT use this
+     namespace — they are written as explicit px, so a 16px icon stays 16px. */
+
+  /* Optical offsets for a round mark set beside a line of type. Derived, not
+     picked: half the line-height minus half the mark, which is the only value
+     that puts the dot on the text's optical centre. Two roles, two values, and
+     nothing else in the product is allowed an off-scale margin. */
+  --mark-body: 7px; /* 6px dot against t-body's 20px line */
+  --mark-caption: 5px; /* 7px dot against t-caption's 18px line */
+  --spacing-1: 2px;
+  --spacing-2: 4px;
+  --spacing-3: 6px;
+  --spacing-4: 8px;
+  --spacing-5: 12px;
+  --spacing-6: 16px;
+  --spacing-7: 20px;
+  --spacing-8: 24px;
+  --spacing-9: 32px;
+  --spacing-10: 40px;
+  --spacing-11: 48px;
+  --spacing-12: 64px;
+
+  /* type */
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+
+  /* motion */
+  --ease-out: cubic-bezier(0.22, 0.61, 0.36, 1);
+  --ease-in: cubic-bezier(0.4, 0, 1, 1);
+  --ease-move: cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-emphasis: cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+html {
+  color-scheme: light;
+}
+html.dark {
+  color-scheme: dark;
+}
+
+body {
+  background: var(--surface-canvas);
+  color: var(--text-primary);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+::selection {
+  background: var(--selection);
+}
+
+/* Hairline scrollbars that match the material. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--text-primary) 18%, transparent)
+    transparent;
+}
+
+/* ==========================================================================
+   TYPOGRAPHY ROLES (§3.4)
+
+   Every piece of text in the product takes one of these classes. An ad-hoc
+   `text-[13px]` is a review failure — if a size is not in this table, it
+   does not exist. Numeric and mono roles carry tabular lining figures,
+   because a column of numbers that does not align on the digit is a defect.
+   ========================================================================== */
+
+@layer components {
+  .t-display {
+    font-size: 36px;
+    font-weight: 600;
+    line-height: 40px;
+    letter-spacing: -0.026em;
+  }
+  .t-title-1 {
+    font-size: 28px;
+    font-weight: 600;
+    line-height: 32px;
+    letter-spacing: -0.022em;
+  }
+  .t-title-2 {
+    font-size: 24px;
+    font-weight: 600;
+    line-height: 28px;
+    letter-spacing: -0.018em;
+  }
+  .t-title-3 {
+    font-size: 20px;
+    font-weight: 600;
+    line-height: 24px;
+    letter-spacing: -0.014em;
+  }
+  /* Logo artwork only: approved lowercase grotesk, not a UI heading role. */
+  .t-brand {
+    font-family: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+    font-size: 20px;
+    font-weight: 400;
+    line-height: 24px;
+    letter-spacing: -0.045em;
+  }
+
+  .t-title-4 {
+    font-size: 17px;
+    font-weight: 600;
+    line-height: 22px;
+    letter-spacing: -0.01em;
+  }
+  .t-title-compact {
+    font-size: 15px;
+    font-weight: 600;
+    line-height: 20px;
+    letter-spacing: -0.002em;
+  }
+  .t-body-read {
+    font-size: 16px;
+    font-weight: 400;
+    line-height: 26px;
+    letter-spacing: -0.002em;
+  }
+  .t-body {
+    font-size: 15px;
+    font-weight: 400;
+    line-height: 22px;
+    letter-spacing: 0;
+  }
+  .t-body-strong {
+    font-size: 15px;
+    font-weight: 600;
+    line-height: 22px;
+    letter-spacing: 0;
+  }
+  .t-caption {
+    font-size: 14px;
+    font-weight: 400;
+    line-height: 20px;
+    letter-spacing: 0;
+  }
+  .t-caption-medium {
+    font-size: 14px;
+    font-weight: 500;
+    line-height: 20px;
+    letter-spacing: 0;
+  }
+  .t-caption-strong {
+    font-size: 14px;
+    font-weight: 600;
+    line-height: 20px;
+    letter-spacing: 0;
+  }
+  .t-micro {
+    font-size: 13px;
+    font-weight: 500;
+    line-height: 18px;
+    letter-spacing: 0.002em;
+  }
+  /* The only uppercase role in the product. */
+  .t-label-caps {
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 16px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  /* Reference dashboard roles. Each one is a size the reference sets that
+     the scale above did not have: a 14px medium for the header title and
+     the sidebar row, a 13px medium for table cells, an 11px mixed-case
+     group label, and the 24px stat value. */
+  .t-body-medium {
+    font-size: 15px;
+    font-weight: 500;
+    line-height: 22px;
+    letter-spacing: 0;
+  }
+  .t-cell {
+    font-size: 15px;
+    font-weight: 400;
+    line-height: 20px;
+    letter-spacing: 0;
+  }
+  .t-stat-label {
+    font-size: 15px;
+    font-weight: 400;
+    line-height: 20px;
+    letter-spacing: 0;
+  }
+  .t-group-label {
+    font-size: 12px;
+    font-weight: 500;
+    line-height: 16px;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+  }
+
+  /* Numeric — all tabular lining figures. */
+  .t-metric-xl,
+  .t-metric-lg,
+  .t-metric-md,
+  .t-metric-sm,
+  .t-metric-stat,
+  .tabular {
+    font-variant-numeric: tabular-nums lining-nums;
+    font-feature-settings:
+      "tnum" 1,
+      "lnum" 1;
+  }
+  .t-metric-xl {
+    font-size: 32px;
+    font-weight: 600;
+    line-height: 36px;
+    letter-spacing: -0.024em;
+  }
+  /* The stat row value: text-2xl at medium weight. */
+  .t-metric-stat {
+    font-size: 22px;
+    font-weight: 500;
+    line-height: 28px;
+    letter-spacing: -0.014em;
+  }
+  .t-metric-lg {
+    font-size: 24px;
+    font-weight: 600;
+    line-height: 28px;
+    letter-spacing: -0.018em;
+  }
+  .t-metric-md {
+    font-size: 18px;
+    font-weight: 600;
+    line-height: 24px;
+    letter-spacing: -0.006em;
+  }
+  .t-metric-sm {
+    font-size: 14px;
+    font-weight: 600;
+    line-height: 20px;
+    letter-spacing: 0;
+  }
+
+  /* Mono — in a versioned system the identifier IS the evidence, so it is
+     always scannable character by character. */
+  .t-mono-hash,
+  .t-mono-hash-lg,
+  .t-mono-seq,
+  .t-mono-code,
+  .t-mono-micro {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums lining-nums;
+    font-feature-settings:
+      "tnum" 1,
+      "lnum" 1;
+  }
+  .t-mono-hash {
+    font-size: 13px;
+    font-weight: 500;
+    line-height: 18px;
+    letter-spacing: 0.01em;
+  }
+  .t-mono-hash-lg {
+    font-size: 14px;
+    font-weight: 500;
+    line-height: 20px;
+    letter-spacing: 0;
+  }
+  .t-mono-seq {
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 18px;
+    letter-spacing: 0.01em;
+  }
+  .t-mono-code {
+    font-size: 14px;
+    font-weight: 400;
+    line-height: 22px;
+    letter-spacing: 0;
+  }
+  .t-mono-micro {
+    font-size: 12px;
+    font-weight: 500;
+    line-height: 16px;
+    letter-spacing: 0.01em;
+  }
+
+  /* Prose links: the brand accent, underlined at rest so the link reads
+     without colour, with the rule filling on hover. */
+  .t-link {
+    color: var(--accent-text);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+    text-decoration-thickness: 1px;
+    text-decoration-color: var(--link-underline);
+    transition: text-decoration-color var(--dur-1) linear;
+  }
+  .t-link:hover {
+    text-decoration-color: var(--accent-text);
+  }
+
+  /* The two-stop focus ring. The first stop is the ground the control sits
+     on, so the offset gap actually reads on every rung. */
+  .focus-ring:focus-visible {
+    outline: none;
+    box-shadow:
+      0 0 0 2px var(--surface-raised),
+      0 0 0 4px var(--focus-ring);
+  }
+  .focus-ring-canvas:focus-visible {
+    outline: none;
+    box-shadow:
+      0 0 0 2px var(--surface-canvas),
+      0 0 0 4px var(--focus-ring);
+  }
+  .focus-ring-inset:focus-visible {
+    outline: none;
+    box-shadow:
+      0 0 0 2px var(--surface-inset),
+      0 0 0 4px var(--focus-ring);
+  }
+  .focus-ring-rail:focus-visible {
+    outline: none;
+    box-shadow:
+      0 0 0 2px var(--surface-rail),
+      0 0 0 4px var(--focus-ring);
+  }
+}
+
+/* A pulse, not a travelling shimmer: a shimmer implies horizontal progress
+   that does not exist, and on a 40-row table it is nauseating. */
+@keyframes ledger-skeleton {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0.62;
+  }
+}
+
+@keyframes ledger-indeterminate {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(430%);
+  }
+}
+
+/* The one celebratory motion in the product: a new head node emits one ring. */
+@keyframes ledger-commit-pulse {
+  from {
+    transform: scale(1);
+    opacity: 0.45;
+  }
+  to {
+    transform: scale(1.9);
+    opacity: 0;
+  }
+}
+
+/* The moment a setup step becomes done: the pill lands. Only on the
+   transition, never on load (see components/setup/setup-path.tsx). */
+@keyframes setup-pop {
+  from {
+    transform: scale(0.72);
+    opacity: 0;
+  }
+  60% {
+    transform: scale(1.06);
+    opacity: 1;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+  /* Opacity crossfades survive, so state changes stay perceptible. */
+  .motion-keep-fade {
+    transition-duration: 90ms !important;
+  }
+}
+
+/* ==========================================================================
+   SHADCN COMPATIBILITY LAYER
+   
+   The Ledger Instrument tokens above are the design system. This block maps
+   shadcn's token names onto them so the components that were built against
+   shadcn utilities (bg-background, text-muted-foreground, border-border …)
+   render in the Ledger palette instead of their old one.
+   
+   Why a mapping rather than a rewrite: re-pointing the tokens changes the
+   whole app's colour scheme in one place, immediately and consistently. The
+   alternative — editing several hundred components to use the new token
+   names — would take far longer and could only ever arrive at the same
+   pixels. New UI should use the Ledger tokens directly; this layer exists so
+   nothing built before the switch looks wrong in the meantime.
+   ========================================================================== */
+
+:root {
+  --background: var(--surface-canvas);
+  --foreground: var(--text-primary);
+  --card: var(--surface-raised);
+  --card-foreground: var(--text-primary);
+  --popover: var(--surface-overlay);
+  --popover-foreground: var(--text-primary);
+  /* Primary is the monochrome action, matching the reference's flat black
+     button — not the blue, which is reserved for links and focus. */
+  --primary: var(--surface-inverse);
+  --primary-foreground: var(--text-inverse);
+  --secondary: var(--surface-object);
+  --secondary-foreground: var(--text-primary);
+  --muted: var(--surface-inset);
+  --muted-foreground: var(--text-tertiary);
+  --accent: var(--surface-selected);
+  --accent-foreground: var(--text-primary);
+  --destructive: var(--critical-mark);
+  --destructive-foreground: #ffffff;
+  --border: var(--line-border);
+  --input: var(--line-border);
+  --ring: var(--focus-ring);
+  --radius: 8px;
+}
+
+:root.dark,
+.dark {
+  --background: var(--surface-canvas);
+  --foreground: var(--text-primary);
+  --card: var(--surface-raised);
+  --card-foreground: var(--text-primary);
+  --popover: var(--surface-overlay);
+  --popover-foreground: var(--text-primary);
+  --primary: var(--surface-inverse);
+  --primary-foreground: #131313;
+  --secondary: var(--surface-object);
+  --secondary-foreground: var(--text-primary);
+  --muted: var(--surface-inset);
+  --muted-foreground: var(--text-tertiary);
+  --accent: var(--surface-selected);
+  --accent-foreground: var(--text-primary);
+  --destructive: var(--critical-mark);
+  --destructive-foreground: #ffffff;
+  --border: var(--line-border);
+  --input: var(--line-border);
+  --ring: var(--focus-ring);
+}
+
+@theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -47,555 +862,11 @@
   --color-accent: var(--accent);
   --color-accent-foreground: var(--accent-foreground);
   --color-destructive: var(--destructive);
-  --color-border: var(--border);
+  --color-destructive-foreground: var(--destructive-foreground);
   --color-input: var(--input);
   --color-ring: var(--ring);
-  --color-sidebar: var(--sidebar);
-  --color-sidebar-foreground: var(--sidebar-foreground);
-  --color-sidebar-primary: var(--sidebar-primary);
-  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
-  --color-sidebar-accent: var(--sidebar-accent);
-  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
-  --color-sidebar-border: var(--sidebar-border);
-  --color-sidebar-ring: var(--sidebar-ring);
-
-  /* Status semantic colors */
-  --color-success: var(--success);
-  --color-warning: var(--warning);
-  --color-info: var(--info);
-  --color-iris: var(--iris);
-
-  /* Surface tokens */
-  --color-surface-base: var(--surface-base);
-  --color-surface-raised: var(--surface-raised);
-  --color-surface-overlay: var(--surface-overlay);
-  --color-surface-sunken: var(--surface-sunken);
-
-  /* Text hierarchy tokens */
-  --color-text-primary: var(--text-primary);
-  --color-text-secondary: var(--text-secondary);
-  --color-text-tertiary: var(--text-tertiary);
-  --color-text-placeholder: var(--text-placeholder);
-  --color-text-disabled: var(--text-disabled);
-  --color-text-inverse: var(--text-inverse);
-
-  /* Border tokens */
-  --color-border-subtle: var(--border-subtle);
-  --color-border-default: var(--border-default);
-  --color-border-strong: var(--border-strong);
-
-  /* Font stacks */
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-  /* Brand fonts — swap these two values to flip the hero ↔ title/logo mapping */
-  --font-display: var(--font-share-tech-mono);  /* logo wordmark + title/heading text */
-  --font-hero: var(--font-space-grotesk);       /* hero headlines */
-
-  /* Radius scale — enterprise: sharper corners */
-  --radius-none: 0;
-  --radius-xs: 0.25rem;    /* 4px  — tight chip/badge */
-  --radius-sm: 0.375rem;   /* 6px  — input, small card, button */
-  --radius-md: 0.5rem;     /* 8px  — card, panel, dropdown, button */
-  --radius-lg: 0.625rem;   /* 10px — modal, sheet */
-  --radius-xl: 0.875rem;   /* 14px — large card */
-  --radius-2xl: 1.25rem;   /* 20px — hero sections */
-  --radius-full: 9999px;   /* pill — avatars and count badges only */
-
-  /* Shadow scale — surgical depth */
-  --shadow-xs: 0 1px 1px 0 rgb(0 0 0 / 0.04);
-  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05), 0 1px 1px -1px rgb(0 0 0 / 0.04);
-  --shadow-md: 0 4px 8px -2px rgb(0 0 0 / 0.06), 0 2px 4px -2px rgb(0 0 0 / 0.04);
-  --shadow-lg: 0 12px 20px -6px rgb(0 0 0 / 0.08), 0 4px 8px -4px rgb(0 0 0 / 0.05);
-  --shadow-xl: 0 24px 40px -10px rgb(0 0 0 / 0.10), 0 10px 16px -8px rgb(0 0 0 / 0.06);
-  --shadow-ring: 0 0 0 1px var(--border-default);
-  --shadow-ring-strong: 0 0 0 1px var(--border-strong);
-
-  /* Motion timing — snappy enterprise curves */
-  --duration-instant: 80ms;
-  --duration-fast: 140ms;
-  --duration-normal: 200ms;
-  --duration-slow: 280ms;
-  --duration-deliberate: 420ms;
-  --duration-page: 240ms;
-  --duration-skeleton: 1.4s;
-
-  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
-  --ease-enter: cubic-bezier(0, 0, 0.2, 1);
-  --ease-exit: cubic-bezier(0.4, 0, 1, 1);
-  --ease-emphasized: cubic-bezier(0.32, 0.72, 0, 1);
-  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
-
-  /* Z-index layer system */
-  --z-base: 0;
-  --z-raised: 10;
-  --z-dropdown: 100;
-  --z-sticky: 200;
-  --z-drawer: 300;
-  --z-modal: 400;
-  --z-toast: 500;
-  --z-overlay: 600;
-  --z-command: 700;
-
-  /* Layout dimensions */
-  --sidebar-width: 14rem;       /* 224px — w-56 */
-  --topbar-height: 3rem;        /* 48px  — h-12 */
-  --panel-width-sm: 18rem;      /* 288px */
-  --panel-width-md: 22rem;      /* 352px */
-
-  /* Spacing rhythm — 4px base grid */
-  --spacing-px: 1px;
-  --spacing-0: 0;
-  --spacing-1: 0.25rem;
-  --spacing-2: 0.5rem;
-  --spacing-3: 0.75rem;
-  --spacing-4: 1rem;
-  --spacing-5: 1.25rem;
-  --spacing-6: 1.5rem;
-  --spacing-8: 2rem;
-  --spacing-10: 2.5rem;
-  --spacing-12: 3rem;
-  --spacing-16: 4rem;
-  --spacing-20: 5rem;
-  --spacing-24: 6rem;
-}
-
-/* ─── Light mode — enterprise cool neutrals ────────────────────────────── */
-:root {
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.145 0 0);
-  --primary-foreground: oklch(0.99 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.18 0 0);
-  --muted: oklch(0.975 0 0);
-  --muted-foreground: oklch(0.50 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.18 0 0);
-  --destructive: oklch(0.58 0.235 27.3);
-  --border: oklch(0.93 0.002 264);
-  --input: oklch(0.93 0.002 264);
-  --ring: oklch(0.50 0.170 265);
-  --radius: 0.5rem;
-
-  --iris: oklch(0.50 0.170 265);
-
-  --sidebar: oklch(0.985 0.001 264);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.145 0 0);
-  --sidebar-primary-foreground: oklch(0.99 0 0);
-  --sidebar-accent: oklch(0.94 0.002 264);
-  --sidebar-accent-foreground: oklch(0.145 0 0);
-  --sidebar-border: oklch(0.93 0.002 264);
-  --sidebar-ring: oklch(0.50 0.170 265);
-
-  --success: oklch(0.62 0.17 145);
-  --warning: oklch(0.70 0.17 60);
-  --info: oklch(0.55 0.16 250);
-
-  --surface-base: oklch(1 0 0);
-  --surface-raised: oklch(1 0 0);
-  --surface-overlay: oklch(1 0 0);
-  --surface-sunken: oklch(0.975 0.001 264);
-
-  --text-primary: oklch(0.145 0 0);
-  --text-secondary: oklch(0.40 0 0);
-  --text-tertiary: oklch(0.56 0 0);
-  --text-placeholder: oklch(0.68 0 0);
-  --text-disabled: oklch(0.78 0 0);
-  --text-inverse: oklch(0.99 0 0);
-
-  --border-subtle: oklch(0.95 0.002 264);
-  --border-default: oklch(0.92 0.002 264);
-  --border-strong: oklch(0.78 0 0);
-
-  --color-brand: var(--iris);
-  --color-brand-subtle: oklch(0.96 0.030 265);
-}
-
-/* ─── Dark mode — graphite + iris ───────────────────────────────────────── */
-.dark {
-  --background: oklch(0.115 0 0);
-  --foreground: oklch(0.96 0 0);
-  --card: oklch(0.155 0 0);
-  --card-foreground: oklch(0.96 0 0);
-  --popover: oklch(0.155 0 0);
-  --popover-foreground: oklch(0.96 0 0);
-  --primary: oklch(0.96 0 0);
-  --primary-foreground: oklch(0.145 0 0);
-  --secondary: oklch(0.205 0 0);
-  --secondary-foreground: oklch(0.96 0 0);
-  --muted: oklch(0.19 0 0);
-  --muted-foreground: oklch(0.62 0 0);
-  --accent: oklch(0.20 0 0);
-  --accent-foreground: oklch(0.96 0 0);
-  --destructive: oklch(0.66 0.22 22.2);
-  --border: oklch(1 0 0 / 8%);
-  --input: oklch(1 0 0 / 11%);
-  --ring: oklch(0.62 0.180 265);
-  --iris: oklch(0.62 0.180 265);
-
-  --sidebar: oklch(0.135 0 0);
-  --sidebar-foreground: oklch(0.96 0 0);
-  --sidebar-primary: oklch(0.96 0 0);
-  --sidebar-primary-foreground: oklch(0.155 0 0);
-  --sidebar-accent: oklch(0.20 0 0);
-  --sidebar-accent-foreground: oklch(0.96 0 0);
-  --sidebar-border: oklch(1 0 0 / 7%);
-  --sidebar-ring: oklch(0.62 0.180 265);
-
-  --success: oklch(0.72 0.18 145);
-  --warning: oklch(0.78 0.17 60);
-  --info: oklch(0.68 0.17 250);
-
-  --surface-base: oklch(0.115 0 0);
-  --surface-raised: oklch(0.155 0 0);
-  --surface-overlay: oklch(0.185 0 0);
-  --surface-sunken: oklch(0.095 0 0);
-
-  --text-primary: oklch(0.96 0 0);
-  --text-secondary: oklch(0.74 0 0);
-  --text-tertiary: oklch(0.56 0 0);
-  --text-placeholder: oklch(0.44 0 0);
-  --text-disabled: oklch(0.34 0 0);
-  --text-inverse: oklch(0.145 0 0);
-
-  --border-subtle: oklch(1 0 0 / 5%);
-  --border-default: oklch(1 0 0 / 8%);
-  --border-strong: oklch(1 0 0 / 18%);
-
-  --color-brand: var(--iris);
-  --color-brand-subtle: oklch(0.30 0.090 265);
-}
-
-/* ─── Base styles ───────────────────────────────────────────────────────── */
-@layer base {
-  * {
-    @apply border-border outline-ring/50;
-  }
-
-  html {
-    @apply font-sans antialiased;
-    font-feature-settings: "cv11", "ss01", "ss02";
-    text-rendering: optimizeLegibility;
-    -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
-  }
-
-  body {
-    @apply bg-background text-foreground;
-    letter-spacing: -0.005em;
-  }
-
-  h1, h2, h3, .text-display, .text-headline, .text-title {
-    letter-spacing: -0.018em;
-    font-family: var(--font-hero);
-  }
-
-  [data-scroll-area] {
-    scroll-behavior: smooth;
-  }
-
-  :focus-visible {
-    outline: 2px solid var(--ring);
-    outline-offset: 2px;
-  }
-
-  button:focus-visible,
-  a:focus-visible,
-  input:focus-visible,
-  select:focus-visible,
-  textarea:focus-visible,
-  [role="button"]:focus-visible,
-  [role="link"]:focus-visible,
-  [tabindex]:focus-visible {
-    outline: 2px solid var(--ring);
-    outline-offset: 2px;
-    border-radius: var(--radius-sm);
-  }
-
-  ::selection {
-    background-color: color-mix(in oklch, var(--iris) 22%, transparent);
-    color: var(--foreground);
-  }
-}
-
-/* ─── Utility classes ───────────────────────────────────────────────────── */
-@layer utilities {
-  .surface-base    { background-color: var(--surface-base); }
-  .surface-raised  { background-color: var(--surface-raised); }
-  .surface-overlay { background-color: var(--surface-overlay); }
-  .surface-sunken  { background-color: var(--surface-sunken); }
-
-  .text-primary-label   { color: var(--text-primary); }
-  .text-secondary-label { color: var(--text-secondary); }
-  .text-tertiary-label  { color: var(--text-tertiary); }
-
-  .border-subtle  { border-color: var(--border-subtle); }
-  .border-default { border-color: var(--border-default); }
-  .border-strong  { border-color: var(--border-strong); }
-
-  .transition-standard {
-    transition-property: color, background-color, border-color, opacity, box-shadow, transform;
-    transition-duration: var(--duration-normal);
-    transition-timing-function: var(--ease-standard);
-  }
-
-  .transition-fast {
-    transition-property: color, background-color, border-color, opacity, transform;
-    transition-duration: var(--duration-fast);
-    transition-timing-function: var(--ease-standard);
-  }
-
-  .focus-ring {
-    @apply outline-none ring-2 ring-ring ring-offset-2 ring-offset-background;
-  }
-
-  .text-iris { color: var(--iris); }
-  .bg-iris   { background-color: var(--iris); }
-  .ring-iris { --tw-ring-color: var(--iris); }
-
-  /* Typography */
-  .text-display {
-    font-size: 2.5rem;
-    font-weight: 600;
-    line-height: 1.1;
-    letter-spacing: -0.024em;
-  }
-
-  .text-headline {
-    font-size: 1.625rem;
-    font-weight: 600;
-    line-height: 1.25;
-    letter-spacing: -0.020em;
-  }
-
-  .text-title {
-    font-size: 1.125rem;
-    font-weight: 600;
-    line-height: 1.4;
-    letter-spacing: -0.014em;
-  }
-
-  .text-body-lg {
-    font-size: 1rem;
-    font-weight: 400;
-    line-height: 1.55;
-  }
-
-  .text-body {
-    font-size: 0.875rem;
-    font-weight: 400;
-    line-height: 1.55;
-  }
-
-  .text-caption {
-    font-size: 0.75rem;
-    font-weight: 400;
-    line-height: 1.5;
-  }
-
-  .text-overline {
-    font-size: 0.6875rem;
-    font-weight: 600;
-    line-height: 1.5;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-    color: var(--text-tertiary);
-  }
-
-  .text-mono {
-    font-family: var(--font-mono);
-    font-feature-settings: "ss01", "ss02";
-  }
-
-  /* Layout */
-  .page-container {
-    max-width: 1280px;
-    margin-left: auto;
-    margin-right: auto;
-    padding-left: 1.5rem;
-    padding-right: 1.5rem;
-  }
-
-  .page-content {
-    max-width: 64rem;
-    margin-left: auto;
-    margin-right: auto;
-    padding-left: 1.5rem;
-    padding-right: 1.5rem;
-  }
-
-  .page-narrow {
-    max-width: 42rem;
-    margin-left: auto;
-    margin-right: auto;
-    padding-left: 1.5rem;
-    padding-right: 1.5rem;
-  }
-
-  .skeleton {
-    @apply animate-pulse bg-muted rounded-sm;
-  }
-
-  .hairline {
-    border-bottom: 1px solid var(--border-subtle);
-  }
-
-  .grid-bg-dots {
-    background-image: radial-gradient(circle, var(--border-default) 1px, transparent 1px);
-    background-size: 20px 20px;
-  }
-}
-
-/* ─── Marketing hero blob — restrained iris glow ──────────────────────── */
-:root {
-  --blur-blob-color: color-mix(in oklch, var(--color-violet-600) 35%, transparent);
-  --blur-blob-color-2: color-mix(in oklch, var(--color-violet-400) 20%, transparent);
-  --blur-blob-color-3: color-mix(in oklch, var(--color-violet-700) 25%, transparent);
-  --blur-1-size: clamp(420px, 55vw, 60vw);
-  --blur-2-size: clamp(280px, 38vw, 40vw);
-  --blur-3-size: clamp(120px, 12vw, 12vw);
-  --blur-amount: clamp(50px, 6vw, 100px);
-}
-
-.wrapper {
-  position: absolute;
-  inset: 0;
-  overflow: hidden;
-  pointer-events: none;
-  z-index: 0;
-}
-
-.wrapper > .blur {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  border-radius: 9999px;
-  filter: blur(var(--blur-amount));
-  will-change: transform;
-  pointer-events: none;
-}
-
-.wrapper > .blur:nth-child(1) {
-  width: var(--blur-1-size);
-  height: var(--blur-1-size);
-  background: var(--blur-blob-color);
-  margin-left: calc(var(--blur-1-size) / -2);
-  margin-top: calc(var(--blur-1-size) / -2);
-  opacity: 0.45;
-}
-
-.wrapper > .blur:nth-child(2) {
-  width: var(--blur-2-size);
-  height: var(--blur-2-size);
-  background: var(--blur-blob-color-2);
-  margin-left: calc(var(--blur-2-size) / -2);
-  margin-top: calc(var(--blur-2-size) / -2);
-  opacity: 0.35;
-}
-
-.wrapper > .blur:nth-child(3) {
-  width: var(--blur-3-size);
-  height: var(--blur-3-size);
-  background: var(--blur-blob-color-3);
-  margin-left: calc(var(--blur-3-size) / -2);
-  margin-top: calc(var(--blur-3-size) / -2);
-  opacity: 0.5;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .wrapper > .blur {
-    animation: none !important;
-  }
-}
-
-/* Logo marquee — the MCP compatibility band (src/components/marketing/mcp_compat.tsx).
-   The track holds two identical copies, so translating by -50% scrolls exactly
-   one copy width for a seamless, infinite loop. */
-@keyframes logo-marquee {
-  from {
-    transform: translateX(0);
-  }
-  to {
-    transform: translateX(-50%);
-  }
-}
-
-/* Announcement bar — a sheen that sweeps across the bar
-   (src/components/marketing/announcement_bar.tsx). */
-@keyframes announce-sheen {
-  0% {
-    transform: translateX(-130%) skewX(-12deg);
-  }
-  100% {
-    transform: translateX(130%) skewX(-12deg);
-  }
-}
-
-/* Border glow — the rotating conic frame used by BorderGlow
-   (src/components/border-glow.tsx). The registry ships only the component, so
-   the animated gradient lives here. Animating the conic `from` angle via a
-   registered custom property rotates the gradient in place (no corner gaps). */
-@property --glow-angle {
-  syntax: "<angle>";
-  initial-value: 0deg;
-  inherits: false;
-}
-@keyframes border-glow-spin {
-  to {
-    --glow-angle: 360deg;
-  }
-}
-@keyframes border-glow-linear {
-  to {
-    background-position: 0 -200%;
-  }
-}
-.glow-border {
-  background: conic-gradient(
-    from var(--glow-angle) at 50% 50%,
-    var(--glow-color-1),
-    var(--glow-color-2),
-    var(--glow-color-3),
-    var(--glow-color-4),
-    var(--glow-color-5),
-    var(--glow-color-6),
-    var(--glow-color-7),
-    var(--glow-color-8),
-    var(--glow-color-9),
-    var(--glow-color-10),
-    var(--glow-color-1)
-  );
-  animation: border-glow-spin var(--glow-animation-duration, 5s) linear infinite;
-  animation-direction: var(--glow-direction, normal);
-}
-.glow-border[data-gradient-type="radial"] {
-  background: radial-gradient(
-    circle at 50% 50%,
-    var(--glow-color-1),
-    var(--glow-color-4),
-    var(--glow-color-7),
-    var(--glow-color-10)
-  );
-  animation: none;
-}
-.glow-border[data-gradient-type="linear"] {
-  background: linear-gradient(
-    var(--glow-color-1),
-    var(--glow-color-3),
-    var(--glow-color-5),
-    var(--glow-color-7),
-    var(--glow-color-9)
-  );
-  background-size: 100% 200%;
-  animation: border-glow-linear var(--glow-animation-duration, 5s) linear infinite;
-}
-@media (prefers-reduced-motion: reduce) {
-  .glow-border {
-    animation: none !important;
-  }
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
 }

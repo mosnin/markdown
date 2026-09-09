@@ -13,7 +13,6 @@ import {
 } from "lucide-react";
 
 import { Onboarding } from "@/components/ui/onboarding";
-import { HeroBackdrop } from "@/components/marketing/hero_backdrop";
 import { cn } from "@/lib/utils";
 import { markOnboarded } from "./actions";
 
@@ -42,7 +41,6 @@ export function WelcomeOnboarding() {
 
   return (
     <main className="relative isolate flex min-h-screen items-center justify-center overflow-hidden bg-background px-6 py-12">
-      <HeroBackdrop />
 
       <m.div
         initial={{ opacity: 0, y: 14, scale: 0.98 }}

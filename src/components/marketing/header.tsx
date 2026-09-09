@@ -1,552 +1,478 @@
-'use client';
+"use client";
 
-import * as React from 'react';
-import Link from 'next/link';
-import Image from 'next/image';
-import { usePathname } from 'next/navigation';
-import {
-  ArrowRight,
-  BookOpen,
-  Boxes,
-  Building2,
-  ChevronDown,
-  Code2,
-  Download,
-  FileText,
-  GitBranch,
-  LayoutGrid,
-  LifeBuoy,
-  Moon,
-  Network,
-  Plug,
-  Puzzle,
-  Rocket,
-  ShieldCheck,
-  Sparkles,
-  Sun,
-  X,
-  type LucideIcon,
-} from 'lucide-react';
-import * as m from 'motion/react-m';
-import { AnimatePresence } from 'motion/react';
-import { useTheme } from 'next-themes';
-import { Button } from '@/components/ui/button';
-import { MenuToggleIcon } from '@/components/ui/menu-toggle-icon';
-import { cn } from '@/lib/utils';
-import { staggerContainer, fadeRise, tween, spring } from '@/lib/motion';
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { AnimatePresence, motion, useReducedMotion } from "motion/react";
+import { ChevronDown, Menu, X } from "lucide-react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { Mark } from "@/components/brand/logo";
+import { CutButton } from "@/components/marketing/cut-button";
+import { cn } from "@/lib/utils";
 
-// ─── Navigation model ────────────────────────────────────────────────────────
-// Real, specific copy — this is the trust-gate / governed-context-layer story,
-// not placeholder nav. Each mega menu pairs a column of destinations with one
-// featured tile that carries the section's headline idea.
+/* ==========================================================================
+   The site header, built from ForgeUI header05: a floating bar that tightens
+   and takes a border once the page scrolls, a mega menu under Product with a
+   promo card, and an accordion sheet on narrow viewports.
 
-type MegaItem = {
+   Two things changed from the block. The scrolled bar is a solid raised
+   surface rather than a frosted one (anti-slop rule 4), and the scrolled
+   state comes from an IntersectionObserver sentinel rather than a scroll
+   listener (DESIGN_LANGUAGE §7.3).
+   ========================================================================== */
+
+type MenuChild = { title: string; href: string; description: string };
+type Promo = { title: string; description: string; href: string };
+type NavItem = {
+  id: string;
   title: string;
-  description: string;
   href: string;
-  icon: LucideIcon;
+  children?: MenuChild[];
+  promo?: Promo;
 };
 
-type Featured = {
-  eyebrow: string;
-  title: string;
-  description: string;
-  href: string;
-  cta: string;
-  icon: LucideIcon;
-};
-
-type MegaMenu = {
-  key: string;
-  label: string;
-  items: MegaItem[];
-  featured: Featured;
-};
-
-const MEGA_MENUS: MegaMenu[] = [
+const NAV: NavItem[] = [
   {
-    key: 'product',
-    label: 'Product',
-    items: [
-      { title: 'Platform overview', description: 'The whole context layer, end to end.', href: '/features', icon: LayoutGrid },
-      { title: 'Notes & files', description: 'Markdown-native knowledge, kept structured.', href: '/notes-and-files', icon: FileText },
-      { title: 'Skills & agents', description: 'Reusable capabilities your agents can call.', href: '/skills-and-agents', icon: Puzzle },
-      { title: 'Organization', description: 'Boxes, branches, and a live knowledge graph.', href: '/organization', icon: Boxes },
-      { title: 'Portability', description: 'Plain markdown — yours to export anytime.', href: '/portability', icon: Download },
+    id: "product",
+    title: "Product",
+    href: "/product",
+    children: [
+      {
+        title: "Handoff briefs",
+        href: "/product#briefs",
+        description: "The next agent starts knowing what the last one knew.",
+      },
+      {
+        title: "Session log",
+        href: "/product#log",
+        description: "What every agent did, and what it actually said.",
+      },
+      {
+        title: "Live coordination",
+        href: "/product#coordination",
+        description: "Several agents on one repo, without collisions.",
+      },
+      {
+        title: "Hooks and MCP",
+        href: "/product#hooks",
+        description: "Claude Code, Codex, Cursor, CI — capture is automatic.",
+      },
     ],
-    featured: {
-      eyebrow: 'The trust gate',
-      title: 'Approve every agent write',
-      description: 'Agents propose changes over MCP. Nothing touches your source of truth until you say so.',
-      href: '/how-it-works',
-      cta: 'See the loop',
-      icon: ShieldCheck,
+    promo: {
+      title: "How it works",
+      description:
+        "Install the hooks, run your agents, and the context carries itself.",
+      href: "/how-it-works",
     },
   },
-  {
-    key: 'developers',
-    label: 'Developers',
-    items: [
-      { title: 'How it works', description: 'Propose → review → approve, in detail.', href: '/how-it-works', icon: GitBranch },
-      { title: 'Connections', description: 'Connect any MCP agent with scoped tokens.', href: '/connections', icon: Plug },
-      { title: 'API', description: 'Build directly on the governed context layer.', href: '/api', icon: Code2 },
-    ],
-    featured: {
-      eyebrow: 'Model Context Protocol',
-      title: 'One protocol, no bespoke glue',
-      description: 'OAuth 2.1 + PKCE, per-box scopes, full audit. Bring the agents you already use.',
-      href: '/connections',
-      cta: 'Connect an agent',
-      icon: Network,
-    },
-  },
-  {
-    key: 'resources',
-    label: 'Resources',
-    items: [
-      { title: 'Blog', description: 'Notes on context engineering.', href: '/blog', icon: BookOpen },
-      { title: 'Changelog', description: 'What shipped, and what’s next.', href: '/changelog', icon: Rocket },
-      { title: 'Help center', description: 'Guides, FAQs, and support.', href: '/help', icon: LifeBuoy },
-      { title: 'About', description: 'Why we’re building Poggle.', href: '/about', icon: Building2 },
-    ],
-    featured: {
-      eyebrow: 'Get started free',
-      title: 'Your first agent in minutes',
-      description: 'Spin up a workspace, connect an agent, and watch the proposals roll in.',
-      href: '/sign_in',
-      cta: 'Start free',
-      icon: Sparkles,
-    },
-  },
+  { id: "how", title: "How it works", href: "/how-it-works" },
+  { id: "pricing", title: "Pricing", href: "/pricing" },
+  { id: "docs", title: "Docs", href: "/docs" },
+  { id: "security", title: "Security", href: "/security" },
+  { id: "about", title: "About", href: "/about" },
 ];
 
-const DIRECT_LINKS: { label: string; href: string }[] = [
-  { label: 'Pricing', href: '/pricing' },
-];
+const GITHUB = "https://github.com/mosnin/poggle";
 
-// ─── Header ──────────────────────────────────────────────────────────────────
+function useStuck(): [boolean, (node: HTMLDivElement | null) => void] {
+  const [stuck, setStuck] = useState(false);
+  const observer = useRef<IntersectionObserver | null>(null);
+  const ref = (node: HTMLDivElement | null): void => {
+    observer.current?.disconnect();
+    if (!node) return;
+    observer.current = new IntersectionObserver(
+      ([entry]) => setStuck(!(entry?.isIntersecting ?? true)),
+      { threshold: 0 },
+    );
+    observer.current.observe(node);
+  };
+  return [stuck, ref];
+}
 
-export function MarketingHeader() {
-  const [active, setActive] = React.useState<string | null>(null);
-  const [mobileOpen, setMobileOpen] = React.useState(false);
-  const scrolled = useScroll(8);
+export function MarketingHeader(): ReactNode {
+  const [stuck, sentinelRef] = useStuck();
+  // The sheet remembers which route it was opened on, so a navigation closes
+  // it without an effect writing state: on a new pathname the two disagree.
+  const [openOn, setOpenOn] = useState<string | null>(null);
+  const [accordion, setAccordion] = useState<string | null>(null);
   const pathname = usePathname();
-  const closeTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
-  const navRef = React.useRef<HTMLDivElement | null>(null);
+  const reduced = useReducedMotion();
+  const open = openOn === pathname;
+  const setOpen = (next: boolean | ((prev: boolean) => boolean)): void => {
+    const value = typeof next === "function" ? next(open) : next;
+    setOpenOn(value ? pathname : null);
+  };
 
-  // Close everything on route change.
-  React.useEffect(() => {
-    setActive(null);
-    setMobileOpen(false);
-  }, [pathname]);
-
-  // Lock body scroll while the full-page mobile menu is open.
-  React.useEffect(() => {
-    if (mobileOpen) {
-      const prev = document.body.style.overflow;
-      document.body.style.overflow = 'hidden';
-      return () => {
-        document.body.style.overflow = prev;
-      };
-    }
-  }, [mobileOpen]);
-
-  // Escape closes the mega menu; click-outside collapses it.
-  React.useEffect(() => {
-    function onKey(e: KeyboardEvent) {
-      if (e.key === 'Escape') {
-        setActive(null);
-        setMobileOpen(false);
-      }
-    }
-    function onClick(e: MouseEvent) {
-      if (navRef.current && !navRef.current.contains(e.target as Node)) {
-        setActive(null);
-      }
-    }
-    document.addEventListener('keydown', onKey);
-    document.addEventListener('pointerdown', onClick);
-    return () => {
-      document.removeEventListener('keydown', onKey);
-      document.removeEventListener('pointerdown', onClick);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent): void => {
+      if (e.key === "Escape") setOpenOn(null);
     };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
   }, []);
 
-  function openMenu(key: string) {
-    if (closeTimer.current) clearTimeout(closeTimer.current);
-    setActive(key);
-  }
-  function scheduleClose() {
-    if (closeTimer.current) clearTimeout(closeTimer.current);
-    closeTimer.current = setTimeout(() => setActive(null), 140);
-  }
-
-  const activeMenu = MEGA_MENUS.find((mm) => mm.key === active) ?? null;
-
-  return (
-    <header className="pointer-events-none sticky top-0 z-50 w-full">
-      <div className="mx-auto flex w-full max-w-6xl justify-center px-4 pt-2.5">
-        <div ref={navRef} className="pointer-events-auto relative w-full md:w-fit">
-          {/* ── The pill ─────────────────────────────────────────────────── */}
-          <nav
-            className={cn(
-              'relative flex h-12 items-center justify-between gap-2 rounded-full px-2 md:gap-7',
-              'backdrop-blur-xl transition-[background-color,box-shadow] duration-300',
-              scrolled
-                ? 'bg-background/80 shadow-[0_12px_40px_-14px_rgba(0,0,0,0.35)]'
-                : 'bg-background/55 shadow-[0_6px_24px_-18px_rgba(0,0,0,0.25)]',
-            )}
-          >
-            {/* Left: logo + nav, grouped together */}
-            <div className="flex items-center gap-1">
-              <Link
-                href="/"
-                className="flex items-center gap-2 rounded-full px-2.5 py-1.5 transition-colors hover:bg-accent/60"
-                onMouseEnter={() => setActive(null)}
-              >
-                <WordmarkLogo />
-              </Link>
-
-              <ul className="hidden items-center gap-0.5 md:flex">
-              {MEGA_MENUS.map((mm) => {
-                const isOpen = active === mm.key;
-                return (
-                  <li
-                    key={mm.key}
-                    onMouseEnter={() => openMenu(mm.key)}
-                    onMouseLeave={scheduleClose}
-                  >
-                    <button
-                      type="button"
-                      aria-expanded={isOpen}
-                      aria-haspopup="true"
-                      onClick={() => setActive(isOpen ? null : mm.key)}
-                      onFocus={() => openMenu(mm.key)}
-                      className={cn(
-                        'flex items-center gap-1 rounded-full px-3.5 py-2 text-sm font-medium transition-colors',
-                        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-                        isOpen
-                          ? 'bg-accent text-foreground'
-                          : 'text-foreground/75 hover:bg-accent/60 hover:text-foreground',
-                      )}
-                    >
-                      {mm.label}
-                      <ChevronDown
-                        className={cn(
-                          'size-3.5 text-foreground/40 transition-transform duration-200',
-                          isOpen && 'rotate-180 text-foreground/70',
-                        )}
-                        aria-hidden="true"
-                      />
-                    </button>
-                  </li>
-                );
-              })}
-              {DIRECT_LINKS.map((link) => (
-                <li key={link.href} onMouseEnter={() => setActive(null)}>
-                  <Link
-                    href={link.href}
-                    className="rounded-full px-3.5 py-2 text-sm font-medium text-foreground/75 transition-colors hover:bg-accent/60 hover:text-foreground"
-                  >
-                    {link.label}
-                  </Link>
-                </li>
-              ))}
-            </ul>
-            </div>
-
-            {/* Desktop CTAs */}
-            <div className="hidden items-center gap-1 md:flex">
-              <ThemeToggleButton />
-              <Link
-                href="/sign_in"
-                className="rounded-full px-3.5 py-2 text-sm font-medium text-foreground/75 transition-colors hover:bg-accent/60 hover:text-foreground"
-              >
-                Sign in
-              </Link>
-              <Button
-                size="sm"
-                className="rounded-full"
-                render={<Link href="/sign_in?mode=signup" />}
-              >
-                Get started
-              </Button>
-            </div>
-
-            {/* Mobile trigger */}
-            <Button
-              size="icon"
-              variant="ghost"
-              onClick={() => setMobileOpen((v) => !v)}
-              className="rounded-full md:hidden"
-              aria-expanded={mobileOpen}
-              aria-controls="mobile-menu"
-              aria-label="Toggle menu"
-            >
-              <MenuToggleIcon open={mobileOpen} className="size-5" duration={300} />
-            </Button>
-          </nav>
-
-          {/* ── Mega menu panel ──────────────────────────────────────────── */}
-          <AnimatePresence>
-            {activeMenu && (
-              <m.div
-                key="mega"
-                initial={{ opacity: 0, y: 8, scale: 0.985 }}
-                animate={{ opacity: 1, y: 0, scale: 1 }}
-                exit={{ opacity: 0, y: 6, scale: 0.99, transition: tween.fast }}
-                transition={spring.gentle}
-                onMouseEnter={() => openMenu(activeMenu.key)}
-                onMouseLeave={scheduleClose}
-                className="absolute left-1/2 top-[calc(100%+0.6rem)] hidden w-[44rem] max-w-[calc(100vw-2rem)] -translate-x-1/2 md:block"
-              >
-                <div className="overflow-hidden rounded-[1.75rem] border border-border/60 bg-popover/85 p-2.5 shadow-2xl shadow-black/10 backdrop-blur-2xl">
-                  <div className="grid grid-cols-5 gap-2">
-                    {/* Destination column */}
-                    <AnimatePresence mode="wait">
-                      <m.ul
-                        key={activeMenu.key}
-                        initial={{ opacity: 0, x: -6 }}
-                        animate={{ opacity: 1, x: 0, transition: tween.fast }}
-                        exit={{ opacity: 0, x: 6, transition: { duration: 0.08 } }}
-                        className="col-span-3 flex list-none flex-col gap-0.5"
-                      >
-                        {activeMenu.items.map((item) => {
-                          const Icon = item.icon;
-                          return (
-                            <li key={item.href}>
-                              <Link
-                                href={item.href}
-                                className="group/item flex items-start gap-3 rounded-2xl p-3 transition-colors hover:bg-accent"
-                              >
-                                <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-violet-500/10 text-violet-500 transition-colors group-hover/item:bg-violet-500/15">
-                                  <Icon className="size-[18px]" aria-hidden="true" />
-                                </span>
-                                <span className="min-w-0">
-                                  <span className="block text-sm font-semibold text-foreground">
-                                    {item.title}
-                                  </span>
-                                  <span className="block text-[13px] leading-snug text-muted-foreground">
-                                    {item.description}
-                                  </span>
-                                </span>
-                              </Link>
-                            </li>
-                          );
-                        })}
-                      </m.ul>
-                    </AnimatePresence>
-
-                    {/* Featured tile */}
-                    <AnimatePresence mode="wait">
-                      <m.div
-                        key={activeMenu.key}
-                        initial={{ opacity: 0, x: 6 }}
-                        animate={{ opacity: 1, x: 0, transition: tween.fast }}
-                        exit={{ opacity: 0, x: -6, transition: { duration: 0.08 } }}
-                        className="col-span-2"
-                      >
-                        <FeaturedTile featured={activeMenu.featured} />
-                      </m.div>
-                    </AnimatePresence>
-                  </div>
-                </div>
-              </m.div>
-            )}
-          </AnimatePresence>
-        </div>
-      </div>
-
-      {/* ── Full-page mobile menu ──────────────────────────────────────────── */}
-      <MobileMenu open={mobileOpen} onClose={() => setMobileOpen(false)} />
-    </header>
-  );
-}
-
-// ─── Featured tile ─────────────────────────────────────────────────────────
-
-function FeaturedTile({ featured }: { featured: Featured }) {
-  const Icon = featured.icon;
-  return (
-    <Link
-      href={featured.href}
-      className="group/feat relative flex h-full flex-col justify-between overflow-hidden rounded-2xl bg-gradient-to-br from-violet-600 to-violet-500 p-5 text-white"
-    >
-      {/* Sheen */}
-      <div className="pointer-events-none absolute -right-6 -top-10 size-32 rounded-full bg-white/15 blur-2xl" />
-      <div className="relative">
-        <span className="flex size-10 items-center justify-center rounded-xl bg-white/15 backdrop-blur-sm">
-          <Icon className="size-5" aria-hidden="true" />
-        </span>
-        <p className="mt-4 font-mono text-[10px] uppercase tracking-[0.18em] text-white/70">
-          {featured.eyebrow}
-        </p>
-        <p className="mt-1 text-base font-semibold leading-tight">{featured.title}</p>
-        <p className="mt-1.5 text-[13px] leading-snug text-white/80">
-          {featured.description}
-        </p>
-      </div>
-      <span className="relative mt-4 inline-flex items-center gap-1 text-sm font-medium">
-        {featured.cta}
-        <ArrowRight className="size-4 transition-transform duration-200 group-hover/feat:translate-x-0.5" aria-hidden="true" />
-      </span>
-    </Link>
-  );
-}
-
-// ─── Theme toggle ────────────────────────────────────────────────────────────
-// Sun/Moon swap driven purely by the `dark` class (next-themes attribute="class"),
-// so it renders identically on server and client — no hydration flash, no mounted
-// guard needed. The click handler reads the resolved theme to decide the flip.
-
-function ThemeToggleButton({ className }: { className?: string }) {
-  const { resolvedTheme, setTheme } = useTheme();
-  return (
-    <button
-      type="button"
-      aria-label="Toggle light and dark theme"
-      onClick={() => setTheme(resolvedTheme === 'dark' ? 'light' : 'dark')}
-      className={cn(
-        'relative inline-flex size-9 items-center justify-center rounded-full text-foreground/70 transition-colors hover:bg-accent/60 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-        className,
-      )}
-    >
-      <Sun className="size-[18px] rotate-0 scale-100 transition-transform duration-300 dark:-rotate-90 dark:scale-0" aria-hidden="true" />
-      <Moon className="absolute size-[18px] rotate-90 scale-0 transition-transform duration-300 dark:rotate-0 dark:scale-100" aria-hidden="true" />
-    </button>
-  );
-}
-
-// ─── Full-page mobile menu ───────────────────────────────────────────────────
-
-function MobileMenu({ open, onClose }: { open: boolean; onClose: () => void }) {
-  return (
-    <AnimatePresence>
-      {open && (
-        <m.div
-          id="mobile-menu"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1, transition: tween.fast }}
-          exit={{ opacity: 0, transition: tween.fast }}
-          className="pointer-events-auto fixed inset-0 z-40 overflow-y-auto bg-background/95 backdrop-blur-xl md:hidden"
-          style={{ paddingTop: 'calc(env(safe-area-inset-top) + 5rem)' }}
-        >
-          {/* Violet bloom backdrop */}
-          <div className="pointer-events-none absolute -top-24 left-1/2 h-72 w-72 -translate-x-1/2 rounded-full bg-violet-600/15 blur-3xl" />
-
-          {/* Top bar: theme toggle + an unmistakable close button */}
-          <div
-            className="absolute right-4 z-10 flex items-center gap-1"
-            style={{ top: 'calc(env(safe-area-inset-top) + 0.9rem)' }}
-          >
-            <ThemeToggleButton />
-            <button
-              type="button"
-              onClick={onClose}
-              aria-label="Close menu"
-              className="inline-flex size-9 items-center justify-center rounded-full text-foreground/70 transition-colors hover:bg-accent/60 hover:text-foreground"
-            >
-              <X className="size-5" aria-hidden="true" />
-            </button>
-          </div>
-
-          <m.div
-            variants={staggerContainer(0.05, 0.04)}
-            initial="hidden"
-            animate="visible"
-            className="relative mx-auto flex min-h-full w-full max-w-md flex-col gap-7 px-6 pb-[calc(env(safe-area-inset-bottom)+2rem)]"
-          >
-            {MEGA_MENUS.map((mm) => (
-              <m.section key={mm.key} variants={fadeRise} className="flex flex-col gap-1">
-                <p className="mb-1 font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground/60">
-                  {mm.label}
-                </p>
-                <ul className="flex list-none flex-col">
-                  {mm.items.map((item) => {
-                    const Icon = item.icon;
-                    return (
-                      <li key={item.href}>
-                        <Link
-                          href={item.href}
-                          onClick={onClose}
-                          className="flex items-center gap-3.5 rounded-2xl py-3 transition-colors active:bg-accent"
-                        >
-                          <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-violet-500/10 text-violet-500">
-                            <Icon className="size-5" aria-hidden="true" />
-                          </span>
-                          <span className="min-w-0">
-                            <span className="block text-[15px] font-medium text-foreground">
-                              {item.title}
-                            </span>
-                            <span className="block truncate text-[13px] text-muted-foreground">
-                              {item.description}
-                            </span>
-                          </span>
-                        </Link>
-                      </li>
-                    );
-                  })}
-                </ul>
-              </m.section>
-            ))}
-
-            {/* Direct links */}
-            <m.div variants={fadeRise} className="flex flex-col">
-              {DIRECT_LINKS.map((link) => (
-                <Link
-                  key={link.href}
-                  href={link.href}
-                  onClick={onClose}
-                  className="flex items-center justify-between rounded-2xl py-3 text-[15px] font-medium text-foreground transition-colors active:bg-accent"
-                >
-                  {link.label}
-                  <ArrowRight className="size-4 text-muted-foreground" aria-hidden="true" />
-                </Link>
-              ))}
-            </m.div>
-
-            {/* CTAs */}
-            <m.div variants={fadeRise} className="mt-auto flex flex-col gap-2.5 pt-2">
-              <Button
-                variant="outline"
-                className="h-11 w-full rounded-full text-[15px]"
-                render={<Link href="/sign_in" onClick={onClose} />}
-              >
-                Sign in
-              </Button>
-              <Button
-                className="h-11 w-full rounded-full text-[15px]"
-                render={<Link href="/sign_in?mode=signup" onClick={onClose} />}
-              >
-                Get started
-              </Button>
-            </m.div>
-          </m.div>
-        </m.div>
-      )}
-    </AnimatePresence>
-  );
-}
-
-// ─── Bits ────────────────────────────────────────────────────────────────────
-
-function useScroll(threshold: number) {
-  const [scrolled, setScrolled] = React.useState(false);
-  React.useEffect(() => {
-    const onScroll = () => setScrolled(window.scrollY > threshold);
-    onScroll();
-    window.addEventListener('scroll', onScroll, { passive: true });
-    return () => window.removeEventListener('scroll', onScroll);
-  }, [threshold]);
-  return scrolled;
-}
-
-function WordmarkLogo() {
   return (
     <>
-      <Image src="/logo-symbol-dark.png" alt="" width={20} height={20} className="rounded dark:hidden" aria-hidden="true" />
-      <Image src="/logo-symbol-light.png" alt="" width={20} height={20} className="hidden rounded dark:block" aria-hidden="true" />
-      <span className="font-display text-base font-semibold tracking-tight text-foreground">Poggle</span>
+      <div ref={sentinelRef} aria-hidden="true" className="h-px w-full" />
+      <div className="fixed inset-x-0 top-0 z-50 px-4">
+        <header
+          data-stuck={stuck || open}
+          className={cn(
+            "mk-header mx-auto mt-4 flex h-[56px] w-full items-center justify-between px-6",
+            "transition-[max-width,background-color,border-color,box-shadow] duration-[var(--dur-4)] ease-[var(--ease-emphasis)]",
+            stuck || open
+              ? "max-w-[1200px] rounded-12 border border-border bg-raised shadow-elev-2"
+              : "max-w-[1360px] border border-transparent bg-transparent",
+          )}
+        >
+          <div className="flex items-center gap-10">
+            <Link
+              href="/"
+              aria-label="Company OS home"
+              className="focus-ring-canvas flex items-center gap-4 rounded-4 text-ink focus-visible:outline-none"
+            >
+              {/* Founder-requested scroll morph. This blur belongs to the
+                  wordmark transition, not a glass surface or scroll reveal. */}
+              <span
+                className="inline-flex shrink-0 items-center"
+                data-brand-compact={stuck}
+                aria-hidden="true"
+              >
+                <Mark size={24} />
+                <motion.span
+                  initial={false}
+                  animate={{
+                    width: stuck ? 0 : "auto",
+                    marginLeft: stuck ? 0 : 8,
+                    opacity: stuck ? 0 : 1,
+                    filter: reduced || !stuck ? "blur(0px)" : "blur(6px)",
+                  }}
+                  transition={{
+                    duration: reduced ? 0 : 0.26,
+                    ease: [0.32, 0.72, 0, 1],
+                  }}
+                  className="t-brand overflow-hidden whitespace-nowrap"
+                >
+                  companyos
+                </motion.span>
+              </span>
+            </Link>
+            <nav aria-label="Main" className="hidden md:flex">
+              <DesktopLinks pathname={pathname} />
+            </nav>
+          </div>
+
+          <div className="flex items-center gap-5">
+            <Link
+              href="/sign_in"
+              className="t-mk-nav focus-ring-canvas hidden rounded-4 px-4 py-3 text-ink-2 transition-colors duration-[var(--dur-1)] hover:text-ink focus-visible:outline-none md:inline-flex"
+            >
+              Sign in
+            </Link>
+            <CutButton href="/sign_in" className="hidden sm:inline-flex">
+              Create a company
+            </CutButton>
+            <button
+              type="button"
+              onClick={() => setOpen((v) => !v)}
+              aria-expanded={open}
+              aria-controls="mk-mobile-menu"
+              aria-label={open ? "Close menu" : "Open menu"}
+              className="focus-ring-canvas flex size-[36px] items-center justify-center rounded-6 text-ink transition-colors duration-[var(--dur-1)] hover:bg-state-hover focus-visible:outline-none md:hidden"
+            >
+              {open ? (
+                <X size={20} strokeWidth={1.5} aria-hidden="true" />
+              ) : (
+                <Menu size={20} strokeWidth={1.5} aria-hidden="true" />
+              )}
+            </button>
+          </div>
+        </header>
+
+        <AnimatePresence>
+          {open ? (
+            <motion.div
+              id="mk-mobile-menu"
+              initial={reduced ? { opacity: 1 } : { height: 0, opacity: 0 }}
+              animate={{ height: "auto", opacity: 1 }}
+              exit={reduced ? { opacity: 0 } : { height: 0, opacity: 0 }}
+              transition={{ duration: 0.26, ease: [0.32, 0.72, 0, 1] }}
+              className="mx-auto mt-2 max-w-[1200px] overflow-hidden rounded-12 border border-border bg-raised shadow-elev-3 md:hidden"
+            >
+              <div className="flex flex-col p-6">
+                {NAV.map((item) => {
+                  const isOpen = accordion === item.id;
+                  if (!item.children) {
+                    return (
+                      <Link
+                        key={item.id}
+                        href={item.href}
+                        onClick={() => setOpen(false)}
+                        className="t-body-strong border-b border-hairline py-6 text-ink-2 transition-colors duration-[var(--dur-1)] hover:text-ink"
+                      >
+                        {item.title}
+                      </Link>
+                    );
+                  }
+                  return (
+                    <div key={item.id} className="border-b border-hairline">
+                      <button
+                        type="button"
+                        onClick={() => setAccordion(isOpen ? null : item.id)}
+                        aria-expanded={isOpen}
+                        className="t-body-strong flex w-full items-center justify-between py-6 text-ink-2 transition-colors duration-[var(--dur-1)] hover:text-ink"
+                      >
+                        {item.title}
+                        <ChevronDown
+                          size={18}
+                          strokeWidth={1.5}
+                          aria-hidden="true"
+                          className={cn(
+                            "transition-transform duration-[var(--dur-2)] ease-[var(--ease-move)]",
+                            isOpen && "rotate-180",
+                          )}
+                        />
+                      </button>
+                      <div
+                        className={cn(
+                          "grid transition-[grid-template-rows,opacity] duration-[var(--dur-2)] ease-[var(--ease-move)]",
+                          isOpen
+                            ? "grid-rows-[1fr] opacity-100"
+                            : "grid-rows-[0fr] opacity-0",
+                        )}
+                      >
+                        <div className="overflow-hidden">
+                          <div className="flex flex-col gap-2 pb-5">
+                            <Link
+                              href={item.href}
+                              onClick={() => setOpen(false)}
+                              className="rounded-8 px-4 py-4 transition-colors duration-[var(--dur-1)] hover:bg-state-hover"
+                            >
+                              <span className="t-body-strong block text-ink">
+                                Overview
+                              </span>
+                            </Link>
+                            {item.children.map((child) => (
+                              <Link
+                                key={child.href}
+                                href={child.href}
+                                onClick={() => setOpen(false)}
+                                className="rounded-8 px-4 py-4 transition-colors duration-[var(--dur-1)] hover:bg-state-hover"
+                              >
+                                <span className="t-body-strong block text-ink">
+                                  {child.title}
+                                </span>
+                                <span className="t-caption block text-ink-3">
+                                  {child.description}
+                                </span>
+                              </Link>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+                <a
+                  href={GITHUB}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="t-body-strong border-b border-hairline py-6 text-ink-2 transition-colors duration-[var(--dur-1)] hover:text-ink"
+                >
+                  GitHub
+                </a>
+                <div className="flex flex-col gap-4 pt-6">
+                  <CutButton href="/sign_in">Start free</CutButton>
+                  <CutButton href="/sign_in" variant="outline">
+                    Sign in
+                  </CutButton>
+                </div>
+              </div>
+            </motion.div>
+          ) : null}
+        </AnimatePresence>
+      </div>
     </>
+  );
+}
+
+function DesktopLinks({ pathname }: { pathname: string }): ReactNode {
+  const [active, setActive] = useState<string | null>(null);
+  const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const show = (id: string | null): void => {
+    if (closeTimer.current) clearTimeout(closeTimer.current);
+    setActive(id);
+  };
+  const scheduleClose = (): void => {
+    if (closeTimer.current) clearTimeout(closeTimer.current);
+    closeTimer.current = setTimeout(() => setActive(null), 120);
+  };
+
+  return (
+    <div
+      onMouseLeave={scheduleClose}
+      onMouseEnter={() => {
+        if (closeTimer.current) clearTimeout(closeTimer.current);
+      }}
+      className="relative flex items-center gap-2"
+    >
+      {NAV.map((item) => {
+        const current =
+          pathname === item.href || pathname.startsWith(`${item.href}/`);
+        const base = cn(
+          "t-mk-nav focus-ring-canvas flex items-center gap-2 rounded-4 px-4 py-3 transition-colors duration-[var(--dur-1)] focus-visible:outline-none",
+          current || active === item.id
+            ? "text-ink"
+            : "text-ink-2 hover:text-ink",
+        );
+        if (!item.children) {
+          return (
+            <Link
+              key={item.id}
+              href={item.href}
+              onMouseEnter={() => show(null)}
+              onFocus={() => show(null)}
+              aria-current={current ? "page" : undefined}
+              className={base}
+            >
+              {item.title}
+            </Link>
+          );
+        }
+        return (
+          <Link
+            key={item.id}
+            href={item.href}
+            onMouseEnter={() => show(item.id)}
+            onFocus={() => show(item.id)}
+            aria-current={current ? "page" : undefined}
+            aria-expanded={active === item.id}
+            className={base}
+          >
+            {item.title}
+            <ChevronDown
+              size={14}
+              strokeWidth={1.5}
+              aria-hidden="true"
+              className={cn(
+                "transition-transform duration-[var(--dur-2)] ease-[var(--ease-move)]",
+                active === item.id && "rotate-180",
+              )}
+            />
+          </Link>
+        );
+      })}
+      <a
+        href={GITHUB}
+        target="_blank"
+        rel="noreferrer"
+        onMouseEnter={() => show(null)}
+        className="t-mk-nav focus-ring-canvas rounded-4 px-4 py-3 text-ink-2 transition-colors duration-[var(--dur-1)] hover:text-ink focus-visible:outline-none"
+      >
+        GitHub
+      </a>
+      <AnimatePresence>
+        {active ? <MegaMenu key={active} id={active} /> : null}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+function MegaMenu({ id }: { id: string }): ReactNode {
+  const item = NAV.find((n) => n.id === id);
+  const reduced = useReducedMotion();
+  if (!item?.children) return null;
+  return (
+    <motion.div
+      initial={reduced ? { opacity: 0 } : { opacity: 0, y: 6, scale: 0.98 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      exit={reduced ? { opacity: 0 } : { opacity: 0, y: 6, scale: 0.98 }}
+      transition={{ duration: 0.2, ease: [0.22, 0.61, 0.36, 1] }}
+      className={cn(
+        "absolute -left-4 top-[44px] origin-top-left rounded-12 border border-border bg-overlay p-2 shadow-elev-3",
+        item.promo ? "grid w-[680px] grid-cols-[1fr_232px] gap-2" : "w-[520px]",
+      )}
+    >
+      <div className="flex flex-col gap-1 rounded-8 bg-object p-2 ring-1 ring-hairline">
+        {item.children.map((child) => (
+          <Link
+            key={child.href}
+            href={child.href}
+            className="focus-ring group flex items-start gap-5 rounded-8 px-4 py-4 transition-colors duration-[var(--dur-1)] hover:bg-state-hover focus-visible:outline-none"
+          >
+            <span className="flex flex-col gap-1">
+              <span className="t-body-strong text-ink">{child.title}</span>
+              <span className="t-caption text-ink-3">{child.description}</span>
+            </span>
+          </Link>
+        ))}
+      </div>
+      {item.promo ? (
+        <Link
+          href={item.promo.href}
+          className="focus-ring group flex flex-col rounded-8 bg-object p-4 ring-1 ring-hairline transition-colors duration-[var(--dur-1)] hover:bg-state-hover focus-visible:outline-none"
+        >
+          <div className="flex min-h-[112px] flex-1 items-center justify-center text-ink">
+            <PromoArt />
+          </div>
+          <div className="flex flex-col gap-1 px-2 pb-1 pt-4">
+            <span className="t-body-strong text-ink">{item.promo.title}</span>
+            <span className="t-caption text-ink-3">
+              {item.promo.description}
+            </span>
+          </div>
+        </Link>
+      ) : null}
+    </motion.div>
+  );
+}
+
+/** header05's "docs" artwork, recoloured to currentColor: three stacked sheets. */
+function PromoArt(): ReactNode {
+  const w = 56;
+  const h = 74;
+  const fold = 13;
+  const doc = (x: number, y: number): string =>
+    `M ${x + 5} ${y} H ${x + w - fold} L ${x + w} ${y + fold} V ${y + h - 5} Q ${x + w} ${y + h} ${x + w - 5} ${y + h} H ${x + 5} Q ${x} ${y + h} ${x} ${y + h - 5} V ${y + 5} Q ${x} ${y} ${x + 5} ${y} Z`;
+  const foldPath = (x: number, y: number): string =>
+    `M ${x + w - fold} ${y} V ${y + fold} H ${x + w}`;
+  const layers = [
+    { x: 130, y: 30, op: 0.13, content: false },
+    { x: 108, y: 36, op: 0.26, content: false },
+    { x: 86, y: 42, op: 0.55, content: true },
+  ];
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 288 140"
+      className="h-auto w-full"
+      fill="none"
+      stroke="currentColor"
+    >
+      {layers.map((l, i) => (
+        <g key={i}>
+          <path
+            d={doc(l.x, l.y)}
+            fill="var(--surface-object)"
+            strokeOpacity={l.op}
+            strokeWidth={1.5}
+          />
+          <path d={foldPath(l.x, l.y)} strokeOpacity={l.op} strokeWidth={1.5} />
+          {l.content
+            ? [0, 1, 2].map((j) => (
+                <line
+                  key={j}
+                  x1={l.x + 11}
+                  y1={l.y + 30 + j * 12}
+                  x2={l.x + w - 11 - (j === 2 ? 12 : 0)}
+                  y2={l.y + 30 + j * 12}
+                  strokeOpacity={0.2}
+                  strokeWidth={1.4}
+                />
+              ))
+            : null}
+        </g>
+      ))}
+    </svg>
   );
 }

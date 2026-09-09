@@ -71,6 +71,9 @@ importers:
       '@dagrejs/dagre':
         specifier: ^3.0.0
         version: 3.0.0
+      '@gsap/react':
+        specifier: ^2.1.2
+        version: 2.1.2(gsap@3.15.0)(react@19.2.4)
       '@hugeicons/core-free-icons':
         specifier: ^4.1.1
         version: 4.1.1
@@ -167,6 +170,9 @@ importers:
       geist:
         specifier: ^1.7.0
         version: 1.7.0(next@16.2.3(@babel/core@7.29.0)(@opentelemetry/api@1.9.1)(@playwright/test@1.59.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4))
+      gsap:
+        specifier: ^3.15.0
+        version: 3.15.0
       hugeicons-react:
         specifier: ^0.4.0
         version: 0.4.0(react@19.2.4)
@@ -212,6 +218,9 @@ importers:
       react-force-graph-2d:
         specifier: ^1.25.0
         version: 1.29.1(react@19.2.4)
+      react-icons:
+        specifier: ^5.7.0
+        version: 5.7.0(react@19.2.4)
       react-use-measure:
         specifier: ^2.1.7
         version: 2.1.7(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
@@ -778,6 +787,12 @@ packages:
     resolution: {integrity: sha512-rc1hOQtjIWGxcxpb9aHAfLpIctjEnsDehj0DAiVfBlmT84uvR0uUtN2hEi/ecvWVjXUGf5qPF4qEgiLOx1YIMQ==}
     engines: {node: '>=6'}
     hasBin: true
+
+  '@gsap/react@2.1.2':
+    resolution: {integrity: sha512-JqliybO1837UcgH2hVOM4VO+38APk3ECNrsuSM4MuXp+rbf+/2IG2K1YJiqfTcXQHH7XlA0m3ykniFYstfq0Iw==}
+    peerDependencies:
+      gsap: ^3.12.5
+      react: '>=17'
 
   '@hexagon/base64@1.1.28':
     resolution: {integrity: sha512-lhqDEAvWixy3bZ+UOYbPwUbBkwBq5C1LAJ/xPC8Oi+lL54oyakv/npbA0aU2hgCsx/1NUd4IBvV03+aUBWxerw==}
@@ -4438,6 +4453,9 @@ packages:
     resolution: {integrity: sha512-5bJ+nf/UCpAjHM8i06fl7eLyVC9iuNAjm9qzkiu2ZGhM0VscSvS6WDPfAwkdkBuoXGM9FJSbKl6wylMwP9Ktig==}
     engines: {node: ^12.22.0 || ^14.16.0 || ^16.0.0 || >=17.0.0}
 
+  gsap@3.15.0:
+    resolution: {integrity: sha512-dMW4CWBTUK1AEEDeZc1g4xpPGIrSf9fJF960qbTZmN/QwZIWY5wgliS6JWl9/25fpTGJrMRtSjGtOmPnfjZB+A==}
+
   guid-typescript@1.0.9:
     resolution: {integrity: sha512-Y8T4vYhEfwJOTbouREvG+3XDsjr8E3kIr7uf+JZ0BYloFsttiHU0WfvANVsR7TxNUJa/WpCnw/Ino/p+DeBhBQ==}
 
@@ -5639,6 +5657,11 @@ packages:
   react-force-graph-2d@1.29.1:
     resolution: {integrity: sha512-1Rl/1Z3xy2iTHKj6a0jRXGyiI86xUti81K+jBQZ+Oe46csaMikp47L5AjrzA9hY9fNGD63X8ffrqnvaORukCuQ==}
     engines: {node: '>=12'}
+    peerDependencies:
+      react: '*'
+
+  react-icons@5.7.0:
+    resolution: {integrity: sha512-LBLy340Rzqy6+/yVhZKT3B/QpP1BZaesGqasf09HPOBzRarcDIFH0WwXlXQfE7q7ipxK4MSiC5DIBWURCny6fw==}
     peerDependencies:
       react: '*'
 
@@ -7183,6 +7206,11 @@ snapshots:
       long: 5.3.2
       protobufjs: 7.5.5
       yargs: 17.7.2
+
+  '@gsap/react@2.1.2(gsap@3.15.0)(react@19.2.4)':
+    dependencies:
+      gsap: 3.15.0
+      react: 19.2.4
 
   '@hexagon/base64@1.1.28': {}
 
@@ -11293,6 +11321,8 @@ snapshots:
 
   graphql@16.13.2: {}
 
+  gsap@3.15.0: {}
+
   guid-typescript@1.0.9: {}
 
   has-bigints@1.1.0: {}
@@ -12436,6 +12466,10 @@ snapshots:
       prop-types: 15.8.1
       react: 19.2.4
       react-kapsule: 2.5.7(react@19.2.4)
+
+  react-icons@5.7.0(react@19.2.4):
+    dependencies:
+      react: 19.2.4
 
   react-is@16.13.1: {}
 
