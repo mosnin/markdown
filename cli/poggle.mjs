@@ -360,6 +360,53 @@ function redact(text) {
     .replace(/\b([a-z][a-z0-9+.-]*:\/\/)[^\s:/@]+:[^\s:/@]+@/gi, "$1<redacted>@");
 }
 
+// ─── Cap detection ──────────────────────────────────────────────────────────
+
+/**
+ * Provider messages that mean a usage limit was hit.
+ *
+ * Kept narrow deliberately. A false positive is not harmless — it tells the
+ * next agent the work was cut off when it may have finished — so anything
+ * ambiguous is left for the server-side reaper to record as `unknown`.
+ */
+const CAP_PATTERNS = [
+  /usage limit reached/i,
+  /rate limit (?:reached|exceeded)/i,
+  /you(?:'ve| have) (?:hit|reached) your (?:usage|plan) limit/i,
+  /quota (?:exceeded|exhausted)/i,
+  /insufficient (?:quota|credits)/i,
+  /out of (?:credits|tokens)/i,
+];
+
+function transcriptPathOf(payload) {
+  return payload?.transcript_path || payload?.transcriptPath || null;
+}
+
+function looksLikeCap(text) {
+  if (typeof text !== "string" || text.length === 0) return false;
+  return CAP_PATTERNS.some((re) => re.test(text));
+}
+
+/**
+ * Close the session as capped, right now.
+ *
+ * The value of catching it here rather than waiting for the reaper is time and
+ * certainty: the claims this agent holds are released immediately instead of
+ * sitting out their TTL, and the reason is observed rather than inferred. It is
+ * a race against our own process being killed, which is why it is fire-first
+ * and best-effort — but when it wins, the next agent gets a truthful brief
+ * forty minutes sooner.
+ */
+async function reportCap(config) {
+  const state = readSessionState(config.cwd);
+  if (!state.session_id) return;
+
+  await apiRequest(config, "PATCH", `/api/v1/relay/sessions/${state.session_id}`, {
+    action: "end",
+    end_reason: "usage_capped",
+  });
+}
+
 // ─── Transcript shipping ────────────────────────────────────────────────────
 
 /**
@@ -588,6 +635,20 @@ function eventsFromClaudeCodeHook(hookName, payload) {
         response?.success === false ||
         Boolean(response?.error) ||
         Boolean(response?.is_error);
+
+      // A provider limit surfacing in a tool result is the clearest cap signal
+      // available, and it arrives while the process is still alive.
+      const errorText = String(
+        response?.error || response?.stderr || response?.message || "",
+      );
+      if (failed && looksLikeCap(errorText)) {
+        events.push(
+          makeEvent("usage_limit", "Provider reported a usage limit", {
+            importance: 5,
+            payload: { error: redact(errorText).slice(0, 1000) },
+          }),
+        );
+      }
 
       events.push(
         makeEvent(
@@ -835,8 +896,17 @@ async function cmdHook(config, args) {
   // Forced at PreCompact and at the end of a session — the two moments context
   // is otherwise lost for good — and opportunistic otherwise, because a hard
   // usage cap kills the process before either of those hooks can fire.
-  const transcriptPath =
-    payload.transcript_path || payload.transcriptPath || null;
+  // If this batch carried a cap, close the session before anything else: the
+  // claims we hold are blocking a peer, and we may not get another turn.
+  if (events.some((e) => e.event_type === "usage_limit")) {
+    if (transcriptPathOf(payload)) {
+      await shipTranscript(config, transcriptPathOf(payload), { force: true });
+    }
+    await reportCap(config);
+    return 0;
+  }
+
+  const transcriptPath = transcriptPathOf(payload);
   if (transcriptPath) {
     const force =
       hookName === "PreCompact" ||

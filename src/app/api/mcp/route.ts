@@ -362,7 +362,8 @@ const TOOLS: ToolDef[] = [
     description:
       "Read what earlier agent sessions did on a project before you: the goal, what is blocked or already failed, decisions taken, what was left in flight, and why the last session stopped. " +
       "Call this FIRST on any project you have not worked on in this session — it is far cheaper than rediscovering the work by reading files. " +
-      "Returns markdown sized to a token budget.",
+      "Returns markdown sized to a token budget. " +
+      "Follow it with check_in so the other agents on this project can see you arrive and you can see what they are holding.",
     scope: "relay:read",
     writes: false,
     inputSchema: {
@@ -480,9 +481,11 @@ const TOOLS: ToolDef[] = [
     name: "check_in",
     description:
       "Report what you are doing and find out what other agents on this project have been doing since you last asked. " +
-      "Call this when you START work, every few minutes WHILE you work, and whenever you are about to edit a file another agent might be in. " +
-      "It renews your claims, returns what changed, and warns you if someone edited something you claimed — a collision you find out about now is a merge conflict you do not get later. " +
-      "Claim the files you are about to change: claims are advisory, so their whole value is that the other agent gets told.",
+      "CALL THIS: (1) immediately after get_handoff_brief when you start, (2) before your first edit to any file, claiming it, " +
+      "(3) after finishing a chunk of work, releasing what you no longer need, and (4) every few minutes during long stretches of work. " +
+      "It renews your claims, returns what changed, and tells you if another agent edited something you claimed — a collision you hear about now is a merge conflict you do not get later. " +
+      "If it returns conflicts, read the named files again before you touch them: your copy is stale. " +
+      "Claiming is advisory and costs nothing; the whole value is that the other agent gets told, so claim early rather than perfectly.",
     scope: "relay:write",
     writes: true,
     inputSchema: {
