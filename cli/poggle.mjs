@@ -940,8 +940,10 @@ function cmdInit(config, args) {
       config.token
         ? "Token found. Start an agent and its context will be logged."
         : [
-            "No token configured yet. Create a relay key in the dashboard, then:",
+            "No token configured yet. Create a relay key at:",
+            `  ${config.apiUrl}/app/settings/relay_keys`,
             "",
+            "That page hands you the exact command to run. Or by hand:",
             "  mkdir -p ~/.poggle",
             '  echo \'{"token":"pgr_v1_..."}\' > ~/.poggle/config.json',
           ].join("\n"),

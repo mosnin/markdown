@@ -14,6 +14,7 @@ import {
   Fingerprint,
   GitBranch,
   Key,
+  KeyRound,
   Mail,
   Palette,
   Shield,
@@ -49,6 +50,9 @@ const accountNav = [
 ];
 
 const developerNav = [
+  // First in the list deliberately: without a relay key nothing is captured,
+  // so this is the setting a new workspace needs before any other.
+  { href: "/app/settings/relay_keys", label: "Relay keys", subLabel: "Credentials your agents' hooks use", icon: KeyRound },
   { href: "/app/settings/oauth_clients", label: "OAuth Clients", subLabel: "Apps you've registered", icon: Code2 },
   { href: "/app/settings/connected_apps", label: "Connected Apps", subLabel: "Apps with access to your workspace", icon: AppWindow },
   { href: "/app/settings/connections/migration", label: "Legacy migration", subLabel: "Migrate csk_v1_ tokens to OAuth", icon: ArrowRightLeft },

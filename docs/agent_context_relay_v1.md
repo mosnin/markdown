@@ -316,6 +316,41 @@ sections — a pointer is worthless if it displaces the substance.
 
 ---
 
+## Relay keys
+
+`src/server/services/relay_key_service.ts`, `/app/settings/relay_keys`
+
+The credential a hook carries, and the one thing standing between a fresh
+install and a working relay. Stored as a `connections` row of type `agent_hook`
+plus a `connection_tokens` row, reusing the existing prefix-and-sha256 storage.
+
+Deliberately a separate service from `connection_service` rather than a flag on
+it, because they differ in every way that matters: no box scopes (a relay key
+reaches the session log and nothing else), no connected-agent quota (that cap
+counts legacy csk_v1_ connections and was sized for a different product — a flat
+ceiling of 25 live keys per workspace guards against runaway creation instead),
+and a different expiry posture.
+
+**Expiry defaults to none**, which departs from the connection tokens this
+reuses. A hook key that silently expires mid-session does not fail loudly — it
+fails as an empty handoff brief three weeks later, when somebody needed context
+and there was none, with no obvious cause. That is worse than a long-lived
+credential whose blast radius is append-only writes to one workspace's log.
+Revocation is the control, `last_used_at` makes a forgotten key visible, and
+callers wanting a bounded credential pass `expiresAt` explicitly.
+
+**Rotation revokes immediately**, with no overlap window: an unattended shim
+cannot be asked to migrate gracefully, so a clean cut plus "paste this into the
+machine again" is more honest than a grace period nobody acts on.
+
+The reveal panel hands over the exact shell command rather than the bare secret,
+because the job of that screen is not "manage credentials" — it is to get a
+working key onto a developer's machine in the fewest steps. A key that has never
+been used is badged in the listing, since a config that never landed on the
+machine is otherwise a silent failure.
+
+---
+
 ## What is NOT built yet
 
 Being honest about the gap, in rough priority order:
@@ -323,10 +358,7 @@ Being honest about the gap, in rough priority order:
 1. **UI.** No dashboard for projects, the live timeline, sessions, or briefs.
    The API and SSE stream are there; nothing renders them. This is the largest
    remaining piece.
-2. **Relay key management.** `mintRelayToken()` exists and the auth path
-   verifies keys, but there is no settings page to create one and no service
-   that persists the `agent_hook` connection. Keys must currently be inserted by
-   hand. **This blocks first real use** and is the smallest high-value gap.
+2. ~~**Relay key management.**~~ Shipped — see "Relay keys" below.
 3. **Checkpoint distillation.** Checkpoints are only written when an agent or
    hook explicitly writes one. The automatic rollup — summarising N events into
    a checkpoint with a model — is not built, so briefs currently lean on raw
@@ -367,6 +399,10 @@ shapes, structure preservation, and termination on hostile input.
 adherence, determinism, cross-workspace refusal, requesting-session exclusion.
 `src/tests/unit/relay_ingest_normalisation.test.ts` — slug derivation across
 every way of naming one repo, end-reason coercion, salience defaults.
+`src/tests/unit/relay_key_service.test.ts` — 16 cases: the raw secret never
+reaches storage, a minted token round-trips to the hash verification will
+compute, rotation leaves exactly one live secret, cross-workspace access
+refused.
 `src/tests/unit/transcript_parser.test.ts` — 20 cases: reasoning kept whole,
 tool output truncated head-and-tail, error results promoted, partial trailing
 lines left unconsumed, byte-accurate offsets on multi-byte text, one malformed
