@@ -1,6 +1,7 @@
 import { type NextRequest } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { resolveRelayAuth } from "@/server/auth/relay_auth";
+import { getRequestContext } from "@/server/auth/get_request_context";
 import {
   E_BAD_REQUEST,
   E_INSUFFICIENT_SCOPE,
@@ -44,10 +45,34 @@ const BACKFILL_LIMIT = 50;
  *
  * Auth: relay key, or OAuth token with `relay:read`.
  */
+/**
+ * Resolve either kind of reader.
+ *
+ * Machines carry a relay key; the dashboard carries a session cookie and
+ * cannot attach a bearer token to an EventSource — the browser API has no way
+ * to set headers. Supporting both here is what lets one stream serve the live
+ * timeline and an external subscriber alike.
+ */
+async function resolveStreamAuth(
+  request: NextRequest
+): Promise<{ workspaceId: string } | { error: Response }> {
+  const relay = await resolveRelayAuth(request);
+  if (relay) {
+    if (!relay.canRead) return { error: E_INSUFFICIENT_SCOPE("relay:read") };
+    return { workspaceId: relay.workspaceId };
+  }
+
+  const session = await getRequestContext();
+  if (!session.isAuthenticated || !session.workspace) {
+    return { error: E_UNAUTHORIZED() };
+  }
+  return { workspaceId: session.workspace.id };
+}
+
 export async function GET(request: NextRequest): Promise<Response> {
-  const ctx = await resolveRelayAuth(request);
-  if (!ctx) return E_UNAUTHORIZED();
-  if (!ctx.canRead) return E_INSUFFICIENT_SCOPE("relay:read");
+  const auth = await resolveStreamAuth(request);
+  if ("error" in auth) return auth.error;
+  const ctx = { workspaceId: auth.workspaceId };
 
   const url = new URL(request.url);
   const projectRaw = url.searchParams.get("project");
