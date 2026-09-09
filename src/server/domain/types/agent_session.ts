@@ -60,6 +60,20 @@ export interface AgentSession {
   end_reason: SessionEndReason | null;
   resumed_from_session_id: string | null;
 
+  /**
+   * Delta cursor for multi-agent check-ins. Held server-side so an agent can
+   * call check_in() with no arguments and still get exactly what it has not
+   * seen — an agent asked to manage its own cursor will eventually get it
+   * wrong, and then either misses events or re-reads them forever.
+   */
+  last_checkin_at: string | null;
+  /**
+   * One line: what this agent is doing right now, shown to every peer.
+   * Distinct from `goal` — intent changes several times inside one goal.
+   */
+  current_intent: string | null;
+  checkin_count: number;
+
   event_count: number;
   tokens_in: number;
   tokens_out: number;

@@ -57,6 +57,12 @@ export const SUPPORTED_EVENT_TYPES = [
   "session.attention",
   "session.ended",
   "session.capped",
+  // ── Multi-agent coordination ─────────────────────────────────────────────
+  // notice.posted is how a team routes agent-to-agent chatter into Slack;
+  // claim.conflict is the one that usually wants a human — two agents wanting
+  // the same file means the work was split badly, and nobody else will notice.
+  "notice.posted",
+  "claim.conflict",
 ] as const;
 
 export type ContentWebhookEventType = (typeof SUPPORTED_EVENT_TYPES)[number];

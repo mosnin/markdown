@@ -50,6 +50,10 @@ export interface UpdateSessionInput {
   last_seen_at?: string;
   resumed_from_session_id?: string | null;
   metadata?: Record<string, unknown> | null;
+  /** Multi-agent check-in bookkeeping. Written only by the check-in path. */
+  last_checkin_at?: string | null;
+  current_intent?: string | null;
+  checkin_count?: number;
 }
 
 const SUMMARY_COLUMNS =

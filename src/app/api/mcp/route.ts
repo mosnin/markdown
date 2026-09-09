@@ -33,6 +33,13 @@ import {
   readTranscriptWindow,
   searchTranscripts,
 } from "@/server/services/transcript_service";
+import {
+  answerNotice,
+  checkIn,
+  listActiveAgents,
+  postNotice,
+  type ClaimRequest,
+} from "@/server/services/coordination_service";
 
 /**
  * HTTP MCP endpoint.
@@ -466,6 +473,92 @@ const TOOLS: ToolDef[] = [
         },
       },
       required: ["session_id"],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "check_in",
+    description:
+      "Report what you are doing and find out what other agents on this project have been doing since you last asked. " +
+      "Call this when you START work, every few minutes WHILE you work, and whenever you are about to edit a file another agent might be in. " +
+      "It renews your claims, returns what changed, and warns you if someone edited something you claimed — a collision you find out about now is a merge conflict you do not get later. " +
+      "Claim the files you are about to change: claims are advisory, so their whole value is that the other agent gets told.",
+    scope: "relay:write",
+    writes: true,
+    inputSchema: {
+      type: "object",
+      properties: {
+        project: { type: "string" },
+        session_external_id: {
+          type: "string",
+          description: "Stable id for this agent run. Reuse it across all calls in one session.",
+        },
+        intent: {
+          type: "string",
+          description:
+            "One line: what you are doing RIGHT NOW. Every other agent sees this, so make it specific — 'rewriting the retry middleware', not 'working'.",
+        },
+        claim: {
+          type: "array",
+          description: "Files or directories you are about to change.",
+          items: {
+            type: "object",
+            properties: {
+              resource: { type: "string" },
+              kind: { type: "string" },
+              intent: { type: "string" },
+            },
+            required: ["resource"],
+          },
+        },
+        release: {
+          type: "array",
+          description: "Resources you are done with. Release promptly — a held claim blocks a peer.",
+          items: { type: "string" },
+        },
+      },
+      required: ["project", "session_external_id"],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "list_active_agents",
+    description:
+      "See which agents are working on this project right now, what each says it is doing, and which files each has claimed. " +
+      "Use before starting a chunk of work to pick something nobody else is on.",
+    scope: "relay:read",
+    writes: false,
+    inputSchema: {
+      type: "object",
+      properties: { project: { type: "string" } },
+      required: ["project"],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "post_notice",
+    description:
+      "Tell the other agents on this project something they need to know now — a schema you changed, an interface you moved, a decision that affects their work. " +
+      "Use kind='question' when you need an answer: questions keep surfacing in every agent's check-in until one is answered, so they do not scroll away. " +
+      "Use kind='alert' only for things that should interrupt.",
+    scope: "relay:write",
+    writes: true,
+    inputSchema: {
+      type: "object",
+      properties: {
+        project: { type: "string" },
+        session_external_id: { type: "string" },
+        body: { type: "string" },
+        kind: {
+          type: "string",
+          description: "broadcast (default) | direct | alert | question | answer",
+        },
+        answers_notice_id: {
+          type: "string",
+          description: "When answering a question, its notice id — this closes it.",
+        },
+      },
+      required: ["project", "body"],
       additionalProperties: false,
     },
   },
@@ -1410,6 +1503,69 @@ async function dispatchTool(
         around: typeof args.around === "number" ? args.around : undefined,
         radius: typeof args.radius === "number" ? args.radius : undefined,
       });
+    }
+
+    case "check_in": {
+      const { session } = await openOrResumeSession(admin, ctx.workspaceId, {
+        project: String(args.project ?? ""),
+        external_id: String(args.session_external_id ?? ""),
+        agent_tool: "custom",
+      });
+
+      const result = await checkIn(admin, ctx.workspaceId, session.id, {
+        intent: typeof args.intent === "string" ? args.intent : undefined,
+        claim: Array.isArray(args.claim)
+          ? (args.claim as ClaimRequest[])
+          : undefined,
+        release: Array.isArray(args.release)
+          ? (args.release as string[])
+          : undefined,
+      });
+
+      return result;
+    }
+
+    case "list_active_agents": {
+      const slug = toProjectSlug(String(args.project ?? ""));
+      if (!slug) throw toolError(-32602, "project is not a usable identifier");
+
+      const project = await getProjectBySlug(admin, ctx.workspaceId, slug);
+      if (!project) return { project: null, agents: [] };
+
+      const agents = await listActiveAgents(admin, project.id);
+      return { project: project.slug, agents, active_count: agents.length };
+    }
+
+    case "post_notice": {
+      const slug = toProjectSlug(String(args.project ?? ""));
+      if (!slug) throw toolError(-32602, "project is not a usable identifier");
+
+      const project = await getProjectBySlug(admin, ctx.workspaceId, slug);
+      if (!project) throw toolError(-32602, `No project '${slug}' in this workspace`);
+
+      // The notice is attributed to the caller's session when it names one, so
+      // peers can see who said it rather than getting anonymous chatter.
+      let sessionId: string | null = null;
+      if (args.session_external_id) {
+        const { session } = await openOrResumeSession(admin, ctx.workspaceId, {
+          project: String(args.project ?? ""),
+          external_id: String(args.session_external_id),
+          agent_tool: "custom",
+        });
+        sessionId = session.id;
+      }
+
+      const notice = await postNotice(admin, ctx.workspaceId, sessionId, {
+        projectId: project.id,
+        body: String(args.body ?? ""),
+        kind: args.kind as "broadcast" | "direct" | "alert" | "question" | "answer",
+      });
+
+      if (args.answers_notice_id) {
+        await answerNotice(admin, ctx.workspaceId, String(args.answers_notice_id));
+      }
+
+      return { notice_id: notice.id, posted_at: notice.created_at };
     }
 
     default:

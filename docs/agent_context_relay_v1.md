@@ -351,6 +351,97 @@ machine is otherwise a silent failure.
 
 ---
 
+## Multi-agent coordination (v1.2)
+
+`supabase/migrations/20260909000003_multi_agent_coordination.sql`,
+`src/server/services/coordination_service.ts`
+
+v1.0 and v1.1 built a **relay**: agent A stops, agent B picks up. This builds a
+**workspace**: agents A, B and C working at the same time, on the same repo,
+aware of each other. Relay is about reading the past; collaboration is about
+knowing the present and not colliding.
+
+### Why check-in is the only primitive that matters
+
+A coding agent is turn-based. It cannot hold an SSE connection open between tool
+calls the way a dashboard can. **Push is for humans; agents poll.**
+
+So rather than making an agent orchestrate a cursor, a lease timer, a
+subscription and a conflict check separately — four things it will eventually
+drop one of — `check_in` does all four in one call:
+
+| It does | Because |
+|---|---|
+| Heartbeat + states current intent | Peers see who is here and what they are doing |
+| Returns the delta since last check-in | Cursor is held server-side; an agent that manages its own will get it wrong |
+| Renews claims | Same call, no separate lease timer to forget |
+| Reports conflicts | The warning is the entire product here |
+
+Order of operations inside a check-in is deliberate: **release → claim → read →
+advance cursor**. Release first so an agent can hand over and take its
+replacement in one call without fighting itself. Cursor last, so if anything
+throws, the agent re-reads rather than silently losing the window — duplicated
+context is recoverable, skipped context is not.
+
+### Claims are advisory, and named accordingly
+
+We cannot intercept another agent's edit tool. We cannot prevent anything. The
+value is entirely in an agent being **told** — before it starts, and again when
+someone walks into its territory. Calling these "locks" would be a lie encoded
+in a name, so they are `claims`.
+
+**Expiry is not optional.** An agent killed by a usage cap never releases
+anything: no `SessionEnd` fires, the process is simply gone. A claim without a
+TTL would leave a dead agent holding a file forever — precisely the deadlock
+this product exists to prevent. Claims live 15 minutes, are renewed by check-in
+(suggested every 4 minutes, so two missed check-ins still cost nothing), expire
+on their own, and are reaped inline by the next agent that wants the resource
+rather than by a cron whose interval would bound how long a dead claim survives.
+A clean `SessionEnd` releases them immediately.
+
+**Overlap is exact-match plus directory prefix, and no fuzzier.** `src/charges`
+matches `src/charges/create.ts` but not `src/charges_old.ts`. A false conflict is
+worse than a missed one: an agent warned about collisions it does not have
+learns to ignore collision warnings entirely.
+
+### Notices — the channel that did not exist
+
+The event log records what happened; a brief summarises the past. Neither lets a
+running agent say something to its peers **right now**. Without a channel,
+coordination degrades to agents inferring each other's intent from file-edit
+events, which is guesswork.
+
+`kind='question'` notices keep surfacing in every peer's check-in until somebody
+answers, deliberately **ignoring the delta cursor** — a question nobody answered
+is still open whether it was asked two minutes or two hours ago, and filtering it
+by the window is how questions get silently dropped.
+
+### API and tools
+
+| Method | Path | Purpose |
+|---|---|---|
+| POST | `/api/v1/relay/checkin` | The workhorse: heartbeat + delta + renewal + conflicts |
+| GET | `/api/v1/relay/agents` | Live roster: who, what, which claims |
+| POST/GET | `/api/v1/relay/notices` | The agent-to-agent channel |
+
+MCP: `check_in`, `list_active_agents`, `post_notice`. Claims have no route of
+their own — check-in is the path, which keeps the surface honest about how
+agents are meant to use it.
+
+Webhooks: `notice.posted`, `claim.conflict`. The second is the one that usually
+wants a human: two agents wanting the same file means the work was split badly,
+and nobody else will notice.
+
+### Client side
+
+The hook checks in every 4 minutes and on every prompt, and surfaces the result
+to the agent **only when it is collision-shaped** — a conflict, a high-salience
+notice, an unanswered question. A running agent does not need a feed of
+everything its peers are doing; it needs to know when somebody is in the file it
+is about to edit. `poggle checkin --intent "..."` does the same from a terminal.
+
+---
+
 ## What is NOT built yet
 
 Being honest about the gap, in rough priority order:
@@ -367,6 +458,9 @@ Being honest about the gap, in rough priority order:
    events: the reasoning is there in full.
 4. **Cap detection.** `usage_capped` must be reported by the client. Inferring a
    cap from an abrupt stop plus a provider error signature is not implemented.
+   Multi-agent makes this more valuable, not less: a capped agent's claims now
+   linger until their TTL, and knowing it capped would let us release them at
+   once.
 5. **Codex hook wiring.** `poggle init` prints the `notify` line for
    `~/.codex/config.toml`; it does not write it, and Codex's notify payload is
    translated by the same Claude-Code-shaped path rather than its own.
@@ -399,6 +493,10 @@ shapes, structure preservation, and termination on hostile input.
 adherence, determinism, cross-workspace refusal, requesting-session exclusion.
 `src/tests/unit/relay_ingest_normalisation.test.ts` — slug derivation across
 every way of naming one repo, end-reason coercion, salience defaults.
+`src/tests/unit/coordination_service.test.ts` — 15 cases: own events and
+notices never returned as news, edits inside a claim reported with who and what,
+a refused claim naming its holder and their intent, directory overlap without
+false positives on sibling paths, open questions surviving the cursor.
 `src/tests/unit/relay_key_service.test.ts` — 16 cases: the raw secret never
 reaches storage, a minted token round-trips to the hash verification will
 compute, rotation leaves exactly one live secret, cross-workspace access

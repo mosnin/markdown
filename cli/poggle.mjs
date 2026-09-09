@@ -26,6 +26,7 @@
  *   poggle log <type> <summary>      log one event
  *   poggle checkpoint --summary S    write a distilled checkpoint
  *   poggle end [--reason R]          close the current session
+ *   poggle checkin [--intent "..."]  check in: peers, claims, conflicts
  *   poggle ship-transcript --path F  upload an agent transcript (incremental)
  *   poggle hook <HookEventName>      internal: called by an agent hook, JSON on stdin
  *   poggle status                    show config and spool state
@@ -67,6 +68,17 @@ const MAX_TRANSCRIPT_CHUNK = 3 * 1024 * 1024;
 const TRANSCRIPT_FLUSH_BYTES = 32 * 1024;
 /** Transcript uploads are bigger than events; give them proportionally longer. */
 const TRANSCRIPT_TIMEOUT_MS = 15000;
+
+/**
+ * How often the hook checks in on the agent's behalf.
+ *
+ * Check-in is what keeps this agent visible to its peers and its claims alive.
+ * Doing it on every tool call would be wasteful; doing it only at session start
+ * would let claims lapse mid-session and make a working agent look dead to
+ * everyone else. Four minutes is well inside the 15-minute claim TTL, so a
+ * couple of missed check-ins still cost nothing.
+ */
+const CHECKIN_INTERVAL_MS = 4 * 60 * 1000;
 
 // ─── Config ─────────────────────────────────────────────────────────────────
 
@@ -443,6 +455,83 @@ async function shipTranscript(config, transcriptPath, options = {}) {
   return { shipped: result.body?.data?.segments_added ?? 0 };
 }
 
+// ─── Check-in ───────────────────────────────────────────────────────────────
+
+/**
+ * Check in with the relay on the agent's behalf.
+ *
+ * Renews claims, refreshes presence, and pulls back what other agents have done
+ * since last time. Returns the check-in payload, or null when it could not run.
+ */
+async function performCheckIn(config, options = {}) {
+  const state = readSessionState(config.cwd);
+  if (!state.session_id || !config.token) return null;
+
+  const result = await apiRequest(config, "POST", "/api/v1/relay/checkin", {
+    session_id: state.session_id,
+    intent: options.intent,
+    claim: options.claim,
+    release: options.release,
+  });
+
+  if (!result.ok) return null;
+
+  writeSessionState(config.cwd, {
+    ...readSessionState(config.cwd),
+    last_checkin_ms: Date.now(),
+  });
+
+  return result.body?.data ?? null;
+}
+
+/**
+ * Render a check-in into something worth interrupting an agent for.
+ *
+ * Only collision-shaped news qualifies. A running agent does not need a feed of
+ * everything its peers are doing — it needs to know when somebody is in the
+ * file it is editing, when a claim it wanted is taken, and when a peer asked a
+ * question nobody has answered. Everything else is available on request.
+ *
+ * Returns null when there is nothing that warrants the interruption.
+ */
+function summariseCheckIn(checkin) {
+  if (!checkin) return null;
+
+  const lines = [];
+
+  for (const conflict of checkin.conflicts ?? []) {
+    lines.push(`- ${conflict.detail}`);
+  }
+
+  for (const notice of checkin.notices ?? []) {
+    if (notice.importance >= 4) {
+      lines.push(`- Notice from another agent: ${notice.body}`);
+    }
+  }
+
+  for (const question of checkin.open_questions ?? []) {
+    lines.push(`- Unanswered question from another agent: ${question.body}`);
+  }
+
+  if (lines.length === 0) return null;
+
+  const peers = (checkin.peers ?? []).filter((p) => p.status === "active");
+  const header =
+    peers.length > 0
+      ? `${peers.length} other agent${peers.length === 1 ? " is" : "s are"} working on this project right now.`
+      : "Another agent has been working on this project.";
+
+  return [
+    "## Coordination update from Poggle",
+    "",
+    header,
+    "",
+    ...lines,
+    "",
+    "Re-read any file listed above before you change it — someone else has touched it since you last looked.",
+  ].join("\n");
+}
+
 // ─── Agent hook translation ─────────────────────────────────────────────────
 
 /**
@@ -731,6 +820,9 @@ async function cmdHook(config, args) {
 
   const events = eventsFromClaudeCodeHook(hookName, payload);
 
+  // Extra context to hand back to the runtime, if this hook supports it.
+  const pendingContext = [];
+
   await sendEvents(config, externalId, events, {
     agent_tool: process.env.POGGLE_AGENT_TOOL || "claude_code",
     agent_model: payload.model || process.env.POGGLE_AGENT_MODEL || undefined,
@@ -753,6 +845,25 @@ async function cmdHook(config, args) {
     await shipTranscript(config, transcriptPath, { force });
   }
 
+  // Periodic check-in: keeps this agent visible to its peers, keeps its claims
+  // alive, and pulls back collisions. Surfaced to the agent only when there is
+  // something collision-shaped to say — a running agent does not need a feed of
+  // everything its peers are doing.
+  const checkinState = readSessionState(config.cwd);
+  const sinceCheckIn = Date.now() - Number(checkinState.last_checkin_ms ?? 0);
+  const forceCheckIn = hookName === "SessionStart" || hookName === "UserPromptSubmit";
+
+  if (forceCheckIn || sinceCheckIn > CHECKIN_INTERVAL_MS) {
+    const checkin = await performCheckIn(config);
+    const update = summariseCheckIn(checkin);
+    if (update) {
+      // stderr is shown to the person running the agent and never parsed as
+      // hook output, so this is safe regardless of which hook fired.
+      process.stderr.write(`${update}\n`);
+      pendingContext.push(update);
+    }
+  }
+
   if (hookName === "SessionStart") {
     const query = new URLSearchParams({
       project: config.project,
@@ -771,11 +882,15 @@ async function cmdHook(config, args) {
     );
 
     if (brief.ok && typeof brief.body === "string" && brief.body.trim()) {
+      pendingContext.unshift(brief.body);
+    }
+
+    if (pendingContext.length > 0) {
       process.stdout.write(
         JSON.stringify({
           hookSpecificOutput: {
             hookEventName: "SessionStart",
-            additionalContext: brief.body,
+            additionalContext: pendingContext.join("\n\n---\n\n"),
           },
         })
       );
@@ -816,6 +931,50 @@ async function cmdShipTranscript(config, args) {
     return 0;
   }
   process.stdout.write(`Shipped ${result.shipped} transcript segments.\n`);
+  return 0;
+}
+
+/**
+ * Check in from the command line.
+ *
+ * For a person driving an agent that has no hooks, or for a wrapper script that
+ * wants to claim files before handing work to an agent.
+ */
+async function cmdCheckIn(config, args) {
+  const intent = getFlag(args, "--intent") || undefined;
+  const claimFlag = getFlag(args, "--claim");
+  const releaseFlag = getFlag(args, "--release");
+
+  const checkin = await performCheckIn(config, {
+    intent,
+    claim: claimFlag
+      ? claimFlag.split(",").map((r) => ({ resource: r.trim(), intent }))
+      : undefined,
+    release: releaseFlag ? releaseFlag.split(",").map((r) => r.trim()) : undefined,
+  });
+
+  if (!checkin) {
+    process.stderr.write("poggle: check-in failed (no session, or relay unreachable)\n");
+    return 0;
+  }
+
+  const peers = (checkin.peers ?? []).filter((p) => p.status === "active");
+  process.stdout.write(
+    [
+      `Checked in. ${peers.length} other active agent${peers.length === 1 ? "" : "s"}.`,
+      ...peers.map(
+        (p) =>
+          `  ${p.agent_tool}${p.account_label ? ` (${p.account_label})` : ""}: ` +
+          `${p.current_intent || "no stated intent"}` +
+          `${p.claims.length ? ` — holding ${p.claims.join(", ")}` : ""}`
+      ),
+      ...((checkin.holding ?? []).length > 0
+        ? [`You hold: ${(checkin.holding ?? []).map((h) => h.resource).join(", ")}`]
+        : []),
+      ...(checkin.conflicts ?? []).map((c) => `  ! ${c.detail}`),
+      "",
+    ].join("\n")
+  );
   return 0;
 }
 
@@ -970,6 +1129,7 @@ const USAGE = `poggle — agent context relay
   poggle log <type> <summary>        log one event
   poggle checkpoint --summary "..."  write a distilled checkpoint
   poggle end [--reason <reason>]     close the current session
+  poggle checkin [--intent "..."]    check in; see peers, claims, conflicts
   poggle ship-transcript --path <f>  upload an agent transcript
   poggle status                      show config and spool state
   poggle hook <HookEventName>        internal: called by agent hooks
@@ -992,6 +1152,8 @@ async function main() {
       return cmdEnd(config, args);
     case "hook":
       return cmdHook(config, args);
+    case "checkin":
+      return cmdCheckIn(config, args);
     case "ship-transcript":
       return cmdShipTranscript(config, args);
     case "status":

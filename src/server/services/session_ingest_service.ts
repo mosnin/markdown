@@ -39,6 +39,7 @@ import {
   redactString,
 } from "@/server/services/session_event_redaction";
 import { dispatchEvent } from "@/server/services/content_webhook_service";
+import { releaseClaims } from "@/server/services/coordination_service";
 
 /**
  * Session ingest service.
@@ -434,6 +435,14 @@ export async function endSession(
 
   const endReason = normaliseEndReason(endReasonRaw);
   const closed = await closeSession(client, sessionId, endReason);
+
+  // Hand back anything this session was holding. The claim TTL covers the
+  // unclean endings — a capped agent never reaches this code — but when we do
+  // know the session is over, making a peer wait out a 15-minute lease on a
+  // file nobody is editing is pure friction.
+  void releaseClaims(client, sessionId).catch(() => {
+    // Expiry is the backstop; a failed release costs a delay, not correctness.
+  });
 
   dispatchEvent(client, workspaceId, "session.ended", {
     session_id: closed.id,

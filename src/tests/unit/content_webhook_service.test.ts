@@ -437,7 +437,10 @@ describe("content_webhook_service", () => {
     expect(SUPPORTED_EVENT_TYPES).toContain("session.ended");
     // The one a team wires to Slack: work stopped unfinished on a usage cap.
     expect(SUPPORTED_EVENT_TYPES).toContain("session.capped");
-    expect(SUPPORTED_EVENT_TYPES).toHaveLength(16);
+    // Multi-agent coordination.
+    expect(SUPPORTED_EVENT_TYPES).toContain("notice.posted");
+    expect(SUPPORTED_EVENT_TYPES).toContain("claim.conflict");
+    expect(SUPPORTED_EVENT_TYPES).toHaveLength(18);
   });
 
   // ── Send test event ───────────────────────────────────────────────────
