@@ -26,6 +26,7 @@
  *   poggle log <type> <summary>      log one event
  *   poggle checkpoint --summary S    write a distilled checkpoint
  *   poggle end [--reason R]          close the current session
+ *   poggle ship-transcript --path F  upload an agent transcript (incremental)
  *   poggle hook <HookEventName>      internal: called by an agent hook, JSON on stdin
  *   poggle status                    show config and spool state
  *
@@ -48,6 +49,24 @@ const REQUEST_TIMEOUT_MS = 2500;
 const BRIEF_TIMEOUT_MS = 8000;
 /** Stop the spool from growing without bound if the relay is down for days. */
 const MAX_SPOOL_EVENTS = 2000;
+
+/**
+ * Transcript shipping.
+ *
+ * MAX_TRANSCRIPT_CHUNK matches the server's per-request ceiling; a bigger
+ * backlog is sent as several chunks rather than rejected.
+ *
+ * TRANSCRIPT_FLUSH_BYTES is the one that matters. Shipping only at PreCompact
+ * and SessionEnd would lose precisely the session we exist to save: a hard
+ * usage cap kills the process mid-tool-call and neither hook ever fires. So we
+ * also ship opportunistically once this much new transcript has accumulated,
+ * which bounds worst-case loss to roughly this many bytes instead of the whole
+ * session.
+ */
+const MAX_TRANSCRIPT_CHUNK = 3 * 1024 * 1024;
+const TRANSCRIPT_FLUSH_BYTES = 32 * 1024;
+/** Transcript uploads are bigger than events; give them proportionally longer. */
+const TRANSCRIPT_TIMEOUT_MS = 15000;
 
 // ─── Config ─────────────────────────────────────────────────────────────────
 
@@ -327,6 +346,101 @@ function redact(text) {
       "$1=<redacted>"
     )
     .replace(/\b([a-z][a-z0-9+.-]*:\/\/)[^\s:/@]+:[^\s:/@]+@/gi, "$1<redacted>@");
+}
+
+// ─── Transcript shipping ────────────────────────────────────────────────────
+
+/**
+ * Read the bytes appended to a transcript since we last shipped it.
+ *
+ * Reads from a byte offset rather than loading the file: a long session's
+ * transcript is megabytes, and this runs inside the agent's own process after
+ * tool calls. Returns null when there is nothing new.
+ */
+function readTranscriptDelta(transcriptPath, offset, maxBytes) {
+  try {
+    const stat = fs.statSync(transcriptPath);
+    if (stat.size <= offset) return null;
+
+    // The file shrank — a new session reused the path, or it was rotated.
+    // Start over rather than reading from a meaningless offset.
+    const start = stat.size < offset ? 0 : offset;
+    const length = Math.min(stat.size - start, maxBytes);
+    if (length <= 0) return null;
+
+    const buffer = Buffer.alloc(length);
+    const fd = fs.openSync(transcriptPath, "r");
+    try {
+      fs.readSync(fd, buffer, 0, length, start);
+    } finally {
+      fs.closeSync(fd);
+    }
+
+    return { start, text: buffer.toString("utf8"), fileSize: stat.size };
+  } catch {
+    // No transcript, no permission, a path that moved: all non-fatal.
+    return null;
+  }
+}
+
+/** Guess the transcript format from its path and first byte. */
+function detectTranscriptFormat(transcriptPath, text) {
+  if (/^\s*\{/.test(text)) {
+    return transcriptPath.includes("codex") ? "codex_jsonl" : "claude_code_jsonl";
+  }
+  return "plain";
+}
+
+/**
+ * Ship new transcript bytes to the relay.
+ *
+ * Offset tracking lives in .poggle/session.json, and the server is the
+ * authority: we advance to whatever `next_offset` it reports, so a partial
+ * line we sent is re-sent whole next time rather than being lost.
+ */
+async function shipTranscript(config, transcriptPath, options = {}) {
+  if (!transcriptPath || !config.token) return { shipped: 0 };
+
+  const state = readSessionState(config.cwd);
+  if (!state.session_id) return { shipped: 0 };
+
+  let offset = Number(state.transcript_offset ?? 0);
+  if (!Number.isFinite(offset) || offset < 0) offset = 0;
+
+  const delta = readTranscriptDelta(transcriptPath, offset, MAX_TRANSCRIPT_CHUNK);
+  if (!delta) return { shipped: 0 };
+
+  // Opportunistic sends wait for a worthwhile batch; forced ones (a compaction
+  // or the end of a session) always go.
+  const pending = delta.fileSize - delta.start;
+  if (!options.force && pending < TRANSCRIPT_FLUSH_BYTES) {
+    return { shipped: 0 };
+  }
+
+  const result = await apiRequest(
+    config,
+    "POST",
+    "/api/v1/relay/transcripts",
+    {
+      session_id: state.session_id,
+      content: delta.text,
+      format: detectTranscriptFormat(transcriptPath, delta.text),
+      from_offset: delta.start,
+    },
+    TRANSCRIPT_TIMEOUT_MS
+  );
+
+  if (!result.ok) {
+    // Leave the offset alone; the next invocation retries the same range.
+    return { shipped: 0, error: result.error || `HTTP ${result.status}` };
+  }
+
+  const nextOffset = result.body?.data?.next_offset;
+  if (typeof nextOffset === "number" && nextOffset >= 0) {
+    writeSessionState(config.cwd, { ...state, transcript_offset: nextOffset });
+  }
+
+  return { shipped: result.body?.data?.segments_added ?? 0 };
 }
 
 // ─── Agent hook translation ─────────────────────────────────────────────────
@@ -622,6 +736,23 @@ async function cmdHook(config, args) {
     agent_model: payload.model || process.env.POGGLE_AGENT_MODEL || undefined,
   });
 
+  // Ship the conversation itself. The runtime hands us the transcript path on
+  // every hook invocation; without this the relay only ever learns what the
+  // agent concluded, never what it actually said.
+  //
+  // Forced at PreCompact and at the end of a session — the two moments context
+  // is otherwise lost for good — and opportunistic otherwise, because a hard
+  // usage cap kills the process before either of those hooks can fire.
+  const transcriptPath =
+    payload.transcript_path || payload.transcriptPath || null;
+  if (transcriptPath) {
+    const force =
+      hookName === "PreCompact" ||
+      hookName === "SessionEnd" ||
+      hookName === "Stop";
+    await shipTranscript(config, transcriptPath, { force });
+  }
+
   if (hookName === "SessionStart") {
     const query = new URLSearchParams({
       project: config.project,
@@ -666,6 +797,28 @@ async function cmdHook(config, args) {
   return 0;
 }
 
+/**
+ * Ship a transcript on demand.
+ *
+ * For agents that have no hook system: point this at the transcript file and
+ * run it from a wrapper or a cron. Same incremental cursor as the hook path.
+ */
+async function cmdShipTranscript(config, args) {
+  const transcriptPath = getFlag(args, "--path") || args[0];
+  if (!transcriptPath) {
+    process.stderr.write("usage: poggle ship-transcript --path <file>\n");
+    return 1;
+  }
+
+  const result = await shipTranscript(config, transcriptPath, { force: true });
+  if (result.error) {
+    process.stderr.write(`poggle: transcript upload failed (${result.error})\n`);
+    return 0;
+  }
+  process.stdout.write(`Shipped ${result.shipped} transcript segments.\n`);
+  return 0;
+}
+
 function cmdStatus(config) {
   const state = readSessionState(config.cwd);
   const spool = fs.existsSync(spoolPath(config.cwd))
@@ -680,6 +833,7 @@ function cmdStatus(config) {
       `account_label  ${config.accountLabel || "(unset)"}`,
       `session_id     ${state.session_id || "(none open)"}`,
       `spooled events ${spool}`,
+      `transcript     ${state.transcript_offset ? `${state.transcript_offset} bytes shipped` : "(none shipped)"}`,
       "",
     ].join("\n")
   );
@@ -814,6 +968,7 @@ const USAGE = `poggle — agent context relay
   poggle log <type> <summary>        log one event
   poggle checkpoint --summary "..."  write a distilled checkpoint
   poggle end [--reason <reason>]     close the current session
+  poggle ship-transcript --path <f>  upload an agent transcript
   poggle status                      show config and spool state
   poggle hook <HookEventName>        internal: called by agent hooks
 `;
@@ -835,6 +990,8 @@ async function main() {
       return cmdEnd(config, args);
     case "hook":
       return cmdHook(config, args);
+    case "ship-transcript":
+      return cmdShipTranscript(config, args);
     case "status":
       return cmdStatus(config);
     default:

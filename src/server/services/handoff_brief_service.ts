@@ -22,6 +22,7 @@ import {
   getLatestCheckpoints,
   listSalientEvents,
 } from "@/server/repositories/session_event_repository";
+import { getTranscriptCoverage } from "@/server/services/transcript_service";
 
 /**
  * Handoff brief assembly.
@@ -277,6 +278,11 @@ export async function assembleBrief(
       .filter((s): s is SessionState => Boolean(s))
   );
 
+  // How much raw conversation is available behind this brief. The brief itself
+  // stays small; this tells the reader that the detail exists and how to reach
+  // it, which is the whole point of keeping the brief small.
+  const coverage = await getTranscriptCoverage(client, project.id);
+
   const now = Date.now();
   const blocks = buildBlocks({
     project,
@@ -285,6 +291,7 @@ export async function assembleBrief(
     eventsBySession,
     state,
     now,
+    coverage,
   });
 
   const { body, tokenEstimate } = spendBudget(blocks, budget);
@@ -307,6 +314,7 @@ interface BuildBlocksArgs {
   eventsBySession: Map<string, SessionEvent[]>;
   state: SessionState;
   now: number;
+  coverage: { sessions: number; segments: number; tokens: number };
 }
 
 /**
@@ -316,7 +324,8 @@ interface BuildBlocksArgs {
  * later without renumbering everything.
  */
 function buildBlocks(args: BuildBlocksArgs): BriefBlock[] {
-  const { project, sessions, checkpoints, eventsBySession, state, now } = args;
+  const { project, sessions, checkpoints, eventsBySession, state, now, coverage } =
+    args;
   const blocks: BriefBlock[] = [];
 
   // ── 0. Header: who was here, and did they finish ──────────────────────────
@@ -450,6 +459,33 @@ function buildBlocks(args: BuildBlocksArgs): BriefBlock[] {
       text: (index === 0 ? "## Session log\n\n" : "") + lines.join("\n"),
     });
   });
+
+  // ── 90. Where the full conversation is ────────────────────────────────────
+  //
+  // This brief is a summary by construction — it is spent into a token budget.
+  // When transcripts have been ingested, everything those agents actually said
+  // is searchable, and saying so converts "the brief did not mention it" from a
+  // dead end into a query. Deliberately placed after the distilled sections:
+  // it is a pointer, and a pointer is worthless if it displaces the substance.
+  if (coverage.segments > 0) {
+    const approxTokens =
+      coverage.tokens >= 1000
+        ? `${Math.round(coverage.tokens / 1000)}k`
+        : String(coverage.tokens);
+
+    blocks.push({
+      priority: 90,
+      text:
+        `## Full conversation is searchable\n\n` +
+        `${coverage.segments} segments (~${approxTokens} tokens) of earlier agents' ` +
+        `actual conversation are stored for this project, across ` +
+        `${coverage.sessions} session${coverage.sessions === 1 ? "" : "s"}.\n\n` +
+        `This brief is a summary. If you need to know **why** something was ` +
+        `decided or exactly what was tried, search it rather than re-deriving it:\n\n` +
+        `- \`search_agent_history(project, query)\` — find where a topic was discussed\n` +
+        `- \`read_transcript_window(session_id, around)\` — read the conversation around a hit`,
+    });
+  }
 
   // ── 200. Files, last: the repo can always be read ─────────────────────────
   const files = state.files_touched?.length

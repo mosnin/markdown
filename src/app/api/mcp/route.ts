@@ -29,6 +29,10 @@ import {
   ingestEvents,
   openOrResumeSession,
 } from "@/server/services/session_ingest_service";
+import {
+  readTranscriptWindow,
+  searchTranscripts,
+} from "@/server/services/transcript_service";
 
 /**
  * HTTP MCP endpoint.
@@ -415,6 +419,53 @@ const TOOLS: ToolDef[] = [
         files: { type: "array", items: { type: "string" } },
       },
       required: ["project", "session_external_id", "event_type", "summary"],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "search_agent_history",
+    description:
+      "Search what earlier agents actually SAID and DID on this project — their reasoning, the approaches they tried, the errors they hit — not just the summary in the handoff brief. " +
+      "Use this the moment you are about to spend more than a couple of minutes working out WHY something is the way it is, or before trying an approach that might already have been ruled out. " +
+      "Searching is far cheaper than rediscovering. Returns matching conversation with a session_id and ordinal for each hit.",
+    scope: "relay:read",
+    writes: false,
+    inputSchema: {
+      type: "object",
+      properties: {
+        project: { type: "string" },
+        query: {
+          type: "string",
+          description:
+            "What you want to know, in natural language or as an exact identifier. Both work: matching runs over keywords and meaning together.",
+        },
+        limit: { type: "number" },
+      },
+      required: ["project", "query"],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "read_transcript_window",
+    description:
+      "Read the conversation surrounding a point in an earlier session. " +
+      "Use after search_agent_history: a single matching paragraph is rarely enough to act on, and the reason an approach was abandoned is usually spread across the prompt, the reasoning, and the tool result that followed.",
+    scope: "relay:read",
+    writes: false,
+    inputSchema: {
+      type: "object",
+      properties: {
+        session_id: { type: "string" },
+        around: {
+          type: "number",
+          description: "Ordinal from a search hit to centre the window on.",
+        },
+        radius: {
+          type: "number",
+          description: "Segments either side. Default 6, max 30.",
+        },
+      },
+      required: ["session_id"],
       additionalProperties: false,
     },
   },
@@ -1325,6 +1376,40 @@ async function dispatchTool(
         logged: result.accepted,
         sequence: result.last_sequence,
       };
+    }
+
+    case "search_agent_history": {
+      const slug = toProjectSlug(String(args.project ?? ""));
+      if (!slug) throw toolError(-32602, "project is not a usable identifier");
+
+      const project = await getProjectBySlug(admin, ctx.workspaceId, slug);
+      if (!project) return { found: false, results: [] };
+
+      const results = await searchTranscripts(admin, ctx.workspaceId, {
+        projectId: project.id,
+        query: String(args.query ?? ""),
+        limit: typeof args.limit === "number" ? args.limit : 12,
+      });
+
+      return {
+        found: results.length > 0,
+        project: project.slug,
+        results,
+        next_step:
+          results.length > 0
+            ? "Call read_transcript_window with a hit's session_id and ordinal to read it in context."
+            : "Nothing matched. The conversation may not have been captured for this project, or nobody discussed this.",
+      };
+    }
+
+    case "read_transcript_window": {
+      const sessionId = String(args.session_id ?? "");
+      if (!sessionId) throw toolError(-32602, "session_id is required");
+
+      return await readTranscriptWindow(admin, ctx.workspaceId, sessionId, {
+        around: typeof args.around === "number" ? args.around : undefined,
+        radius: typeof args.radius === "number" ? args.radius : undefined,
+      });
     }
 
     default:
