@@ -8,6 +8,16 @@ export const FREE_NOTE_LIMIT = 50;
 export const FREE_BOX_LIMIT = 3;
 
 /**
+ * Projects a free workspace may relay into.
+ *
+ * The project is the unit that costs us something — it is what transcripts,
+ * embeddings and briefs hang off — and it is also the unit a person recognises
+ * ("one repo"). Capping sessions instead would punish the exact behaviour the
+ * product is for: running several agents on one piece of work.
+ */
+export const FREE_PROJECT_LIMIT = 3;
+
+/**
  * The three billing tiers. Mirrors the CHECK constraint on
  * workspace_subscriptions.plan. Historical callers imported `WorkspacePlan`
  * from this file, so we re-export the tuple-derived type here too.
@@ -178,6 +188,36 @@ export async function checkNoteLimit(
     allowed: current < FREE_NOTE_LIMIT,
     current,
     max: FREE_NOTE_LIMIT,
+  };
+}
+
+/**
+ * Checks whether the workspace is allowed to relay into another project.
+ *
+ * Counted rather than derived from a stored total so it stays correct after a
+ * project is deleted.
+ */
+export async function checkProjectLimit(
+  supabase: SupabaseClient,
+  workspaceId: string
+): Promise<{ allowed: boolean; current: number; max: number }> {
+  const pro = await isProWorkspace(supabase, workspaceId);
+  if (pro) {
+    return { allowed: true, current: 0, max: Infinity };
+  }
+
+  const { count, error } = await supabase
+    .from("projects")
+    .select("id", { count: "exact", head: true })
+    .eq("workspace_id", workspaceId);
+
+  // A counting failure must not block the page that displays it. Reporting
+  // zero-of-limit is wrong but harmless; refusing to render settings is not.
+  const current = error ? 0 : (count ?? 0);
+  return {
+    allowed: current < FREE_PROJECT_LIMIT,
+    current,
+    max: FREE_PROJECT_LIMIT,
   };
 }
 
