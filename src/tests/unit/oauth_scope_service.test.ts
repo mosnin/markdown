@@ -172,6 +172,10 @@ describe("oauth_scope_service — registry invariants", () => {
         "context:propose",
         "context:generate",
         "context:branch",
+        // Agent context relay — reading prior sessions' context, and
+        // appending to the append-only session log.
+        "relay:read",
+        "relay:write",
       ])
     );
   });

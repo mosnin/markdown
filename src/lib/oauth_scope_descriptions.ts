@@ -34,7 +34,7 @@ import {
 
 export type ScopeRiskTier = "safe" | "propose-write" | "generate";
 
-export type ScopeGroup = "read" | "propose" | "generate" | "branch";
+export type ScopeGroup = "read" | "propose" | "generate" | "branch" | "relay";
 
 export interface ScopeDescription {
   /** Canonical scope string, e.g. "context:read". */
@@ -114,6 +114,26 @@ export const SCOPE_DESCRIPTIONS: Record<OAuthCapabilityScope, ScopeDescription> 
     writeCapable: true,
     badgeVariant: "warning",
   },
+  "relay:read": {
+    scope: "relay:read",
+    title: "Read your agent session history",
+    description:
+      "Read the log of what agents have been doing on your projects — prompts, edits, decisions, blockers — and fetch handoff briefs assembled from it.",
+    group: "relay",
+    tier: "safe",
+    writeCapable: false,
+    badgeVariant: "success",
+  },
+  "relay:write": {
+    scope: "relay:write",
+    title: "Log agent session activity",
+    description:
+      "Open sessions and append entries to your agent session log. Append-only: this cannot change or remove anything already logged, and it cannot touch anything else in your workspace.",
+    group: "relay",
+    tier: "propose-write",
+    writeCapable: true,
+    badgeVariant: "info",
+  },
 };
 
 /** Human-readable label for a group header in the consent UI. */
@@ -122,6 +142,7 @@ export const SCOPE_GROUP_LABELS: Record<ScopeGroup, string> = {
   propose: "Propose writes",
   generate: "Generate",
   branch: "Branch",
+  relay: "Agent session relay",
 };
 
 /** Returns true if the capability-scope set contains at least one writer. */
@@ -205,12 +226,14 @@ export function groupScopes(scopes: readonly OAuthScope[]): {
   propose: OAuthCapabilityScope[];
   generate: OAuthCapabilityScope[];
   branch: OAuthCapabilityScope[];
+  relay: OAuthCapabilityScope[];
   narrow: string[];
 } {
   const read: OAuthCapabilityScope[] = [];
   const propose: OAuthCapabilityScope[] = [];
   const generate: OAuthCapabilityScope[] = [];
   const branch: OAuthCapabilityScope[] = [];
+  const relay: OAuthCapabilityScope[] = [];
   const narrow: string[] = [];
   for (const s of scopes) {
     if (isCapabilityScope(s)) {
@@ -218,13 +241,14 @@ export function groupScopes(scopes: readonly OAuthScope[]): {
       if (g === "read") read.push(s);
       else if (g === "propose") propose.push(s);
       else if (g === "branch") branch.push(s);
+      else if (g === "relay") relay.push(s);
       else generate.push(s);
     } else if (isBoxScope(s)) {
       const id = parseBoxScope(s);
       if (id) narrow.push(id);
     }
   }
-  return { read, propose, generate, branch, narrow };
+  return { read, propose, generate, branch, relay, narrow };
 }
 
 /**

@@ -19,6 +19,27 @@ import { createAuditEvent } from "@/server/repositories/audit_event_repository";
 import { auditMcp } from "@/server/services/audit_service";
 import { getCanonicalBaseUrl } from "@/lib/canonical_url";
 import { apiWriteLimit } from "@/lib/api/rate_limit";
+import {
+  getProjectBySlug,
+  toProjectSlug,
+} from "@/server/repositories/project_repository";
+import { listSessionsForProject } from "@/server/repositories/agent_session_repository";
+import { createBriefForProject } from "@/server/services/handoff_brief_service";
+import {
+  ingestEvents,
+  openOrResumeSession,
+} from "@/server/services/session_ingest_service";
+import {
+  readTranscriptWindow,
+  searchTranscripts,
+} from "@/server/services/transcript_service";
+import {
+  answerNotice,
+  checkIn,
+  listActiveAgents,
+  postNotice,
+  type ClaimRequest,
+} from "@/server/services/coordination_service";
 
 /**
  * HTTP MCP endpoint.
@@ -329,6 +350,218 @@ const TOOLS: ToolDef[] = [
       properties: {
         status: { type: "string", enum: ["open", "promoted", "discarded"] },
       },
+      additionalProperties: false,
+    },
+  },
+  // ── Agent context relay ───────────────────────────────────────────────────
+  // These are the tools an agent uses to participate in a handoff: read what
+  // earlier sessions did, and log what this one is doing. They are the MCP
+  // equivalent of the hook shim, for runtimes that speak MCP but have no hooks.
+  {
+    name: "get_handoff_brief",
+    description:
+      "Read what earlier agent sessions did on a project before you: the goal, what is blocked or already failed, decisions taken, what was left in flight, and why the last session stopped. " +
+      "Call this FIRST on any project you have not worked on in this session — it is far cheaper than rediscovering the work by reading files. " +
+      "Returns markdown sized to a token budget. " +
+      "Follow it with check_in so the other agents on this project can see you arrive and you can see what they are holding.",
+    scope: "relay:read",
+    writes: false,
+    inputSchema: {
+      type: "object",
+      properties: {
+        project: {
+          type: "string",
+          description: "Project slug, repo URL, or directory name.",
+        },
+        budget_tokens: {
+          type: "number",
+          description: "Token budget for the brief. Default 4000, max 32000.",
+        },
+      },
+      required: ["project"],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "list_agent_sessions",
+    description:
+      "List recent agent sessions on a project — which tool and account ran them, when, and how each one ended (notably whether it stopped on a usage cap with work unfinished).",
+    scope: "relay:read",
+    writes: false,
+    inputSchema: {
+      type: "object",
+      properties: {
+        project: { type: "string" },
+        limit: { type: "number" },
+      },
+      required: ["project"],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "log_agent_event",
+    description:
+      "Append an entry to the shared agent session log so the next agent inherits it. " +
+      "Log decisions you make, approaches that failed, and blockers you hit — those are what a later session cannot recover on its own. " +
+      "Do not log routine file reads; the hooks capture mechanical activity already.",
+    scope: "relay:write",
+    writes: true,
+    inputSchema: {
+      type: "object",
+      properties: {
+        project: { type: "string" },
+        session_external_id: {
+          type: "string",
+          description:
+            "Stable id for this agent run. Reuse the same value for every event in one session.",
+        },
+        event_type: {
+          type: "string",
+          description:
+            "One of: decision, blocker, question, note, checkpoint, error, custom.",
+        },
+        summary: {
+          type: "string",
+          description: "One line. This is what the next agent reads.",
+        },
+        files: { type: "array", items: { type: "string" } },
+      },
+      required: ["project", "session_external_id", "event_type", "summary"],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "search_agent_history",
+    description:
+      "Search what earlier agents actually SAID and DID on this project — their reasoning, the approaches they tried, the errors they hit — not just the summary in the handoff brief. " +
+      "Use this the moment you are about to spend more than a couple of minutes working out WHY something is the way it is, or before trying an approach that might already have been ruled out. " +
+      "Searching is far cheaper than rediscovering. Returns matching conversation with a session_id and ordinal for each hit.",
+    scope: "relay:read",
+    writes: false,
+    inputSchema: {
+      type: "object",
+      properties: {
+        project: { type: "string" },
+        query: {
+          type: "string",
+          description:
+            "What you want to know, in natural language or as an exact identifier. Both work: matching runs over keywords and meaning together.",
+        },
+        limit: { type: "number" },
+      },
+      required: ["project", "query"],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "read_transcript_window",
+    description:
+      "Read the conversation surrounding a point in an earlier session. " +
+      "Use after search_agent_history: a single matching paragraph is rarely enough to act on, and the reason an approach was abandoned is usually spread across the prompt, the reasoning, and the tool result that followed.",
+    scope: "relay:read",
+    writes: false,
+    inputSchema: {
+      type: "object",
+      properties: {
+        session_id: { type: "string" },
+        around: {
+          type: "number",
+          description: "Ordinal from a search hit to centre the window on.",
+        },
+        radius: {
+          type: "number",
+          description: "Segments either side. Default 6, max 30.",
+        },
+      },
+      required: ["session_id"],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "check_in",
+    description:
+      "Report what you are doing and find out what other agents on this project have been doing since you last asked. " +
+      "CALL THIS: (1) immediately after get_handoff_brief when you start, (2) before your first edit to any file, claiming it, " +
+      "(3) after finishing a chunk of work, releasing what you no longer need, and (4) every few minutes during long stretches of work. " +
+      "It renews your claims, returns what changed, and tells you if another agent edited something you claimed — a collision you hear about now is a merge conflict you do not get later. " +
+      "If it returns conflicts, read the named files again before you touch them: your copy is stale. " +
+      "Claiming is advisory and costs nothing; the whole value is that the other agent gets told, so claim early rather than perfectly.",
+    scope: "relay:write",
+    writes: true,
+    inputSchema: {
+      type: "object",
+      properties: {
+        project: { type: "string" },
+        session_external_id: {
+          type: "string",
+          description: "Stable id for this agent run. Reuse it across all calls in one session.",
+        },
+        intent: {
+          type: "string",
+          description:
+            "One line: what you are doing RIGHT NOW. Every other agent sees this, so make it specific — 'rewriting the retry middleware', not 'working'.",
+        },
+        claim: {
+          type: "array",
+          description: "Files or directories you are about to change.",
+          items: {
+            type: "object",
+            properties: {
+              resource: { type: "string" },
+              kind: { type: "string" },
+              intent: { type: "string" },
+            },
+            required: ["resource"],
+          },
+        },
+        release: {
+          type: "array",
+          description: "Resources you are done with. Release promptly — a held claim blocks a peer.",
+          items: { type: "string" },
+        },
+      },
+      required: ["project", "session_external_id"],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "list_active_agents",
+    description:
+      "See which agents are working on this project right now, what each says it is doing, and which files each has claimed. " +
+      "Use before starting a chunk of work to pick something nobody else is on.",
+    scope: "relay:read",
+    writes: false,
+    inputSchema: {
+      type: "object",
+      properties: { project: { type: "string" } },
+      required: ["project"],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "post_notice",
+    description:
+      "Tell the other agents on this project something they need to know now — a schema you changed, an interface you moved, a decision that affects their work. " +
+      "Use kind='question' when you need an answer: questions keep surfacing in every agent's check-in until one is answered, so they do not scroll away. " +
+      "Use kind='alert' only for things that should interrupt.",
+    scope: "relay:write",
+    writes: true,
+    inputSchema: {
+      type: "object",
+      properties: {
+        project: { type: "string" },
+        session_external_id: { type: "string" },
+        body: { type: "string" },
+        kind: {
+          type: "string",
+          description: "broadcast (default) | direct | alert | question | answer",
+        },
+        answers_notice_id: {
+          type: "string",
+          description: "When answering a question, its notice id — this closes it.",
+        },
+      },
+      required: ["project", "body"],
       additionalProperties: false,
     },
   },
@@ -1176,6 +1409,166 @@ async function dispatchTool(
         }
         throw toolError(-32000, err instanceof Error ? err.message : "Failed to submit proposal");
       }
+    }
+
+    case "get_handoff_brief": {
+      const slug = toProjectSlug(String(args.project ?? ""));
+      if (!slug) throw toolError(-32602, "project is not a usable identifier");
+
+      const project = await getProjectBySlug(admin, ctx.workspaceId, slug);
+      if (!project) {
+        return {
+          found: false,
+          message: `No relay history for '${slug}'. You are the first session on this project — log what you do so the next one is not.`,
+        };
+      }
+
+      const { assembled } = await createBriefForProject(admin, ctx.workspaceId, {
+        project_id: project.id,
+        budget_tokens:
+          typeof args.budget_tokens === "number" ? args.budget_tokens : undefined,
+      });
+
+      return {
+        found: true,
+        project: project.slug,
+        brief: assembled.body,
+        state: assembled.state,
+        token_estimate: assembled.token_estimate,
+        source_sessions: assembled.source_session_ids.length,
+      };
+    }
+
+    case "list_agent_sessions": {
+      const slug = toProjectSlug(String(args.project ?? ""));
+      if (!slug) throw toolError(-32602, "project is not a usable identifier");
+
+      const project = await getProjectBySlug(admin, ctx.workspaceId, slug);
+      if (!project) return { project: null, sessions: [] };
+
+      const sessions = await listSessionsForProject(admin, project.id, {
+        limit: typeof args.limit === "number" ? Math.min(100, args.limit) : 25,
+      });
+      return { project: project.slug, sessions };
+    }
+
+    case "log_agent_event": {
+      const { session } = await openOrResumeSession(admin, ctx.workspaceId, {
+        project: String(args.project ?? ""),
+        external_id: String(args.session_external_id ?? ""),
+        agent_tool: "custom",
+      });
+
+      const result = await ingestEvents(admin, ctx.workspaceId, session.id, [
+        {
+          event_type: String(args.event_type ?? "note"),
+          summary: String(args.summary ?? ""),
+          files: Array.isArray(args.files) ? (args.files as string[]) : undefined,
+        },
+      ]);
+
+      return {
+        session_id: session.id,
+        logged: result.accepted,
+        sequence: result.last_sequence,
+      };
+    }
+
+    case "search_agent_history": {
+      const slug = toProjectSlug(String(args.project ?? ""));
+      if (!slug) throw toolError(-32602, "project is not a usable identifier");
+
+      const project = await getProjectBySlug(admin, ctx.workspaceId, slug);
+      if (!project) return { found: false, results: [] };
+
+      const results = await searchTranscripts(admin, ctx.workspaceId, {
+        projectId: project.id,
+        query: String(args.query ?? ""),
+        limit: typeof args.limit === "number" ? args.limit : 12,
+      });
+
+      return {
+        found: results.length > 0,
+        project: project.slug,
+        results,
+        next_step:
+          results.length > 0
+            ? "Call read_transcript_window with a hit's session_id and ordinal to read it in context."
+            : "Nothing matched. The conversation may not have been captured for this project, or nobody discussed this.",
+      };
+    }
+
+    case "read_transcript_window": {
+      const sessionId = String(args.session_id ?? "");
+      if (!sessionId) throw toolError(-32602, "session_id is required");
+
+      return await readTranscriptWindow(admin, ctx.workspaceId, sessionId, {
+        around: typeof args.around === "number" ? args.around : undefined,
+        radius: typeof args.radius === "number" ? args.radius : undefined,
+      });
+    }
+
+    case "check_in": {
+      const { session } = await openOrResumeSession(admin, ctx.workspaceId, {
+        project: String(args.project ?? ""),
+        external_id: String(args.session_external_id ?? ""),
+        agent_tool: "custom",
+      });
+
+      const result = await checkIn(admin, ctx.workspaceId, session.id, {
+        intent: typeof args.intent === "string" ? args.intent : undefined,
+        claim: Array.isArray(args.claim)
+          ? (args.claim as ClaimRequest[])
+          : undefined,
+        release: Array.isArray(args.release)
+          ? (args.release as string[])
+          : undefined,
+      });
+
+      return result;
+    }
+
+    case "list_active_agents": {
+      const slug = toProjectSlug(String(args.project ?? ""));
+      if (!slug) throw toolError(-32602, "project is not a usable identifier");
+
+      const project = await getProjectBySlug(admin, ctx.workspaceId, slug);
+      if (!project) return { project: null, agents: [] };
+
+      const agents = await listActiveAgents(admin, project.id);
+      return { project: project.slug, agents, active_count: agents.length };
+    }
+
+    case "post_notice": {
+      const slug = toProjectSlug(String(args.project ?? ""));
+      if (!slug) throw toolError(-32602, "project is not a usable identifier");
+
+      const project = await getProjectBySlug(admin, ctx.workspaceId, slug);
+      if (!project) throw toolError(-32602, `No project '${slug}' in this workspace`);
+
+      // The notice is attributed to the caller's session when it names one, so
+      // peers can see who said it rather than getting anonymous chatter.
+      let sessionId: string | null = null;
+      if (args.session_external_id) {
+        const { session } = await openOrResumeSession(admin, ctx.workspaceId, {
+          project: String(args.project ?? ""),
+          external_id: String(args.session_external_id),
+          agent_tool: "custom",
+        });
+        sessionId = session.id;
+      }
+
+      const notice = await postNotice(admin, ctx.workspaceId, sessionId, {
+        projectId: project.id,
+        body: String(args.body ?? ""),
+        kind: args.kind as "broadcast" | "direct" | "alert" | "question" | "answer",
+      });
+
+      if (args.answers_notice_id) {
+        await answerNotice(admin, ctx.workspaceId, String(args.answers_notice_id));
+      }
+
+      return { notice_id: notice.id, posted_at: notice.created_at };
     }
 
     default:

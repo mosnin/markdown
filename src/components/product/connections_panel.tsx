@@ -61,12 +61,14 @@ const TYPE_LABEL: Record<ConnectionType, string> = {
   mcp: "MCP",
   api_token: "API Token",
   internal: "Internal",
+  agent_hook: "Agent Hook",
 };
 
 const TYPE_ICON: Record<ConnectionType, React.ElementType> = {
   mcp: Zap,
   api_token: Key,
   internal: Webhook,
+  agent_hook: Zap,
 };
 
 const PERMISSION_LABEL: Record<PermissionMode, string> = {

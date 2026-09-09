@@ -537,13 +537,14 @@ function ScopesStep(props: {
     propose: [],
     generate: [],
     branch: [],
+    relay: [],
   };
   for (const s of ALL_SCOPES) {
     const g = SCOPE_DESCRIPTIONS[s].group;
     groups[g].push(s);
   }
 
-  const groupOrder: ScopeGroup[] = ["read", "propose", "generate", "branch"];
+  const groupOrder: ScopeGroup[] = ["read", "relay", "propose", "generate", "branch"];
 
   return (
     <Card>

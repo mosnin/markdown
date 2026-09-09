@@ -6,6 +6,11 @@ export const CONNECTION_TYPE = {
   MCP: "mcp",
   API_TOKEN: "api_token",
   INTERNAL: "internal",
+  /**
+   * A relay key held by an agent hook — a Claude Code / Codex shim, a git
+   * hook, or a CI job. Append-only access to the session log, nothing else.
+   */
+  AGENT_HOOK: "agent_hook",
 } as const;
 
 export type ConnectionType =

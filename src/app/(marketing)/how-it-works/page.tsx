@@ -1,112 +1,11 @@
 import type { Metadata } from "next";
-import { GitPullRequestArrow, ScrollText, SlidersHorizontal } from "lucide-react";
-import { PageHeroSection } from "@/components/marketing/hero";
-import { LoopStepper } from "@/components/marketing/loop_stepper";
-import { ArchitectureDiagram } from "@/components/marketing/architecture_diagram";
-import { TerminalShowcase } from "@/components/marketing/terminal_showcase";
-import { TiltCard } from "@/components/marketing/tilt_card";
-import {
-  MarketingSection,
-  SectionHeader,
-  IconTile,
-} from "@/components/marketing/sections";
-import { MatrixCta } from "@/components/marketing/matrix_cta";
+import { HowItWorksPage } from "@/components/marketing/pages/how-it-works";
 
 export const metadata: Metadata = {
-  title: "How It Works — Poggle",
-  description:
-    "The governed loop in four steps: agents connect over MCP, read your context, propose changes, and you approve.",
+  title: "How it works",
+  description: "Install the hooks, run your agents, and the context carries itself.",
 };
 
-const WHY = [
-  {
-    icon: GitPullRequestArrow,
-    title: "Proposals, not writes",
-    body: "Agents submit reviewable diffs. You see exactly what would change, in context, before anything happens.",
-  },
-  {
-    icon: SlidersHorizontal,
-    title: "Scoped, least-privilege access",
-    body: "Each agent gets a token scoped to specific boxes and capabilities — read here, propose there, nothing more.",
-  },
-  {
-    icon: ScrollText,
-    title: "Auditable and reversible",
-    body: "Every step lands on an append-only log, with full version history and one-click rollback on every object.",
-  },
-];
-
-export default function HowItWorksPage() {
-  return (
-    <div className="min-h-screen bg-background">
-      <PageHeroSection
-        eyebrow="How it works"
-        title="The governed loop, in four steps."
-        description="Agents connect, read, and propose. You approve. Here's the trust gate, end to end — try it below."
-        ctaPrimary={{ label: "Get started free", href: "/sign_in?mode=signup" }}
-        ctaSecondary={{ label: "Connect an agent", href: "/connections" }}
-      />
-
-      {/* Interactive loop */}
-      <MarketingSection className="border-b border-border/30">
-        <SectionHeader
-          eyebrow="The loop"
-          title="One path, every agent, every time."
-          lede="Click through each step, or let it play. The gate stays closed until a human opens it."
-        />
-        <LoopStepper />
-      </MarketingSection>
-
-      {/* Live terminal */}
-      <MarketingSection className="border-b border-border/30">
-        <SectionHeader
-          eyebrow="Live"
-          title="Watch the loop run."
-          lede="Connect, read, propose, approve — the same gate, in your terminal. Click a step to replay it."
-        />
-        <div className="mt-12">
-          <TerminalShowcase />
-        </div>
-      </MarketingSection>
-
-      {/* Why it's safe */}
-      <MarketingSection muted className="border-b border-border/30">
-        <SectionHeader eyebrow="Why it's safe" title="Guardrails that aren't optional." />
-        <div className="mt-12 grid grid-cols-1 gap-5 md:grid-cols-3">
-          {WHY.map((w) => {
-            const Icon = w.icon;
-            return (
-              <TiltCard key={w.title}>
-                <IconTile>
-                  <Icon className="size-5" aria-hidden="true" />
-                </IconTile>
-                <h3 className="mt-5 font-hero text-lg font-semibold text-foreground">{w.title}</h3>
-                <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{w.body}</p>
-              </TiltCard>
-            );
-          })}
-        </div>
-      </MarketingSection>
-
-      {/* Architecture */}
-      <MarketingSection className="border-b border-border/30">
-        <SectionHeader
-          eyebrow="Architecture"
-          title="From any agent to your source of truth."
-          lede="Agents connect over MCP and propose changes. Nothing is written to your governed store until you approve — and every step is versioned and audited."
-        />
-        <div className="mt-12">
-          <ArchitectureDiagram />
-        </div>
-      </MarketingSection>
-
-      {/* CTA */}
-      <MatrixCta
-        title="Ready to put a human in the loop?"
-        subtitle="Connect your first agent in minutes. No credit card needed."
-        primary={{ label: "Get started free", href: "/sign_in?mode=signup" }}
-        secondary={{ label: "View pricing", href: "/pricing" }}
-      />
-    </div>
-  );
+export default function Page() {
+  return <HowItWorksPage />;
 }

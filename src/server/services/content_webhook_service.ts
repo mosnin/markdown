@@ -47,6 +47,22 @@ export const SUPPORTED_EVENT_TYPES = [
   "branch.promoted",
   "branch.discarded",
   "member.joined",
+  // ── Agent context relay ──────────────────────────────────────────────────
+  // session.event is the firehose — every logged event. The other three are
+  // the ones worth paging a human for: a session opened, a session ended, and
+  // the two that mean work was left unfinished (attention = a blocker or a
+  // cap was logged; capped = the run stopped because the plan ran out).
+  "session.started",
+  "session.event",
+  "session.attention",
+  "session.ended",
+  "session.capped",
+  // ── Multi-agent coordination ─────────────────────────────────────────────
+  // notice.posted is how a team routes agent-to-agent chatter into Slack;
+  // claim.conflict is the one that usually wants a human — two agents wanting
+  // the same file means the work was split badly, and nobody else will notice.
+  "notice.posted",
+  "claim.conflict",
 ] as const;
 
 export type ContentWebhookEventType = (typeof SUPPORTED_EVENT_TYPES)[number];

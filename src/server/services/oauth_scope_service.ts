@@ -45,7 +45,9 @@ export type OAuthCapabilityScope =
   | "context:bundles"
   | "context:propose"
   | "context:generate"
-  | "context:branch";
+  | "context:branch"
+  | "relay:read"
+  | "relay:write";
 
 /**
  * A box-narrowing scope. The full scope string is `context:box:<uuid>`;
@@ -87,6 +89,18 @@ export const OAUTH_SCOPES: Record<OAuthCapabilityScope, { label: string; descrip
     label: "Create and write to branches",
     description:
       "Create draft branches and batch-write notes onto them for human review. Branch content does not touch main until a human promotes it.",
+    minRole: "member",
+  },
+  "relay:read": {
+    label: "Read agent session context",
+    description:
+      "Read the project's agent session log and fetch handoff briefs — what earlier agents did, decided, and left unfinished.",
+    minRole: "viewer",
+  },
+  "relay:write": {
+    label: "Log agent session context",
+    description:
+      "Open sessions and append events to the agent session log. Append-only: this scope cannot edit or delete anything already logged.",
     minRole: "member",
   },
 };

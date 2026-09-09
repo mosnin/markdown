@@ -1,0 +1,275 @@
+/* ==========================================================================
+   LOGGED-OUT WEBSITE: the marketing surface.
+
+   Scoped to `.company-marketing`. Every colour here resolves to a LEDGER
+   INSTRUMENT token from globals.css, so the site follows the same light and
+   dark palette as the product and anti-slop rule 6 (a designed dark theme)
+   holds on both. What this file adds is only what a marketing page needs and
+   the product does not: a larger type scale for headlines, three section
+   spacing steps above the product's twelve, and the type roles the animated
+   illustrations are set in. Buttons, cards, radii and the accent are the
+   product's own, so a person who signs in meets the same instrument.
+
+   Type metrics live only inside `.t-*` roles (scripts/lint-css-tokens.mjs).
+   Spacing: the product's 4pt scale tops out at 64px; a marketing page needs
+   three larger steps between sections, so this surface adds 80 / 112 / 128,
+   each a multiple of 16, and nothing else off the scale.
+   ========================================================================== */
+
+.company-marketing {
+  --mk-page-x: 20px; /* rule 12: at least 16 at 375, at least 48 at 1440 */
+  --mk-max: 1200px;
+  --mk-max-wide: 1360px;
+  --mk-prose: 640px;
+  --mk-section: 80px;
+  --mk-band: 64px;
+  min-height: 100dvh;
+  overflow-x: clip;
+  background: var(--surface-canvas);
+  color: var(--text-primary);
+}
+
+@media (min-width: 768px) {
+  .company-marketing {
+    --mk-page-x: 32px;
+    --mk-section: 112px;
+  }
+}
+
+@media (min-width: 1280px) {
+  .company-marketing {
+    --mk-page-x: 48px;
+    --mk-section: 128px;
+  }
+}
+
+html:has(.company-marketing),
+html:has(.company-marketing) body {
+  overflow-x: clip;
+  background: var(--surface-canvas);
+}
+
+/* Layout classes sit in the components layer so a utility on the same
+   element (a `pt-0` on a section that follows an intro) still wins. */
+@layer components {
+  /* ---- Layout ------------------------------------------------------------- */
+
+  .mk-container {
+    width: 100%;
+    max-width: calc(var(--mk-max) + 2 * var(--mk-page-x));
+    margin-inline: auto;
+    padding-inline: var(--mk-page-x);
+  }
+
+  .mk-container-wide {
+    width: 100%;
+    max-width: calc(var(--mk-max-wide) + 2 * var(--mk-page-x));
+    margin-inline: auto;
+    padding-inline: var(--mk-page-x);
+  }
+
+  .mk-section {
+    padding-block: var(--mk-section);
+  }
+
+  .mk-section-top {
+    padding-top: var(--mk-section);
+  }
+
+  .mk-section-bottom {
+    padding-bottom: var(--mk-section);
+  }
+
+  .mk-band {
+    padding-block: var(--mk-band);
+  }
+
+  .mk-prose {
+    max-width: var(--mk-prose);
+  }
+
+  /* The header takes its sticky hairline from an IntersectionObserver sentinel,
+     never a scroll listener (DESIGN_LANGUAGE §7.3). */
+  .mk-header {
+    background: var(--surface-canvas);
+    border-bottom: 1px solid transparent;
+    transition: border-color var(--dur-2) linear;
+  }
+
+  .mk-header[data-stuck="true"] {
+    border-bottom-color: var(--line-border);
+  }
+}
+
+/* ---- Type roles: marketing scale ---------------------------------------- */
+
+.t-mk-hero {
+  font-size: clamp(36px, 5vw, 56px);
+  font-weight: 600;
+  line-height: 1.06;
+  letter-spacing: -0.03em;
+}
+
+.t-mk-h2 {
+  font-size: clamp(28px, 3.4vw, 40px);
+  font-weight: 600;
+  line-height: 1.1;
+  letter-spacing: -0.026em;
+}
+
+.t-mk-h3 {
+  font-size: clamp(22px, 2.2vw, 26px);
+  font-weight: 600;
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+}
+
+.t-mk-h4 {
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 24px;
+  letter-spacing: -0.012em;
+}
+
+.t-mk-lead {
+  font-size: clamp(17px, 1.4vw, 19px);
+  font-weight: 400;
+  line-height: 1.5;
+  letter-spacing: -0.006em;
+}
+
+.t-mk-body {
+  font-size: 16px;
+  font-weight: 400;
+  line-height: 26px;
+  letter-spacing: -0.002em;
+}
+
+.t-mk-body-strong {
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 26px;
+  letter-spacing: -0.002em;
+}
+
+.t-mk-stat {
+  font-size: clamp(30px, 3vw, 36px);
+  font-weight: 600;
+  line-height: 1.1;
+  letter-spacing: -0.024em;
+  font-variant-numeric: tabular-nums lining-nums;
+  font-feature-settings:
+    "tnum" 1,
+    "lnum" 1;
+}
+
+.t-mk-nav {
+  font-size: 15px;
+  font-weight: 500;
+  line-height: 22px;
+  letter-spacing: 0;
+}
+
+/* ---- Type roles: illustrations ------------------------------------------
+   The animated scenes are drawn at a fixed size and scaled down on narrow
+   viewports, so their text is small on purpose. 11px is the floor. */
+
+.t-mk-ill-11 {
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 14px;
+  letter-spacing: 0.006em;
+}
+
+.t-mk-ill-12 {
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 16px;
+  letter-spacing: 0.004em;
+}
+
+.t-mk-ill-12s {
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 16px;
+  letter-spacing: 0.004em;
+}
+
+.t-mk-ill-13 {
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 18px;
+  letter-spacing: 0.002em;
+}
+
+.t-mk-ill-13s {
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 18px;
+  letter-spacing: 0.002em;
+}
+
+.t-mk-ill-15s {
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 20px;
+  letter-spacing: -0.002em;
+}
+
+.t-mk-ill-mono-11 {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 14px;
+  letter-spacing: 0.01em;
+  font-variant-numeric: tabular-nums lining-nums;
+}
+
+.t-mk-ill-mono-12 {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 16px;
+  letter-spacing: 0.01em;
+  font-variant-numeric: tabular-nums lining-nums;
+}
+
+.t-mk-ill-mono-13 {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 20px;
+  letter-spacing: 0;
+  font-variant-numeric: tabular-nums lining-nums;
+}
+
+/* ---- Keyframes shared by the scenes -------------------------------------- */
+
+@keyframes mk-caret {
+  0%,
+  49% {
+    opacity: 1;
+  }
+  50%,
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes mk-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes mk-dash {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .company-marketing [data-mk-motion] {
+    animation: none !important;
+  }
+}
