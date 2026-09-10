@@ -1,5 +1,5 @@
 import Link from "next/link";
-import Image from "next/image";
+import { Wordmark } from "@/components/brand/logo";
 import type { ReactNode } from "react";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { CONTACT_EMAIL, ISSUES_URL } from "@/lib/site/contact";
@@ -68,20 +68,14 @@ export function MarketingFooter(): ReactNode {
               aria-label="Poggle home"
               className="focus-ring-canvas inline-flex w-fit items-center gap-4 rounded-4 text-ink focus-visible:outline-none"
             >
-              {/* Founder-approved glass brand artwork, isolated from the
-                  social image; the footer itself keeps its solid theme ground. */}
-              <Image
-                src="/icon.svg"
-                alt="Poggle"
-                width={112}
-                height={112}
-                sizes="112px"
-                className="size-[112px] object-contain"
-              />
+              {/* The brand lockup, not an <img>: /icon.svg never existed, so this
+                  was a broken image on every marketing page. Drawn geometry
+                  also follows the theme, which a raster mark cannot. */}
+              <Wordmark className="[&_svg]:size-[44px]" />
             </Link>
             <p className="t-body max-w-[40ch] text-ink-2">
-              A shared workspace for company knowledge, daily work and the AI
-              tools that help your team.
+              Shared memory for coding agents. One runs out of plan, the next
+              picks up knowing what happened.
             </p>
             <div className="w-fit">
               <ThemeToggle />

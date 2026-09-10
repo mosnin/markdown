@@ -26,24 +26,24 @@ const PLAYHEAD_X = 428;
 
 const ROWS = [
   {
-    title: "Update ICP after Q3 interviews",
-    meta: "Dana · a3f9c1e",
+    title: "Decision: drop the Redis cache",
+    meta: "Claude Code · session a3f9c1e",
     left: 44,
     width: 290,
     top: 90,
     authors: ["person", "person"],
   },
   {
-    title: "Merge branch agent/pricing",
-    meta: "Pricing agent · 5b2e7d0",
+    title: "Blocked: migration needs a new index",
+    meta: "Codex · session 5b2e7d0",
     left: 188,
     width: 250,
     top: 150,
     authors: ["agent"],
   },
   {
-    title: "Founding commit",
-    meta: "Dana · c0ffee1",
+    title: "Session started",
+    meta: "Claude Code · session c0ffee1",
     left: 90,
     width: 228,
     top: 210,

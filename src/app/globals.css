@@ -5,7 +5,7 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 /* ==========================================================================
-   LEDGER INSTRUMENT — the CompanyOS Web design language, version 2.
+   LEDGER INSTRUMENT — Poggle's design language, version 2.
    Normative spec: docs/DESIGN_LANGUAGE.md. Every value here comes from it.
    The palette and scale follow the developer dashboard the product is
    styled after: a #212121 ground with a darker #131313 rail in the dark

@@ -127,7 +127,7 @@ export function MarketingHeader(): ReactNode {
           <div className="flex items-center gap-10">
             <Link
               href="/"
-              aria-label="Company OS home"
+              aria-label="Poggle home"
               className="focus-ring-canvas flex items-center gap-4 rounded-4 text-ink focus-visible:outline-none"
             >
               {/* Founder-requested scroll morph. This blur belongs to the
@@ -152,7 +152,7 @@ export function MarketingHeader(): ReactNode {
                   }}
                   className="t-brand overflow-hidden whitespace-nowrap"
                 >
-                  companyos
+                  poggle
                 </motion.span>
               </span>
             </Link>
@@ -169,7 +169,7 @@ export function MarketingHeader(): ReactNode {
               Sign in
             </Link>
             <CutButton href="/sign_in" className="hidden sm:inline-flex">
-              Create a company
+              Start free
             </CutButton>
             <button
               type="button"

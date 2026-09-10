@@ -1,10 +1,20 @@
 import type { ReactNode } from "react";
+import { useId } from "react";
 import { cn } from "@/lib/utils";
 
 /**
- * Two interlocking brackets represent departments sharing one company context.
- * The approved September 2026 identity uses solid, monochrome geometry.
- * currentColor keeps the same silhouette legible on every application surface.
+ * Poggle's identity.
+ *
+ * The mark is the two overlapping eyes from `public/logo-symbol-*.png` — the
+ * "oo" of the wordmark, drawn as a silhouette in `currentColor` so it stays
+ * legible on the rail, on a marketing hero, and inside an illustration where
+ * it is tinted and scaled. The full-colour iridescent version lives in the
+ * PNGs and is used where the brand is being presented rather than used as
+ * furniture.
+ *
+ * Kept as geometry rather than an <img> because the mark appears at 16-24px in
+ * chrome, where a raster gradient turns to mud, and because the Ledger surface
+ * is monochrome by rule: structure never carries colour.
  */
 export function Mark({
   className,
@@ -13,16 +23,32 @@ export function Mark({
   className?: string;
   size?: number;
 }): ReactNode {
+  // Two overlapping discs cannot be unioned with `evenodd` — the intersection
+  // would punch a hole — so the pupils are removed with a mask instead. The id
+  // must be unique per instance or the first mask on the page wins.
+  const maskId = useId();
+
   return (
     <svg
-      viewBox="0 0 224 250"
+      viewBox="0 0 256 208"
       width={size}
-      height={size}
-      fill="currentColor"
+      height={(size * 208) / 256}
       aria-hidden="true"
       className={cn("shrink-0", className)}
     >
-      <path d="M0 0h150v40H40v96h110v40H0Z M84 74h140v176H84v-40h100v-96H84Z" />
+      <mask id={maskId}>
+        <rect width="256" height="208" fill="black" />
+        <circle cx="90" cy="104" r="62" fill="white" />
+        <circle cx="166" cy="104" r="62" fill="white" />
+        <circle cx="76" cy="104" r="27" fill="black" />
+        <circle cx="152" cy="104" r="27" fill="black" />
+      </mask>
+      <rect
+        width="256"
+        height="208"
+        fill="currentColor"
+        mask={`url(#${maskId})`}
+      />
     </svg>
   );
 }
@@ -37,7 +63,7 @@ export function Wordmark({ className }: { className?: string }): ReactNode {
       )}
     >
       <Mark size={24} />
-      <span className="t-brand whitespace-nowrap">companyos</span>
+      <span className="t-brand whitespace-nowrap">poggle</span>
     </span>
   );
 }
