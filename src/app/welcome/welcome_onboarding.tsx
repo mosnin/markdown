@@ -5,10 +5,10 @@ import { useRouter } from "next/navigation";
 import * as m from "motion/react-m";
 import {
   Sparkles,
-  Plug,
-  GitPullRequestArrow,
-  ShieldCheck,
-  Eye,
+  Terminal,
+  BatteryLow,
+  FileText,
+  Radio,
   Check,
 } from "lucide-react";
 
@@ -19,7 +19,7 @@ import { markOnboarded } from "./actions";
 // ─── First-run welcome wizard ────────────────────────────────────────────────
 //
 // The first thing a new account sees after sign-up. Three short, branded slides
-// that orient on the core loop — connect, propose, approve — then hand off to
+// that orient on the core loop — capture, cap out, hand off — then hand off to
 // /app, where the real activation checklist takes over. Shown once per account
 // (gated on the onboarded_at metadata flag set on completion or skip). Reuses
 // the marketing hero's shader backdrop so the leap from logged-out to logged-in
@@ -74,30 +74,30 @@ export function WelcomeOnboarding() {
               <Slide
                 icon={<Sparkles className="size-6" aria-hidden="true" />}
                 title="Welcome to Poggle"
-                body="A governed context layer for your AI agents — a workspace they can read, and a trust gate they can't cross."
+                body="Shared memory for your coding agents. When one runs out of plan, the next one starts knowing what happened."
               >
-                <FactRow icon={<Eye className="size-4" />} label="Agents get rich read access" />
-                <FactRow icon={<ShieldCheck className="size-4" />} label="Every write waits for your approval" />
+                <FactRow icon={<Terminal className="size-4" />} label="Works with Claude Code, Codex, and any CLI" />
+                <FactRow icon={<Radio className="size-4" />} label="Captures automatically once hooks are installed" />
               </Slide>
             </Onboarding.Step>
 
             <Onboarding.Step step={2}>
               <Slide
-                icon={<GitPullRequestArrow className="size-6" aria-hidden="true" />}
-                title="Agents propose. You approve."
-                body="Agents connect over MCP and submit changes as reviewable diffs. Nothing touches your source of truth until you say so."
+                icon={<BatteryLow className="size-6" aria-hidden="true" />}
+                title="One runs out. The next carries on."
+                body="Poggle logs what each agent decided, tried and got stuck on — then assembles that into a brief the next agent reads on its first turn."
               >
-                <LoopRow n={1} icon={<Plug className="size-4" />} label="Connect an agent over MCP" />
-                <LoopRow n={2} icon={<GitPullRequestArrow className="size-4" />} label="It proposes a diff" />
-                <LoopRow n={3} icon={<Check className="size-4" />} label="You approve & merge" />
+                <LoopRow n={1} icon={<Radio className="size-4" />} label="Agents log as they work" />
+                <LoopRow n={2} icon={<BatteryLow className="size-4" />} label="One hits its usage limit" />
+                <LoopRow n={3} icon={<FileText className="size-4" />} label="The next one gets the brief" />
               </Slide>
             </Onboarding.Step>
 
             <Onboarding.Step step={3}>
               <Slide
-                icon={<ShieldCheck className="size-6" aria-hidden="true" />}
-                title="Let's connect your first agent."
-                body="We'll drop you into your workspace with a short checklist: connect an agent, scope its access, and approve your first proposal."
+                icon={<Terminal className="size-6" aria-hidden="true" />}
+                title="Let's capture your first session."
+                body="We'll drop you into your workspace with a short checklist: create a relay key, run poggle init in a repository, and start an agent."
               >
                 <FactRow tone="emerald" icon={<Check className="size-4" />} label="Free to start — no credit card" />
               </Slide>
