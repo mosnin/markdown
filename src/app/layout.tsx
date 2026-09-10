@@ -26,22 +26,21 @@ const shareTechMono = Share_Tech_Mono({
 });
 
 const SITE_DESCRIPTION =
-  "Agents connect over MCP, read your workspace context, and propose changes you approve. Poggle is the trust gate between your AI agents and your source of truth.";
+  "One agent hits its usage limit, the next picks up where it left off. Poggle captures what your coding agents do and hands the next one a brief.";
 
 export const metadata: Metadata = {
   metadataBase: new URL(getCanonicalBaseUrl()),
   title: "Poggle",
-  description:
-    "A structured, markdown-native context operating system for humans and AI.",
+  description: SITE_DESCRIPTION,
   openGraph: {
     type: "website",
     siteName: "Poggle",
-    title: "Poggle — The governed context layer for AI agents",
+    title: "Poggle — Shared memory for coding agents",
     description: SITE_DESCRIPTION,
   },
   twitter: {
     card: "summary_large_image",
-    title: "Poggle — The governed context layer for AI agents",
+    title: "Poggle — Shared memory for coding agents",
     description: SITE_DESCRIPTION,
   },
   icons: {
