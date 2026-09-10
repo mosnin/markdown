@@ -7,18 +7,18 @@ import { useEffect, useState } from "react";
 import { FitScale } from "./fit-scale";
 
 /**
- * The Company OS hub with six of the eleven departments meshed around it:
- * every department's context is a typed document in the same ledger, and the
- * beams are reads and commits crossing it. Adapted from ForgeUI "Model Mesh";
- * the ripple, the 3s beam and the 2.5s loop are the original's.
+ * Poggle at the centre with six agent runtimes meshed around it: each one
+ * writes to the same log, and the beams are events going in and briefs coming
+ * back out. Adapted from ForgeUI "Model Mesh"; the ripple, the 3s beam and the
+ * 2.5s loop are the original's.
  */
 const NODES = [
-  { label: "Marketing", pos: "top-1/2 left-0" },
-  { label: "Sales", pos: "top-1/2 right-0" },
-  { label: "Product", pos: "top-[40px] left-[40px]" },
-  { label: "Finance", pos: "top-[40px] right-[40px]" },
-  { label: "People", pos: "bottom-[20px] left-[40px]" },
-  { label: "Legal", pos: "right-[40px] bottom-[20px]" },
+  { label: "Claude Code", pos: "top-1/2 left-0" },
+  { label: "Codex", pos: "top-1/2 right-0" },
+  { label: "Cursor", pos: "top-[40px] left-[40px]" },
+  { label: "Aider", pos: "top-[40px] right-[40px]" },
+  { label: "CI", pos: "bottom-[20px] left-[40px]" },
+  { label: "Git hooks", pos: "right-[40px] bottom-[20px]" },
 ];
 
 export function ModelMesh({ className }: { className?: string }) {

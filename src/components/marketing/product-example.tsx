@@ -1,76 +1,36 @@
 import type { ReactNode } from "react";
 import { Mark } from "@/components/brand/logo";
-import { CodePresence } from "./illustrations/codepresence";
 import { RevisionTimeline } from "./illustrations/timeline";
 import { ChatThread } from "./illustrations/chatthread";
 import { DataPipeline } from "./illustrations/data-pipeline";
-import { NotificationStack } from "./illustrations/notification-stack";
-import { MetricsChart } from "./illustrations/metricschart";
 import { ModelMesh } from "./illustrations/model-mesh";
-import { WorkflowRun } from "./illustrations/workflowrun";
-import { ExportFlow } from "./illustrations/export-flow";
 
-/** Licensed ForgeUI scenes in the existing editorial slots. Keep the page
- * structure and readable captions independent of the animation choreography. */
+/** Licensed ForgeUI scenes in the editorial slots, captioned for Poggle.
+ * Page structure and captions stay independent of the animation choreography. */
 const examples = {
-  profile: {
-    title: "Marketing / Ideal customer profile",
-    caption:
-      "Capture your audience, their problems and what prompts them to buy.",
-    scene: <CodePresence />,
-  },
   history: {
-    title: "Company documents / History",
+    title: "Session log / What the agent actually did",
     caption:
-      "Every saved change keeps its author, message and earlier version.",
+      "Every prompt, edit, command and decision, in order, with the ones that matter scored highest.",
     scene: <RevisionTimeline />,
   },
-  branch: {
-    title: "Branches / Customer research",
-    caption: "Propose an update on a branch, then review it before merging.",
-    scene: <ChatThread />,
-  },
-  import: {
-    title: "Import / Customer interview notes",
+  brain: {
+    title: "Handoff brief / What the next agent reads first",
     caption:
-      "Source material becomes proposed documents on a branch for review.",
-    scene: <DataPipeline />,
-  },
-  inbox: {
-    title: "Inbox / Needs your attention",
-    caption:
-      "Find drafts to review, overdue documents and connections needing attention.",
-    scene: <NotificationStack variant="inbox" />,
-  },
-  metrics: {
-    title: "Help desk / Ticket activity",
-    caption:
-      "Example ticket trends. App metrics are calculated from the records your team maintains.",
-    scene: <MetricsChart />,
-  },
-  shared: {
-    title: "Company context / Shared across departments",
-    caption:
-      "Departments work from shared documents instead of separate copies.",
-    scene: <ModelMesh />,
+      "Assembled from the sessions before it and sized to a token budget, injected before it opens a file.",
+    scene: <ChatThread variant="knowledge" />,
   },
   agents: {
-    title: "Agent access / A connected assistant",
+    title: "Roster / Three agents, one repository",
     caption:
-      "An example MCP workflow. Each read, write or merge requires the corresponding access.",
-    scene: <WorkflowRun />,
+      "Who is working, what they are touching, and which files are already claimed.",
+    scene: <ModelMesh />,
   },
-  export: {
-    title: "Settings / Your data",
+  import: {
+    title: "Transcript / The conversation itself",
     caption:
-      "Download JSON with history, or Markdown documents and CSV tables.",
-    scene: <ExportFlow />,
-  },
-  brain: {
-    title: "Brain / Company knowledge",
-    caption:
-      "Ask about indexed company knowledge using Stored and your configured AI provider.",
-    scene: <ChatThread variant="knowledge" />,
+      "Reasoning is kept whole; tool output is cut to its head and tail. What cannot be reconstructed survives.",
+    scene: <DataPipeline />,
   },
 } satisfies Record<
   string,

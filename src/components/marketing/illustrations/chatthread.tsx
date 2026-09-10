@@ -1,7 +1,7 @@
 import { cn } from "@/lib/utils";
 
 /**
- * An agent and a member inside the ledger's rules: the agent proposes, the
+ * An incoming agent asking the relay what happened before it: the agent
  * member decides, the agent branches the work for review. Adapted from
  * ForgeUI "Chat Thread"; the bubble shapes and the 1.3s blink are the
  * original's. The agent's turn is tinted with the agent wash, which is the
@@ -36,15 +36,15 @@ export function ChatThread({
               knowledge ? "text-ink" : "text-agent-text",
             )}
           >
-            {knowledge ? "Dana" : "Marketing agent"}
+            {knowledge ? "Fresh agent" : "Claude Code"}
           </span>
           <span className="t-mk-ill-12 text-ink-3">09:41</span>
         </div>
         <div className={BUBBLE}>
           <p className="t-mk-ill-13 text-ink">
             {knowledge
-              ? "Who is our product for?"
-              : "Draft an ICP update from the Q3 interviews?"}
+              ? "What was the last agent doing?"
+              : "Anything I should know before I start?"}
           </p>
         </div>
       </div>
@@ -57,15 +57,15 @@ export function ChatThread({
               knowledge ? "text-agent-text" : "text-ink",
             )}
           >
-            {knowledge ? "Company Brain" : "Dana"}
+            {knowledge ? "Handoff brief" : "Poggle"}
           </span>
           <span className="t-mk-ill-12 text-ink-3">09:43</span>
         </div>
         <div className={BUBBLE}>
           <p className="t-mk-ill-13 text-ink">
             {knowledge
-              ? "Operations leads at growing B2B companies. The customer profile describes their handoff problems and buying triggers."
-              : "Yes, branch it for review"}
+              ? "Capped mid-migration. The retry middleware is rewritten but untested, and the Redis approach was already ruled out."
+              : "Three sessions before you. Two decisions, one blocker."}
           </p>
         </div>
       </div>
@@ -73,7 +73,7 @@ export function ChatThread({
       <div className="w-full max-w-[320px]">
         <div className="mb-4 flex items-baseline gap-4">
           <span className="t-mk-ill-13s text-agent-text">
-            {knowledge ? "Company knowledge" : "Marketing agent"}
+            {knowledge ? "3 sessions · 1,840 tokens" : "Claude Code"}
           </span>
           <span className="t-mk-ill-12 text-ink-3">09:43</span>
         </div>
@@ -81,8 +81,8 @@ export function ChatThread({
           <div className="flex items-center gap-4">
             <span className="t-mk-ill-13 text-agent-text">
               {knowledge
-                ? "Customer profile · Source"
-                : "Working on the proposal"}
+                ? "session 4c1f · usage_capped"
+                : "Reading the brief"}
             </span>
             {!knowledge && (
               <div className="flex gap-2">
